@@ -3,8 +3,13 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny,IsAuthenticated
 from rest_framework.response import Response
 from django.contrib.auth import authenticate
-from rest_framework import response, serializers, status
-from .serializers import UserRegisterSerializer,UserProfileSerializer,UserLoginSerializer
+from rest_framework import status
+from .serializers import (
+    UserRegisterSerializer,
+    UserProfileSerializer,
+    UserLoginSerializer,
+    ChangePasswordSerializer,
+    )
 from rest_framework_simplejwt.tokens import RefreshToken
 from zthob.utils import api_response
 from drf_yasg.utils import swagger_auto_schema
@@ -12,6 +17,7 @@ from drf_yasg.utils import swagger_auto_schema
 class UserRegistrationView(APIView):
     permission_classes=[AllowAny]
     @swagger_auto_schema(
+    tags=['Accounts - Authentication'],
     request_body=UserRegisterSerializer,
     responses={201: UserProfileSerializer}
     )
@@ -39,6 +45,7 @@ class UserRegistrationView(APIView):
 class UserLoginView(APIView):
     permission_classes=[AllowAny]
     @swagger_auto_schema(
+        tags=['Accounts - Authentication'],
         request_body=UserLoginSerializer,
         responses={200:UserProfileSerializer}
     )
@@ -77,6 +84,7 @@ class UserLoginView(APIView):
 class UserProfileView(APIView):
     permission_classes=[IsAuthenticated]
     @swagger_auto_schema(
+        tags=['Accounts - User Profile'],
         response={200:UserProfileSerializer}
     )
     def get(self,request):
@@ -87,6 +95,7 @@ class UserProfileView(APIView):
                             status_code=status.HTTP_200_OK
                             )
     @swagger_auto_schema(
+       tags=['Accounts - User Profile'],
        request_body=UserProfileSerializer,
        responses={200:UserProfileSerializer} 
     )
@@ -105,4 +114,33 @@ class UserProfileView(APIView):
                             status_code=status.HTTP_400_BAD_REQUEST
                             
                             )
-    
+
+class ChangePasswordView(APIView):
+    permission_classes=[IsAuthenticated]
+    @swagger_auto_schema(
+        tags=['Accounts - Change Password'],
+        request_body=ChangePasswordSerializer,
+        responses={200:UserProfileSerializer}
+    )
+    def post(self,request):
+        serializer=ChangePasswordSerializer(data=request.data)
+        if serializer.is_valid():
+            user=request.user
+            if user.check_password(serializer.validated_data['old_password']):
+                user.set_password(serializer.validated_data['new_password'])
+                user.save()
+                return api_response(
+                    success=True,
+                    message="Password changed successfully")
+            else:
+                return api_response(
+                    success=False,
+                    message="Current password is incorrect",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+        return api_response(
+            success=False,
+            message="Password change failed",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
