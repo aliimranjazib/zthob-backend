@@ -292,4 +292,12 @@ SWAGGER_SETTINGS = {
         }
     },
     'USE_SESSION_AUTH': False,
+    'PERSIST_AUTH': True,
+    'SUPPORTED_SUBMIT_METHODS': ['get', 'post', 'put', 'delete', 'patch'],
+    'OPERATIONS_SORTER': 'alpha',
+    'TAGS_SORTER': 'alpha',
+    'DOC_EXPANSION': 'list',        # Expand operations by default
+    'DEFAULT_MODEL_RENDERING': 'example',  # Show examples by default
+    'DEEP_LINKING': True,   
+    'HIDE_MODELS': True,        
 }

@@ -23,9 +23,9 @@ from drf_yasg import openapi
 
 schema_view = get_schema_view(
        openapi.Info(
-           title="Zthob API",
+           title="Mgask API",
            default_version='v1',
-           description="Tailoring System API",
+           description="Mgask API",
        ),
        public=True,
        permission_classes=(permissions.AllowAny,),
