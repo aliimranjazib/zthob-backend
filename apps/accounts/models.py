@@ -18,6 +18,8 @@ class CustomUser(AbstractUser):
     shop_name=models.CharField(blank=True,null=True,max_length=50)
     experience_years=models.PositiveIntegerField(blank=True,null=True,default=None)
     is_active=models.BooleanField(default=True)
+    working_hours=models.JSONField(default=dict,blank=True,null=True,   
+                                   help_text="Working hours stored as JSON. Format: {'monday': {'is_open': true, 'start_time': '09:00', 'end_time': '18:00'}}")
     USERNAME_FIELD='username'
     REQUIRED_FIELDS=['email']
     

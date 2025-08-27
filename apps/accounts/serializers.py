@@ -40,7 +40,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model=CustomUser
         fields = [
             'id', 'username', 'email', 'role', 'phone', 'address', 'measurement',
-            'vehicle_info', 'license_number', 'shop_name', 'experience_years',
+            'vehicle_info', 'license_number', 'shop_name', 'experience_years','working_hours',
             'date_joined', 'is_active'
         ]
         read_only_fields = ['id', 'username', 'email', 'role', 'date_joined']
