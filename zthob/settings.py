@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "drf_yasg",
     # Apps
     "apps.accounts",
+    "apps.tailors",
 ]
     
 MIDDLEWARE = [
