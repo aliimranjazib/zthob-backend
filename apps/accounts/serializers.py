@@ -9,7 +9,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     
     class Meta:
         model=CustomUser
-        fields=['username','email','password','confirm_password','role']
+        fields=['first_name','last_name','username','email','password','confirm_password','role']
         extra_kwargs={'username':{'help_text':'username must be unique and between 3-100 character'},
              'email':{'help_text':'Valid email address required'},
              'role':{'help_text':'Choose Role : User, Rider, Tailor '}  
@@ -39,9 +39,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model=CustomUser
         fields = [
-            'id', 'username', 'email', 'role', 'phone', 'address', 'measurement',
-            'vehicle_info', 'license_number', 'shop_name', 'experience_years','working_hours',
-            'date_joined', 'is_active'
+            'id', 'username', 'email', 'role', 'phone', 'first_name', 'last_name',
         ]
         read_only_fields = ['id', 'username', 'email', 'role', 'date_joined']
 
