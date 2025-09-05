@@ -7,21 +7,22 @@ class CustomUser(AbstractUser):
       ('USER','User'),
       ("RIDER","Rider"),
       ("TAILOR","Tailor"),
+      ("ADMIN", "Admin"),
     )
     role=models.CharField(max_length=10,choices=USER_ROLES, default="USER")
     email=models.EmailField(unique=True,max_length=100)
     phone=models.CharField(max_length=15,blank=True,null=True)
-    address=models.TextField(max_length=100,blank=True,null=True)
-    measurement=models.JSONField(blank=True,null=True)
-    vehicle_info=models.CharField(blank=True,null=True,max_length=50)
-    license_number=models.CharField(blank=True,null=True,max_length=50)
-    shop_name=models.CharField(blank=True,null=True,max_length=50)
-    experience_years=models.PositiveIntegerField(blank=True,null=True,default=None)
     is_active=models.BooleanField(default=True)
-    working_hours=models.JSONField(default=dict,blank=True,null=True,   
-                                   help_text="Working hours stored as JSON. Format: {'monday': {'is_open': true, 'start_time': '09:00', 'end_time': '18:00'}}")
+    is_deleted = models.BooleanField(default=False)
+    
     USERNAME_FIELD='username'
     REQUIRED_FIELDS=['email']
     
-def __str__(self):
-    return f"{self.username} ({self.email}) ({self.role})"
+    def soft_delete(self):
+      """Mark user as deleted instead of hard deleting"""
+      self.is_active = False
+      self.is_deleted = True
+      self.save()
+    
+    def __str__(self):
+      return f"{self.username} ({self.email}) ({self.role})"

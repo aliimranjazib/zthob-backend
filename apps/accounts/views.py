@@ -3,7 +3,10 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny,IsAuthenticated
 from rest_framework.response import Response
 from django.contrib.auth import authenticate
+from django.db.models import Q
 from rest_framework import status
+
+from apps.accounts.models import CustomUser
 from .serializers import (
     UserRegisterSerializer,
     UserProfileSerializer,
@@ -54,7 +57,8 @@ class UserLoginView(APIView):
         if serializer.is_valid():
             username=serializer.validated_data['username']
             password=serializer.validated_data['password']
-            user=authenticate(username=username,password=password)
+            user = CustomUser.objects.filter(Q(username=username)|Q(email=username)|Q(phone=username)).first()
+            #user=authenticate(username=username,password=password)
             if user:
                 refresh=RefreshToken.for_user(user)
                 return api_response(success=True,

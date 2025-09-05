@@ -23,9 +23,9 @@ from drf_yasg import openapi
 
 schema_view = get_schema_view(
        openapi.Info(
-           title="Mgask API",
+           title="Zthob API",
            default_version='v1',
-           description="Mgask API",
+           description="Zthob API documentation",
        ),
        public=True,
        permission_classes=(permissions.AllowAny,),
@@ -34,6 +34,7 @@ schema_view = get_schema_view(
 urlpatterns = [
     path("admin/", admin.site.urls),
     path('api/accounts/',include('apps.accounts.urls')),
-    path('swagger/', schema_view.with_ui('swagger')),
-    path('redoc/', schema_view.with_ui('redoc')),
+    path('api/tailors/',include('apps.tailors.urls')),
+    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0)),
+    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0)),
 ]
