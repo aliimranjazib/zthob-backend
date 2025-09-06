@@ -2,11 +2,25 @@ from rest_framework import serializers
 from apps.accounts.serializers import UserProfileSerializer
 from apps.tailors.models import Fabric, FabricCategory, FabricImage, TailorProfile
 
+class TailorProfileSerializer(serializers.ModelSerializer):
+    user=UserProfileSerializer(read_only=True)
+    class Meta:
+        model=TailorProfile
+        fields = ['user','shop_name','establishment_year','tailor_experience','working_hours','contact_number','address']
 
 class FabricImageSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
     class Meta:
         model = FabricImage
         fields = ["id", "image", "order"]
+
+    def get_image(self, obj):
+        request = self.context.get("request", None)
+        if request:
+            return request.build_absolute_uri(obj.image.url) if obj.image else None
+        return obj.image.url if obj.image else None
+
 class FabricCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = FabricCategory
@@ -14,6 +28,8 @@ class FabricCategorySerializer(serializers.ModelSerializer):
 
 class FabricSerializer(serializers.ModelSerializer):
     gallery = FabricImageSerializer(many=True, read_only=True)
+    category=FabricCategorySerializer(read_only=True)
+    tailor=TailorProfileSerializer(read_only=True)
     class Meta:
         model = Fabric
         fields = [
@@ -58,9 +74,11 @@ class FabricCreateSerializer(serializers.ModelSerializer):
         images = validated_data.pop("images", [])
         request = self.context.get("request")
         tailor_profile = getattr(request.user, "tailor_profile", None)
+        
 
         fabric = Fabric.objects.create(
             tailor=tailor_profile,
+            created_by=request.user,
             fabric_image=images[0] if images else None,
             **validated_data,
         )
@@ -74,12 +92,6 @@ class FabricCreateSerializer(serializers.ModelSerializer):
 
         return fabric
         
-
-class TailorProfileSerializer(serializers.ModelSerializer):
-    user=UserProfileSerializer(read_only=True)
-    class Meta:
-        model=TailorProfile
-        fields = ['user','shop_name','establishment_year','tailor_experience','working_hours','contact_number','address']
         
 class TailorProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
