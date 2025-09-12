@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.core.validators import FileExtensionValidator
 from apps.accounts.serializers import UserProfileSerializer
 from apps.tailors.models import Fabric, FabricCategory, FabricImage, TailorProfile
 
@@ -13,7 +14,7 @@ class FabricImageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = FabricImage
-        fields = ["id", "image", "order"]
+        fields = ["id", "image", "order", "is_primary"]
 
     def get_image(self, obj) -> str | None:
         request = self.context.get("request", None)
@@ -30,6 +31,8 @@ class FabricSerializer(serializers.ModelSerializer):
     gallery = FabricImageSerializer(many=True, read_only=True)
     category=FabricCategorySerializer(read_only=True)
     tailor=TailorProfileSerializer(read_only=True)
+    primary_image_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = Fabric
         fields = [
@@ -37,20 +40,46 @@ class FabricSerializer(serializers.ModelSerializer):
             "name", "description",
             "sku", "price", "stock",
             "is_active", "created_at", "updated_at",
-            "fabric_image", "gallery",
+            "fabric_image", "primary_image_url", "gallery",
         ]
         read_only_fields = ["id", "sku", "created_at", "updated_at"]
     
-    def validate_gallery(self, value):
-        if not (1 <= len(value) <= 4):
-            raise serializers.ValidationError("You must upload between 1 and 4 images.")
-        return value
+    def get_primary_image_url(self, obj):
+        """Get the URL for the primary image"""
+        request = self.context.get('request')
+        
+        # Find primary image in gallery
+        primary_image = obj.gallery.filter(is_primary=True).first()
+        if primary_image and primary_image.image:
+            if request:
+                return request.build_absolute_uri(primary_image.image.url)
+            return primary_image.image.url
+        
+        # Fall back to fabric_image
+        if obj.fabric_image:
+            if request:
+                return request.build_absolute_uri(obj.fabric_image.url)
+            return obj.fabric_image.url
+        
+        return None
 
+# Define a serializer for image upload with metadata
+class ImageWithMetadataSerializer(serializers.Serializer):
+    image = serializers.ImageField(
+        validators=[FileExtensionValidator(allowed_extensions=["jpg", "jpeg", "png"])]
+    )
+    is_primary = serializers.BooleanField(default=False)
+    order = serializers.IntegerField(default=0)
 
 class FabricCreateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for creating a fabric with multiple images and their metadata.
+    """
     images = serializers.ListField(
-        child=serializers.ImageField(),
-        write_only=True
+        child=ImageWithMetadataSerializer(),
+        required=True,
+        write_only=True,
+        help_text="List of images with metadata (is_primary, order)"
     )
 
     class Meta:
@@ -64,30 +93,77 @@ class FabricCreateSerializer(serializers.ModelSerializer):
             "is_active",
             "images",
         ]
+    
 
-    def validate_images(self, value):
-        if not (1 <= len(value) <= 4):
-            raise serializers.ValidationError("You must upload between 1 and 4 images.")
-        return value
+
+    def validate_images(self, images):
+        # Check that we have at least one image
+        if not images:
+            raise serializers.ValidationError("At least one image must be provided")
+        
+        # Check maximum 4 images limit
+        if len(images) > 4:
+            raise serializers.ValidationError("Maximum 4 images are allowed per fabric")
+        
+        # Check for file size limits and format validation
+        for i, img_data in enumerate(images):
+            if 'image' not in img_data:
+                raise serializers.ValidationError(f"No image provided for image {i}")
+            
+            image = img_data['image']
+            
+            # Check file size (5MB limit)
+            if image.size > 5 * 1024 * 1024:
+                raise serializers.ValidationError(f"Image size exceeds 5MB limit: {image.name}")
+            
+            # Check file format (jpg, jpeg, png)
+            allowed_extensions = ['jpg', 'jpeg', 'png']
+            file_extension = image.name.split('.')[-1].lower()
+            if file_extension not in allowed_extensions:
+                raise serializers.ValidationError(f"Invalid file format for {image.name}. Only JPG, JPEG, and PNG files are allowed.")
+        
+        # Ensure only one primary image
+        primary_images = [img for img in images if img.get('is_primary', False)]
+        if len(primary_images) > 1:
+            raise serializers.ValidationError("Only one image can be marked as primary")
+        elif not primary_images:
+            # If no primary image is marked, set the first one as primary
+            images[0]['is_primary'] = True
+        
+        # Validate order values
+        orders = [img.get('order', 0) for img in images]
+        if len(set(orders)) != len(orders):
+            # If duplicate orders exist, reassign them sequentially
+            for i, img in enumerate(images):
+                img['order'] = i
+        
+        return images
 
     def create(self, validated_data):
-        images = validated_data.pop("images", [])
         request = self.context.get("request")
         tailor_profile = getattr(request.user, "tailor_profile", None)
         
-
+        # Extract images data
+        images_data = validated_data.pop('images')
+        
+        # Find the primary image
+        primary_image = next((img_data for img_data in images_data if img_data.get('is_primary')), images_data[0])
+        
+        # Create the fabric with the primary image
         fabric = Fabric.objects.create(
             tailor=tailor_profile,
             created_by=request.user,
-            fabric_image=images[0] if images else None,
+            fabric_image=primary_image['image'],  # Use the primary image for the fabric_image field
             **validated_data,
         )
-
-        for index, image in enumerate(images):
+        
+        # Create gallery images from all images
+        for img_data in sorted(images_data, key=lambda x: x.get('order', 0)):
             FabricImage.objects.create(
                 fabric=fabric,
-                image=image,
-                order=index,
+                image=img_data['image'],
+                is_primary=img_data.get('is_primary', False),
+                order=img_data.get('order', 0),
             )
 
         return fabric
@@ -97,5 +173,3 @@ class TailorProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model=TailorProfile
         fields = ['shop_name','establishment_year','tailor_experience','working_hours','contact_number','address']
-
-    

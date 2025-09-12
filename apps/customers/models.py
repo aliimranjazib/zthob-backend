@@ -41,6 +41,8 @@ class CustomerProfile(models.Model):
                                     null=True,
                                     blank=True,
                                     related_name="default_for_customers")
+    loyalty_points = models.IntegerField(null=True, blank=True)
+    tags=models.CharField(max_length=20, blank=True, null=True)
     def __str__(self):
         return f"Customer Profile for {self.user.username}"
     
