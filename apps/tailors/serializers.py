@@ -15,7 +15,7 @@ class FabricImageSerializer(serializers.ModelSerializer):
         model = FabricImage
         fields = ["id", "image", "order"]
 
-    def get_image(self, obj):
+    def get_image(self, obj) -> str | None:
         request = self.context.get("request", None)
         if request:
             return request.build_absolute_uri(obj.image.url) if obj.image else None

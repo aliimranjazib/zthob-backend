@@ -15,14 +15,16 @@ from .serializers import (
     )
 from rest_framework_simplejwt.tokens import RefreshToken
 from zthob.utils import api_response
-from drf_yasg.utils import swagger_auto_schema
+from drf_spectacular.utils import extend_schema
+
 
 class UserRegistrationView(APIView):
+    serializer_class = UserRegisterSerializer
     permission_classes=[AllowAny]
-    @swagger_auto_schema(
-    tags=['Accounts - Authentication'],
-    request_body=UserRegisterSerializer,
-    responses={201: UserProfileSerializer}
+    @extend_schema(
+        responses=UserRegisterSerializer,
+        tags=["Profile"],
+        summary="Retrieve logged-in user profile"
     )
     def post(self,request):
         serializer=UserRegisterSerializer(data=request.data)
@@ -37,7 +39,7 @@ class UserRegistrationView(APIView):
                                           'access_token':str(refresh.access_token)
                                       }
                                       },
-                                status_code=status.HTTP_201_CREATED     
+                                status_code=status.HTTP_201_CREATED
                                 )
         return api_response(success=False,
                             message='Registration Failed',
@@ -46,12 +48,9 @@ class UserRegistrationView(APIView):
                             )
         
 class UserLoginView(APIView):
+    serializer_class = UserLoginSerializer
     permission_classes=[AllowAny]
-    @swagger_auto_schema(
-        tags=['Accounts - Authentication'],
-        request_body=UserLoginSerializer,
-        responses={200:UserProfileSerializer}
-    )
+
     def post(self,request):
         serializer=UserLoginSerializer(data=request.data)
         if serializer.is_valid():
@@ -63,14 +62,14 @@ class UserLoginView(APIView):
                 refresh=RefreshToken.for_user(user)
                 return api_response(success=True,
                                     message="Login successful",
-                                    data={'user':UserProfileSerializer(user).data,
+                                    data={
                                           'tokens':{
                                               'refresh':str(refresh),
                                               'access_token':str(refresh.access_token)
                                           }
                                           
                                           },
-                                    status_code=status.HTTP_200_OK,   
+                                    status_code=status.HTTP_200_OK,
                                     )
             else:
                 return api_response(success=False,
@@ -79,18 +78,16 @@ class UserLoginView(APIView):
                                     status_code=status.HTTP_401_UNAUTHORIZED
                                     )
             
-        return api_response(success=False,     
+        return api_response(success=False,
                             message='Login failed',
                             errors=serializer.errors,
                             status_code=status.HTTP_400_BAD_REQUEST
                             )
         
 class UserProfileView(APIView):
+    serializer_class = UserProfileSerializer
     permission_classes=[IsAuthenticated]
-    @swagger_auto_schema(
-        tags=['Accounts - User Profile'],
-        response={200:UserProfileSerializer}
-    )
+
     def get(self,request):
         serializer=UserProfileSerializer(request.user)
         return api_response(success=True,
@@ -98,11 +95,7 @@ class UserProfileView(APIView):
                             data=serializer.data ,
                             status_code=status.HTTP_200_OK
                             )
-    @swagger_auto_schema(
-       tags=['Accounts - User Profile'],
-       request_body=UserProfileSerializer,
-       responses={200:UserProfileSerializer} 
-    )
+
     def put(self,request):
         serializer=UserProfileSerializer(request.user, data=request.data, partial=True)
         if serializer.is_valid():
@@ -120,12 +113,8 @@ class UserProfileView(APIView):
                             )
 
 class ChangePasswordView(APIView):
+    serializer_class = ChangePasswordSerializer
     permission_classes=[IsAuthenticated]
-    @swagger_auto_schema(
-        tags=['Accounts - Change Password'],
-        request_body=ChangePasswordSerializer,
-        responses={200:UserProfileSerializer}
-    )
     def post(self,request):
         serializer=ChangePasswordSerializer(data=request.data)
         if serializer.is_valid():

@@ -9,6 +9,6 @@ dependencies = [
     "django-cors-headers>=4.7.0",
     "djangorestframework>=3.15.0",
     "djangorestframework-simplejwt>=5.5.1",
-    "drf-yasg>=1.21.10",
+    "drf-spectacular>=0.27.0",
     "pillow>=11.3.0",
 ]

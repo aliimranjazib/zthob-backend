@@ -1,8 +1,10 @@
 from rest_framework.serializers import ModelSerializer
 from rest_framework import serializers
 
+from apps.accounts.serializers import UserProfileSerializer
 from apps.tailors.models import Fabric
 from apps.tailors.serializers import FabricCategorySerializer, FabricImageSerializer, TailorProfileSerializer
+from apps.customers.models import Address, CustomerProfile, FamilyMember
 
 
 class FabricCatalogSerializer(serializers.ModelSerializer):
@@ -27,8 +29,68 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
         ]
     
 
-    def get_fabric_image(self, obj):
+    def get_fabric_image(self, obj) -> str | None:
         request = self.context.get("request", None)
         if request:
             return request.build_absolute_uri(obj.fabric_image.url) if obj.fabric_image else None
         return obj.fabric_image.url if obj.fabric_image else None
+    
+
+class AddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Address
+        fields = '__all__'
+        read_only_fields = ['user']
+    
+    
+class FamilyMemberSerializer(serializers.ModelSerializer):
+    address=AddressSerializer(required=False)
+    class Meta:
+        model=FamilyMember
+        fields = ['id', 'name', 'gender', 'relationship', 'measurements', 'address']
+        read_only_fields = ['user']
+        
+    def create(self, validated_data):
+        user = self.context.get("user")
+
+        address_data = validated_data.pop("address", None)
+
+        family_member = FamilyMember.objects.create(
+            user=user,
+            **validated_data
+        )
+
+        if address_data:
+            address = Address.objects.create(user=user, **address_data)
+            family_member.address = address
+            family_member.save()
+
+        return family_member
+
+    def update(self,instance,validated_data):
+        address_data=validated_data.pop('address',None)
+        #update family member field
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if address_data:
+            if instance.address:
+                for attr, value in validated_data.items():
+                    setattr(instance.address, attr, value)
+                    instance.address.save()
+            else:
+                user = self.context.get('user')
+                address = Address.objects.create(user=user, **address_data)
+                instance.address = address
+                instance.save()
+        return instance
+
+
+class CustomerProfileSerializer(serializers.ModelSerializer):
+    user=UserProfileSerializer(read_only=True)
+    default_address = AddressSerializer(read_only=True)
+    addresses = AddressSerializer(source='user.addresses', many=True, read_only=True)
+    class Meta:
+        model=CustomerProfile
+        fields = ['user', 'default_address','addresses']
+

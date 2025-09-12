@@ -44,11 +44,12 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "corsheaders",
-    "drf_yasg",
+    "drf_spectacular",
     # Apps
     "apps.accounts",
     "apps.tailors",
     "apps.customers",
+    "apps.orders",
 ]
     
 MIDDLEWARE = [
@@ -271,6 +272,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 SIMPLE_JWT = {
@@ -287,22 +289,17 @@ CORS_ALLOWED_ORIGINS=[
 
 CORS_ALLOW_CREDENTIALS=True
 
-# Swagger Settings
-SWAGGER_SETTINGS = {
-    'SECURITY_DEFINITIONS': {
+# drf-spectacular settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Zthob API',
+    'DESCRIPTION': 'Zthob API documentation',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SECURITY': [{
         'Bearer': {
             'type': 'apiKey',
             'name': 'Authorization',
             'in': 'header'
         }
-    },
-    'USE_SESSION_AUTH': False,
-    'PERSIST_AUTH': True,
-    'SUPPORTED_SUBMIT_METHODS': ['get', 'post', 'put', 'delete', 'patch'],
-    'OPERATIONS_SORTER': 'alpha',
-    'TAGS_SORTER': 'alpha',
-    'DOC_EXPANSION': 'list',        # Expand operations by default
-    'DEFAULT_MODEL_RENDERING': 'example',  # Show examples by default
-    'DEEP_LINKING': True,   
-    'HIDE_MODELS': True,        
+    }],
 }
