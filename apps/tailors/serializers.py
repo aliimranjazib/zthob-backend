@@ -7,7 +7,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
     user=UserProfileSerializer(read_only=True)
     class Meta:
         model=TailorProfile
-        fields = ['user','shop_name','establishment_year','tailor_experience','working_hours','contact_number','address']
+        fields = ['user','shop_name','establishment_year','tailor_experience','working_hours','contact_number','address','shop_status']
 
 class FabricImageSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
@@ -31,7 +31,6 @@ class FabricSerializer(serializers.ModelSerializer):
     gallery = FabricImageSerializer(many=True, read_only=True)
     category=FabricCategorySerializer(read_only=True)
     tailor=TailorProfileSerializer(read_only=True)
-    primary_image_url = serializers.SerializerMethodField()
     
     class Meta:
         model = Fabric
@@ -40,28 +39,9 @@ class FabricSerializer(serializers.ModelSerializer):
             "name", "description",
             "sku", "price", "stock",
             "is_active", "created_at", "updated_at",
-            "fabric_image", "primary_image_url", "gallery",
+            "gallery",
         ]
         read_only_fields = ["id", "sku", "created_at", "updated_at"]
-    
-    def get_primary_image_url(self, obj):
-        """Get the URL for the primary image"""
-        request = self.context.get('request')
-        
-        # Find primary image in gallery
-        primary_image = obj.gallery.filter(is_primary=True).first()
-        if primary_image and primary_image.image:
-            if request:
-                return request.build_absolute_uri(primary_image.image.url)
-            return primary_image.image.url
-        
-        # Fall back to fabric_image
-        if obj.fabric_image:
-            if request:
-                return request.build_absolute_uri(obj.fabric_image.url)
-            return obj.fabric_image.url
-        
-        return None
 
 # Define a serializer for image upload with metadata
 class ImageWithMetadataSerializer(serializers.Serializer):
@@ -72,9 +52,6 @@ class ImageWithMetadataSerializer(serializers.Serializer):
     order = serializers.IntegerField(default=0)
 
 class FabricCreateSerializer(serializers.ModelSerializer):
-    """
-    Serializer for creating a fabric with multiple images and their metadata.
-    """
     images = serializers.ListField(
         child=ImageWithMetadataSerializer(),
         required=True,
@@ -146,14 +123,10 @@ class FabricCreateSerializer(serializers.ModelSerializer):
         # Extract images data
         images_data = validated_data.pop('images')
         
-        # Find the primary image
-        primary_image = next((img_data for img_data in images_data if img_data.get('is_primary')), images_data[0])
-        
-        # Create the fabric with the primary image
+        # Create the fabric without the legacy fabric_image field
         fabric = Fabric.objects.create(
             tailor=tailor_profile,
             created_by=request.user,
-            fabric_image=primary_image['image'],  # Use the primary image for the fabric_image field
             **validated_data,
         )
         
@@ -172,4 +145,4 @@ class FabricCreateSerializer(serializers.ModelSerializer):
 class TailorProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model=TailorProfile
-        fields = ['shop_name','establishment_year','tailor_experience','working_hours','contact_number','address']
+        fields = ['shop_name','establishment_year','tailor_experience','working_hours','contact_number','address','shop_status']

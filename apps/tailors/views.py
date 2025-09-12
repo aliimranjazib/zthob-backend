@@ -103,35 +103,6 @@ class TailorFabricView(APIView):
         responses={201: FabricSerializer},
         description="""
         Create a new fabric with multiple images and metadata.
-        
-        **Request Format:**
-        ```json
-        {
-          "name": "Cotton Fabric",
-          "description": "High-quality cotton",
-          "price": 15.99,
-          "stock": 100,
-          "category": 1,
-          "images": [
-            {
-              "image": [file1],
-              "is_primary": true,
-              "order": 0
-            },
-            {
-              "image": [file2],
-              "is_primary": false,
-              "order": 1
-            }
-          ]
-        }
-        ```
-        
-        **Notes:**
-        - At least one image is required, maximum 4 images allowed
-        - Only one image can be marked as primary (if none is marked, the first one will be set as primary)
-        - Each image must be jpg, jpeg, or png format and less than 5MB
-        - The 'order' field determines the display order (0 is first)
         """
     )
     def post(self, request):

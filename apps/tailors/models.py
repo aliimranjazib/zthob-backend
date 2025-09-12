@@ -51,7 +51,7 @@ class Fabric(BaseModel):
     stock = models.PositiveIntegerField(default=1)
     is_active = models.BooleanField(default=True)
     # Keep this for backward compatibility but it will be deprecated
-    fabric_image=models.ImageField(upload_to='fabrics/images', validators=image_validator)
+    fabric_image=models.ImageField(upload_to='fabrics/images', validators=image_validator, null=True, blank=True)
     
     def save(self, *args, **kwargs):
         if not self.sku:
