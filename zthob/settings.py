@@ -29,10 +29,11 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-vv#!hz_y7dae4soqei&
 if ENVIRONMENT == 'production':
     DEBUG = False
 
-ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0').split(',')
 # Application definition
 
 INSTALLED_APPS = [
+    "jazzmin",  # Must be before django.contrib.admin
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -302,4 +303,64 @@ SPECTACULAR_SETTINGS = {
             'in': 'header'
         }
     }],
+}
+
+# Jazzmin Admin UI Configuration - Simplified
+JAZZMIN_SETTINGS = {
+    # Simple branding
+    "site_title": "Mgask Admin",
+    "site_header": "Mgask",
+    "site_brand": "Mgask",
+    "welcome_sign": "Welcome to Mgask",
+    "copyright": "Mgask Team",
+
+    # Simplified search - only search users
+    "search_model": "accounts.CustomUser",
+
+    # Clean top menu - only essential links
+    "topmenu_links": [
+        {"name": "Dashboard", "url": "admin:index"},
+        {"name": "Users", "model": "accounts.CustomUser"},
+    ],
+
+    # Simple user menu
+    "usermenu_links": [
+        {"model": "accounts.CustomUser"}
+    ],
+
+    # Simplified sidebar
+    "show_sidebar": True,
+    "navigation_expanded": False,  # Start collapsed for cleaner look
+    "hide_apps": ["auth"],  # Hide Django's default auth app
+    "hide_models": ["auth.Group"],  # Hide groups
+
+    # Organized menu order - most important first
+    "order_with_respect_to": ["accounts", "customers", "tailors", "orders"],
+
+    # Simple, clear icons
+    "icons": {
+        "accounts.CustomUser": "fas fa-users",
+        "customers.CustomerProfile": "fas fa-user",
+        "customers.Address": "fas fa-map-marker",
+        "customers.FamilyMember": "fas fa-user-friends",
+        "tailors.TailorProfile": "fas fa-cut",
+        "tailors.Fabric": "fas fa-tshirt",
+        "tailors.FabricCategory": "fas fa-tags",
+        "tailors.FabricImage": "fas fa-image",
+        "orders.Order": "fas fa-shopping-cart",
+    },
+
+    # Simplified forms - single column for easier use
+    "changeform_format": "single",
+    "changeform_format_overrides": {},
+
+    # Clean UI
+    "related_modal_active": False,
+    "show_ui_builder": False,
+    "language_chooser": False,
+    "use_google_fonts_cdn": True,
+    
+    # Custom styling for simplicity
+    "custom_css": ["admin/css/custom_admin.css", "admin/css/dashboard_widgets.css"],
+    "custom_js": None,
 }

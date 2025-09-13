@@ -27,6 +27,11 @@ from drf_spectacular.views import (
     SpectacularRedocView,
 )
 
+# Customize admin site
+admin.site.site_header = "Mgask Administration"
+admin.site.site_title = "Mgask Admin"
+admin.site.index_title = "Welcome to Zthob Mgask"
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path('api/accounts/',include('apps.accounts.urls')),
