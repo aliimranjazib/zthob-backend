@@ -33,14 +33,14 @@ ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0')
 # Application definition
 
 INSTALLED_APPS = [
-    "jazzmin",  # Must be before django.contrib.admin
+  # Must be before django.contrib.admin
+    "jazzmin",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    
     # Third Pary Packages
     "rest_framework",
     "rest_framework_simplejwt",
