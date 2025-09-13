@@ -1,0 +1,152 @@
+/* Simplified Admin Panel Styling */
+
+/* Clean, simple header */
+.jazzmin .main-header {
+    background: #2c3e50;
+    border-bottom: 3px solid #3498db;
+}
+
+/* Simple sidebar */
+.jazzmin .main-sidebar {
+    background: #34495e;
+}
+
+/* Clean brand */
+.jazzmin .brand-link {
+    background: #2c3e50;
+    border-bottom: 1px solid #3498db;
+}
+
+/* Simple buttons */
+.jazzmin .btn-primary {
+    background: #3498db;
+    border: none;
+    border-radius: 4px;
+}
+
+.jazzmin .btn-primary:hover {
+    background: #2980b9;
+}
+
+/* Clean cards */
+.jazzmin .card {
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Simple tables */
+.jazzmin .table {
+    border-radius: 4px;
+}
+
+.jazzmin .table thead th {
+    background: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+}
+
+/* Clean forms */
+.jazzmin .form-control {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+}
+
+.jazzmin .form-control:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+}
+
+/* Simple alerts */
+.jazzmin .alert {
+    border-radius: 4px;
+    border: none;
+}
+
+/* Clean pagination */
+.jazzmin .pagination .page-link {
+    border-radius: 4px;
+    margin: 0 1px;
+    border: 1px solid #dee2e6;
+}
+
+/* Simple badges */
+.jazzmin .badge {
+    border-radius: 4px;
+}
+
+/* Clean dashboard */
+.jazzmin .content-wrapper {
+    background: #f8f9fa;
+}
+
+/* Simple sidebar menu */
+.jazzmin .nav-sidebar .nav-item .nav-link {
+    border-radius: 4px;
+    margin: 1px 4px;
+    padding: 8px 12px;
+}
+
+.jazzmin .nav-sidebar .nav-item .nav-link:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.jazzmin .nav-sidebar .nav-item .nav-link.active {
+    background: #3498db;
+}
+
+/* Clean login page */
+.jazzmin .login-box {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Simplify search */
+.jazzmin .main-header .navbar-nav .nav-item .nav-link {
+    color: #fff;
+}
+
+/* Clean breadcrumbs */
+.jazzmin .breadcrumb {
+    background: transparent;
+    padding: 0;
+}
+
+/* Simple filters */
+.jazzmin .filter-form {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+/* Clean action buttons */
+.jazzmin .actions {
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+/* Simple fieldset */
+.jazzmin fieldset {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+/* Clean help text */
+.jazzmin .help {
+    color: #6c757d;
+    font-size: 0.875rem;
+}
+
+/* Simple error messages */
+.jazzmin .errorlist {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid #f5c6cb;
+}

@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 from typing import List
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -28,19 +29,30 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-vv#!hz_y7dae4soqei&
 if ENVIRONMENT == 'production':
     DEBUG = False
 
-ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
-
+ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0').split(',')
 # Application definition
 
 INSTALLED_APPS = [
+  # Must be before django.contrib.admin
+    "jazzmin",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # Third Pary Packages
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "corsheaders",
+    "drf_spectacular",
+    # Apps
+    "apps.accounts",
+    "apps.tailors",
+    "apps.customers",
+    "apps.orders",
 ]
-
+    
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -49,9 +61,11 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
 ]
 
 ROOT_URLCONF = "zthob.urls"
+AUTH_USER_MODEL="accounts.CustomUser"
 
 TEMPLATES = [
     {
@@ -153,8 +167,12 @@ STATICFILES_DIRS = [
 ]
 
 # Media files
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+# MEDIA_URL = "/media/"
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# MEDIA_ROOT = BASE_DIR / "media"
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -247,3 +265,102 @@ else:
 # Create logs directory if it doesn't exist
 LOGS_DIR = BASE_DIR / 'logs'
 LOGS_DIR.mkdir(exist_ok=True)
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME" : timedelta(hours=1),
+    "REFRESH_TOKEN_LIFETIME" : timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS" : True,
+    "BACKLIST_AFTER_ROTATION":True, 
+}
+
+CORS_ALLOWED_ORIGINS=[
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
+CORS_ALLOW_CREDENTIALS=True
+
+# drf-spectacular settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Zthob API',
+    'DESCRIPTION': 'Zthob API documentation',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SECURITY': [{
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header'
+        }
+    }],
+}
+
+# Jazzmin Admin UI Configuration - Simplified
+JAZZMIN_SETTINGS = {
+    # Simple branding
+    "site_title": "Mgask Admin",
+    "site_header": "Mgask",
+    "site_brand": "Mgask",
+    "welcome_sign": "Welcome to Mgask",
+    "copyright": "Mgask Team",
+
+    # Simplified search - only search users
+    "search_model": "accounts.CustomUser",
+
+    # Clean top menu - only essential links
+    "topmenu_links": [
+        {"name": "Dashboard", "url": "admin:index"},
+        {"name": "Users", "model": "accounts.CustomUser"},
+    ],
+
+    # Simple user menu
+    "usermenu_links": [
+        {"model": "accounts.CustomUser"}
+    ],
+
+    # Simplified sidebar
+    "show_sidebar": True,
+    "navigation_expanded": False,  # Start collapsed for cleaner look
+    "hide_apps": ["auth"],  # Hide Django's default auth app
+    "hide_models": ["auth.Group"],  # Hide groups
+
+    # Organized menu order - most important first
+    "order_with_respect_to": ["accounts", "customers", "tailors", "orders"],
+
+    # Simple, clear icons
+    "icons": {
+        "accounts.CustomUser": "fas fa-users",
+        "customers.CustomerProfile": "fas fa-user",
+        "customers.Address": "fas fa-map-marker",
+        "customers.FamilyMember": "fas fa-user-friends",
+        "tailors.TailorProfile": "fas fa-cut",
+        "tailors.Fabric": "fas fa-tshirt",
+        "tailors.FabricCategory": "fas fa-tags",
+        "tailors.FabricImage": "fas fa-image",
+        "orders.Order": "fas fa-shopping-cart",
+    },
+
+    # Simplified forms - single column for easier use
+    "changeform_format": "single",
+    "changeform_format_overrides": {},
+
+    # Clean UI
+    "related_modal_active": False,
+    "show_ui_builder": False,
+    "language_chooser": False,
+    "use_google_fonts_cdn": True,
+    
+    # Custom styling for simplicity
+    "custom_css": ["admin/css/custom_admin.css", "admin/css/dashboard_widgets.css"],
+    "custom_js": None,
+}
