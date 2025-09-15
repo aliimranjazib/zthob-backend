@@ -1,0 +1,18 @@
+[Unit]
+Description=Zthob Django Application
+After=network.target
+
+[Service]
+Type=notify
+User=admin
+Group=admin
+WorkingDirectory=/home/admin/web/mgask.net/public_html
+Environment="PATH=/home/admin/web/mgask.net/venv/bin"
+Environment="DJANGO_SETTINGS_MODULE=zthob.settings"
+ExecStart=/home/admin/web/mgask.net/venv/bin/gunicorn --config gunicorn.conf.py zthob.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
