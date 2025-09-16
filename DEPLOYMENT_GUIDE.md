@@ -10,7 +10,8 @@
 
 ### 1.1 Connect to your VPS
 ```bash
-ssh admin@your-vps-ip
+ssh root@69.62.126.95
+
 ```
 
 ### 1.2 Update system packages
@@ -36,7 +37,7 @@ sudo -u postgres psql
 In PostgreSQL shell:
 ```sql
 CREATE DATABASE zthob_prod;
-CREATE USER zthob_user WITH PASSWORD 'your-secure-password';
+CREATE USER zthob_user WITH PASSWORD '@Mgaskapp007';
 GRANT ALL PRIVILEGES ON DATABASE zthob_prod TO zthob_user;
 ALTER USER zthob_user CREATEDB;
 \q
