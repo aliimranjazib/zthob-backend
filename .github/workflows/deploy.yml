@@ -10,15 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Setup SSH key
-      uses: shimataro/ssh-key-action@v2
-      with:
-        key: ${{ secrets.SSH_KEY }}
-        known_hosts: ${{ secrets.KNOWN_HOSTS }}
-        
     - name: Deploy to server
       run: |
-        ssh -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.HOST }} '
+        echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh -o StrictHostKeyChecking=no root@69.62.126.95 '
           cd /home/zthob-backend
           sudo mkdir -p /var/backups/zthob
           sudo chown $USER:$USER /var/backups/zthob
