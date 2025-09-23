@@ -10,14 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Deploy to server
-      uses: appleboy/ssh-action@v1.0.3
+    - name: Setup SSH key
+      uses: shimataro/ssh-key-action@v2
       with:
-        host: ${{ secrets.HOST }}
-        username: ${{ secrets.USERNAME }}
         key: ${{ secrets.SSH_KEY }}
-        port: 22
-        script: |
+        known_hosts: ${{ secrets.KNOWN_HOSTS }}
+        
+    - name: Deploy to server
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.HOST }} '
           cd /home/zthob-backend
           sudo mkdir -p /var/backups/zthob
           sudo chown $USER:$USER /var/backups/zthob
@@ -28,7 +29,7 @@ jobs:
           fi
           
           echo "Creating code backup..."
-          tar -czf /var/backups/zthob/code_backup_$(date +%Y%m%d_%H%M%S).tar.gz --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' .
+          tar -czf /var/backups/zthob/code_backup_$(date +%Y%m%d_%H%M%S).tar.gz --exclude=".git" --exclude="__pycache__" --exclude="*.pyc" .
           
           echo "Pulling latest changes..."
           git fetch origin
@@ -55,3 +56,4 @@ jobs:
             echo "❌ Service failed to start"
             exit 1
           fi
+        '
