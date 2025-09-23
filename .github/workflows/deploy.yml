@@ -3,7 +3,7 @@ name: Deploy to Production
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # Allows manual triggering
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -18,71 +18,40 @@ jobs:
         key: ${{ secrets.SSH_KEY }}
         port: 22
         script: |
-          # Navigate to project directory
           cd /home/zthob-backend
-          
-          # Create backup directory if it doesn't exist
           sudo mkdir -p /var/backups/zthob
           sudo chown $USER:$USER /var/backups/zthob
           
-          # Backup current database (if using SQLite)
           if [ -f "db.sqlite3" ]; then
             echo "Creating database backup..."
             cp db.sqlite3 /var/backups/zthob/db_backup_$(date +%Y%m%d_%H%M%S).sqlite3
-            echo "Database backup created"
           fi
           
-          # Backup current code
           echo "Creating code backup..."
           tar -czf /var/backups/zthob/code_backup_$(date +%Y%m%d_%H%M%S).tar.gz --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' .
-          echo "Code backup created"
           
-          # Pull latest changes
-          echo "Pulling latest changes from Git..."
+          echo "Pulling latest changes..."
           git fetch origin
           git reset --hard origin/main
-          echo "Code updated successfully"
           
-          # Activate virtual environment
           echo "Activating virtual environment..."
           source magsk_venv/bin/activate
           
-          # Install/update dependencies
           echo "Installing dependencies..."
           pip3 install -r requirements.txt
-          echo "Dependencies updated"
           
-          # Run database migrations
-          echo "Running database migrations..."
+          echo "Running migrations..."
           python3 manage.py migrate
-          echo "Migrations completed"
           
-          # Collect static files
           echo "Collecting static files..."
           python3 manage.py collectstatic --noinput
-          echo "Static files collected"
           
-          # Restart the service
-          echo "Restarting gunicorn service..."
+          echo "Restarting service..."
           sudo systemctl restart gunicorn
-          echo "Service restarted"
           
-          # Check service status
-          echo "Checking service status..."
           if systemctl is-active --quiet gunicorn; then
-            echo "✅ Service is running successfully"
+            echo "✅ Deployment successful!"
           else
             echo "❌ Service failed to start"
-            systemctl status gunicorn
             exit 1
           fi
-          
-          # Test API endpoint
-          echo "Testing API endpoint..."
-          if curl -f -s http://localhost:8000/api/schema/swagger-ui/ > /dev/null; then
-            echo "✅ API is responding correctly"
-          else
-            echo "⚠️  API endpoint test failed - check manually"
-          fi
-          
-          echo "🎉 Deployment completed successfully!"
