@@ -12,6 +12,7 @@ jobs:
     steps:
     - name: Deploy to server
       run: |
+        mkdir -p ~/.ssh
         echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
         ssh -o StrictHostKeyChecking=no root@69.62.126.95 '
