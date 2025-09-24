@@ -17,7 +17,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from zthob.utils import api_response
 from drf_spectacular.utils import extend_schema
 
-
+# Test deployment
 class UserRegistrationView(APIView):
     serializer_class = UserRegisterSerializer
     permission_classes=[AllowAny]
