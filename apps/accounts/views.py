@@ -137,3 +137,7 @@ class ChangePasswordView(APIView):
             errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
         )
+
+@api_view(['GET'])
+def test_deployment(request):
+    return api_response(success=True, message="Deployment test successful")
