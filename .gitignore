@@ -229,3 +229,6 @@ local.py
 
 .kilocode/mcp.json
 .kilocodemodes
+magsk_venv/
+rollback.sh
+udo systemctl restart gunicorn
