@@ -47,10 +47,31 @@ jobs:
           echo "Restarting service..."
           sudo systemctl restart gunicorn
           
+          # Wait a moment for service to start
+          sleep 3
+          
           if systemctl is-active --quiet gunicorn; then
             echo "✅ Deployment successful!"
           else
-            echo "❌ Service failed to start"
-            exit 1
+            echo "❌ Service failed to start, checking logs..."
+            systemctl status gunicorn
+            journalctl -u gunicorn --since "1 minute ago"
+            echo "Attempting to fix and restart..."
+            
+            # Fix common issues
+            sudo mkdir -p /var/run/gunicorn
+            sudo chown root:root /var/run/gunicorn
+            sudo chmod 755 /var/run/gunicorn
+            
+            # Restart again
+            sudo systemctl restart gunicorn
+            sleep 3
+            
+            if systemctl is-active --quiet gunicorn; then
+              echo "✅ Service fixed and running!"
+            else
+              echo "❌ Service still failed after fix attempt"
+              exit 1
+            fi
           fi
         '
