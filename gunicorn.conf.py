@@ -20,7 +20,7 @@ max_requests_jitter = 50
 
 # Logging
 # Use project-specific log directory
-log_dir = "/home/admin/web/mgask.net/logs"
+log_dir = "/home/zthob-backend/logs"
 accesslog = os.path.join(log_dir, "gunicorn_access.log")
 errorlog = os.path.join(log_dir, "gunicorn_error.log")
 loglevel = "info"
@@ -32,8 +32,8 @@ proc_name = "zthob"
 # Server mechanics
 daemon = False          # Don't run as daemon (systemd will manage this)
 pidfile = "/var/run/gunicorn/zthob.pid"
-user = "admin"          # Run as admin user
-group = "admin"         # Run as admin group
+user = "root"          # Run as admin user
+group = "root"         # Run as admin group
 tmp_upload_dir = None   # Use system default
 
 # Preload application for better performance
