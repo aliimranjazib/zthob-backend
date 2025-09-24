@@ -45,6 +45,14 @@ jobs:
           python3 manage.py collectstatic --noinput
           
           echo "Restarting service..."
+          # Ensure gunicorn directories exist
+          sudo mkdir -p /var/run/gunicorn
+          sudo chown root:root /var/run/gunicorn
+          sudo chmod 755 /var/run/gunicorn
+          sudo mkdir -p /home/zthob-backend/logs
+          sudo chown root:root /home/zthob-backend/logs
+          sudo chmod 755 /home/zthob-backend/logs
+          
           sudo systemctl restart gunicorn
           
           # Wait a moment for service to start
