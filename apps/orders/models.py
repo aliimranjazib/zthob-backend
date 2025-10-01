@@ -5,15 +5,60 @@ from decimal import Decimal
 
 # Create your models here.
 class Order(BaseModel):
+    """
+    Order Status Flow Documentation:
+    
+    Order Types:
+    - FABRIC_ONLY: Just purchase fabric/item (no stitching required)
+    - FABRIC_WITH_STITCHING: Purchase fabric + get it stitched
+    
+    Category-Based Order Types:
+    - Fabric Category: 2 options (FABRIC_ONLY OR FABRIC_WITH_STITCHING)
+    - Other Categories (caps, handkerchief, etc.): 1 option (FABRIC_ONLY only - just buy it)
+    
+    Status Flows:
+    FABRIC_ONLY Flow (for all categories):
+    1. pending -> confirmed -> ready_for_delivery -> delivered
+    
+    FABRIC_WITH_STITCHING Flow (fabric category only):
+    1. pending -> confirmed -> measuring -> cutting -> stitching -> ready_for_delivery -> delivered
+    
+    Role-Based Status Update Permissions:
+    - CUSTOMERS (USER): Can only cancel orders (pending -> cancelled)
+    - TAILORS (TAILOR): Can update all statuses except cancellation
+    - ADMINS (ADMIN): Can do everything (full control)
+    
+    Cancellation Rules:
+    - Can only be cancelled when status is 'pending'
+    - Only customers can cancel their own orders
+    - Tailors cannot cancel orders (only customers can)
+    - Once 'confirmed' or beyond, no cancellation allowed
+    - Once 'delivered' or 'cancelled', no further changes allowed
+    
+    Status Meanings:
+    - pending: Order created, waiting for tailor confirmation
+    - confirmed: Tailor accepted the order
+    - measuring: Taking customer measurements (stitching orders only)
+    - cutting: Cutting fabric (stitching orders only)
+    - stitching: Sewing the garment (stitching orders only)
+    - ready_for_delivery: Order ready for delivery
+    - delivered: Order completed and delivered to customer
+    - cancelled: Order cancelled (final state)
+    """
+    ORDER_TYPE_CHOICES = (
+        ('fabric_only', 'Fabric Purchase Only'),
+        ('fabric_with_stitching', 'Fabric + Stitching'),
+    )
+    
     ORDER_STATUS_CHOICES=(
-        ("pending", "Pending"),
-        ("confirmed", "Confirmed"),
-        ("measuring", "Measuring"),
-        ("cutting", "Cutting"),
-        ("stitching", "Stitching"),
-        ("ready_for_delivery", "Ready for Delivery"),
-        ("delivered", "Delivered"),
-        ("cancelled", "Cancelled"),
+        ("pending", "Pending"),                    # Initial state - waiting for tailor
+        ("confirmed", "Confirmed"),                # Tailor accepted the order
+        ("measuring", "Measuring"),                # Taking measurements (stitching only)
+        ("cutting", "Cutting"),                    # Cutting fabric (stitching only)
+        ("stitching", "Stitching"),                # Sewing garment (stitching only)
+        ("ready_for_delivery", "Ready for Delivery"), # Order ready for delivery
+        ("delivered", "Delivered"),                # Order completed (final state)
+        ("cancelled", "Cancelled"),                # Order cancelled (final state)
     )
     PAYMENT_STATUS_CHOICES = (
         ("pending", "Pending"),
@@ -37,6 +82,12 @@ class Order(BaseModel):
     on_delete=models.CASCADE,
     related_name='tailor_orders',
     help_text='Tailor assigned to this order'
+    )
+    order_type=models.CharField(
+        max_length=25,
+        choices=ORDER_TYPE_CHOICES,
+        default='fabric_with_stitching',
+        help_text="Type of order - fabric only or fabric with stitching"
     )
     order_number=models.CharField(
     max_length=20,
@@ -92,6 +143,13 @@ class Order(BaseModel):
     help_text="Payment method chosen by customer"
     )
 
+    family_member=models.ForeignKey(
+    'customers.FamilyMember',
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True,
+    help_text="Family member this order is for (optional - if not specified, order is for the customer)"
+    )
     delivery_address=models.ForeignKey(
     'customers.Address',
     on_delete=models.SET_NULL,
@@ -143,7 +201,8 @@ class Order(BaseModel):
 
     def __str__(self):
         tailor_name = getattr(self.tailor, 'tailor_profile', {}).get('shop_name', self.tailor.username)
-        return f"Order {self.order_number} - {self.customer.username} to {tailor_name}"
+        recipient = self.family_member.name if self.family_member else self.customer.username
+        return f"Order {self.order_number} - {recipient} (by {self.customer.username}) to {tailor_name}"
 
     @property
     def items_count(self):
@@ -154,6 +213,28 @@ class Order(BaseModel):
     def can_be_cancelled(self):
         """Check if order can still be cancelled"""
         return self.status in ['pending','confirmed']
+    
+    def get_allowed_status_transitions(self):
+        """Get allowed status transitions based on order type"""
+        if self.order_type == 'fabric_only':
+            return {
+                'pending': ['confirmed', 'cancelled'],
+                'confirmed': ['ready_for_delivery'],
+                'ready_for_delivery': ['delivered'],
+                'delivered': [],
+                'cancelled': []
+            }
+        else:  # fabric_with_stitching
+            return {
+                'pending': ['confirmed', 'cancelled'],
+                'confirmed': ['measuring'],
+                'measuring': ['cutting'],
+                'cutting': ['stitching'],
+                'stitching': ['ready_for_delivery'],
+                'ready_for_delivery': ['delivered'],
+                'delivered': [],
+                'cancelled': []
+            }
 
 class OrderItem(BaseModel):
 

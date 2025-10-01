@@ -53,6 +53,7 @@ class OrderSerializer(serializers.ModelSerializer):
     customer_email=serializers.CharField(source='customer.email',read_only=True)
     tailor_name=serializers.SerializerMethodField()
     tailor_contact=serializers.SerializerMethodField()
+    family_member_name=serializers.SerializerMethodField()
     delivery_address_text=serializers.SerializerMethodField()
     items=OrderItemSerializer(source='order_items',many=True,read_only=True)
     items_count=serializers.IntegerField(read_only=True)
@@ -69,6 +70,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'tailor',
             'tailor_name',
             'tailor_contact',
+            'order_type',
             'status',
             'subtotal',
             'tax_amount',
@@ -76,6 +78,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'total_amount',
             'payment_status',
             'payment_method',
+            'family_member',
+            'family_member_name',
             'delivery_address',
             'delivery_address_text',
             'estimated_delivery_date',
@@ -105,6 +109,11 @@ class OrderSerializer(serializers.ModelSerializer):
         except TailorProfile.DoesNotExist:
             return None
 
+    def get_family_member_name(self, obj):
+        if obj.family_member:
+            return f"{obj.family_member.name} ({obj.family_member.relationship})"
+        return None
+
     def get_delivery_address_text(self,obj):
         if obj.delivery_address:
             return f"{obj.delivery_address.street}, {obj.delivery_address.city}, {obj.delivery_address.country}"
@@ -118,10 +127,12 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         fields = [
             'customer',
             'tailor',
+            'order_type',
             'subtotal',
             'tax_amount',
             'delivery_fee',
             'payment_method',
+            'family_member',
             'delivery_address',
             'estimated_delivery_date',
             'special_instructions',
@@ -145,6 +156,66 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Tailor profile not found')
         return value
 
+    def validate_family_member(self, value):
+        if value:
+            # Get the customer from context (set in the view)
+            customer = self.context.get('request').user
+            if value.user != customer:
+                raise serializers.ValidationError('Family member must belong to the authenticated customer')
+        return value
+
+    def validate(self, data):
+        """Validate order type based on fabric categories"""
+        order_type = data.get('order_type')
+        items_data = data.get('items', [])
+        
+        if items_data:
+            # Check categories of all items
+            fabric_categories = set()
+            for item_data in items_data:
+                fabric_value = item_data.get('fabric')
+                if fabric_value:
+                    try:
+                        from apps.tailors.models import Fabric
+                        
+                        # Handle both ID and Fabric object cases
+                        if isinstance(fabric_value, Fabric):
+                            fabric = fabric_value
+                        else:
+                            # Try to get fabric by ID
+                            fabric = Fabric.objects.get(id=fabric_value)
+                        
+                        if fabric.category:
+                            fabric_categories.add(fabric.category.name.lower())
+                    except (Fabric.DoesNotExist, ValueError, TypeError):
+                        # Skip validation for invalid fabric references
+                        pass
+            
+            # Business rule validation
+            if not fabric_categories:
+                # No valid categories found - allow any order type
+                pass
+            elif len(fabric_categories) > 1:
+                # Mixed categories - only allow fabric_only
+                if order_type != 'fabric_only':
+                    raise serializers.ValidationError(
+                        f"Orders with mixed categories ({', '.join(fabric_categories)}) can only be 'fabric_only' type"
+                    )
+            elif 'fabric' in fabric_categories:
+                # Only fabric category: Can choose either fabric_only or fabric_with_stitching
+                if order_type not in ['fabric_only', 'fabric_with_stitching']:
+                    raise serializers.ValidationError(
+                        "For fabric category items, you can choose either 'fabric_only' or 'fabric_with_stitching'"
+                    )
+            else:
+                # Other categories (caps, handkerchief, etc.): Only fabric_only allowed
+                if order_type != 'fabric_only':
+                    raise serializers.ValidationError(
+                        f"For {', '.join(fabric_categories)} category items, only 'fabric_only' option is available"
+                    )
+        
+        return data
+
     def create(self,validated_data):
         items_data=validated_data.pop('items')
         order=Order.objects.create(**validated_data)
@@ -158,21 +229,16 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         fields=['status','notes']
     def validate_status(self,value):
         instance=self.instance
-        if instance:
-            allowed_transitions={
-        'pending':['confirmed','cancelled'],
-        'confirmed':['measuring','cancelled'],
-        'measuring':['cutting','cancelled'],
-        'cutting':['stitching','cancelled'],
-        'stitching':['ready_for_delivery','cancelled'],
-        'ready_for_delivery': ['delivered', 'cancelled'],
-        'delivered': [],  # Final state
-        'cancelled': []   # Final state
-            }
+        if instance and value != instance.status:  # Only validate if status is actually changing
+            
+            # Get allowed transitions based on order type
+            allowed_transitions = instance.get_allowed_status_transitions()
+            
             current_status=instance.status
             if value not in allowed_transitions.get(current_status,[]):
                 raise serializers.ValidationError(
-                    f"Cannot change status from {current_status} to {value}"
+                    f"Cannot change status from {current_status} to {value}. "
+                    f"Allowed transitions from {current_status}: {allowed_transitions.get(current_status, [])}"
                 )
         return value
     def update(self,instance,validated_data):

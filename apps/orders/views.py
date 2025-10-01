@@ -102,7 +102,7 @@ class OrderDetailView(APIView):
                 raise PermissionError('You can only view your own orders')
 
         elif request.user.role == 'TAILOR':
-            if order.tailor.user != request.user:
+            if order.tailor != request.user:
                 raise PermissionError('You can only view order that is assigned to you')
 
         return order
@@ -139,6 +139,30 @@ class OrderDetailView(APIView):
     def put(self, request, order_id):
         try:
             order=self.get_object(order_id,request)
+            
+            # Role-based permission checks for status updates
+            new_status = request.data.get('status')
+            if new_status:
+                if request.user.role == 'USER':
+                    # Customers can only cancel orders (pending -> cancelled)
+                    if new_status != 'cancelled':
+                        raise PermissionError("Customers can only cancel orders. Only tailors can update order status.")
+                    
+                    # Only allow cancellation when status is pending
+                    if new_status == 'cancelled' and order.status != 'pending':
+                        raise PermissionError("Orders can only be cancelled when status is pending")
+                        
+                elif request.user.role == 'TAILOR':
+                    # Tailors cannot cancel orders (only customers can cancel)
+                    if new_status == 'cancelled':
+                        raise PermissionError("Tailors cannot cancel orders. Only customers can cancel their orders.")
+                        
+                elif request.user.role == 'ADMIN':
+                    # Admins can do everything - no restrictions
+                    pass
+                else:
+                    raise PermissionError("Invalid user role")
+            
             serializer=OrderUpdateSerializer(order,data=request.data, partial=True)
             if serializer.is_valid():
                 updated_order=serializer.save()
@@ -203,12 +227,38 @@ class OrderStatusUpdateView(APIView):
 
         try:
             order=get_object_or_404(Order,id=order_id)
-            if request.user.role =='USER':
+            
+            # Role-based permission checks
+            if request.user.role == 'USER':
+                # Customers can only update their own orders
                 if order.customer != request.user:
                     raise PermissionError("You can only update your own orders")
-            elif request.user.role =='TAILOR':
-                if order.tailor.user!=request.user:
+                
+                # Customers can only cancel orders (pending -> cancelled)
+                new_status = request.data.get('status')
+                if new_status and new_status != 'cancelled':
+                    raise PermissionError("Customers can only cancel orders. Only tailors can update order status.")
+                
+                # Only allow cancellation when status is pending
+                if new_status == 'cancelled' and order.status != 'pending':
+                    raise PermissionError("Orders can only be cancelled when status is pending")
+                    
+            elif request.user.role == 'TAILOR':
+                # Tailors can only update orders assigned to them
+                if order.tailor != request.user:
                     raise PermissionError("You can only update orders assigned to you")
+                
+                # Tailors cannot cancel orders (only customers can cancel)
+                new_status = request.data.get('status')
+                if new_status and new_status == 'cancelled':
+                    raise PermissionError("Tailors cannot cancel orders. Only customers can cancel their orders.")
+                    
+            elif request.user.role == 'ADMIN':
+                # Admins can do everything - no restrictions
+                pass
+            else:
+                raise PermissionError("Invalid user role")
+            
             serializer=OrderUpdateSerializer(order, data=request.data,partial=True, context={'request':request})
             if serializer.is_valid():
                 updated_order=serializer.save()
@@ -250,7 +300,7 @@ class OrderHistoryView(APIView):
                 if order.customer != request.user:
                     raise PermissionError("You can only view your own order history")
             elif request.user.role == 'TAILOR':
-                if order.tailor.user != request.user:
+                if order.tailor != request.user:
                     raise PermissionError("You can only view history for orders assigned to you")
             
             # Get status history

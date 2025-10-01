@@ -6,8 +6,9 @@ from .models import Order, OrderItem, OrderStatusHistory
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = [
-        'order_number', 
+        'order_number',
         'customer', 
+        'family_member',
         'tailor', 
         'status', 
         'total_amount', 
@@ -34,7 +35,7 @@ class OrderAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
     fieldsets = (
         ('Order Information', {
-            'fields': ('order_number', 'customer', 'tailor', 'status')
+            'fields': ('order_number', 'customer', 'family_member', 'tailor', 'status')
         }),
         ('Financial Information', {
             'fields': ('subtotal', 'tax_amount', 'delivery_fee', 'total_amount')
