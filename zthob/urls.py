@@ -37,11 +37,13 @@ urlpatterns = [
     path('api/accounts/',include('apps.accounts.urls')),
     path('api/tailors/',include('apps.tailors.urls')),
     path('api/customers/',include('apps.customers.urls')),
+    path('api/orders/',include('apps.orders.urls')),
     
     # API documentation URLs
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/schema/swagger-ui/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path("api/schema/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
+    
 ]
 
 if settings.DEBUG:
