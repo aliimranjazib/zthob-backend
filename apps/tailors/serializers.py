@@ -30,7 +30,6 @@ class FabricCategorySerializer(serializers.ModelSerializer):
 class FabricSerializer(serializers.ModelSerializer):
     gallery = FabricImageSerializer(many=True, read_only=True)
     category=FabricCategorySerializer(read_only=True)
-    tailor=TailorProfileSerializer(read_only=True)
     
     class Meta:
         model = Fabric
