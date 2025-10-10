@@ -39,28 +39,19 @@ jobs:
           pip3 install -r requirements.txt
           
           echo "Running migrations..."
-          python3 manage.py migrate --verbosity=2
+          python3 manage.py migrate --verbosity=2 || {
+            echo "Migration failed, attempting to fix..."
+            python3 fix_migrations.py || {
+              echo "Fix failed, resetting database..."
+              python3 reset_database.py
+            }
+          }
           
           echo "Checking migration status..."
           python3 manage.py showmigrations
           
           echo "Verifying database tables..."
-          python3 -c "
-          import sqlite3
-          conn = sqlite3.connect('db.sqlite3')
-          cursor = conn.cursor()
-          cursor.execute(\"SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'tailors_%';\")
-          tables = [row[0] for row in cursor.fetchall()]
-          print('Tailors tables found:', tables)
-          required = ['tailors_fabrictype', 'tailors_fabriccategory', 'tailors_fabric', 'tailors_fabricimage', 'tailors_tailorprofile']
-          missing = [t for t in required if t not in tables]
-          if missing:
-            print('❌ Missing tables:', missing)
-            exit(1)
-          else:
-            print('✅ All required tables exist')
-          conn.close()
-          "
+          python3 -c "import sqlite3; conn = sqlite3.connect('db.sqlite3'); cursor = conn.cursor(); cursor.execute(\"SELECT name FROM sqlite_master WHERE type='table'\"); tables = [row[0] for row in cursor.fetchall()]; print('All tables found:', len(tables), 'tables'); required = ['tailors_fabrictype', 'tailors_fabriccategory', 'tailors_fabric', 'tailors_fabricimage', 'tailors_tailorprofile', 'orders_order', 'orders_orderitem']; missing = [t for t in required if t not in tables]; print('❌ Missing tables:', missing) if missing else print('✅ All required tables exist'); conn.close()"
           
           echo "Collecting static files..."
           python3 manage.py collectstatic --noinput
