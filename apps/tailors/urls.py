@@ -5,6 +5,9 @@ from apps.tailors.views import (
     TailorFabricCategoryDetailView,
     TailorProfileView,
     TailorFabricView,
+    TailorFabricDetailView,
+    TailorFabricTypeListCreateView,
+    TailorFabricTypeRetrieveUpdateDestroyView,
     FabricImagePrimaryView,
     FabricImageDeleteView
 )
@@ -12,6 +15,10 @@ from apps.tailors.views import (
 urlpatterns = [
     path('profile/', TailorProfileView.as_view(), name='tailor-profile'),
     path('fabrics/', TailorFabricView.as_view(), name='tailor-fabrics'),
+    path('fabrics/<int:pk>/', TailorFabricDetailView.as_view(), name='tailor-fabric-detail'),
+    path('fabric-type/', TailorFabricTypeListCreateView.as_view(),name='fabrics-type'),
+    path('fabric-type/<int:pk>/', TailorFabricTypeRetrieveUpdateDestroyView.as_view(),name='fabrics-type-detail'),
+
     path('category/', TailorFabricCategoryListCreateView.as_view(), name='fabric-category'),
     path('category/<int:pk>/', TailorFabricCategoryDetailView.as_view(), name='fabric-category-detail'),
     path('images/<int:image_id>/set-primary/', FabricImagePrimaryView.as_view(), name='fabric-image-set-primary'),

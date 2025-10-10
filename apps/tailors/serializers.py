@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.core.validators import FileExtensionValidator
 from apps.accounts.serializers import UserProfileSerializer
-from apps.tailors.models import Fabric, FabricCategory, FabricImage, TailorProfile
+from apps.tailors.models import SEASON_CHOICES, Fabric, FabricCategory, FabricImage, FabricType, TailorProfile
 
 class TailorProfileSerializer(serializers.ModelSerializer):
     user=UserProfileSerializer(read_only=True)
@@ -22,21 +22,40 @@ class FabricImageSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.image.url) if obj.image else None
         return obj.image.url if obj.image else None
 
+class FabricTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model=FabricType
+        fields=['id','name',"created_at", "updated_at"]
+class FabricTypeBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model=FabricType
+        fields=['id','name']
+
 class FabricCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = FabricCategory
         fields = ["id", "name", "slug", "is_active", "created_at", "updated_at"]
-
+class FabricCategoryBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model=FabricCategory
+        fields=['id','name','is_active']
 class FabricSerializer(serializers.ModelSerializer):
     gallery = FabricImageSerializer(many=True, read_only=True)
-    category=FabricCategorySerializer(read_only=True)
+    category=FabricCategoryBasicSerializer(read_only=True)
+    fabric_type=FabricTypeBasicSerializer(read_only=True)
+    # tailor=TailorProfileSerializer(read_only=True)
+    is_low_stock = serializers.ReadOnlyField()
+    is_out_of_stock = serializers.ReadOnlyField()
     
     class Meta:
         model = Fabric
         fields = [
-            "id", "tailor", "category",
+            "id", "category",
             "name", "description",
+            'seasons',
+            'fabric_type',
             "sku", "price", "stock",
+            "is_low_stock", "is_out_of_stock",  # Added stock status fields
             "is_active", "created_at", "updated_at",
             "gallery",
         ]
@@ -63,6 +82,8 @@ class FabricCreateSerializer(serializers.ModelSerializer):
         fields = [
             "category",
             "name",
+            'seasons',
+            'fabric_type',
             "description",
             "price",
             "stock",
@@ -139,8 +160,43 @@ class FabricCreateSerializer(serializers.ModelSerializer):
             )
 
         return fabric
-        
-        
+
+
+class FabricUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating existing fabrics."""
+    
+    fabric_type = serializers.PrimaryKeyRelatedField(
+        queryset=FabricType.objects.all(),
+        required=False,
+        help_text="Fabric type ID"
+    )
+    seasons = serializers.ChoiceField(
+        choices=SEASON_CHOICES,
+        required=False,
+        help_text="Best suited season for this fabric"
+    )
+    
+    class Meta:
+        model = Fabric
+        fields = [
+            "category",
+            "fabric_type",
+            "seasons",
+            "name",
+            "description",
+            "price",
+            "stock",
+            "is_active",
+        ]
+    
+    def update(self, instance, validated_data):
+        """Update fabric instance with validated data."""
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+
+
 class TailorProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model=TailorProfile

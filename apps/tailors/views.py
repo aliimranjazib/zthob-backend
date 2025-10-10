@@ -1,18 +1,100 @@
 from django.shortcuts import render
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-from apps.tailors.models import FabricCategory, FabricImage, TailorProfile, Fabric
+from rest_framework.permissions import IsAuthenticated,AllowAny
+from apps.tailors.models import FabricCategory, FabricImage, FabricType, TailorProfile, Fabric
 from apps.tailors.permissions import IsTailor
-from apps.tailors.serializers import FabricCategorySerializer, TailorProfileSerializer, TailorProfileUpdateSerializer, FabricSerializer, FabricCreateSerializer
+from apps.tailors.serializers import FabricCategorySerializer, FabricTypeSerializer, TailorProfileSerializer, TailorProfileUpdateSerializer, FabricSerializer, FabricCreateSerializer, FabricUpdateSerializer
 from zthob.utils import api_response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema
+from rest_framework import generics
+
 # Create your views here.
 
+@extend_schema(
+    description="Fabric type management operations",
+    request=FabricTypeSerializer,
+    responses={
+        201: FabricTypeSerializer,  
+        200: FabricTypeSerializer(many=True),
+    },
+    tags=["Fabric Types"]
+)
 
+class TailorFabricTypeListCreateView(generics.ListCreateAPIView):
+    queryset=FabricType.objects.all()
+    serializer_class=FabricTypeSerializer
+    permission_classes=[AllowAny]
+    
+    @extend_schema(
+        description="Get all available fabric types",
+        responses={200: FabricTypeSerializer(many=True)}
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+    
+    @extend_schema(
+        description="Create a new fabric type",
+        request=FabricTypeSerializer,
+        responses={201: FabricTypeSerializer}
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+@extend_schema(
+    tags=["Fabric Types"],
+    description="Fabric type detail operations (get, update, delete)",
+    request=FabricTypeSerializer,
+    responses={
+        200: FabricTypeSerializer,
+        201: FabricTypeSerializer,
+        204: {"description": "Fabric type deleted successfully"},
+        404: {"description": "Fabric type not found"}
+    }
+)
+class TailorFabricTypeRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+    queryset=FabricType.objects.all()
+    serializer_class=FabricTypeSerializer
+    permission_classes=[AllowAny]
+    lookup_field = 'pk'
+    
+    @extend_schema(
+        description="Get fabric type details by ID",
+        responses={200: FabricTypeSerializer, 404: {"description": "Fabric type not found"}}
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+    
+    @extend_schema(
+        description="Update fabric type completely",
+        request=FabricTypeSerializer,
+        responses={200: FabricTypeSerializer, 404: {"description": "Fabric type not found"}}
+    )
+    def put(self, request, *args, **kwargs):
+        return super().put(request, *args, **kwargs)
+    
+    @extend_schema(
+        description="Update fabric type partially",
+        request=FabricTypeSerializer,
+        responses={200: FabricTypeSerializer, 404: {"description": "Fabric type not found"}}
+    )
+    def patch(self, request, *args, **kwargs):
+        return super().patch(request, *args, **kwargs)
+    
+    @extend_schema(
+        description="Delete fabric type",
+        responses={204: {"description": "Fabric type deleted successfully"}, 404: {"description": "Fabric type not found"}}
+    )
+    def delete(self, request, *args, **kwargs):
+        return super().delete(request, *args, **kwargs)
+
+@extend_schema(
+    tags=["Fabric Categories"],
+    description="Fabric category management operations"
+)
 class TailorFabricCategoryListCreateView(APIView):
     serializer_class = FabricCategorySerializer
+    permission_classes=[AllowAny]
     
     def get(self,request):
         queryset = FabricCategory.objects.filter(is_active=True).order_by("-created_at")
@@ -26,12 +108,21 @@ class TailorFabricCategoryListCreateView(APIView):
         return api_response(success=False, message="Validation failed", errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    tags=["Fabric Categories"],
+    description="Fabric category detail operations"
+)
 class TailorFabricCategoryDetailView(APIView):
     serializer_class = FabricCategorySerializer
+    permission_classes=[AllowAny]
     def delete(self,request,pk):
         category = FabricCategory.objects.get(pk=pk)
         category.delete()
         return api_response(success=True, message="Fabric category deleted", data=None, status_code=status.HTTP_200_OK)
+@extend_schema(
+    tags=["Tailor Profile"],
+    description="Tailor profile management operations"
+)
 class TailorProfileView(APIView):
     serializer_class = TailorProfileSerializer
 
@@ -51,6 +142,138 @@ class TailorProfileView(APIView):
         return api_response(success=False, message="Validation failed", errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    tags=["Fabric Management"],
+    description="Individual fabric operations (get, update, delete)"
+)
+class TailorFabricDetailView(APIView):
+    """View for handling individual fabric operations (GET, PUT, PATCH, DELETE)."""
+    
+    permission_classes = [IsAuthenticated, IsTailor]
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def get_object(self, pk, user):
+        """Get fabric that belongs to the authenticated tailor."""
+        try:
+            return Fabric.objects.get(pk=pk, tailor__user=user)
+        except Fabric.DoesNotExist:
+            return None
+    
+    @extend_schema(
+        responses={200: FabricSerializer, 404: {"description": "Fabric not found"}},
+        description="Get single fabric details by ID"
+    )
+    def get(self, request, pk):
+        """Get single fabric details."""
+        fabric = self.get_object(pk, request.user)
+        if not fabric:
+            return api_response(
+                success=False, 
+                message="Fabric not found", 
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = FabricSerializer(fabric, context={'request': request})
+        return api_response(
+            success=True, 
+            message="Fabric details fetched", 
+            data=serializer.data, 
+            status_code=status.HTTP_200_OK
+        )
+    
+    @extend_schema(
+        request=FabricUpdateSerializer,
+        responses={200: FabricSerializer, 400: {"description": "Validation failed"}, 404: {"description": "Fabric not found"}},
+        description="Update fabric completely (all fields required)"
+    )
+    def put(self, request, pk):
+        """Update fabric (full update)."""
+        fabric = self.get_object(pk, request.user)
+        if not fabric:
+            return api_response(
+                success=False, 
+                message="Fabric not found", 
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = FabricUpdateSerializer(fabric, data=request.data, partial=False)
+        if serializer.is_valid():
+            updated_fabric = serializer.save()
+            response_serializer = FabricSerializer(updated_fabric, context={'request': request})
+            return api_response(
+                success=True, 
+                message="Fabric updated successfully", 
+                data=response_serializer.data, 
+                status_code=status.HTTP_200_OK
+            )
+        
+        return api_response(
+            success=False, 
+            message="Validation failed", 
+            errors=serializer.errors, 
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    
+    @extend_schema(
+        request=FabricUpdateSerializer,
+        responses={200: FabricSerializer, 400: {"description": "Validation failed"}, 404: {"description": "Fabric not found"}},
+        description="Update fabric partially (only provided fields)"
+    )
+    def patch(self, request, pk):
+        """Update fabric (partial update)."""
+        fabric = self.get_object(pk, request.user)
+        if not fabric:
+            return api_response(
+                success=False, 
+                message="Fabric not found", 
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = FabricUpdateSerializer(fabric, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated_fabric = serializer.save()
+            response_serializer = FabricSerializer(updated_fabric, context={'request': request})
+            return api_response(
+                success=True, 
+                message="Fabric updated successfully", 
+                data=response_serializer.data, 
+                status_code=status.HTTP_200_OK
+            )
+        
+        return api_response(
+            success=False, 
+            message="Validation failed", 
+            errors=serializer.errors, 
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    
+    @extend_schema(
+        responses={200: {"description": "Fabric deleted successfully"}, 404: {"description": "Fabric not found"}},
+        description="Delete fabric permanently"
+    )
+    def delete(self, request, pk):
+        """Delete fabric."""
+        fabric = self.get_object(pk, request.user)
+        if not fabric:
+            return api_response(
+                success=False, 
+                message="Fabric not found", 
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        fabric_name = fabric.name
+        fabric.delete()
+        return api_response(
+            success=True, 
+            message=f"Fabric '{fabric_name}' deleted successfully", 
+            status_code=status.HTTP_200_OK
+        )
+
+
+@extend_schema(
+    tags=["Fabric Images"],
+    description="Fabric image management operations"
+)
 class FabricImagePrimaryView(APIView):
     """
     View to set an image as the primary image for a fabric
@@ -87,12 +310,20 @@ class FabricImagePrimaryView(APIView):
                           status_code=status.HTTP_200_OK)
 
 
+@extend_schema(
+    tags=["Fabric Management"],
+    description="Fabric list and creation operations"
+)
 class TailorFabricView(APIView):
     serializer_class = FabricSerializer
     
     permission_classes = [IsAuthenticated, IsTailor]
     parser_classes = [MultiPartParser, FormParser]
 
+    @extend_schema(
+        responses={200: FabricSerializer(many=True)},
+        description="Get all fabrics for the authenticated tailor"
+    )
     def get(self, request):
         queryset = Fabric.objects.filter(tailor__user=request.user).order_by("-created_at")
         data = FabricSerializer(queryset, many=True, context={'request': request}).data
@@ -101,9 +332,7 @@ class TailorFabricView(APIView):
     @extend_schema(
         request=FabricCreateSerializer,
         responses={201: FabricSerializer},
-        description="""
-        Create a new fabric with multiple images and metadata.
-        """
+        description="Create a new fabric with multiple images and metadata"
     )
     def post(self, request):
         # Process the form data to create the expected structure
@@ -148,6 +377,10 @@ class TailorFabricView(APIView):
         return api_response(success=False, message="Validation failed", errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    tags=["Fabric Images"],
+    description="Fabric image deletion operations"
+)
 class FabricImageDeleteView(APIView):
     """
     View to delete an individual fabric image
