@@ -1,14 +1,48 @@
+# apps/tailors/serializers/catalog.py
 from rest_framework import serializers
-from django.core.validators import FileExtensionValidator
-from apps.accounts.serializers import UserProfileSerializer
-from apps.tailors.models import SEASON_CHOICES, Fabric, FabricCategory, FabricImage, FabricTag, FabricType, TailorProfile
+from ..models import (
+    Fabric, FabricImage, FabricType, 
+    FabricCategory, FabricTag
+)
+from ..models.base import SEASON_CHOICES
+from .base import ImageWithMetadataSerializer
 
-class TailorProfileSerializer(serializers.ModelSerializer):
-    user=UserProfileSerializer(read_only=True)
+# Fabric Type Serializers
+class FabricTypeSerializer(serializers.ModelSerializer):
     class Meta:
-        model=TailorProfile
-        fields = ['user','shop_name','establishment_year','tailor_experience','working_hours','contact_number','address','shop_status']
+        model = FabricType
+        fields = ['id', 'name', 'created_at', 'updated_at']
 
+class FabricTypeBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FabricType
+        fields = ['id', 'name']
+
+# Fabric Category Serializers
+class FabricCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FabricCategory
+        fields = ["id", "name", "slug", "is_active", "created_at", "updated_at"]
+
+class FabricCategoryBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FabricCategory
+        fields = ['id', 'name', 'is_active']
+
+# Fabric Tag Serializers
+class FabricTagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FabricTag
+        fields = ['id', 'name', 'slug', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'slug', 'created_at', 'updated_at']
+
+class FabricTagBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FabricTag
+        fields = ['id', 'name']
+        read_only_fields = ['id']
+
+# Fabric Image Serializers
 class FabricImageSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
 
@@ -22,71 +56,24 @@ class FabricImageSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.image.url) if obj.image else None
         return obj.image.url if obj.image else None
 
-class FabricTypeSerializer(serializers.ModelSerializer):
-    class Meta:
-        model=FabricType
-        fields=['id','name',"created_at", "updated_at"]
-class FabricTypeBasicSerializer(serializers.ModelSerializer):
-    class Meta:
-        model=FabricType
-        fields=['id','name']
-
-class FabricCategorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = FabricCategory
-        fields = ["id", "name", "slug", "is_active", "created_at", "updated_at"]
-class FabricCategoryBasicSerializer(serializers.ModelSerializer):
-    class Meta:
-        model=FabricCategory
-        fields=['id','name','is_active']
-
-class FabricTagSerializer(serializers.ModelSerializer):
-    
-    class Meta:
-        model = FabricTag
-        fields = ['id', 'name', 'slug', 'is_active', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'slug', 'created_at', 'updated_at']
-    
-
-class FabricTagBasicSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = FabricTag
-        fields = ['id', 'name']
-        read_only_fields = ['id']
-
+# Fabric Serializers
 class FabricSerializer(serializers.ModelSerializer):
     gallery = FabricImageSerializer(many=True, read_only=True)
-    category=FabricCategoryBasicSerializer(read_only=True)
-    fabric_type=FabricTypeBasicSerializer(read_only=True)
-    fabric_tag=FabricTagBasicSerializer(read_only=True)
-    # tailor=TailorProfileSerializer(read_only=True)
+    category = FabricCategoryBasicSerializer(read_only=True)
+    fabric_type = FabricTypeBasicSerializer(read_only=True)
+    fabric_tag = FabricTagBasicSerializer(read_only=True)
     is_low_stock = serializers.ReadOnlyField()
     is_out_of_stock = serializers.ReadOnlyField()
     
     class Meta:
         model = Fabric
         fields = [
-            "id", "category",
-            "name", "description",
-            'seasons',
-            'fabric_type',
-            'fabric_tag', 
-            "sku", "price", "stock",
-            "is_low_stock", "is_out_of_stock",  # Added stock status fields
-            "is_active", "created_at", "updated_at",
-            "gallery",
+            "id", "category", "name", "description", "seasons",
+            "fabric_type", "fabric_tag", "sku", "price", "stock",
+            "is_low_stock", "is_out_of_stock", "is_active", 
+            "created_at", "updated_at", "gallery",
         ]
         read_only_fields = ["id", "sku", "created_at", "updated_at"]
-
-# Define a serializer for image upload with metadata
-class ImageWithMetadataSerializer(serializers.Serializer):
-    image = serializers.ImageField(
-        validators=[FileExtensionValidator(allowed_extensions=["jpg", "jpeg", "png"])]
-    )
-    is_primary = serializers.BooleanField(default=False)
-    order = serializers.IntegerField(default=0)
-
-
 
 class FabricCreateSerializer(serializers.ModelSerializer):
     images = serializers.ListField(
@@ -99,18 +86,9 @@ class FabricCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Fabric
         fields = [
-            "category",
-            "name",
-            'seasons',
-            'fabric_type',
-            "description",
-            "price",
-            "stock",
-            "is_active",
-            "images",
+            "category", "name", "seasons", "fabric_type",
+            "description", "price", "stock", "is_active", "images",
         ]
-    
-
 
     def validate_images(self, images):
         # Check that we have at least one image
@@ -180,7 +158,6 @@ class FabricCreateSerializer(serializers.ModelSerializer):
 
         return fabric
 
-
 class FabricUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating existing fabrics."""
     
@@ -198,14 +175,8 @@ class FabricUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Fabric
         fields = [
-            "category",
-            "fabric_type",
-            "seasons",
-            "name",
-            "description",
-            "price",
-            "stock",
-            "is_active",
+            "category", "fabric_type", "seasons", "name",
+            "description", "price", "stock", "is_active",
         ]
     
     def update(self, instance, validated_data):
@@ -214,9 +185,3 @@ class FabricUpdateSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
-
-
-class TailorProfileUpdateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model=TailorProfile
-        fields = ['shop_name','establishment_year','tailor_experience','working_hours','contact_number','address','shop_status']

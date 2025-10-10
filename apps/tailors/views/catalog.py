@@ -1,28 +1,24 @@
-from django.shortcuts import render
+# apps/tailors/views/catalog.py
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated,AllowAny
-from apps.tailors.permissions import IsTailor
-from apps.tailors.serializers import (
-    FabricCategorySerializer, FabricTagSerializer, FabricTypeSerializer, 
-    TailorProfileSerializer, TailorProfileUpdateSerializer, 
-    FabricSerializer, FabricCreateSerializer, FabricUpdateSerializer
-)
-from zthob.utils import api_response
-from rest_framework import status
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework import generics
 from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema
-from rest_framework import generics
-from .models import (
-    FabricCategory, 
-    FabricImage, 
-    FabricTag, 
-    FabricType, 
-    TailorProfile, 
-    Fabric,
-    TailorProfileReview
-)
-# Create your views here.
+from zthob.utils import api_response
+from rest_framework import status
 
+from ..models import (
+    FabricCategory, FabricImage, FabricTag, 
+    FabricType, Fabric
+)
+from ..serializers import (
+    FabricCategorySerializer, FabricTagSerializer, FabricTypeSerializer,
+    FabricSerializer, FabricCreateSerializer, FabricUpdateSerializer
+)
+from ..permissions import IsTailor
+from .base import BaseTailorAuthenticatedView
+
+# Fabric Type Views
 @extend_schema(
     description="Fabric type management operations",
     request=FabricTypeSerializer,
@@ -32,11 +28,10 @@ from .models import (
     },
     tags=["Fabric Types"]
 )
-
 class TailorFabricTypeListCreateView(generics.ListCreateAPIView):
-    queryset=FabricType.objects.all()
-    serializer_class=FabricTypeSerializer
-    permission_classes=[AllowAny]
+    queryset = FabricType.objects.all()
+    serializer_class = FabricTypeSerializer
+    permission_classes = [AllowAny]
     
     @extend_schema(
         description="Get all available fabric types",
@@ -52,6 +47,7 @@ class TailorFabricTypeListCreateView(generics.ListCreateAPIView):
     )
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
+
 @extend_schema(
     tags=["Fabric Types"],
     description="Fabric type detail operations (get, update, delete)",
@@ -64,9 +60,9 @@ class TailorFabricTypeListCreateView(generics.ListCreateAPIView):
     }
 )
 class TailorFabricTypeRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
-    queryset=FabricType.objects.all()
-    serializer_class=FabricTypeSerializer
-    permission_classes=[AllowAny]
+    queryset = FabricType.objects.all()
+    serializer_class = FabricTypeSerializer
+    permission_classes = [AllowAny]
     lookup_field = 'pk'
     
     @extend_schema(
@@ -99,15 +95,15 @@ class TailorFabricTypeRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAP
     def delete(self, request, *args, **kwargs):
         return super().delete(request, *args, **kwargs)
 
+# Fabric Tag Views
 @extend_schema(
-    tags=["Fabric Categories"],
-    description="Fabric category management operations"
+    tags=["Fabric Tags"],
+    description="Fabric tag management operations"
 )
-
 class TailorFabricTagsListCreateView(generics.ListCreateAPIView):
-    queryset=FabricTag.objects.all()
-    serializer_class=FabricTagSerializer
-    permission_classes=[AllowAny]
+    queryset = FabricTag.objects.all()
+    serializer_class = FabricTagSerializer
+    permission_classes = [AllowAny]
     
     @extend_schema(
         tags=["Fabric Tags"],
@@ -128,16 +124,15 @@ class TailorFabricTagsListCreateView(generics.ListCreateAPIView):
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
-
 class TailorFabricTagsRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
-    queryset=FabricTag.objects.all()
-    serializer_class=FabricTagSerializer
-    permission_classes=[AllowAny]
+    queryset = FabricTag.objects.all()
+    serializer_class = FabricTagSerializer
+    permission_classes = [AllowAny]
     lookup_field = 'pk'
     
     @extend_schema(
         tags=["Fabric Tags"],
-        description="Get fabric tag by ID",
+        description="Get fabric tag details by ID",
         operation_id="fabric_tags_retrieve",
         responses={200: FabricTagSerializer, 404: {"description": "Fabric tag not found"}}
     )
@@ -173,26 +168,41 @@ class TailorFabricTagsRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAP
     def delete(self, request, *args, **kwargs):
         return super().delete(request, *args, **kwargs)
 
-
+# Fabric Category Views
 @extend_schema(
     tags=["Fabric Categories"],
     description="Fabric category management operations"
 )
 class TailorFabricCategoryListCreateView(APIView):
     serializer_class = FabricCategorySerializer
-    permission_classes=[AllowAny]
+    permission_classes = [AllowAny]
     
-    def get(self,request):
+    def get(self, request):
         queryset = FabricCategory.objects.filter(is_active=True).order_by("-created_at")
         data = FabricCategorySerializer(queryset, many=True).data
-        return api_response(success=True, message="Fabric categories fetched", data=data, status_code=status.HTTP_200_OK)
-    def post(self,request):
+        return api_response(
+            success=True, 
+            message="Fabric categories fetched", 
+            data=data, 
+            status_code=status.HTTP_200_OK
+        )
+    
+    def post(self, request):
         serializer = FabricCategorySerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return api_response(success=True, message="Fabric category created", data=serializer.data, status_code=status.HTTP_201_CREATED)
-        return api_response(success=False, message="Validation failed", errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
-
+            return api_response(
+                success=True, 
+                message="Fabric category created", 
+                data=serializer.data, 
+                status_code=status.HTTP_201_CREATED
+            )
+        return api_response(
+            success=False, 
+            message="Validation failed", 
+            errors=serializer.errors, 
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
 
 @extend_schema(
     tags=["Fabric Categories"],
@@ -200,42 +210,105 @@ class TailorFabricCategoryListCreateView(APIView):
 )
 class TailorFabricCategoryDetailView(APIView):
     serializer_class = FabricCategorySerializer
-    permission_classes=[AllowAny]
-    def delete(self,request,pk):
+    permission_classes = [AllowAny]
+    
+    def delete(self, request, pk):
         category = FabricCategory.objects.get(pk=pk)
         category.delete()
-        return api_response(success=True, message="Fabric category deleted", data=None, status_code=status.HTTP_200_OK)
+        return api_response(
+            success=True, 
+            message="Fabric category deleted", 
+            data=None, 
+            status_code=status.HTTP_200_OK
+        )
+
+# Fabric Views
 @extend_schema(
-    tags=["Tailor Profile"],
-    description="Tailor profile management operations"
+    tags=["Fabric Management"],
+    description="Fabric list and creation operations"
 )
-class TailorProfileView(APIView):
-    serializer_class = TailorProfileSerializer
+class TailorFabricView(BaseTailorAuthenticatedView):
+    serializer_class = FabricSerializer
+    parser_classes = [MultiPartParser, FormParser]
 
-    permission_classes=[IsAuthenticated,IsTailor]
-    def get(self,request):
-        profile, _=TailorProfile.objects.get_or_create(user=request.user)
-        data=TailorProfileSerializer(profile).data
-        return api_response(success=True,message='Tailor profile fetched',
-                            data=data, status_code=status.HTTP_200_OK)
-    
-    def put(self,request):
-        profile, _ = TailorProfile.objects.get_or_create(user=request.user)
-        serializer=TailorProfileUpdateSerializer(profile, data=request.data, partial=True)
+    @extend_schema(
+        responses={200: FabricSerializer(many=True)},
+        description="Get all fabrics for the authenticated tailor"
+    )
+    def get(self, request):
+        queryset = Fabric.objects.filter(tailor__user=request.user).order_by("-created_at")
+        data = FabricSerializer(queryset, many=True, context={'request': request}).data
+        return api_response(
+            success=True, 
+            message="Fabrics fetched", 
+            data=data, 
+            status_code=status.HTTP_200_OK
+        )
+
+    @extend_schema(
+        request=FabricCreateSerializer,
+        responses={201: FabricSerializer},
+        description="Create a new fabric with multiple images and metadata"
+    )
+    def post(self, request):
+        # Process the form data to create the expected structure
+        processed_data = request.POST.copy()
+        processed_data.update(request.FILES)
+        
+        # Extract images and create the proper structure
+        images_data = []
+        i = 0
+        while True:
+            image_key = f'images[{i}][image]'
+            is_primary_key = f'images[{i}][is_primary]'
+            order_key = f'images[{i}][order]'
+            
+            if image_key in request.FILES:
+                image_data = {
+                    'image': request.FILES[image_key],
+                    'is_primary': request.POST.get(is_primary_key, 'false').lower() == 'true',
+                    'order': int(request.POST.get(order_key, '0'))
+                }
+                images_data.append(image_data)
+                i += 1
+            else:
+                break
+        
+        # Add the processed images to the data (convert to regular dict to avoid QueryDict issues)
+        processed_data = dict(processed_data)
+        
+        # Extract single values from lists for other fields
+        for key, value in processed_data.items():
+            if isinstance(value, list) and len(value) == 1 and key != 'images':
+                processed_data[key] = value[0]
+        
+        processed_data['images'] = images_data
+        
+        serializer = FabricCreateSerializer(data=processed_data, context={"request": request})
         if serializer.is_valid():
-            serializer.save()
-            return api_response(success=True, message="Tailor profile updated", data=serializer.data, status_code=status.HTTP_200_OK)
-        return api_response(success=False, message="Validation failed", errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
-
+            fabric = serializer.save()
+            data = FabricSerializer(fabric, context={'request': request}).data
+            return api_response(
+                success=True, 
+                message="Fabric created", 
+                data=data, 
+                status_code=status.HTTP_201_CREATED
+            )
+        
+        return api_response(
+            success=False, 
+            message="Validation failed", 
+            errors=serializer.errors, 
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
 
 @extend_schema(
     tags=["Fabric Management"],
     description="Individual fabric operations (get, update, delete)"
 )
-class TailorFabricDetailView(APIView):
+class TailorFabricDetailView(BaseTailorAuthenticatedView):
     """View for handling individual fabric operations (GET, PUT, PATCH, DELETE)."""
     
-    permission_classes = [IsAuthenticated, IsTailor]
     parser_classes = [MultiPartParser, FormParser]
     
     def get_object(self, pk, user):
@@ -355,16 +428,15 @@ class TailorFabricDetailView(APIView):
             status_code=status.HTTP_200_OK
         )
 
-
+# Fabric Image Views
 @extend_schema(
     tags=["Fabric Images"],
     description="Fabric image management operations"
 )
-class FabricImagePrimaryView(APIView):
+class FabricImagePrimaryView(BaseTailorAuthenticatedView):
     """
     View to set an image as the primary image for a fabric
     """
-    permission_classes = [IsAuthenticated, IsTailor]
     
     @extend_schema(
         description="Set an existing image as the primary image for a fabric",
@@ -379,99 +451,41 @@ class FabricImagePrimaryView(APIView):
         try:
             image = FabricImage.objects.select_related('fabric', 'fabric__tailor').get(pk=image_id)
         except FabricImage.DoesNotExist:
-            return api_response(success=False, message="Image not found", status_code=status.HTTP_404_NOT_FOUND)
+            return api_response(
+                success=False, 
+                message="Image not found", 
+                status_code=status.HTTP_404_NOT_FOUND
+            )
         
-        # Check permissions (only the tailor who owns the fabric can set a primary image)
+        # Check permissions (only the tailor who owns the fabric can modify the image)
         if image.fabric.tailor.user != request.user:
-            return api_response(success=False, message="You don't have permission to modify this image",
-                              status_code=status.HTTP_403_FORBIDDEN)
+            return api_response(
+                success=False, 
+                message="You don't have permission to modify this image",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
         
-        # Set as primary
+        # Set this image as primary (this will automatically unset others due to the save method)
         image.is_primary = True
-        image.save()  # This will unset any other primary images due to the save method override
+        image.save()
         
         # Return the updated fabric
         fabric_serializer = FabricSerializer(image.fabric, context={'request': request})
-        return api_response(success=True, message="Image set as primary", data=fabric_serializer.data,
-                          status_code=status.HTTP_200_OK)
-
-
-@extend_schema(
-    tags=["Fabric Management"],
-    description="Fabric list and creation operations"
-)
-class TailorFabricView(APIView):
-    serializer_class = FabricSerializer
-    
-    permission_classes = [IsAuthenticated, IsTailor]
-    parser_classes = [MultiPartParser, FormParser]
-
-    @extend_schema(
-        responses={200: FabricSerializer(many=True)},
-        description="Get all fabrics for the authenticated tailor"
-    )
-    def get(self, request):
-        queryset = Fabric.objects.filter(tailor__user=request.user).order_by("-created_at")
-        data = FabricSerializer(queryset, many=True, context={'request': request}).data
-        return api_response(success=True, message="Fabrics fetched", data=data, status_code=status.HTTP_200_OK)
-
-    @extend_schema(
-        request=FabricCreateSerializer,
-        responses={201: FabricSerializer},
-        description="Create a new fabric with multiple images and metadata"
-    )
-    def post(self, request):
-        # Process the form data to create the expected structure
-        processed_data = request.POST.copy()
-        processed_data.update(request.FILES)
-        
-        # Extract images and create the proper structure
-        images_data = []
-        i = 0
-        while True:
-            image_key = f'images[{i}][image]'
-            is_primary_key = f'images[{i}][is_primary]'
-            order_key = f'images[{i}][order]'
-            
-            if image_key in request.FILES:
-                image_data = {
-                    'image': request.FILES[image_key],
-                    'is_primary': request.POST.get(is_primary_key, 'false').lower() == 'true',
-                    'order': int(request.POST.get(order_key, '0'))
-                }
-                images_data.append(image_data)
-                i += 1
-            else:
-                break
-        
-        # Add the processed images to the data (convert to regular dict to avoid QueryDict issues)
-        processed_data = dict(processed_data)
-        
-        # Extract single values from lists for other fields
-        for key, value in processed_data.items():
-            if isinstance(value, list) and len(value) == 1 and key != 'images':
-                processed_data[key] = value[0]
-        
-        processed_data['images'] = images_data
-        
-        serializer = FabricCreateSerializer(data=processed_data, context={"request": request})
-        if serializer.is_valid():
-            fabric = serializer.save()
-            data = FabricSerializer(fabric, context={'request': request}).data
-            return api_response(success=True, message="Fabric created", data=data, status_code=status.HTTP_201_CREATED)
-        
-        return api_response(success=False, message="Validation failed", errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
-
+        return api_response(
+            success=True, 
+            message="Primary image updated successfully", 
+            data=fabric_serializer.data,
+            status_code=status.HTTP_200_OK
+        )
 
 @extend_schema(
     tags=["Fabric Images"],
     description="Fabric image deletion operations"
 )
-class FabricImageDeleteView(APIView):
+class FabricImageDeleteView(BaseTailorAuthenticatedView):
     """
     View to delete an individual fabric image
     """
-    permission_classes = [IsAuthenticated, IsTailor]
     
     @extend_schema(
         description="Delete a fabric image. If it's the primary image, the first remaining image will become primary.",
@@ -487,18 +501,28 @@ class FabricImageDeleteView(APIView):
         try:
             image = FabricImage.objects.select_related('fabric', 'fabric__tailor').get(pk=image_id)
         except FabricImage.DoesNotExist:
-            return api_response(success=False, message="Image not found", status_code=status.HTTP_404_NOT_FOUND)
+            return api_response(
+                success=False, 
+                message="Image not found", 
+                status_code=status.HTTP_404_NOT_FOUND
+            )
         
         # Check permissions (only the tailor who owns the fabric can delete the image)
         if image.fabric.tailor.user != request.user:
-            return api_response(success=False, message="You don't have permission to delete this image",
-                              status_code=status.HTTP_403_FORBIDDEN)
+            return api_response(
+                success=False, 
+                message="You don't have permission to delete this image",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
         
         # Check if this is the last image
         total_images = image.fabric.gallery.count()
         if total_images <= 1:
-            return api_response(success=False, message="Cannot delete the last image of a fabric",
-                              status_code=status.HTTP_400_BAD_REQUEST)
+            return api_response(
+                success=False, 
+                message="Cannot delete the last image of a fabric",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
         
         # If this is the primary image, set another image as primary
         if image.is_primary:
@@ -513,5 +537,9 @@ class FabricImageDeleteView(APIView):
         
         # Return the updated fabric
         fabric_serializer = FabricSerializer(image.fabric, context={'request': request})
-        return api_response(success=True, message="Image deleted successfully", data=fabric_serializer.data,
-                          status_code=status.HTTP_200_OK)
+        return api_response(
+            success=True, 
+            message="Image deleted successfully", 
+            data=fabric_serializer.data,
+            status_code=status.HTTP_200_OK
+        )
