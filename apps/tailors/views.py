@@ -1,9 +1,9 @@
 from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated,AllowAny
-from apps.tailors.models import FabricCategory, FabricImage, FabricType, TailorProfile, Fabric
+from apps.tailors.models import FabricCategory, FabricImage, FabricTag, FabricType, TailorProfile, Fabric
 from apps.tailors.permissions import IsTailor
-from apps.tailors.serializers import FabricCategorySerializer, FabricTypeSerializer, TailorProfileSerializer, TailorProfileUpdateSerializer, FabricSerializer, FabricCreateSerializer, FabricUpdateSerializer
+from apps.tailors.serializers import FabricCategorySerializer, FabricTagSerializer, FabricTypeSerializer, TailorProfileSerializer, TailorProfileUpdateSerializer, FabricSerializer, FabricCreateSerializer, FabricUpdateSerializer
 from zthob.utils import api_response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -87,6 +87,81 @@ class TailorFabricTypeRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAP
     )
     def delete(self, request, *args, **kwargs):
         return super().delete(request, *args, **kwargs)
+
+@extend_schema(
+    tags=["Fabric Categories"],
+    description="Fabric category management operations"
+)
+
+class TailorFabricTagsListCreateView(generics.ListCreateAPIView):
+    queryset=FabricTag.objects.all()
+    serializer_class=FabricTagSerializer
+    permission_classes=[AllowAny]
+    
+    @extend_schema(
+        tags=["Fabric Tags"],
+        description="Get all fabric tags",
+        operation_id="fabric_tags_list",
+        responses={200: FabricTagSerializer(many=True)}
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+    
+    @extend_schema(
+        tags=["Fabric Tags"],
+        description="Create a new fabric tag",
+        operation_id="fabric_tags_create",
+        request=FabricTagSerializer,
+        responses={201: FabricTagSerializer}
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
+
+class TailorFabricTagsRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+    queryset=FabricTag.objects.all()
+    serializer_class=FabricTagSerializer
+    permission_classes=[AllowAny]
+    lookup_field = 'pk'
+    
+    @extend_schema(
+        tags=["Fabric Tags"],
+        description="Get fabric tag by ID",
+        operation_id="fabric_tags_retrieve",
+        responses={200: FabricTagSerializer, 404: {"description": "Fabric tag not found"}}
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+    
+    @extend_schema(
+        tags=["Fabric Tags"],
+        description="Update fabric tag completely",
+        operation_id="fabric_tags_update",
+        request=FabricTagSerializer,
+        responses={200: FabricTagSerializer, 404: {"description": "Fabric tag not found"}}
+    )
+    def put(self, request, *args, **kwargs):
+        return super().put(request, *args, **kwargs)
+    
+    @extend_schema(
+        tags=["Fabric Tags"],
+        description="Update fabric tag partially",
+        operation_id="fabric_tags_partial_update",
+        request=FabricTagSerializer,
+        responses={200: FabricTagSerializer, 404: {"description": "Fabric tag not found"}}
+    )
+    def patch(self, request, *args, **kwargs):
+        return super().patch(request, *args, **kwargs)
+    
+    @extend_schema(
+        tags=["Fabric Tags"],
+        description="Delete fabric tag",
+        operation_id="fabric_tags_destroy",
+        responses={204: {"description": "Fabric tag deleted successfully"}, 404: {"description": "Fabric tag not found"}}
+    )
+    def delete(self, request, *args, **kwargs):
+        return super().delete(request, *args, **kwargs)
+
 
 @extend_schema(
     tags=["Fabric Categories"],

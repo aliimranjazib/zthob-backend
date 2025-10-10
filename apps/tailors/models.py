@@ -115,6 +115,25 @@ class FabricType(SluggedModel):
         return self.name
 
 
+class FabricTag(SluggedModel):
+    name = models.CharField(max_length=50, unique=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Fabric Tag"
+        verbose_name_plural = "Fabric Tags"
+        ordering = ['name']
+    
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return self.name
+
 class FabricCategory(SluggedModel):
     """Model representing fabric categories."""
     
@@ -159,6 +178,12 @@ class Fabric(BaseModel):
         blank=True,
         related_name='fabrics',
         help_text="Type of fabric"
+    )
+    tags = models.ManyToManyField(
+        FabricTag,
+        blank=True,
+        related_name="fabrics",
+        help_text="Tags associated with this fabric"
     )
     category = models.ForeignKey(
         FabricCategory,

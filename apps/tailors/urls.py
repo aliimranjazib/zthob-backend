@@ -9,6 +9,8 @@ from apps.tailors.views import (
     TailorFabricTypeListCreateView,
     TailorFabricTypeRetrieveUpdateDestroyView,
     FabricImagePrimaryView,
+    TailorFabricTagsListCreateView,
+    TailorFabricTagsRetrieveUpdateDestroyView,
     FabricImageDeleteView
 )
 
@@ -18,6 +20,8 @@ urlpatterns = [
     path('fabrics/<int:pk>/', TailorFabricDetailView.as_view(), name='tailor-fabric-detail'),
     path('fabric-type/', TailorFabricTypeListCreateView.as_view(),name='fabrics-type'),
     path('fabric-type/<int:pk>/', TailorFabricTypeRetrieveUpdateDestroyView.as_view(),name='fabrics-type-detail'),
+    path('fabric-tags/', TailorFabricTagsListCreateView.as_view(),name='fabrics-tags'),
+    path('fabric-tags/<int:pk>/', TailorFabricTagsRetrieveUpdateDestroyView.as_view(),name='fabrics-tags-detail'),
 
     path('category/', TailorFabricCategoryListCreateView.as_view(), name='fabric-category'),
     path('category/<int:pk>/', TailorFabricCategoryDetailView.as_view(), name='fabric-category-detail'),

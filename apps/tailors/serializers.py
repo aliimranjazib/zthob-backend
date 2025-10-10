@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.core.validators import FileExtensionValidator
 from apps.accounts.serializers import UserProfileSerializer
-from apps.tailors.models import SEASON_CHOICES, Fabric, FabricCategory, FabricImage, FabricType, TailorProfile
+from apps.tailors.models import SEASON_CHOICES, Fabric, FabricCategory, FabricImage, FabricTag, FabricType, TailorProfile
 
 class TailorProfileSerializer(serializers.ModelSerializer):
     user=UserProfileSerializer(read_only=True)
@@ -39,10 +39,26 @@ class FabricCategoryBasicSerializer(serializers.ModelSerializer):
     class Meta:
         model=FabricCategory
         fields=['id','name','is_active']
+
+class FabricTagSerializer(serializers.ModelSerializer):
+    
+    class Meta:
+        model = FabricTag
+        fields = ['id', 'name', 'slug', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'slug', 'created_at', 'updated_at']
+    
+
+class FabricTagBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FabricTag
+        fields = ['id', 'name']
+        read_only_fields = ['id']
+
 class FabricSerializer(serializers.ModelSerializer):
     gallery = FabricImageSerializer(many=True, read_only=True)
     category=FabricCategoryBasicSerializer(read_only=True)
     fabric_type=FabricTypeBasicSerializer(read_only=True)
+    fabric_tag=FabricTagBasicSerializer(read_only=True)
     # tailor=TailorProfileSerializer(read_only=True)
     is_low_stock = serializers.ReadOnlyField()
     is_out_of_stock = serializers.ReadOnlyField()
@@ -54,6 +70,7 @@ class FabricSerializer(serializers.ModelSerializer):
             "name", "description",
             'seasons',
             'fabric_type',
+            'fabric_tag', 
             "sku", "price", "stock",
             "is_low_stock", "is_out_of_stock",  # Added stock status fields
             "is_active", "created_at", "updated_at",
@@ -68,6 +85,8 @@ class ImageWithMetadataSerializer(serializers.Serializer):
     )
     is_primary = serializers.BooleanField(default=False)
     order = serializers.IntegerField(default=0)
+
+
 
 class FabricCreateSerializer(serializers.ModelSerializer):
     images = serializers.ListField(
