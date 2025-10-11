@@ -88,7 +88,8 @@ class TailorProfileSubmissionSerializer(serializers.ModelSerializer):
     service_areas = serializers.ListField(
         child=serializers.IntegerField(),
         required=True,
-        help_text="List of service area IDs that the tailor serves"
+        help_text="List of service area IDs that the tailor serves",
+        write_only=True  # This field is only for input, not output
     )
     
     class Meta:
