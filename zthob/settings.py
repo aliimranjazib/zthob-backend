@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "drf_spectacular",
     # Apps
+    "apps.core",        # ← ADD THIS LINE
     "apps.accounts",
     "apps.tailors",
     "apps.customers",

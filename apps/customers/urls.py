@@ -1,5 +1,6 @@
 from django.urls import path
 
+from apps.core.views import SendOTPView, VerifyOTPView
 from apps.customers.views import AddressListView, AddressCreateView, AddressDetailView, CustomerProfileAPIView, FabricCatalogAPIView, FamilyMemberListView, FamilyMemberDetailView
 
 
@@ -10,7 +11,8 @@ urlpatterns = [
     path("addresses/create/", AddressCreateView.as_view(), name="address-create"),
     path("addresses/<int:pk>/", AddressDetailView.as_view(), name="address-detail"),
     path('family/', FamilyMemberListView.as_view(), name='family-member-list'),
-    path('family/<int:pk>/', FamilyMemberDetailView.as_view(), name='family-member-detail')
-    
+    path('family/<int:pk>/', FamilyMemberDetailView.as_view(), name='family-member-detail'),
+    path('phone/send-otp/', SendOTPView.as_view(), name='customer-send-otp'),
+    path('phone/verify-otp/', VerifyOTPView.as_view(), name='customer-verify-otp'),
     
 ]

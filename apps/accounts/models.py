@@ -14,7 +14,7 @@ class CustomUser(AbstractUser):
     phone=models.CharField(max_length=15,blank=True,null=True)
     is_active=models.BooleanField(default=True)
     is_deleted = models.BooleanField(default=False)
-    
+    phone_verified=models.BooleanField(default=False,help_text="Is phone number verified?")
     USERNAME_FIELD='username'
     REQUIRED_FIELDS=['email']
     
