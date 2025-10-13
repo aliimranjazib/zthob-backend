@@ -301,38 +301,237 @@ graph TB
     PROFILE_MGMT --> MEDIA
 ```
 
-## 10. Database Entity Relationship
+## 10. Complete System Entity Relationship Diagram
 
 ```mermaid
 erDiagram
-    CustomUser ||--o| CustomerProfile : has
-    CustomUser ||--o| TailorProfile : has
-    CustomUser ||--o{ Address : owns
-    CustomUser ||--o{ FamilyMember : has
-    CustomUser ||--o{ Order : places
-    CustomUser ||--o{ Order : assigned_to
+    %% Core User Management
+    CustomUser {
+        int id PK
+        string username
+        string email
+        string phone
+        string role
+        boolean is_active
+        boolean phone_verified
+        datetime created_at
+    }
+    
+    PhoneVerification {
+        int id PK
+        int user_id FK
+        string phone_number
+        string otp_code
+        boolean is_verified
+        datetime expires_at
+        datetime created_at
+    }
 
-    CustomerProfile ||--o| Address : default_address
-    FamilyMember ||--o| Address : address
+    %% Customer Management
+    CustomerProfile {
+        int id PK
+        int user_id FK
+        string gender
+        date date_of_birth
+        int loyalty_points
+        string tags
+        int default_address_id FK
+    }
+    
+    Address {
+        int id PK
+        int user_id FK
+        string street
+        string city
+        string state_province
+        string zip_code
+        string country
+        decimal latitude
+        decimal longitude
+        boolean is_default
+    }
+    
+    FamilyMember {
+        int id PK
+        int user_id FK
+        string name
+        string gender
+        string relationship
+        json measurements
+        int address_id FK
+    }
 
-    TailorProfile ||--o{ Fabric : owns
-    TailorProfile ||--o{ TailorServiceArea : serves
-    TailorProfile ||--o| TailorProfileReview : reviewed
+    %% Tailor Management
+    TailorProfile {
+        int id PK
+        int user_id FK
+        string shop_name
+        string contact_number
+        int establishment_year
+        int tailor_experience
+        json working_hours
+        string address
+        boolean shop_status
+        string shop_image
+        datetime created_at
+    }
+    
+    TailorProfileReview {
+        int id PK
+        int profile_id FK
+        string review_status
+        datetime submitted_at
+        datetime reviewed_at
+        int reviewed_by_id FK
+        text rejection_reason
+        json service_areas
+    }
 
-    ServiceArea ||--o{ TailorServiceArea : served_by
+    %% Service Area Management
+    ServiceArea {
+        int id PK
+        string name
+        string city
+        boolean is_active
+        datetime created_at
+    }
+    
+    TailorServiceArea {
+        int id PK
+        int tailor_id FK
+        int service_area_id FK
+        boolean is_primary
+        decimal delivery_fee
+        int estimated_delivery_days
+    }
 
-    Fabric ||--o{ FabricImage : has
-    Fabric ||--o{ OrderItem : ordered_as
-    Fabric }o--|| FabricCategory : belongs_to
-    Fabric }o--|| FabricType : is_type
-    Fabric }o--o{ FabricTag : tagged_with
+    %% Catalog Management
+    FabricCategory {
+        int id PK
+        string name
+        string slug
+        boolean is_active
+        datetime created_at
+    }
+    
+    FabricType {
+        int id PK
+        string name
+        string slug
+        datetime created_at
+    }
+    
+    FabricTag {
+        int id PK
+        string name
+        string slug
+        boolean is_active
+        datetime created_at
+    }
+    
+    Fabric {
+        int id PK
+        int tailor_id FK
+        int fabric_type_id FK
+        int category_id FK
+        string name
+        text description
+        string sku
+        decimal price
+        int stock
+        string seasons
+        boolean is_active
+        string fabric_image
+        datetime created_at
+    }
+    
+    FabricImage {
+        int id PK
+        int fabric_id FK
+        string image
+        boolean is_primary
+        int order
+        datetime created_at
+    }
 
-    Order ||--o{ OrderItem : contains
-    Order ||--o{ OrderStatusHistory : tracked_by
-    Order }o--o| FamilyMember : for_member
-    Order }o--o| Address : delivery_address
+    %% Order Management
+    Order {
+        int id PK
+        int customer_id FK
+        int tailor_id FK
+        string order_type
+        string order_number
+        string status
+        decimal subtotal
+        decimal tax_amount
+        decimal delivery_fee
+        decimal total_amount
+        string payment_status
+        string payment_method
+        int family_member_id FK
+        int delivery_address_id FK
+        date estimated_delivery_date
+        date actual_delivery_date
+        text special_instructions
+        text notes
+        datetime created_at
+    }
+    
+    OrderItem {
+        int id PK
+        int order_id FK
+        int fabric_id FK
+        int quantity
+        decimal unit_price
+        decimal total_price
+        json measurements
+        text custom_instructions
+        boolean is_ready
+        datetime created_at
+    }
+    
+    OrderStatusHistory {
+        int id PK
+        int order_id FK
+        string status
+        string previous_status
+        int changed_by_id FK
+        text notes
+        datetime created_at
+    }
 
-    OrderItem }o--|| Fabric : is_fabric
+    %% Relationships
+    CustomUser ||--o| CustomerProfile : "has profile"
+    CustomUser ||--o| TailorProfile : "has profile"
+    CustomUser ||--o{ Address : "owns"
+    CustomUser ||--o{ FamilyMember : "has"
+    CustomUser ||--o{ Order : "places"
+    CustomUser ||--o{ Order : "assigned to"
+    CustomUser ||--o{ PhoneVerification : "verifies"
+    CustomUser ||--o{ OrderStatusHistory : "changes"
+
+    CustomerProfile ||--o| Address : "default address"
+    FamilyMember ||--o| Address : "lives at"
+
+    TailorProfile ||--o| TailorProfileReview : "reviewed"
+    TailorProfile ||--o{ Fabric : "owns"
+    TailorProfile ||--o{ TailorServiceArea : "serves"
+    TailorProfile ||--o{ Order : "handles"
+
+    ServiceArea ||--o{ TailorServiceArea : "served by"
+
+    FabricCategory ||--o{ Fabric : "contains"
+    FabricType ||--o{ Fabric : "categorizes"
+    FabricTag }o--o{ Fabric : "tags"
+    Fabric ||--o{ FabricImage : "has images"
+    Fabric ||--o{ OrderItem : "ordered as"
+
+    Order ||--o{ OrderItem : "contains"
+    Order ||--o{ OrderStatusHistory : "tracked by"
+    Order }o--o| FamilyMember : "for member"
+    Order }o--o| Address : "delivery address"
+
+    OrderItem }o--|| Fabric : "is fabric"
 ```
 
 ## API Response Format
