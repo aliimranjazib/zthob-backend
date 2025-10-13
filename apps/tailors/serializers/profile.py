@@ -13,7 +13,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
     reviewed_at = serializers.SerializerMethodField()
     rejection_reason = serializers.SerializerMethodField()
     service_areas = serializers.SerializerMethodField()
-    
+    phone_verified = serializers.SerializerMethodField()
     class Meta:
         model = TailorProfile
         fields = [
@@ -22,7 +22,8 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             'contact_number', 'address', 'shop_status',
             'shop_image', 'shop_image_url',
             'review_status', 'submitted_at', 'reviewed_at', 
-            'rejection_reason', 'service_areas'
+            'rejection_reason', 'service_areas',
+            'phone_verified', 
         ]
     
     def get_shop_image_url(self, obj):
@@ -68,6 +69,10 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             return obj.review.service_areas
         except:
             return []
+    
+    def get_phone_verified(self, obj):
+        """Get phone verification status from user."""
+        return obj.user.phone_verified
 
 class TailorProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -83,7 +88,8 @@ class TailorProfileSubmissionSerializer(serializers.ModelSerializer):
     service_areas = serializers.ListField(
         child=serializers.IntegerField(),
         required=True,
-        help_text="List of service area IDs that the tailor serves"
+        help_text="List of service area IDs that the tailor serves",
+        write_only=True  # This field is only for input, not output
     )
     
     class Meta:

@@ -1,7 +1,7 @@
 # apps/tailors/views/profile.py
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from drf_spectacular.utils import extend_schema
 from zthob.utils import api_response
 from rest_framework import status
@@ -22,7 +22,7 @@ from .base import BaseTailorAuthenticatedView
 )
 class TailorProfileView(BaseTailorAuthenticatedView):
     serializer_class = TailorProfileSerializer
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
         profile, _ = TailorProfile.objects.get_or_create(user=request.user)
@@ -58,7 +58,7 @@ class TailorProfileView(BaseTailorAuthenticatedView):
 )
 class TailorProfileSubmissionView(BaseTailorAuthenticatedView):
     serializer_class = TailorProfileSubmissionSerializer
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def post(self, request):
         try:

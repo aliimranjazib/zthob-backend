@@ -1,5 +1,6 @@
 from django.urls import path
 
+from apps.core.views import SendOTPView, VerifyOTPView
 from apps.tailors.views import (
     # Profile views
     TailorProfileView,
@@ -68,4 +69,8 @@ urlpatterns = [
     # Admin Service Area URLs
     path('admin/service-areas/', AdminServiceAreasView.as_view(), name='admin-service-areas'),
     path('admin/service-areas/<int:pk>/', AdminServiceAreaDetailView.as_view(), name='admin-service-area-detail'),
+
+    path('phone/send-otp/', SendOTPView.as_view(), name='customer-send-otp'),
+    path('phone/verify-otp/', VerifyOTPView.as_view(), name='customer-verify-otp'),
 ]
+
