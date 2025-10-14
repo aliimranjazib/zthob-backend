@@ -29,6 +29,11 @@ from apps.tailors.views import (
     TailorServiceAreaDetailView,
     AdminServiceAreasView,
     AdminServiceAreaDetailView,
+    
+    # Address views
+    TailorAddressListView,
+    TailorAddressDetailView,
+    TailorAddressSetDefaultView,
 )
 
 urlpatterns = [
@@ -69,6 +74,11 @@ urlpatterns = [
     # Admin Service Area URLs
     path('admin/service-areas/', AdminServiceAreasView.as_view(), name='admin-service-areas'),
     path('admin/service-areas/<int:pk>/', AdminServiceAreaDetailView.as_view(), name='admin-service-area-detail'),
+
+    # Address URLs
+    path('addresses/', TailorAddressListView.as_view(), name='tailor-addresses'),
+    path('addresses/<int:pk>/', TailorAddressDetailView.as_view(), name='tailor-address-detail'),
+    path('addresses/<int:pk>/set-default/', TailorAddressSetDefaultView.as_view(), name='tailor-address-set-default'),
 
     path('phone/send-otp/', SendOTPView.as_view(), name='customer-send-otp'),
     path('phone/verify-otp/', VerifyOTPView.as_view(), name='customer-verify-otp'),
