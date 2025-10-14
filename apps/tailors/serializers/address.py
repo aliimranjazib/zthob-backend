@@ -7,47 +7,9 @@ class TailorAddressSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Address
-        fields = [
-            'id', 'street', 'city', 'state_province', 'zip_code', 
-            'country', 'latitude', 'longitude', 'is_default', 
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
-    
-    def create(self, validated_data):
-        """Create a new address for the tailor."""
-        user = self.context.get('request').user
-        validated_data['user'] = user
-        return super().create(validated_data)
-    
-    def update(self, instance, validated_data):
-        """Update the address."""
-        # Remove user from validated_data if it exists
-        validated_data.pop('user', None)
-        return super().update(instance, validated_data)
+        fields = '__all__'
+        read_only_fields = ['user']
 
-class TailorAddressCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating tailor addresses."""
-    
-    class Meta:
-        model = Address
-        fields = [
-            'street', 'city', 'state_province', 'zip_code', 
-            'country', 'latitude', 'longitude', 'is_default'
-        ]
-    
-    def create(self, validated_data):
-        """Create a new address for the tailor."""
-        user = self.context.get('request').user
-        validated_data['user'] = user
-        return super().create(validated_data)
-
-class TailorAddressUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for updating tailor addresses."""
-    
-    class Meta:
-        model = Address
-        fields = [
-            'street', 'city', 'state_province', 'zip_code', 
-            'country', 'latitude', 'longitude', 'is_default'
-        ]
+# Use the same serializer for all operations (like customer side)
+TailorAddressCreateSerializer = TailorAddressSerializer
+TailorAddressUpdateSerializer = TailorAddressSerializer
