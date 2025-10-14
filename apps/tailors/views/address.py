@@ -24,7 +24,7 @@ class TailorAddressListView(APIView):
     
     def get(self, request):
         """Get all addresses for the current tailor."""
-        addresses = Address.objects.filter(user=request.user).order_by('-is_default', '-created_at')
+        addresses = Address.objects.filter(user=request.user).order_by('-is_default')
         serializer = TailorAddressSerializer(addresses, many=True, context={'request': request})
         
         return api_response(
