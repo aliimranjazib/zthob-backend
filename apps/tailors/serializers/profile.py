@@ -15,6 +15,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
     rejection_reason = serializers.SerializerMethodField()
     service_areas = serializers.SerializerMethodField()
     phone_verified = serializers.SerializerMethodField()
+    phone_number = serializers.SerializerMethodField()
     
     # Address field - show structured address from Address model
     address = serializers.SerializerMethodField()
@@ -28,7 +29,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             'shop_image', 'shop_image_url',
             'review_status', 'submitted_at', 'reviewed_at', 
             'rejection_reason', 'service_areas',
-            'phone_verified', 
+            'phone_verified', 'phone_number',
         ]
     
     def get_shop_image_url(self, obj):
@@ -98,6 +99,12 @@ class TailorProfileSerializer(serializers.ModelSerializer):
     def get_phone_verified(self, obj):
         """Get phone verification status from user."""
         return obj.user.phone_verified
+    
+    def get_phone_number(self, obj):
+        """Get phone number only if phone is verified."""
+        if obj.user.phone_verified:
+            return obj.user.phone_number
+        return None
 
 class TailorProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
