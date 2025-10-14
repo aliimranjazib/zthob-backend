@@ -193,12 +193,12 @@ class TailorProfileStatusView(BaseTailorAuthenticatedView):
 
 @extend_schema(
     tags=["Tailor Profile"],
-    description="Toggle shop status (on/off)"
+    description="Update shop status (on/off)"
 )
 class TailorShopStatusView(BaseTailorAuthenticatedView):
     
-    def post(self, request):
-        """Toggle shop status to True (on)"""
+    def put(self, request):
+        """Update shop status"""
         try:
             profile = TailorProfile.objects.get(user=request.user)
         except TailorProfile.DoesNotExist:
@@ -208,33 +208,31 @@ class TailorShopStatusView(BaseTailorAuthenticatedView):
                 status_code=status.HTTP_404_NOT_FOUND
             )
         
-        profile.shop_status = True
-        profile.save()
-        
-        return api_response(
-            success=True,
-            message="Shop is now ON",
-            data={'shop_status': True},
-            status_code=status.HTTP_200_OK
-        )
-    
-    def delete(self, request):
-        """Toggle shop status to False (off)"""
-        try:
-            profile = TailorProfile.objects.get(user=request.user)
-        except TailorProfile.DoesNotExist:
+        # Get shop_status from request data
+        shop_status = request.data.get('shop_status')
+        if shop_status is None:
             return api_response(
                 success=False,
-                message="Profile not found",
-                status_code=status.HTTP_404_NOT_FOUND
+                message="shop_status field is required",
+                status_code=status.HTTP_400_BAD_REQUEST
             )
         
-        profile.shop_status = False
+        # Validate that shop_status is a boolean
+        if not isinstance(shop_status, bool):
+            return api_response(
+                success=False,
+                message="shop_status must be true or false",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        profile.shop_status = shop_status
         profile.save()
+        
+        status_message = "Shop is now ON" if shop_status else "Shop is now OFF"
         
         return api_response(
             success=True,
-            message="Shop is now OFF",
-            data={'shop_status': False},
+            message=status_message,
+            data={'shop_status': shop_status},
             status_code=status.HTTP_200_OK
         )
