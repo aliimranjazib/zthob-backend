@@ -103,7 +103,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
     def get_phone_number(self, obj):
         """Get phone number only if phone is verified."""
         if obj.user.phone_verified:
-            return obj.user.phone_number
+            return obj.user.phone
         return None
 
 class TailorProfileUpdateSerializer(serializers.ModelSerializer):
