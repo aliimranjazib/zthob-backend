@@ -85,10 +85,9 @@ class TailorProfileUpdateSerializer(serializers.ModelSerializer):
 
 class TailorProfileSubmissionSerializer(serializers.ModelSerializer):
     """Serializer for tailor profile submission for review."""
-    service_areas = serializers.ListField(
-        child=serializers.IntegerField(),
+    service_areas = serializers.IntegerField(
         required=True,
-        help_text="List of service area IDs that the tailor serves",
+        help_text="Service area ID that the tailor serves",
         write_only=True  # This field is only for input, not output
     )
     
@@ -100,23 +99,17 @@ class TailorProfileSubmissionSerializer(serializers.ModelSerializer):
         ]
     
     def validate_service_areas(self, value):
-        """Validate that all service area IDs exist and are active."""
+        """Validate that the service area ID exists and is active."""
         from ..models import ServiceArea
         
         if not value:
-            raise serializers.ValidationError("At least one service area is required.")
+            raise serializers.ValidationError("Service area is required.")
         
-        # Check if all service areas exist and are active
-        existing_areas = ServiceArea.objects.filter(
-            id__in=value, 
-            is_active=True
-        ).values_list('id', flat=True)
-        
-        invalid_ids = set(value) - set(existing_areas)
-        if invalid_ids:
-            raise serializers.ValidationError(
-                f"Invalid or inactive service area IDs: {list(invalid_ids)}"
-            )
+        # Check if the service area exists and is active
+        try:
+            service_area = ServiceArea.objects.get(id=value, is_active=True)
+        except ServiceArea.DoesNotExist:
+            raise serializers.ValidationError(f"Invalid or inactive service area ID: {value}")
         
         return value
     
