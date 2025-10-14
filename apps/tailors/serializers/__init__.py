@@ -28,11 +28,6 @@ from .service_areas import (
     TailorServiceAreaCreateSerializer,
     ServiceAreaWithTailorCountSerializer
 )
-from .address import (
-    TailorAddressSerializer,
-    TailorAddressCreateSerializer,
-    TailorAddressUpdateSerializer
-)
 from .base import ImageWithMetadataSerializer
 
 # Export all serializers
@@ -66,10 +61,6 @@ __all__ = [
     'TailorServiceAreaCreateSerializer',
     'ServiceAreaWithTailorCountSerializer',
     
-    # Address serializers
-    'TailorAddressSerializer',
-    'TailorAddressCreateSerializer',
-    'TailorAddressUpdateSerializer',
     
     # Base serializers
     'ImageWithMetadataSerializer',
