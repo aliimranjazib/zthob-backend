@@ -2,7 +2,8 @@
 from .profile import (
     TailorProfileView,
     TailorProfileSubmissionView,
-    TailorProfileStatusView
+    TailorProfileStatusView,
+    TailorShopStatusView
 )
 from .catalog import (
     TailorFabricTypeListCreateView,
@@ -39,6 +40,7 @@ __all__ = [
     'TailorProfileView',
     'TailorProfileSubmissionView',
     'TailorProfileStatusView',
+    'TailorShopStatusView',
     
     # Catalog views
     'TailorFabricTypeListCreateView',

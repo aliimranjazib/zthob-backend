@@ -6,6 +6,7 @@ from apps.tailors.views import (
     TailorProfileView,
     TailorProfileSubmissionView,
     TailorProfileStatusView,
+    TailorShopStatusView,
     
     # Catalog views
     TailorFabricCategoryListCreateView,
@@ -41,6 +42,7 @@ urlpatterns = [
     path('profile/', TailorProfileView.as_view(), name='tailor-profile'),
     path('profile/submit/', TailorProfileSubmissionView.as_view(), name='tailor-profile-submit'),
     path('profile/status/', TailorProfileStatusView.as_view(), name='tailor-profile-status'),
+    path('shop/status/', TailorShopStatusView.as_view(), name='tailor-shop-status'),
     
     # Fabric URLs
     path('fabrics/', TailorFabricView.as_view(), name='tailor-fabrics'),

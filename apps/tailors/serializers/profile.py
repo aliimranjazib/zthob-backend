@@ -15,7 +15,6 @@ class TailorProfileSerializer(serializers.ModelSerializer):
     rejection_reason = serializers.SerializerMethodField()
     service_areas = serializers.SerializerMethodField()
     phone_verified = serializers.SerializerMethodField()
-    phone_number = serializers.SerializerMethodField()
     
     # Address field - show structured address from Address model
     address = serializers.SerializerMethodField()
@@ -25,11 +24,11 @@ class TailorProfileSerializer(serializers.ModelSerializer):
         fields = [
             'user', 'shop_name', 'establishment_year', 
             'tailor_experience', 'working_hours', 
-            'contact_number', 'address', 'shop_status',
+            'address', 'shop_status',
             'shop_image', 'shop_image_url',
             'review_status', 'submitted_at', 'reviewed_at', 
             'rejection_reason', 'service_areas',
-            'phone_verified', 'phone_number',
+            'phone_verified',
         ]
     
     def get_shop_image_url(self, obj):
@@ -100,18 +99,13 @@ class TailorProfileSerializer(serializers.ModelSerializer):
         """Get phone verification status from user."""
         return obj.user.phone_verified
     
-    def get_phone_number(self, obj):
-        """Get phone number only if phone is verified."""
-        if obj.user.phone_verified:
-            return obj.user.phone
-        return None
 
 class TailorProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = TailorProfile
         fields = [
             'shop_name', 'establishment_year', 'tailor_experience', 
-            'working_hours', 'contact_number', 'shop_status',
+            'working_hours', 'shop_status',
             'shop_image'
         ]
 
@@ -126,7 +120,7 @@ class TailorProfileSubmissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = TailorProfile
         fields = [
-            'shop_name', 'contact_number', 'establishment_year',
+            'shop_name', 'establishment_year',
             'tailor_experience', 'working_hours', 'shop_image', 'service_areas'
         ]
     

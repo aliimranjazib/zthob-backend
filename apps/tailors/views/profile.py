@@ -190,3 +190,51 @@ class TailorProfileStatusView(BaseTailorAuthenticatedView):
             data=data,
             status_code=status.HTTP_200_OK
         )
+
+@extend_schema(
+    tags=["Tailor Profile"],
+    description="Toggle shop status (on/off)"
+)
+class TailorShopStatusView(BaseTailorAuthenticatedView):
+    
+    def post(self, request):
+        """Toggle shop status to True (on)"""
+        try:
+            profile = TailorProfile.objects.get(user=request.user)
+        except TailorProfile.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Profile not found",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        profile.shop_status = True
+        profile.save()
+        
+        return api_response(
+            success=True,
+            message="Shop is now ON",
+            data={'shop_status': True},
+            status_code=status.HTTP_200_OK
+        )
+    
+    def delete(self, request):
+        """Toggle shop status to False (off)"""
+        try:
+            profile = TailorProfile.objects.get(user=request.user)
+        except TailorProfile.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Profile not found",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        profile.shop_status = False
+        profile.save()
+        
+        return api_response(
+            success=True,
+            message="Shop is now OFF",
+            data={'shop_status': False},
+            status_code=status.HTTP_200_OK
+        )
