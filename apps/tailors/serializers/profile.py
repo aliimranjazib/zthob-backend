@@ -1,6 +1,7 @@
 # apps/tailors/serializers/profile.py
 from rest_framework import serializers
 from apps.accounts.serializers import UserProfileSerializer
+from apps.customers.models import Address
 from ..models import TailorProfile
 
 class TailorProfileSerializer(serializers.ModelSerializer):
@@ -14,6 +15,9 @@ class TailorProfileSerializer(serializers.ModelSerializer):
     rejection_reason = serializers.SerializerMethodField()
     service_areas = serializers.SerializerMethodField()
     phone_verified = serializers.SerializerMethodField()
+    
+    # Address field - show structured address from Address model
+    address = serializers.SerializerMethodField()
     
     class Meta:
         model = TailorProfile
@@ -35,6 +39,24 @@ class TailorProfileSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.shop_image.url)
             return obj.shop_image.url
         return None
+    
+    def get_address(self, obj):
+        """Get the structured address from the Address model."""
+        try:
+            address = Address.objects.get(user=obj.user)
+            return {
+                'id': address.id,
+                'street': address.street,
+                'city': address.city,
+                'state_province': address.state_province,
+                'zip_code': address.zip_code,
+                'country': address.country,
+                'latitude': address.latitude,
+                'longitude': address.longitude,
+                'is_default': address.is_default
+            }
+        except Address.DoesNotExist:
+            return None
     
     def get_review_status(self, obj):
         """Get the review status from the related review object."""
@@ -82,7 +104,7 @@ class TailorProfileUpdateSerializer(serializers.ModelSerializer):
         model = TailorProfile
         fields = [
             'shop_name', 'establishment_year', 'tailor_experience', 
-            'working_hours', 'contact_number', 'address', 'shop_status',
+            'working_hours', 'contact_number', 'shop_status',
             'shop_image'
         ]
 
@@ -98,7 +120,7 @@ class TailorProfileSubmissionSerializer(serializers.ModelSerializer):
         model = TailorProfile
         fields = [
             'shop_name', 'contact_number', 'establishment_year',
-            'tailor_experience', 'working_hours', 'address', 'shop_image', 'service_areas'
+            'tailor_experience', 'working_hours', 'shop_image', 'service_areas'
         ]
     
     def validate_service_areas(self, value):

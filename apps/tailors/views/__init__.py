@@ -27,6 +27,11 @@ from .service_areas import (
     AdminServiceAreasView,
     AdminServiceAreaDetailView
 )
+from .address import (
+    TailorAddressView,
+    TailorAddressCreateUpdateView,
+    TailorAddressDeleteView
+)
 
 # Export all views
 __all__ = [
@@ -58,4 +63,8 @@ __all__ = [
     'AdminServiceAreasView',
     'AdminServiceAreaDetailView',
     
+    # Address views
+    'TailorAddressView',
+    'TailorAddressCreateUpdateView',
+    'TailorAddressDeleteView',
 ]
