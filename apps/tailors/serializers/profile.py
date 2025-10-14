@@ -87,11 +87,20 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             return None
     
     def get_service_areas(self, obj):
-        """Get the service area from the related review object."""
+        """Get the service area name from the related review object."""
         try:
             service_areas = obj.review.service_areas
-            # Return the first service area ID as a single integer, or None if empty
-            return service_areas[0] if service_areas else None
+            if service_areas:
+                # Get the first service area ID
+                service_area_id = service_areas[0]
+                # Fetch the service area object to get name
+                from ..models import ServiceArea
+                try:
+                    service_area = ServiceArea.objects.get(id=service_area_id)
+                    return service_area.name
+                except ServiceArea.DoesNotExist:
+                    return None
+            return None
         except:
             return None
     
