@@ -36,13 +36,16 @@ class TailorProfileView(BaseTailorAuthenticatedView):
     
     def put(self, request):
         profile, _ = TailorProfile.objects.get_or_create(user=request.user)
-        serializer = TailorProfileUpdateSerializer(profile, data=request.data, partial=True)
+        # Use the same serializer as profile submission for consistency
+        serializer = TailorProfileSubmissionSerializer(profile, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
+            # Return the full profile data with proper image URLs
+            profile_serializer = TailorProfileSerializer(profile, context={'request': request})
             return api_response(
                 success=True, 
                 message="Tailor profile updated", 
-                data=serializer.data, 
+                data=profile_serializer.data, 
                 status_code=status.HTTP_200_OK
             )
         return api_response(
@@ -102,10 +105,12 @@ class TailorProfileSubmissionView(BaseTailorAuthenticatedView):
                 review.service_areas = service_areas
                 review.save()
             
+            # Return the full profile data with proper image URLs
+            profile_serializer = TailorProfileSerializer(profile, context={'request': request})
             return api_response(
                 success=True,
                 message="Profile submitted for review successfully",
-                data=serializer.data,
+                data=profile_serializer.data,
                 status_code=status.HTTP_200_OK
             )
         
