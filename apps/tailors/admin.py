@@ -38,6 +38,40 @@ class TailorProfileAdmin(admin.ModelAdmin):
         ('Status', {'fields': ('shop_status',)}),
     )
 
+@admin.register(FabricType)
+class FabricTypeAdmin(admin.ModelAdmin):
+    # Fabric type management
+    list_display = ['name', 'slug', 'get_fabric_count', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['name', 'slug']
+    prepopulated_fields = {'slug': ('name',)}
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['name']
+    
+    # Custom display methods
+    def get_fabric_count(self, obj):
+        """Display count of fabrics using this type."""
+        return obj.fabrics.count()
+    get_fabric_count.short_description = 'Fabrics Count'
+    get_fabric_count.admin_order_field = 'fabrics__count'
+    
+    # Grouped form
+    fieldsets = (
+        ('Fabric Type Information', {
+            'fields': ('name', 'slug'),
+            'description': 'Basic fabric type information (e.g., Cotton, Silk, Wool)'
+        }),
+        ('System Information', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+            'description': 'System timestamps'
+        }),
+    )
+    
+    def get_queryset(self, request):
+        """Optimize queries by prefetching related objects."""
+        return super().get_queryset(request).prefetch_related('fabrics')
+
 @admin.register(FabricCategory)
 class FabricCategoryAdmin(admin.ModelAdmin):
     # Simple category management
@@ -52,18 +86,53 @@ class FabricCategoryAdmin(admin.ModelAdmin):
         ('Category Info', {'fields': ('name', 'slug', 'is_active')}),
     )
 
+@admin.register(FabricTag)
+class FabricTagAdmin(admin.ModelAdmin):
+    # Fabric tag management
+    list_display = ['name', 'slug', 'is_active', 'get_fabric_count', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['name', 'slug']
+    prepopulated_fields = {'slug': ('name',)}
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['name']
+    
+    # Custom display methods
+    def get_fabric_count(self, obj):
+        """Display count of fabrics using this tag."""
+        return obj.fabrics.count()
+    get_fabric_count.short_description = 'Fabrics Count'
+    get_fabric_count.admin_order_field = 'fabrics__count'
+    
+    # Grouped form
+    fieldsets = (
+        ('Tag Information', {
+            'fields': ('name', 'slug', 'is_active'),
+            'description': 'Fabric tag information for categorization'
+        }),
+        ('System Information', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+            'description': 'System timestamps'
+        }),
+    )
+    
+    def get_queryset(self, request):
+        """Optimize queries by prefetching related objects."""
+        return super().get_queryset(request).prefetch_related('fabrics')
+
 @admin.register(Fabric)
 class FabricAdmin(admin.ModelAdmin):
     # Essential fabric info
-    list_display = ['name', 'tailor', 'category', 'price', 'stock', 'is_active']
-    list_filter = ['category', 'is_active']
-    search_fields = ['name', 'sku', 'tailor__shop_name']
-    raw_id_fields = ['tailor', 'category']
+    list_display = ['name', 'tailor', 'category', 'fabric_type', 'price', 'stock', 'is_active']
+    list_filter = ['category', 'fabric_type', 'is_active', 'seasons']
+    search_fields = ['name', 'sku', 'tailor__shop_name', 'fabric_type__name']
+    raw_id_fields = ['tailor', 'category', 'fabric_type']
     readonly_fields = ['sku', 'created_at', 'updated_at']
     
     # Grouped fabric form
     fieldsets = (
-        ('Basic Info', {'fields': ('name', 'description', 'category', 'tailor')}),
+        ('Basic Info', {'fields': ('name', 'description', 'category', 'fabric_type', 'tailor')}),
+        ('Attributes', {'fields': ('seasons', 'tags')}),
         ('Pricing & Stock', {'fields': ('price', 'stock', 'is_active')}),
         ('Images', {'fields': ('fabric_image',)}),
     )
