@@ -46,8 +46,9 @@ class PhoneVerificationService:
                 verification.is_verified = True
                 verification.save()
                 
-                # Update user's phone_verified status
+                # Update user's phone_verified status and phone number
                 user.phone_verified = True
+                user.phone = verification.phone_number  # Update the phone field
                 user.save()
                 
                 return True, "Phone verified successfully!"
