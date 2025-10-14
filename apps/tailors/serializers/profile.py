@@ -126,4 +126,9 @@ class TailorProfileSubmissionSerializer(serializers.ModelSerializer):
         for field in required_fields:
             if not data.get(field):
                 raise serializers.ValidationError(f"{field} is required for submission")
+        
+        # Check if shop_image is provided (either in data or already exists on instance)
+        if not data.get('shop_image') and not (hasattr(self, 'instance') and self.instance and self.instance.shop_image):
+            raise serializers.ValidationError("shop_image is required for submission")
+        
         return data
