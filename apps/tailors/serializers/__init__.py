@@ -23,10 +23,7 @@ from .review import (
 )
 from .service_areas import (
     ServiceAreaSerializer,
-    ServiceAreaBasicSerializer,
-    TailorServiceAreaSerializer,
-    TailorServiceAreaCreateSerializer,
-    ServiceAreaWithTailorCountSerializer
+    ServiceAreaBasicSerializer
 )
 from .address import (
     TailorAddressSerializer,
@@ -62,9 +59,6 @@ __all__ = [
     # Service Area serializers
     'ServiceAreaSerializer',
     'ServiceAreaBasicSerializer',
-    'TailorServiceAreaSerializer',
-    'TailorServiceAreaCreateSerializer',
-    'ServiceAreaWithTailorCountSerializer',
     
     # Address serializers
     'TailorAddressSerializer',

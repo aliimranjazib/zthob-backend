@@ -7,8 +7,7 @@ from .models import (
     FabricType,
     FabricTag,
     TailorProfileReview,
-    ServiceArea,
-    TailorServiceArea
+    ServiceArea
 )
 # Register your models here.
 @admin.register(TailorProfile)
@@ -270,16 +269,11 @@ class TailorProfileReviewAdmin(admin.ModelAdmin):
 @admin.register(ServiceArea)
 class ServiceAreaAdmin(admin.ModelAdmin):
     # Service area management
-    list_display = ['name', 'city', 'is_active', 'get_tailor_count']
+    list_display = ['name', 'city', 'is_active']
     list_filter = ['city', 'is_active']
     search_fields = ['name', 'city']
     readonly_fields = ['created_at', 'updated_at']
     
-    # Custom display methods
-    def get_tailor_count(self, obj):
-        return obj.tailors.count()
-    get_tailor_count.short_description = 'Tailors Count'
-    get_tailor_count.admin_order_field = 'tailors__count'
     
     # Grouped form
     fieldsets = (
@@ -295,48 +289,6 @@ class ServiceAreaAdmin(admin.ModelAdmin):
     )
     
     def get_queryset(self, request):
-        """Optimize queries by prefetching related objects."""
-        return super().get_queryset(request).prefetch_related('tailors')
+        """Optimize queries."""
+        return super().get_queryset(request)
 
-@admin.register(TailorServiceArea)
-class TailorServiceAreaAdmin(admin.ModelAdmin):
-    # Tailor service area management
-    list_display = ['get_tailor_name', 'get_service_area', 'is_primary', 'delivery_fee', 'estimated_delivery_days']
-    list_filter = ['is_primary', 'service_area__city', 'service_area__is_active']
-    search_fields = ['tailor__shop_name', 'tailor__user__email', 'service_area__name']
-    raw_id_fields = ['tailor', 'service_area']
-    readonly_fields = ['created_at', 'updated_at']
-    
-    # Custom display methods
-    def get_tailor_name(self, obj):
-        return obj.tailor.shop_name or obj.tailor.user.get_full_name()
-    get_tailor_name.short_description = 'Tailor'
-    get_tailor_name.admin_order_field = 'tailor__shop_name'
-    
-    def get_service_area(self, obj):
-        return f"{obj.service_area.name}, {obj.service_area.city}"
-    get_service_area.short_description = 'Service Area'
-    get_service_area.admin_order_field = 'service_area__name'
-    
-    # Grouped form
-    fieldsets = (
-        ('Service Area Assignment', {
-            'fields': ('tailor', 'service_area', 'is_primary'),
-            'description': 'Assign service area to tailor'
-        }),
-        ('Delivery Information', {
-            'fields': ('delivery_fee', 'estimated_delivery_days'),
-            'description': 'Optional delivery details for this area'
-        }),
-        ('System Information', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',),
-            'description': 'System timestamps'
-        }),
-    )
-    
-    def get_queryset(self, request):
-        """Optimize queries by selecting related objects."""
-        return super().get_queryset(request).select_related(
-            'tailor__user', 'service_area'
-        )

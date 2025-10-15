@@ -279,10 +279,25 @@ class TailorFabricView(BaseTailorAuthenticatedView):
         
         # Extract single values from lists for other fields
         for key, value in processed_data.items():
-            if isinstance(value, list) and len(value) == 1 and key != 'images':
+            if isinstance(value, list) and len(value) == 1 and key not in ['images', 'tags']:
                 processed_data[key] = value[0]
         
         processed_data['images'] = images_data
+        
+        # Handle tags data
+        if 'tags' in processed_data:
+            # Convert tags to list of integers if it's a string
+            tags_data = processed_data['tags']
+            if isinstance(tags_data, str):
+                # Handle comma-separated string or single value
+                if ',' in tags_data:
+                    tags_data = [int(tag.strip()) for tag in tags_data.split(',') if tag.strip()]
+                else:
+                    tags_data = [int(tags_data)] if tags_data else []
+            elif isinstance(tags_data, list):
+                # Convert string values to integers
+                tags_data = [int(tag) for tag in tags_data if str(tag).strip()]
+            processed_data['tags'] = tags_data
         
         serializer = FabricCreateSerializer(data=processed_data, context={"request": request})
         if serializer.is_valid():

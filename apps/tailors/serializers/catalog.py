@@ -82,12 +82,19 @@ class FabricCreateSerializer(serializers.ModelSerializer):
         write_only=True,
         help_text="List of images with metadata (is_primary, order)"
     )
+    tags = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+        help_text="List of fabric tag IDs"
+    )
 
     class Meta:
         model = Fabric
         fields = [
             "category", "name", "seasons", "fabric_type",
-            "description", "price", "stock", "is_active", "images",
+            "description", "price", "stock", "is_active", "images", "tags",
         ]
 
     def validate_images(self, images):
@@ -133,12 +140,31 @@ class FabricCreateSerializer(serializers.ModelSerializer):
         
         return images
 
+    def validate_tags(self, tags):
+        """Validate that all provided tag IDs exist and are active."""
+        if not tags:
+            return tags
+        
+        from ..models import FabricTag
+        
+        # Get all active tag IDs
+        active_tag_ids = set(FabricTag.objects.filter(is_active=True).values_list('id', flat=True))
+        provided_tag_ids = set(tags)
+        
+        # Check if all provided tags exist and are active
+        invalid_tags = provided_tag_ids - active_tag_ids
+        if invalid_tags:
+            raise serializers.ValidationError(f"Invalid or inactive tag IDs: {list(invalid_tags)}")
+        
+        return tags
+
     def create(self, validated_data):
         request = self.context.get("request")
         tailor_profile = getattr(request.user, "tailor_profile", None)
         
-        # Extract images data
-        images_data = validated_data.pop('images')
+        # Extract images and tags data
+        images_data = validated_data.pop('images', [])
+        tags_data = validated_data.pop('tags', [])
         
         # Create the fabric without the legacy fabric_image field
         fabric = Fabric.objects.create(
@@ -146,6 +172,12 @@ class FabricCreateSerializer(serializers.ModelSerializer):
             created_by=request.user,
             **validated_data,
         )
+        
+        # Add tags to the fabric
+        if tags_data:
+            from ..models import FabricTag
+            tags = FabricTag.objects.filter(id__in=tags_data, is_active=True)
+            fabric.tags.set(tags)
         
         # Create gallery images from all images
         for img_data in sorted(images_data, key=lambda x: x.get('order', 0)):
@@ -171,17 +203,53 @@ class FabricUpdateSerializer(serializers.ModelSerializer):
         required=False,
         help_text="Best suited season for this fabric"
     )
+    tags = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+        help_text="List of fabric tag IDs"
+    )
     
     class Meta:
         model = Fabric
         fields = [
             "category", "fabric_type", "seasons", "name",
-            "description", "price", "stock", "is_active",
+            "description", "price", "stock", "is_active", "tags",
         ]
+    
+    def validate_tags(self, tags):
+        """Validate that all provided tag IDs exist and are active."""
+        if not tags:
+            return tags
+        
+        from ..models import FabricTag
+        
+        # Get all active tag IDs
+        active_tag_ids = set(FabricTag.objects.filter(is_active=True).values_list('id', flat=True))
+        provided_tag_ids = set(tags)
+        
+        # Check if all provided tags exist and are active
+        invalid_tags = provided_tag_ids - active_tag_ids
+        if invalid_tags:
+            raise serializers.ValidationError(f"Invalid or inactive tag IDs: {list(invalid_tags)}")
+        
+        return tags
     
     def update(self, instance, validated_data):
         """Update fabric instance with validated data."""
+        # Extract tags data
+        tags_data = validated_data.pop('tags', None)
+        
+        # Update other fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+        
+        # Update tags if provided
+        if tags_data is not None:
+            from ..models import FabricTag
+            tags = FabricTag.objects.filter(id__in=tags_data, is_active=True)
+            instance.tags.set(tags)
+        
         return instance

@@ -129,8 +129,8 @@ class TailorProfileSubmissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = TailorProfile
         fields = [
-            'shop_name', 'establishment_year',
-            'tailor_experience', 'working_hours', 'shop_image', 'service_areas'
+            'shop_name', 'contact_number', 'establishment_year',
+            'tailor_experience', 'address', 'working_hours', 'shop_image', 'service_areas'
         ]
     
     def validate_service_areas(self, value):

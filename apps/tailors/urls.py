@@ -26,8 +26,6 @@ from apps.tailors.views import (
     
     # Service Area views
     AvailableServiceAreasView,
-    TailorServiceAreasView,
-    TailorServiceAreaDetailView,
     AdminServiceAreasView,
     AdminServiceAreaDetailView,
     
@@ -70,8 +68,6 @@ urlpatterns = [
     
     # Service Area URLs
     path('service-areas/available/', AvailableServiceAreasView.as_view(), name='available-service-areas'),
-    path('service-areas/', TailorServiceAreasView.as_view(), name='tailor-service-areas'),
-    path('service-areas/<int:pk>/', TailorServiceAreaDetailView.as_view(), name='tailor-service-area-detail'),
     
     # Admin Service Area URLs
     path('admin/service-areas/', AdminServiceAreasView.as_view(), name='admin-service-areas'),

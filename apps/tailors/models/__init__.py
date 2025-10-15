@@ -8,7 +8,7 @@ from .catalog import (
     FabricImage
 )
 from .review import TailorProfileReview
-from .service_areas import ServiceArea, TailorServiceArea
+from .service_areas import ServiceArea
 
 __all__ = [
     'TailorProfile',
@@ -19,5 +19,4 @@ __all__ = [
     'FabricImage',
     'TailorProfileReview',
     'ServiceArea',
-    'TailorServiceArea',
 ]

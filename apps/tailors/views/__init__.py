@@ -23,8 +23,6 @@ from .review import (
 )
 from .service_areas import (
     AvailableServiceAreasView,
-    TailorServiceAreasView,
-    TailorServiceAreaDetailView,
     AdminServiceAreasView,
     AdminServiceAreaDetailView
 )
@@ -60,8 +58,6 @@ __all__ = [
     
     # Service Area views
     'AvailableServiceAreasView',
-    'TailorServiceAreasView',
-    'TailorServiceAreaDetailView',
     'AdminServiceAreasView',
     'AdminServiceAreaDetailView',
     
