@@ -14,7 +14,8 @@ from drf_spectacular.views import extend_schema
 class FabricCatalogAPIView(APIView):
     serializer_class = FabricCatalogSerializer
     def get(self,request):
-        fabrics=Fabric.objects.all()
+        fabrics=Fabric.objects.select_related('category','fabric_type','tailor'
+        ).prefetch_related('tags','gallery').all()
         serializers=FabricCatalogSerializer(fabrics, many=True,context={"request": request})
         return api_response(success=True, message="Fabrics fetched successfully",
                             data=serializers.data,

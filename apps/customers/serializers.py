@@ -4,6 +4,7 @@ from rest_framework import serializers
 from apps.accounts.serializers import UserProfileSerializer
 from apps.tailors.models import Fabric
 from apps.tailors.serializers import FabricCategorySerializer, FabricImageSerializer, TailorProfileSerializer
+from apps.tailors.serializers.catalog import FabricTypeBasicSerializer,FabricTagBasicSerializer
 from apps.customers.models import Address, CustomerProfile, FamilyMember
 
 
@@ -11,6 +12,8 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
     fabric_image = serializers.SerializerMethodField()
     gallery = FabricImageSerializer(many=True, read_only=True)
     category = FabricCategorySerializer(read_only=True)
+    fabric_type=FabricTypeBasicSerializer(ready_only=True)
+    tags=FabricTagBasicSerializer(many=True, read_only=True)
     tailor = TailorProfileSerializer(read_only=True)
     class Meta:
         model=Fabric
@@ -22,6 +25,9 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
             "price",
             "stock",
             "is_active",
+            "seasons",
+            "fabric_type",  
+            "tags", 
             "fabric_image",
             "gallery",
             "category",
