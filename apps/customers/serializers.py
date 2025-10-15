@@ -12,7 +12,7 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
     fabric_image = serializers.SerializerMethodField()
     gallery = FabricImageSerializer(many=True, read_only=True)
     category = FabricCategorySerializer(read_only=True)
-    fabric_type=FabricTypeBasicSerializer(ready_only=True)
+    fabric_type=FabricTypeBasicSerializer(read_only=True)
     tags=FabricTagBasicSerializer(many=True, read_only=True)
     tailor = TailorProfileSerializer(read_only=True)
     class Meta:
