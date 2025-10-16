@@ -125,6 +125,8 @@ class TailorProfileSubmissionSerializer(serializers.ModelSerializer):
         help_text="Service area ID that the tailor serves",
         write_only=True  # This field is only for input, not output
     )
+    contact_number = serializers.CharField(required=False, allow_blank=True)
+    working_hours = serializers.JSONField(required=False, allow_null=True)
     
     class Meta:
         model = TailorProfile
@@ -150,7 +152,7 @@ class TailorProfileSubmissionSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         # Ensure all required fields are present for submission
-        required_fields = ['shop_name', 'contact_number', 'address', 'service_areas']
+        required_fields = ['shop_name', 'address', 'service_areas']
         for field in required_fields:
             if not data.get(field):
                 raise serializers.ValidationError(f"{field} is required for submission")
