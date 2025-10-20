@@ -25,20 +25,34 @@ class TailorAddressView(APIView):
     def get(self, request):
         """Get the tailor's address."""
         try:
-            address = Address.objects.get(user=request.user)
-            serializer = TailorAddressSerializer(address)
-            return api_response(
-                success=True,
-                message='Address fetched successfully',
-                data=serializer.data,
-                status_code=status.HTTP_200_OK
-            )
-        except Address.DoesNotExist:
+            # First try to get the default address
+            address = Address.objects.filter(user=request.user, is_default=True).first()
+            
+            # If no default address, get the first address
+            if not address:
+                address = Address.objects.filter(user=request.user).first()
+            
+            if address:
+                serializer = TailorAddressSerializer(address)
+                return api_response(
+                    success=True,
+                    message='Address fetched successfully',
+                    data=serializer.data,
+                    status_code=status.HTTP_200_OK
+                )
+            else:
+                return api_response(
+                    success=False,
+                    message='No address found',
+                    data=None,
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+        except Exception as e:
             return api_response(
                 success=False,
-                message='No address found',
+                message=f'Error fetching address: {str(e)}',
                 data=None,
-                status_code=status.HTTP_404_NOT_FOUND
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 @extend_schema(
@@ -73,31 +87,45 @@ class TailorAddressCreateUpdateView(APIView):
     def put(self, request):
         """Update the tailor's existing address."""
         try:
-            address = Address.objects.get(user=request.user)
-            serializer = TailorAddressUpdateSerializer(address, data=request.data, partial=True)
+            # First try to get the default address
+            address = Address.objects.filter(user=request.user, is_default=True).first()
             
-            if serializer.is_valid():
-                updated_address = serializer.save()
-                response_serializer = TailorAddressSerializer(updated_address)
+            # If no default address, get the first address
+            if not address:
+                address = Address.objects.filter(user=request.user).first()
+            
+            if address:
+                serializer = TailorAddressUpdateSerializer(address, data=request.data, partial=True)
+                
+                if serializer.is_valid():
+                    updated_address = serializer.save()
+                    response_serializer = TailorAddressSerializer(updated_address)
+                    return api_response(
+                        success=True,
+                        message='Address updated successfully',
+                        data=response_serializer.data,
+                        status_code=status.HTTP_200_OK
+                    )
+                
                 return api_response(
-                    success=True,
-                    message='Address updated successfully',
-                    data=response_serializer.data,
-                    status_code=status.HTTP_200_OK
+                    success=False,
+                    message='Address update failed',
+                    errors=serializer.errors,
+                    status_code=status.HTTP_400_BAD_REQUEST
                 )
-            
+            else:
+                return api_response(
+                    success=False,
+                    message='No address found to update',
+                    data=None,
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+        except Exception as e:
             return api_response(
                 success=False,
-                message='Address update failed',
-                errors=serializer.errors,
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-        except Address.DoesNotExist:
-            return api_response(
-                success=False,
-                message='No address found to update',
+                message=f'Error updating address: {str(e)}',
                 data=None,
-                status_code=status.HTTP_404_NOT_FOUND
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 @extend_schema(
@@ -111,18 +139,29 @@ class TailorAddressDeleteView(APIView):
     def delete(self, request):
         """Delete the tailor's address."""
         try:
-            address = Address.objects.get(user=request.user)
-            address.delete()
-            return api_response(
-                success=True,
-                message='Address deleted successfully',
-                data=None,
-                status_code=status.HTTP_200_OK
-            )
-        except Address.DoesNotExist:
+            # Delete all addresses for this user
+            addresses = Address.objects.filter(user=request.user)
+            deleted_count = addresses.count()
+            
+            if deleted_count > 0:
+                addresses.delete()
+                return api_response(
+                    success=True,
+                    message=f'Address deleted successfully ({deleted_count} address(es) removed)',
+                    data=None,
+                    status_code=status.HTTP_200_OK
+                )
+            else:
+                return api_response(
+                    success=False,
+                    message='No address found to delete',
+                    data=None,
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+        except Exception as e:
             return api_response(
                 success=False,
-                message='No address found to delete',
+                message=f'Error deleting address: {str(e)}',
                 data=None,
-                status_code=status.HTTP_404_NOT_FOUND
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

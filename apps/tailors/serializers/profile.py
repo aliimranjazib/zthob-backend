@@ -43,19 +43,27 @@ class TailorProfileSerializer(serializers.ModelSerializer):
     def get_address(self, obj):
         """Get the structured address from the Address model."""
         try:
-            address = Address.objects.get(user=obj.user)
-            return {
-                'id': address.id,
-                'street': address.street,
-                'city': address.city,
-                'state_province': address.state_province,
-                'zip_code': address.zip_code,
-                'country': address.country,
-                'latitude': address.latitude,
-                'longitude': address.longitude,
-                'is_default': address.is_default
-            }
-        except Address.DoesNotExist:
+            # First try to get the default address
+            address = Address.objects.filter(user=obj.user, is_default=True).first()
+            
+            # If no default address, get the first address
+            if not address:
+                address = Address.objects.filter(user=obj.user).first()
+            
+            if address:
+                return {
+                    'id': address.id,
+                    'street': address.street,
+                    'city': address.city,
+                    'state_province': address.state_province,
+                    'zip_code': address.zip_code,
+                    'country': address.country,
+                    'latitude': address.latitude,
+                    'longitude': address.longitude,
+                    'is_default': address.is_default
+                }
+            return None
+        except Exception:
             return None
     
     def get_review_status(self, obj):
