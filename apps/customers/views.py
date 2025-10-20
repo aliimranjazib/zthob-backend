@@ -8,6 +8,8 @@ from apps.customers.serializers import AddressSerializer, CustomerProfileSeriali
 from apps.tailors.models import Fabric
 from zthob.utils import api_response
 from drf_spectacular.views import extend_schema
+from apps.tailors.models import TailorProfile
+from apps.tailors.serializers import TailorProfileSerializer
 
 
 # Create your views here.
@@ -238,4 +240,71 @@ class CustomerProfileAPIView(APIView):
                             )
          
          
+class TailorListAPIView(APIView):
+
+    serializer_class=TailorProfileSerializer
+
+    @extend_schema(operation_id="customers_tailor_list")
+    def get(self, request):
+        # Fetch all tailor profiles with related data
+        tailors = TailorProfile.objects.select_related('user').prefetch_related('review').all()
         
+        # Serialize the data
+        serializer = TailorProfileSerializer(tailors, many=True, context={'request': request})
+        
+        return api_response(
+            success=True, 
+            message="Tailors fetched successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+class TailorFabricsAPIView(APIView):
+    """API view to fetch fabrics of a specific tailor for customers"""
+    serializer_class = FabricCatalogSerializer
+    
+    @extend_schema(operation_id="customers_tailor_fabrics")
+    def get(self, request, tailor_id):
+        """
+        Fetch all fabrics of a specific tailor
+        URL: /api/customers/tailors/{tailor_id}/fabrics/
+        """
+        try:
+            # Get the tailor profile
+            from apps.tailors.models import TailorProfile
+            tailor = TailorProfile.objects.get(user__id=tailor_id)
+            
+            # Fetch all active fabrics for this tailor
+            fabrics = Fabric.objects.filter(
+                tailor=tailor,
+                is_active=True  # Only show active fabrics to customers
+            ).select_related(
+                'category', 'fabric_type', 'tailor'
+            ).prefetch_related(
+                'tags', 'gallery'
+            ).order_by('-created_at')
+            
+            # Serialize the data
+            serializer = FabricCatalogSerializer(fabrics, many=True, context={'request': request})
+            
+            return api_response(
+                success=True, 
+                message=f"Fabrics for {tailor.shop_name or tailor.user.get_full_name()} fetched successfully",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+            
+        except TailorProfile.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Tailor not found",
+                data=None,
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return api_response(
+                success=False,
+                message="Error fetching tailor fabrics",
+                data=None,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
