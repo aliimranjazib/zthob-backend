@@ -18,7 +18,7 @@ from .base import BaseTailorAuthenticatedView
 
 @extend_schema(
     tags=["Tailor Profile"],
-    description="Tailor profile management operations"
+    description="Tailor profile management operations - supports GET, PUT, and PATCH methods"
 )
 class TailorProfileView(BaseTailorAuthenticatedView):
     serializer_class = TailorProfileSerializer
@@ -46,6 +46,33 @@ class TailorProfileView(BaseTailorAuthenticatedView):
             serializer.save()
             
             # Service area handling removed - now managed by admin
+            
+            # Return the full profile data with proper image URLs
+            profile_serializer = TailorProfileSerializer(profile, context={'request': request})
+            return api_response(
+                success=True, 
+                message="Tailor profile updated", 
+                data=profile_serializer.data, 
+                status_code=status.HTTP_200_OK
+            )
+        return api_response(
+            success=False, 
+            message="Validation failed", 
+            errors=serializer.errors, 
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    
+    def patch(self, request):
+        """PATCH method for partial updates - same logic as PUT but explicitly for partial updates."""
+        profile, _ = TailorProfile.objects.get_or_create(user=request.user)
+        
+        # Create a copy of request data
+        data = request.data.copy()
+        
+        # Use TailorProfileUpdateSerializer for basic profile fields with partial=True
+        serializer = TailorProfileUpdateSerializer(profile, data=data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
             
             # Return the full profile data with proper image URLs
             profile_serializer = TailorProfileSerializer(profile, context={'request': request})

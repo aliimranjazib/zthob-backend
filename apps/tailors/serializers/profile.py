@@ -122,7 +122,7 @@ class TailorProfileUpdateSerializer(serializers.ModelSerializer):
         model = TailorProfile
         fields = [
             'shop_name', 'establishment_year', 'tailor_experience', 
-            'working_hours', 'shop_status',
+            'working_hours', 'contact_number', 'address', 'shop_status',
             'shop_image'
         ]
 
