@@ -40,12 +40,40 @@ class TailorProfileView(BaseTailorAuthenticatedView):
         # Create a copy of request data
         data = request.data.copy()
         
+        # Extract service_areas from request data if present
+        service_areas_id = data.pop('service_areas', None)
+        
+        # Validate service_areas if provided
+        if service_areas_id is not None:
+            from ..models import ServiceArea
+            try:
+                service_area = ServiceArea.objects.get(id=service_areas_id, is_active=True)
+            except ServiceArea.DoesNotExist:
+                return api_response(
+                    success=False,
+                    message=f"Invalid or inactive service area ID: {service_areas_id}",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+        
         # Use TailorProfileUpdateSerializer for basic profile fields
         serializer = TailorProfileUpdateSerializer(profile, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
             
-            # Service area handling removed - now managed by admin
+            # Handle service_areas if provided
+            if service_areas_id is not None:
+                from ..models import TailorProfileReview
+                # Create or update review record with service_areas
+                review, created = TailorProfileReview.objects.get_or_create(
+                    profile=profile,
+                    defaults={
+                        'review_status': 'draft',
+                        'service_areas': [service_areas_id]
+                    }
+                )
+                if not created:
+                    review.service_areas = [service_areas_id]
+                    review.save()
             
             # Return the full profile data with proper image URLs
             profile_serializer = TailorProfileSerializer(profile, context={'request': request})
@@ -69,10 +97,40 @@ class TailorProfileView(BaseTailorAuthenticatedView):
         # Create a copy of request data
         data = request.data.copy()
         
+        # Extract service_areas from request data if present
+        service_areas_id = data.pop('service_areas', None)
+        
+        # Validate service_areas if provided
+        if service_areas_id is not None:
+            from ..models import ServiceArea
+            try:
+                service_area = ServiceArea.objects.get(id=service_areas_id, is_active=True)
+            except ServiceArea.DoesNotExist:
+                return api_response(
+                    success=False,
+                    message=f"Invalid or inactive service area ID: {service_areas_id}",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+        
         # Use TailorProfileUpdateSerializer for basic profile fields with partial=True
         serializer = TailorProfileUpdateSerializer(profile, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
+            
+            # Handle service_areas if provided
+            if service_areas_id is not None:
+                from ..models import TailorProfileReview
+                # Create or update review record with service_areas
+                review, created = TailorProfileReview.objects.get_or_create(
+                    profile=profile,
+                    defaults={
+                        'review_status': 'draft',
+                        'service_areas': [service_areas_id]
+                    }
+                )
+                if not created:
+                    review.service_areas = [service_areas_id]
+                    review.save()
             
             # Return the full profile data with proper image URLs
             profile_serializer = TailorProfileSerializer(profile, context={'request': request})
@@ -117,21 +175,32 @@ class TailorProfileSubmissionView(BaseTailorAuthenticatedView):
         
         serializer = TailorProfileSubmissionSerializer(profile, data=request.data, partial=True)
         if serializer.is_valid():
-            # Update profile with submitted data
+            # Extract service_areas from validated data before saving
+            service_areas_id = serializer.validated_data.pop('service_areas', None)
+            
+            # Update profile with submitted data (excluding service_areas)
             serializer.save()
             
             # Create or update review record
             from ..models import TailorProfileReview
+            review_data = {
+                'review_status': 'pending',
+                'submitted_at': timezone.now()
+            }
+            
+            # Add service_areas to review data if provided
+            if service_areas_id is not None:
+                review_data['service_areas'] = [service_areas_id]
+            
             review, created = TailorProfileReview.objects.get_or_create(
                 profile=profile,
-                defaults={
-                    'review_status': 'pending',
-                    'submitted_at': timezone.now()
-                }
+                defaults=review_data
             )
             if not created:
                 review.review_status = 'pending'
                 review.submitted_at = timezone.now()
+                if service_areas_id is not None:
+                    review.service_areas = [service_areas_id]
                 review.save()
             
             # Return the full profile data with proper image URLs

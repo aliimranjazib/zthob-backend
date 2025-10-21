@@ -15,7 +15,14 @@ class TailorAddressCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Address
-        fields = ['street', 'city', 'state_province', 'zip_code', 'country', 'latitude', 'longitude']
+        fields = ['street', 'city', 'state_province', 'zip_code', 'country', 'latitude', 'longitude', 'formatted_address', 'address_tag']
+    
+    def validate_address_tag(self, value):
+        """Validate address_tag field"""
+        valid_tags = [choice[0] for choice in Address.ADDRESS_TAG_CHOICES]
+        if value not in valid_tags:
+            raise serializers.ValidationError(f"Invalid address_tag. Must be one of: {', '.join(valid_tags)}")
+        return value
     
     def create(self, validated_data):
         """Create a new address for the tailor, replacing any existing one."""
@@ -34,4 +41,11 @@ class TailorAddressUpdateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Address
-        fields = ['street', 'city', 'state_province', 'zip_code', 'country', 'latitude', 'longitude']
+        fields = ['street', 'city', 'state_province', 'zip_code', 'country', 'latitude', 'longitude', 'formatted_address', 'address_tag']
+    
+    def validate_address_tag(self, value):
+        """Validate address_tag field"""
+        valid_tags = [choice[0] for choice in Address.ADDRESS_TAG_CHOICES]
+        if value not in valid_tags:
+            raise serializers.ValidationError(f"Invalid address_tag. Must be one of: {', '.join(valid_tags)}")
+        return value

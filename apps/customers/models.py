@@ -4,6 +4,13 @@ from django.conf import settings
 # Create your models here.
 
 class Address(models.Model):
+    ADDRESS_TAG_CHOICES = [
+        ('home', 'Home'),
+        ('office', 'Office'),
+        ('work', 'Work'),
+        ('other', 'Other'),
+    ]
+    
     user=models.ForeignKey(settings.AUTH_USER_MODEL,
                             on_delete=models.CASCADE, 
                             related_name="addresses", 
@@ -16,6 +23,8 @@ class Address(models.Model):
     latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     is_default = models.BooleanField(default=False)
+    formatted_address = models.TextField(blank=True, null=True, help_text="Full formatted address from Google Maps API")
+    address_tag = models.CharField(max_length=20, choices=ADDRESS_TAG_CHOICES, default='home', help_text="Address type: home, office, work, other")
     class Meta:
         verbose_name_plural = "Addresses"
 
@@ -23,11 +32,13 @@ class Address(models.Model):
 
     def __str__(self):
         return f"{self.street}, {self.city}"
+    
     def save(self, *args, **kwargs):
         if self.is_default and self.user:  # Added check for self.user
         # unset other defaults for this user
             Address.objects.filter(user=self.user, is_default=True).update(is_default=False)
-            super().save(*args, **kwargs)
+        
+        super().save(*args, **kwargs)
 
 
 

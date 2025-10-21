@@ -60,7 +60,9 @@ class TailorProfileSerializer(serializers.ModelSerializer):
                     'country': address.country,
                     'latitude': address.latitude,
                     'longitude': address.longitude,
-                    'is_default': address.is_default
+                    'is_default': address.is_default,
+                    'formatted_address': address.formatted_address,
+                    'address_tag': address.address_tag
                 }
             return None
         except Exception:
@@ -98,7 +100,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
         """Get the service area name from the related review object."""
         try:
             service_areas = obj.review.service_areas
-            if service_areas:
+            if service_areas and len(service_areas) > 0:
                 # Get the first service area ID
                 service_area_id = service_areas[0]
                 # Fetch the service area object to get name
@@ -109,7 +111,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
                 except ServiceArea.DoesNotExist:
                     return None
             return None
-        except:
+        except Exception:
             return None
     
     def get_phone_verified(self, obj):

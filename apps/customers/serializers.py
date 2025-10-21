@@ -48,6 +48,13 @@ class AddressSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['user']
     
+    def validate_address_tag(self, value):
+        """Validate address_tag field"""
+        valid_tags = [choice[0] for choice in Address.ADDRESS_TAG_CHOICES]
+        if value not in valid_tags:
+            raise serializers.ValidationError(f"Invalid address_tag. Must be one of: {', '.join(valid_tags)}")
+        return value
+    
     
 class FamilyMemberSerializer(serializers.ModelSerializer):
     address=AddressSerializer(required=False)
