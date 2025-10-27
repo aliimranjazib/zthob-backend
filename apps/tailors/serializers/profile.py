@@ -41,7 +41,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
         return None
     
     def get_address(self, obj):
-        """Get the structured address from the Address model."""
+        """Get the simplified address from the Address model."""
         try:
             # First try to get the default address
             address = Address.objects.filter(user=obj.user, is_default=True).first()
@@ -53,15 +53,11 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             if address:
                 return {
                     'id': address.id,
-                    'street': address.street,
-                    'city': address.city,
-                    'state_province': address.state_province,
-                    'zip_code': address.zip_code,
-                    'country': address.country,
                     'latitude': address.latitude,
                     'longitude': address.longitude,
+                    'address': address.street,  # Map street to address for consistency
+                    'extra_info': address.extra_info,
                     'is_default': address.is_default,
-                    'formatted_address': address.formatted_address,
                     'address_tag': address.address_tag
                 }
             return None

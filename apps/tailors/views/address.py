@@ -9,7 +9,8 @@ from apps.customers.models import Address
 from ..serializers.address import (
     TailorAddressSerializer, 
     TailorAddressCreateSerializer, 
-    TailorAddressUpdateSerializer
+    TailorAddressUpdateSerializer,
+    TailorAddressResponseSerializer
 )
 from ..permissions import IsTailor
 from zthob.utils import api_response
@@ -33,7 +34,7 @@ class TailorAddressView(APIView):
                 address = Address.objects.filter(user=request.user).first()
             
             if address:
-                serializer = TailorAddressSerializer(address)
+                serializer = TailorAddressResponseSerializer(address)
                 return api_response(
                     success=True,
                     message='Address fetched successfully',
@@ -69,7 +70,7 @@ class TailorAddressCreateUpdateView(APIView):
         
         if serializer.is_valid():
             address = serializer.save()
-            response_serializer = TailorAddressSerializer(address)
+            response_serializer = TailorAddressResponseSerializer(address)
             return api_response(
                 success=True,
                 message='Address created successfully',
@@ -99,7 +100,7 @@ class TailorAddressCreateUpdateView(APIView):
                 
                 if serializer.is_valid():
                     updated_address = serializer.save()
-                    response_serializer = TailorAddressSerializer(updated_address)
+                    response_serializer = TailorAddressResponseSerializer(updated_address)
                     return api_response(
                         success=True,
                         message='Address updated successfully',

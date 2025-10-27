@@ -4,7 +4,7 @@ from django.template.context_processors import request
 from django.contrib.auth.models import User
 from rest_framework import serializers, status
 from apps.customers.models import Address, CustomerProfile, FamilyMember
-from apps.customers.serializers import AddressSerializer, CustomerProfileSerializer, FabricCatalogSerializer, FamilyMemberSerializer
+from apps.customers.serializers import AddressSerializer, AddressCreateSerializer, AddressResponseSerializer, CustomerProfileSerializer, FabricCatalogSerializer, FamilyMemberSerializer
 from apps.tailors.models import Fabric
 from zthob.utils import api_response
 from drf_spectacular.views import extend_schema
@@ -115,12 +115,12 @@ class FamilyMemberDetailView(APIView):
                status_code=status.HTTP_404_NOT_FOUND
            )
 class AddressListView(APIView):
-    serializer_class = AddressSerializer
+    serializer_class = AddressResponseSerializer
 
     @extend_schema(operation_id="address_list")
     def get(self, request):
         address = Address.objects.filter(user=request.user)
-        serializers = AddressSerializer(address, many=True)
+        serializers = AddressResponseSerializer(address, many=True)
         return api_response(success=True, message='address fetch successfully',
                             data=serializers.data,
                             status_code=status.HTTP_200_OK
@@ -128,30 +128,32 @@ class AddressListView(APIView):
 
 
 class AddressCreateView(APIView):
-    serializer_class = AddressSerializer
+    serializer_class = AddressCreateSerializer
 
     @extend_schema(operation_id="address_create")
     def post(self, request):
-        serializers = AddressSerializer(data=request.data)
-        if serializers.is_valid():
-            serializers.save(user=request.user)
+        serializer = AddressCreateSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            address = serializer.save()
+            # Return simplified response
+            response_serializer = AddressResponseSerializer(address)
             return api_response(success=True, message='address created successfully',
-                            data=serializers.data,
-                            status_code=status.HTTP_200_OK
+                            data=response_serializer.data,
+                            status_code=status.HTTP_201_CREATED
                             )
         return api_response(success=False, message='address creation failed',
-                            errors=serializers.errors,
+                            errors=serializer.errors,
                             status_code=status.HTTP_400_BAD_REQUEST
                             )
 
 
 class AddressDetailView(APIView):
-    serializer_class = AddressSerializer
+    serializer_class = AddressResponseSerializer
 
     def get(self, request, pk):
         address = Address.objects.filter(pk=pk, user=request.user).first()
         if address:
-            serializers = AddressSerializer(address)
+            serializers = AddressResponseSerializer(address)
             return api_response(success=True, message='address fetch successfully',
                                 data=serializers.data,
                                 status_code=status.HTTP_200_OK
@@ -167,18 +169,30 @@ class AddressDetailView(APIView):
     def put(self, request, pk):
         address = Address.objects.filter(pk=pk, user=request.user).first()
         if address:
-            serializers = AddressSerializer(data=request.data, instance=address, partial=True)
-            if serializers.is_valid():
-                serializers.save()
+            # Use AddressCreateSerializer for updates to maintain consistency
+            serializer = AddressCreateSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                # Update the existing address
+                address_data = serializer.validated_data
+                address_text = address_data.pop('address')
+                
+                address.street = address_text
+                address.latitude = address_data.get('latitude', address.latitude)
+                address.longitude = address_data.get('longitude', address.longitude)
+                address.extra_info = address_data.get('extra_info', address.extra_info)
+                address.address_tag = address_data.get('address_tag', address.address_tag)
+                address.save()
+                
+                response_serializer = AddressResponseSerializer(address)
                 return api_response(success=True,
                                     message='Address updated successfully',
-                                    data=serializers.data,
+                                    data=response_serializer.data,
                                     status_code=status.HTTP_200_OK
                                     )
             return api_response(success=False,
                                     message='Address update failed',
-                                    errors=serializers.errors,
-                                    status_code=status.HTTP_200_OK
+                                    errors=serializer.errors,
+                                    status_code=status.HTTP_400_BAD_REQUEST
                                     )
         else:
             return api_response(success=False,
