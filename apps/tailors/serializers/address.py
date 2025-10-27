@@ -14,10 +14,11 @@ class TailorAddressCreateSerializer(serializers.ModelSerializer):
     """Simplified serializer for creating tailor's single address."""
     address = serializers.CharField(max_length=255, help_text="Full address text")
     address_tag = serializers.ChoiceField(choices=Address.ADDRESS_TAG_CHOICES, default='work', help_text="Address type: home, office, work, other")
+    is_default = serializers.BooleanField(default=True, help_text="Whether this is the default address")
     
     class Meta:
         model = Address
-        fields = ['latitude', 'longitude', 'address', 'extra_info', 'address_tag']
+        fields = ['latitude', 'longitude', 'address', 'extra_info', 'address_tag', 'is_default']
     
     def validate_address_tag(self, value):
         """Validate address_tag field"""
@@ -35,6 +36,7 @@ class TailorAddressCreateSerializer(serializers.ModelSerializer):
         
         # Map the 'address' field to 'street' field in the model
         address_text = validated_data.pop('address')
+        is_default = validated_data.pop('is_default', True)
         
         # Set default values for required fields
         validated_data.update({
@@ -42,7 +44,7 @@ class TailorAddressCreateSerializer(serializers.ModelSerializer):
             'street': address_text,
             'city': 'Riyadh',  # Default city, can be updated later
             'country': 'Saudi Arabia',
-            'is_default': True,  # Since it's the only address
+            'is_default': is_default,
         })
         
         return super().create(validated_data)
@@ -51,10 +53,11 @@ class TailorAddressUpdateSerializer(serializers.ModelSerializer):
     """Simplified serializer for updating tailor's single address."""
     address = serializers.CharField(max_length=255, help_text="Full address text")
     address_tag = serializers.ChoiceField(choices=Address.ADDRESS_TAG_CHOICES, help_text="Address type: home, office, work, other")
+    is_default = serializers.BooleanField(help_text="Whether this is the default address")
     
     class Meta:
         model = Address
-        fields = ['latitude', 'longitude', 'address', 'extra_info', 'address_tag']
+        fields = ['latitude', 'longitude', 'address', 'extra_info', 'address_tag', 'is_default']
     
     def validate_address_tag(self, value):
         """Validate address_tag field"""
@@ -73,6 +76,7 @@ class TailorAddressUpdateSerializer(serializers.ModelSerializer):
         instance.longitude = validated_data.get('longitude', instance.longitude)
         instance.extra_info = validated_data.get('extra_info', instance.extra_info)
         instance.address_tag = validated_data.get('address_tag', instance.address_tag)
+        instance.is_default = validated_data.get('is_default', instance.is_default)
         instance.save()
         
         return instance

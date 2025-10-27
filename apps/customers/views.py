@@ -175,12 +175,19 @@ class AddressDetailView(APIView):
                 # Update the existing address
                 address_data = serializer.validated_data
                 address_text = address_data.pop('address')
+                is_default = address_data.pop('is_default', address.is_default)
                 
                 address.street = address_text
                 address.latitude = address_data.get('latitude', address.latitude)
                 address.longitude = address_data.get('longitude', address.longitude)
                 address.extra_info = address_data.get('extra_info', address.extra_info)
                 address.address_tag = address_data.get('address_tag', address.address_tag)
+                address.is_default = is_default
+                
+                # If this address is being set as default, make other addresses non-default
+                if is_default:
+                    Address.objects.filter(user=request.user, is_default=True).exclude(id=address.id).update(is_default=False)
+                
                 address.save()
                 
                 response_serializer = AddressResponseSerializer(address)

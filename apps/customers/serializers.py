@@ -59,10 +59,11 @@ class AddressCreateSerializer(serializers.ModelSerializer):
     """Simplified serializer for address creation with only required fields."""
     address = serializers.CharField(max_length=255, help_text="Full address text")
     address_tag = serializers.ChoiceField(choices=Address.ADDRESS_TAG_CHOICES, default='home', help_text="Address type: home, office, work, other")
+    is_default = serializers.BooleanField(default=False, help_text="Whether this is the default address")
     
     class Meta:
         model = Address
-        fields = ['latitude', 'longitude', 'address', 'extra_info', 'address_tag']
+        fields = ['latitude', 'longitude', 'address', 'extra_info', 'address_tag', 'is_default']
     
     def validate_address_tag(self, value):
         """Validate address_tag field"""
@@ -77,6 +78,7 @@ class AddressCreateSerializer(serializers.ModelSerializer):
         
         # Map the 'address' field to 'street' field in the model
         address_text = validated_data.pop('address')
+        is_default = validated_data.pop('is_default', False)
         
         # Set default values for required fields
         validated_data.update({
@@ -84,11 +86,12 @@ class AddressCreateSerializer(serializers.ModelSerializer):
             'street': address_text,
             'city': 'Riyadh',  # Default city, can be updated later
             'country': 'Saudi Arabia',
-            'is_default': True,  # Set as default address
+            'is_default': is_default,
         })
         
-        # Make other addresses non-default
-        Address.objects.filter(user=user, is_default=True).update(is_default=False)
+        # If this address is being set as default, make other addresses non-default
+        if is_default:
+            Address.objects.filter(user=user, is_default=True).update(is_default=False)
         
         return super().create(validated_data)
 
