@@ -41,7 +41,7 @@ class FamilyMemberListView(APIView):
    @extend_schema(operation_id="customers_family_create")
    def post(self, request):
        print("data is valid===============")
-       serializers = FamilyMemberSerializer(data=request.data, context={'user': request.user})
+       serializers = FamilyMemberSerializer(data=request.data, context={'user': request.user, 'request': request})
        if serializers.is_valid():
            print("data is valid===============")
            serializers.save()
@@ -78,7 +78,7 @@ class FamilyMemberDetailView(APIView):
    def put(self, request, pk):
        family = FamilyMember.objects.filter(pk=pk, user=request.user).first()
        if family:
-           serializers = FamilyMemberSerializer(data=request.data, instance=family, partial=True)
+           serializers = FamilyMemberSerializer(data=request.data, instance=family, partial=True, context={'user': request.user, 'request': request})
            if serializers.is_valid():
                serializers.save()
                return api_response(success=True, message='family member update successfully',
@@ -87,7 +87,7 @@ class FamilyMemberDetailView(APIView):
            return api_response(success=False,
                                    message='family member update failed',
                                    errors=serializers.errors,
-                                   status_code=status.HTTP_200_OK
+                                   status_code=status.HTTP_400_BAD_REQUEST
                                    )
        else:
            return api_response(success=False,

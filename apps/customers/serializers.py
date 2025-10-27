@@ -102,15 +102,42 @@ class AddressResponseSerializer(serializers.ModelSerializer):
     
     def get_address(self, obj):
         """Return the street field as 'address' for consistency."""
-        return obj.street
+        # If street is empty, try to construct from other fields
+        if obj.street:
+            return obj.street
+        
+        # Fallback: construct address from available fields
+        address_parts = []
+        if obj.city:
+            address_parts.append(obj.city)
+        if obj.state_province:
+            address_parts.append(obj.state_province)
+        if obj.country:
+            address_parts.append(obj.country)
+        
+        if address_parts:
+            return ', '.join(address_parts)
+        
+        # If no address components available, return a default message
+        return 'Address not specified'
     
     
 class FamilyMemberSerializer(serializers.ModelSerializer):
-    address=AddressResponseSerializer(required=False)
+    address = AddressCreateSerializer(required=False, write_only=True)
+    address_response = AddressResponseSerializer(source='address', read_only=True)
+    
     class Meta:
         model=FamilyMember
-        fields = ['id', 'name', 'gender', 'relationship', 'measurements', 'address']
+        fields = ['id', 'name', 'gender', 'relationship', 'measurements', 'address', 'address_response']
         read_only_fields = ['user']
+        
+    def to_representation(self, instance):
+        """Custom representation to use address_response as address in output."""
+        data = super().to_representation(instance)
+        # Replace 'address_response' with 'address' in the output
+        if 'address_response' in data:
+            data['address'] = data.pop('address_response')
+        return data
         
     def create(self, validated_data):
         user = self.context.get("user")
@@ -123,9 +150,17 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
         )
 
         if address_data:
-            address = Address.objects.create(user=user, **address_data)
-            family_member.address = address
-            family_member.save()
+            # Create a mock request object for AddressCreateSerializer
+            class MockRequest:
+                def __init__(self, user):
+                    self.user = user
+            
+            mock_request = MockRequest(user)
+            address_serializer = AddressCreateSerializer(data=address_data, context={'request': mock_request})
+            if address_serializer.is_valid():
+                address = address_serializer.save()
+                family_member.address = address
+                family_member.save()
 
         return family_member
 
@@ -136,15 +171,34 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         if address_data:
+            # Create a mock request object for AddressCreateSerializer
+            class MockRequest:
+                def __init__(self, user):
+                    self.user = user
+            
+            user = self.context.get("user")
+            mock_request = MockRequest(user)
+            
             if instance.address:
-                for attr, value in validated_data.items():
-                    setattr(instance.address, attr, value)
+                # Use AddressCreateSerializer to properly handle the address update
+                address_serializer = AddressCreateSerializer(data=address_data, context={'request': mock_request})
+                if address_serializer.is_valid():
+                    address_data_validated = address_serializer.validated_data
+                    address_text = address_data_validated.pop('address')
+                    
+                    instance.address.street = address_text
+                    instance.address.latitude = address_data_validated.get('latitude', instance.address.latitude)
+                    instance.address.longitude = address_data_validated.get('longitude', instance.address.longitude)
+                    instance.address.extra_info = address_data_validated.get('extra_info', instance.address.extra_info)
+                    instance.address.address_tag = address_data_validated.get('address_tag', instance.address.address_tag)
                     instance.address.save()
             else:
-                user = self.context.get('user')
-                address = Address.objects.create(user=user, **address_data)
-                instance.address = address
-                instance.save()
+                # Create new address if none exists
+                address_serializer = AddressCreateSerializer(data=address_data, context={'request': mock_request})
+                if address_serializer.is_valid():
+                    address = address_serializer.save()
+                    instance.address = address
+                    instance.save()
         return instance
 
 

@@ -87,4 +87,21 @@ class TailorAddressResponseSerializer(serializers.ModelSerializer):
     
     def get_address(self, obj):
         """Return the street field as 'address' for consistency."""
-        return obj.street
+        # If street is empty, try to construct from other fields
+        if obj.street:
+            return obj.street
+        
+        # Fallback: construct address from available fields
+        address_parts = []
+        if obj.city:
+            address_parts.append(obj.city)
+        if obj.state_province:
+            address_parts.append(obj.state_province)
+        if obj.country:
+            address_parts.append(obj.country)
+        
+        if address_parts:
+            return ', '.join(address_parts)
+        
+        # If no address components available, return a default message
+        return 'Address not specified'
