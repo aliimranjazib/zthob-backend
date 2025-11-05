@@ -3,6 +3,10 @@ from django.contrib.auth import get_user_model
 from .models import Order, OrderItem, OrderStatusHistory
 from apps.tailors.models import TailorProfile,Fabric
 from apps.customers.models import Address
+from decimal import Decimal
+from django.db import transaction
+from apps.orders.services import OrderCalculationService
+
 
 User = get_user_model()
 
@@ -32,7 +36,7 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model=OrderItem
-        fields=['fabric','quantity','unit_price','measurements','custom_instructions']
+        fields=['fabric','quantity','measurements','custom_instructions']
 
     def validate_quantity(self,value):
         if value<=0:
@@ -128,9 +132,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'customer',
             'tailor',
             'order_type',
-            'subtotal',
-            'tax_amount',
-            'delivery_fee',
             'payment_method',
             'family_member',
             'delivery_address',
@@ -140,9 +141,39 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         ]
 
     def validate_items(self,value):
-        if not value:
+        if not value or len(value)==0:
             raise serializers.ValidationError("Order must have at least one item")
-        return value
+        
+        tailor =self.context.get('tailor')
+        validated_items=[]
+        for item_data in value:
+            fabric = item_data.get('fabric')
+            quantity=item_data.get('quantity',1)
+            if fabric is None:
+                raise serializers.ValidationError("Each item must have a fabric")
+            try:
+                if isinstance(fabric,int):
+                    fabric =Fabric.objects.select_for_update().get(id=fabric)
+                elif not isinstance(fabric,Fabric):
+                    raise serializers.ValidationError(f'Invalid fabric: {fabric}')
+            except Fabric.DoesNotExist:
+                raise serializers.ValidationError(f'Fabric with ID {fabric} does not exist')
+            if quantity<=0:
+                raise serializers.ValidationError(
+                f"Quantity must be greater than 0 for fabric {fabric.name}"
+                )
+            if not fabric.is_active:
+                raise serializers.ValidationError(
+                    f"{fabric.name} is not available for purchase"
+                    )
+
+            if tailor and fabric.tailor.user!= tailor:
+                raise serializers.ValidationError(
+                    f"Fabric {fabric.name} does not belong to selected tailor"
+                )
+            item_data['fabric']=fabric
+            validated_items.append(item_data)
+        return validated_items
 
     def validate_tailor(self,value):
         if value.role!='TAILOR':
@@ -151,9 +182,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             tailor_profile=value.tailor_profile
             if not tailor_profile.shop_status:
                 raise serializers.ValidationError('Selected tailor is not accepting orders')
-        
         except TailorProfile.DoesNotExist:
             raise serializers.ValidationError('Tailor profile not found')
+        self.context['tailor'] = value
         return value
 
     def validate_family_member(self, value):
@@ -215,13 +246,91 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     )
         
         return data
-
+    @transaction.atomic
     def create(self,validated_data):
         items_data=validated_data.pop('items')
-        order=Order.objects.create(**validated_data)
+        tailor=validated_data.get('tailor')  # Use .get() method
+        delivery_address=validated_data.get('delivery_address')
+        items_with_fabrics=[]
+        fabric_ids=[]
+        # order=Order.objects.create(**validated_data)
         for item_data in items_data:
-            OrderItem.objects.create(order=order, **item_data)
+            fabric=item_data['fabric']
+            fabric_ids.append(fabric.id)
+
+        #lock fabric to prevent race conditions
+        locked_fabrics=Fabric.objects.select_for_update().filter(
+            id__in=fabric_ids
+        )
+        fabric_dict={f.id:f for f in locked_fabrics}
+        for item_data in items_data:
+            fabric=item_data['fabric']
+            quantity=item_data.get('quantity',1)
+
+            locked_fabric=fabric_dict.get(fabric.id)
+            if not locked_fabric:
+               raise serializers.ValidationError(
+                f"Fabric {fabric.name} not found or locked"
+            )
+            if locked_fabric.stock<quantity:
+               raise serializers.ValidationError(
+                f"Insufficient stock for {locked_fabric.name}. "
+                f"Available: {locked_fabric.stock}, Requested: {quantity}"
+            )
+            if not locked_fabric.is_active:
+                raise serializers.ValidationError(
+                f"{locked_fabric.name} is no longer available"
+            )
+            items_with_fabrics.append({
+            'fabric': locked_fabric,
+            'quantity': quantity,
+            'unit_price': locked_fabric.price,  # ALWAYS use current DB price
+            'measurements': item_data.get('measurements', {}),
+            'custom_instructions': item_data.get('custom_instructions', ''),
+        })
+        totals = OrderCalculationService.calculate_all_totals(
+        items_with_fabrics,
+        delivery_address=delivery_address,
+        tailor=tailor
+        )
+        validated_data.update(totals)
+        order = Order.objects.create(**validated_data)
+        for item_data in items_with_fabrics:
+            fabric = item_data['fabric']
+            quantity = item_data['quantity']
+            
+            # Create order item
+            OrderItem.objects.create(
+                order=order,
+                fabric=fabric,
+                quantity=quantity,
+                unit_price=item_data['unit_price'],  # Snapshot of price at order time
+                measurements=item_data['measurements'],
+                custom_instructions=item_data['custom_instructions'],
+            )
+            fabric.stock -= quantity
+            if fabric.stock < 0:
+                raise serializers.ValidationError(
+                    f"Stock cannot be negative for {fabric.name}"
+                )
+            fabric.save(update_fields=['stock'])
+        try:
+            OrderStatusHistory.objects.create(
+                order=order,
+                status=order.status,
+                previous_status=None,
+                changed_by=self.context.get('request').user,
+                notes="Order created"
+            )
+        except Exception as e:
+            # Edge Case: History creation failure shouldn't break order
+            # Log error but don't fail order creation
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to create order history: {str(e)}")
+    
         return order
+        
 
 class OrderUpdateSerializer(serializers.ModelSerializer):
     class Meta:

@@ -199,6 +199,25 @@ class Order(BaseModel):
 
         super().save(*args, **kwargs)
 
+    def recalculate_totals(self):
+        from apps.orders.services import OrderCalculationService
+        items_data=[]
+        for item in self.order_items.all():
+            items_data.append({
+                'fabric':item.fabric,
+                'quantity':item.quantity,
+            })
+        totals = OrderCalculationService.calculate_all_totals(
+                items_data,
+                delivery_address=self.delivery_address,
+                tailor=self.tailor
+        )
+        self.subtotal = totals['subtotal']
+        self.tax_amount = totals['tax_amount']
+        self.delivery_fee = totals['delivery_fee']
+        self.total_amount = totals['total_amount']
+        self.save(update_fields=['subtotal', 'tax_amount', 'delivery_fee', 'total_amount'])
+
     def __str__(self):
         tailor_name = getattr(self.tailor, 'tailor_profile', {}).get('shop_name', self.tailor.username)
         recipient = self.family_member.name if self.family_member else self.customer.username

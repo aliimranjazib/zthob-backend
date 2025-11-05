@@ -70,19 +70,40 @@ class OrderCreateView(APIView):
         data['customer'] = request.user.id
         serializer = OrderCreateSerializer(data=data, context={'request':request})
         if serializer.is_valid():
-            order=serializer.save()
-            response_serializer = OrderSerializer(order, context={'request':request})
+            try:
+                order=serializer.save()
+                response_serializer = OrderSerializer(order, context={'request':request})
+                return api_response(
+                success=True,
+                message="Order created successfully",
+                data=response_serializer.data,
+                status_code=status.HTTP_201_CREATED)
+            except serializer.ValidationError as e:
+                return api_response(
+                success=False,
+                message="Order creation failed",
+                errors={'detail': str(e)},
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+            except Exception as e:
+            # Edge Case: Unexpected errors
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Order creation error: {str(e)}", exc_info=True)
+            
+                return api_response(
+                success=False,
+                message="An error occurred while creating your order. Please try again.",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        else:
             return api_response(
-            success=True,
-            message="Order created successfully",
-            data=response_serializer.data,
-            status_code=status.HTTP_201_CREATED)
-        return api_response(
             success=False,
             message="Order creation failed",
             errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
         )
+        
 
 class OrderDetailView(APIView):
     """
