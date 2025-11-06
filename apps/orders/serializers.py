@@ -176,6 +176,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         return validated_items
 
     def validate_tailor(self,value):
+        if value is None:
+            raise serializers.ValidationError('Tailor is required')
         if value.role!='TAILOR':
             raise serializers.ValidationError('Selected user is not a tailor')
         try:
@@ -193,6 +195,14 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             customer = self.context.get('request').user
             if value.user != customer:
                 raise serializers.ValidationError('Family member must belong to the authenticated customer')
+        return value
+    
+    def validate_delivery_address(self, value):
+        if value:
+            # Get the customer from context (set in the view)
+            customer = self.context.get('request').user
+            if value.user != customer:
+                raise serializers.ValidationError('Delivery address must belong to the authenticated customer')
         return value
 
     def validate(self, data):

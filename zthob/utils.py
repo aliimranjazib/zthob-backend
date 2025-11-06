@@ -5,6 +5,7 @@ from rest_framework import status
 from django.http import Http404
 from django.core.exceptions import PermissionDenied
 from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated
+import re
 
 def api_response(*,success:bool, message:str, data:dict=None, errors:dict=None, status_code:int=200):
     """
@@ -25,17 +26,79 @@ def api_response(*,success:bool, message:str, data:dict=None, errors:dict=None, 
             if any(isinstance(v, list) for v in errors.values()):
                 # Handle serializer field errors - get the first error message
                 first_error = None
+                error_field = None
                 for field, field_errors in errors.items():
                     if isinstance(field_errors, list) and field_errors:
                         first_error = field_errors[0]
+                        error_field = field
                         break
-                formatted_errors = first_error if first_error else "Validation failed"
+                
+                # Improve error messages for common DRF validation errors
+                if first_error:
+                    # Helper function to extract string from error (handles nested structures)
+                    def extract_error_string(error):
+                        """Recursively extract error message from nested error structures"""
+                        if isinstance(error, str):
+                            return error
+                        elif isinstance(error, dict):
+                            # Try common error dict keys
+                            if 'detail' in error:
+                                return extract_error_string(error['detail'])
+                            elif 'message' in error:
+                                return extract_error_string(error['message'])
+                            elif 'non_field_errors' in error:
+                                non_field_errors = error['non_field_errors']
+                                if isinstance(non_field_errors, list) and non_field_errors:
+                                    return extract_error_string(non_field_errors[0])
+                            # If it's a nested field error dict, get first value
+                            if error:
+                                first_value = next(iter(error.values()))
+                                return extract_error_string(first_value)
+                            return str(error)
+                        elif isinstance(error, list) and error:
+                            return extract_error_string(error[0])
+                        else:
+                            return str(error)
+                    
+                    error_str = extract_error_string(first_error)
+                    
+                    # Handle "Invalid pk" errors with better messages
+                    if isinstance(error_str, str):
+                        pk_error_pattern = r'Invalid pk "(\d+)" - object does not exist\.'
+                        match = re.search(pk_error_pattern, error_str)
+                        if match:
+                            pk_value = match.group(1)
+                            # Map field names to user-friendly messages
+                            field_messages = {
+                                'tailor': f'Tailor with ID {pk_value} does not exist. Please select a valid tailor.',
+                                'delivery_address': f'Delivery address with ID {pk_value} does not exist. Please select a valid address.',
+                                'family_member': f'Family member with ID {pk_value} does not exist. Please select a valid family member.',
+                                'fabric': f'Fabric with ID {pk_value} does not exist. Please select a valid fabric.',
+                                'customer': f'Customer with ID {pk_value} does not exist.',
+                            }
+                            formatted_errors = field_messages.get(
+                                error_field, 
+                                f'{error_field.replace("_", " ").title()} with ID {pk_value} does not exist.'
+                            )
+                        else:
+                            formatted_errors = error_str
+                    else:
+                        formatted_errors = str(error_str)
+                else:
+                    formatted_errors = "Validation failed"
             else:
                 # Regular dict errors
                 formatted_errors = errors
         else:
-            # String or other format
-            formatted_errors = str(errors)
+            # String or other format - also check for pk errors in strings
+            error_str = str(errors)
+            pk_error_pattern = r'Invalid pk "(\d+)" - object does not exist\.'
+            match = re.search(pk_error_pattern, error_str)
+            if match:
+                pk_value = match.group(1)
+                formatted_errors = f"The requested resource with ID {pk_value} does not exist."
+            else:
+                formatted_errors = error_str
     
     return Response({
         'success': success,
