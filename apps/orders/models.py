@@ -219,9 +219,25 @@ class Order(BaseModel):
         self.save(update_fields=['subtotal', 'tax_amount', 'delivery_fee', 'total_amount'])
 
     def __str__(self):
-        tailor_name = getattr(self.tailor, 'tailor_profile', {}).get('shop_name', self.tailor.username)
-        recipient = self.family_member.name if self.family_member else self.customer.username
-        return f"Order {self.order_number} - {recipient} (by {self.customer.username}) to {tailor_name}"
+        # Get tailor name from profile if available
+        try:
+            if hasattr(self.tailor, 'tailor_profile') and self.tailor.tailor_profile:
+                tailor_name = self.tailor.tailor_profile.shop_name or self.tailor.username
+            else:
+                tailor_name = self.tailor.username if self.tailor else 'Unknown'
+        except (AttributeError, Exception):
+            tailor_name = self.tailor.username if self.tailor else 'Unknown'
+        
+        # Get recipient name
+        if self.family_member and self.family_member.name:
+            recipient = self.family_member.name
+        else:
+            recipient = self.customer.username if self.customer else 'Unknown'
+        
+        # Get customer username
+        customer_name = self.customer.username if self.customer else 'Unknown'
+        
+        return f"Order {self.order_number or 'N/A'} - {recipient} (by {customer_name}) to {tailor_name}"
 
     @property
     def items_count(self):
