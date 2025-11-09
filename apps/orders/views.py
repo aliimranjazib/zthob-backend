@@ -14,6 +14,7 @@ OrderCreateSerializer,
 OrderUpdateSerializer,
 OrderListSerializer,
 OrderStatusHistorySerializer,
+OrderPaymentStatusUpdateSerializer,
 )
 from apps.tailors.models import TailorProfile
 from apps.customers.models import CustomerProfile
@@ -375,7 +376,7 @@ class TailorOrderListView(APIView):
     def get(self,request):
         try:
             tailor_profile = TailorProfile.objects.get(user=request.user)
-            orders = Order.objects.filter(tailor=tailor_profile).select_related('customer', 'delivery_address').order_by('-created_at')
+            orders = Order.objects.filter(tailor=request.user).select_related('customer', 'delivery_address').order_by('-created_at')
             status_filter = request.query_params.get('status')
             if status_filter:
                 orders = orders.filter(status=status_filter)
@@ -395,6 +396,93 @@ class TailorOrderListView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
+
+class OrderPaymentStatusUpdateView(APIView):
+    permission_classes=[IsAuthenticated]
+    @extend_schema(
+        request=OrderPaymentStatusUpdateSerializer,
+        responses=OrderSerializer,
+        summary="Update payment status",
+        description="Update order payment status after payment success"
+    )
+    def patch(self, request, order_id):
+        try:
+            order = get_object_or_404(Order, id=order_id)
+            
+            # Permission checks
+            if request.user.role == 'USER':
+                if order.customer != request.user:
+                    raise PermissionError('You can only update payment status of your own orders')
+            elif request.user.role == 'ADMIN':
+                # Admins can update any order's payment status
+                pass
+            else:
+                # Tailors and other roles cannot update payment status
+                raise PermissionError('Only customers and admins can update payment status')
+            
+            # Validate request data using serializer
+            serializer = OrderPaymentStatusUpdateSerializer(data=request.data)
+            if not serializer.is_valid():
+                return api_response(
+                    success=False,
+                    message="Invalid payment status data",
+                    errors=serializer.errors,
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            payment_status = serializer.validated_data['payment_status']
+            current_payment_status = order.payment_status
+            
+            # Business logic validation
+            if current_payment_status == 'refunded':
+                return api_response(
+                    success=False,
+                    message="Cannot change payment status of refunded orders",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            if current_payment_status == 'paid' and payment_status == 'pending':
+                return api_response(
+                    success=False,
+                    message="Cannot change payment status from paid to pending",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update payment status
+            old_payment_status = order.payment_status
+            order.payment_status = payment_status
+            order.save(update_fields=['payment_status'])
+
+            OrderStatusHistory.objects.create(
+                order=order,
+                status=order.status,
+                previous_status=order.status,
+                changed_by=request.user,
+                notes=f"Payment status changed from {old_payment_status} to {payment_status}"
+            )
+
+            response_serializer=OrderSerializer(order, context={'request':request})
+            return api_response(
+                success=True,
+                message="Payment status updated successfully",
+                data=response_serializer.data,
+                status_code=status.HTTP_200_OK
+
+            )
+        except PermissionError as e:
+            return api_response(
+                success=False,
+                message=str(e),
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        except Exception as e:
+            import logging
+            logger=logging.getLogger(__name__)
+            logger.error(f'Payment status update error : {str(e)}', exc_info=True)
+            return api_response(
+                success=False,
+                message="An error occurred while updating payment status",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 

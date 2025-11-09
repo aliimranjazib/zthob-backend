@@ -416,4 +416,12 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
             'created_at'
         ]
         read_only_fields = ['id', 'created_at']
+
+class OrderPaymentStatusUpdateSerializer(serializers.Serializer):
+    """Serializer for updating payment status only"""
+    payment_status = serializers.ChoiceField(
+        choices=Order.PAYMENT_STATUS_CHOICES,
+        required=True,
+        help_text="Payment status: pending, paid, or refunded"
+    )
             

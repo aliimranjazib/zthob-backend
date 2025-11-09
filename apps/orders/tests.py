@@ -474,3 +474,440 @@ class OrderCreateIntegrationTest(TestCase):
         self.assertEqual(order.subtotal, Decimal('500.00'))
         self.assertEqual(order.delivery_fee, Decimal('0.00'))
         self.assertEqual(order.total_amount, Decimal('575.00'))  # 500 + 75 (tax) + 0 (delivery)
+
+
+class OrderPaymentStatusUpdateViewTest(TestCase):
+    """Comprehensive tests for OrderPaymentStatusUpdateView"""
+    
+    def setUp(self):
+        """Set up test data"""
+        # Create customer
+        self.customer = User.objects.create_user(
+            username=f'customer_pay_{id(self)}',
+            email=f'customer_pay_{id(self)}@example.com',
+            password='testpass123',
+            role='USER'
+        )
+        
+        # Create another customer (for permission tests)
+        self.other_customer = User.objects.create_user(
+            username=f'other_customer_{id(self)}',
+            email=f'other_customer_{id(self)}@example.com',
+            password='testpass123',
+            role='USER'
+        )
+        
+        # Create tailor
+        self.tailor_user = User.objects.create_user(
+            username=f'tailor_pay_{id(self)}',
+            email=f'tailor_pay_{id(self)}@example.com',
+            password='testpass123',
+            role='TAILOR'
+        )
+        self.tailor_profile, _ = TailorProfile.objects.get_or_create(
+            user=self.tailor_user,
+            defaults={
+                'shop_name': 'Test Tailor Shop',
+                'shop_status': True
+            }
+        )
+        
+        # Create admin
+        self.admin_user = User.objects.create_user(
+            username=f'admin_pay_{id(self)}',
+            email=f'admin_pay_{id(self)}@example.com',
+            password='testpass123',
+            role='ADMIN'
+        )
+        
+        # Create fabric category
+        self.fabric_category = FabricCategory.objects.create(
+            name='Fabric',
+            slug='fabric'
+        )
+        
+        # Create fabric
+        self.fabric = Fabric.objects.create(
+            tailor=self.tailor_profile,
+            name='Test Fabric',
+            price=Decimal('100.00'),
+            stock=10,
+            is_active=True,
+            category=self.fabric_category
+        )
+        
+        # Create delivery address
+        self.address = Address.objects.create(
+            user=self.customer,
+            street='123 Test St',
+            city='Riyadh',
+            country='Saudi Arabia'
+        )
+        
+        # Create an order with pending payment status
+        self.order = Order.objects.create(
+            customer=self.customer,
+            tailor=self.tailor_user,
+            order_type='fabric_only',
+            payment_method='cod',
+            delivery_address=self.address,
+            status='pending',
+            payment_status='pending',
+            subtotal=Decimal('100.00'),
+            tax_amount=Decimal('15.00'),
+            delivery_fee=Decimal('25.00'),
+            total_amount=Decimal('140.00')
+        )
+        
+        # Create order item
+        OrderItem.objects.create(
+            order=self.order,
+            fabric=self.fabric,
+            quantity=1,
+            unit_price=Decimal('100.00')
+        )
+        
+        # Create API clients
+        self.customer_client = APIClient()
+        self.customer_client.force_authenticate(user=self.customer)
+        
+        self.other_customer_client = APIClient()
+        self.other_customer_client.force_authenticate(user=self.other_customer)
+        
+        self.tailor_client = APIClient()
+        self.tailor_client.force_authenticate(user=self.tailor_user)
+        
+        self.admin_client = APIClient()
+        self.admin_client.force_authenticate(user=self.admin_user)
+        
+        self.unauth_client = APIClient()
+    
+    # ========== PERMISSION TESTS ==========
+    
+    def test_customer_can_update_own_order_payment_status(self):
+        """Test that customer can update their own order's payment status"""
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'paid'}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get('success'))
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'paid')
+    
+    def test_customer_cannot_update_other_customer_order(self):
+        """Test that customer cannot update another customer's order payment status"""
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'paid'}
+        
+        response = self.other_customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(response.data.get('success'))
+        self.assertIn('own orders', response.data.get('message', ''))
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'pending')  # Should remain unchanged
+    
+    def test_admin_can_update_any_order_payment_status(self):
+        """Test that admin can update any order's payment status"""
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'paid'}
+        
+        response = self.admin_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get('success'))
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'paid')
+    
+    def test_tailor_cannot_update_payment_status(self):
+        """Test that tailor cannot update payment status"""
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'paid'}
+        
+        response = self.tailor_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(response.data.get('success'))
+        self.assertIn('Only customers and admins', response.data.get('message', ''))
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'pending')  # Should remain unchanged
+    
+    def test_unauthenticated_user_cannot_update_payment_status(self):
+        """Test that unauthenticated user cannot update payment status"""
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'paid'}
+        
+        response = self.unauth_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'pending')  # Should remain unchanged
+    
+    # ========== VALIDATION TESTS ==========
+    
+    def test_missing_payment_status_field(self):
+        """Test that missing payment_status field returns 400"""
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data.get('success'))
+        self.assertIn('payment_status', str(response.data))
+    
+    def test_invalid_payment_status_value(self):
+        """Test that invalid payment_status value returns 400"""
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'invalid_status'}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data.get('success'))
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'pending')  # Should remain unchanged
+    
+    def test_valid_payment_status_values(self):
+        """Test that all valid payment status values are accepted"""
+        valid_statuses = ['pending', 'paid', 'refunded']
+        
+        for payment_status in valid_statuses:
+            # Reset order to pending for each test
+            self.order.payment_status = 'pending'
+            self.order.save()
+            
+            url = f'/api/orders/{self.order.id}/payment-status/'
+            data = {'payment_status': payment_status}
+            
+            response = self.customer_client.patch(url, data, format='json')
+            
+            self.assertEqual(response.status_code, status.HTTP_200_OK, 
+                           f"Failed for status: {payment_status}")
+            self.order.refresh_from_db()
+            self.assertEqual(self.order.payment_status, payment_status)
+    
+    def test_order_not_found(self):
+        """Test that non-existent order returns 404"""
+        url = '/api/orders/99999/payment-status/'
+        data = {'payment_status': 'paid'}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+    
+    # ========== BUSINESS LOGIC TESTS ==========
+    
+    def test_cannot_change_refunded_order_payment_status(self):
+        """Test that refunded order's payment status cannot be changed"""
+        self.order.payment_status = 'refunded'
+        self.order.save()
+        
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'paid'}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data.get('success'))
+        self.assertIn('refunded', response.data.get('message', '').lower())
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'refunded')  # Should remain unchanged
+    
+    def test_cannot_change_from_paid_to_pending(self):
+        """Test that payment status cannot be changed from paid to pending"""
+        self.order.payment_status = 'paid'
+        self.order.save()
+        
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'pending'}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data.get('success'))
+        self.assertIn('paid to pending', response.data.get('message', '').lower())
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'paid')  # Should remain unchanged
+    
+    def test_can_change_from_pending_to_paid(self):
+        """Test that payment status can be changed from pending to paid"""
+        self.order.payment_status = 'pending'
+        self.order.save()
+        
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'paid'}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get('success'))
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'paid')
+    
+    def test_can_change_from_pending_to_refunded(self):
+        """Test that payment status can be changed from pending to refunded"""
+        self.order.payment_status = 'pending'
+        self.order.save()
+        
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'refunded'}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get('success'))
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'refunded')
+    
+    def test_can_change_from_paid_to_refunded(self):
+        """Test that payment status can be changed from paid to refunded"""
+        self.order.payment_status = 'paid'
+        self.order.save()
+        
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'refunded'}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get('success'))
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'refunded')
+    
+    def test_same_payment_status_no_change(self):
+        """Test that setting the same payment status still succeeds"""
+        self.order.payment_status = 'paid'
+        self.order.save()
+        
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'paid'}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get('success'))
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'paid')
+    
+    # ========== SUCCESS CASE TESTS ==========
+    
+    def test_successful_payment_status_update_creates_history(self):
+        """Test that successful payment status update creates history entry"""
+        initial_history_count = OrderStatusHistory.objects.filter(order=self.order).count()
+        
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'paid'}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Verify history was created
+        history_count = OrderStatusHistory.objects.filter(order=self.order).count()
+        self.assertEqual(history_count, initial_history_count + 1)
+        
+        # Verify history entry details
+        latest_history = OrderStatusHistory.objects.filter(order=self.order).latest('created_at')
+        self.assertEqual(latest_history.changed_by, self.customer)
+        self.assertIn('Payment status changed', latest_history.notes)
+        self.assertIn('pending', latest_history.notes)
+        self.assertIn('paid', latest_history.notes)
+    
+    def test_successful_payment_status_update_returns_order_data(self):
+        """Test that successful update returns complete order data"""
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'paid'}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get('success'))
+        self.assertIn('data', response.data)
+        
+        order_data = response.data['data']
+        self.assertEqual(order_data['id'], self.order.id)
+        self.assertEqual(order_data['payment_status'], 'paid')
+        self.assertIn('order_number', order_data)
+        self.assertIn('total_amount', order_data)
+    
+    def test_payment_status_update_preserves_other_order_fields(self):
+        """Test that payment status update doesn't affect other order fields"""
+        original_status = self.order.status
+        original_total = self.order.total_amount
+        
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 'paid'}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.order.refresh_from_db()
+        
+        # Verify other fields are unchanged
+        self.assertEqual(self.order.status, original_status)
+        self.assertEqual(self.order.total_amount, original_total)
+        self.assertEqual(self.order.customer, self.customer)
+        self.assertEqual(self.order.tailor, self.tailor_user)
+    
+    # ========== EDGE CASE TESTS ==========
+    
+    def test_payment_status_update_with_empty_string(self):
+        """Test that empty string payment_status is rejected"""
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': ''}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'pending')
+    
+    def test_payment_status_update_with_null_value(self):
+        """Test that null payment_status is rejected"""
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': None}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'pending')
+    
+    def test_payment_status_update_with_numeric_value(self):
+        """Test that numeric payment_status is rejected"""
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        data = {'payment_status': 123}
+        
+        response = self.customer_client.patch(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'pending')
+    
+    def test_multiple_rapid_payment_status_updates(self):
+        """Test handling of multiple rapid payment status updates"""
+        url = f'/api/orders/{self.order.id}/payment-status/'
+        
+        # First update: pending -> paid
+        data1 = {'payment_status': 'paid'}
+        response1 = self.customer_client.patch(url, data1, format='json')
+        self.assertEqual(response1.status_code, status.HTTP_200_OK)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'paid')
+        
+        # Second update: paid -> refunded
+        data2 = {'payment_status': 'refunded'}
+        response2 = self.customer_client.patch(url, data2, format='json')
+        self.assertEqual(response2.status_code, status.HTTP_200_OK)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'refunded')
+        
+        # Third update: refunded -> paid (should fail)
+        data3 = {'payment_status': 'paid'}
+        response3 = self.customer_client.patch(url, data3, format='json')
+        self.assertEqual(response3.status_code, status.HTTP_400_BAD_REQUEST)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, 'refunded')  # Should remain refunded
