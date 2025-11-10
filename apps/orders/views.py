@@ -26,7 +26,8 @@ class OrderListView(APIView):
     @extend_schema(
         responses=OrderListSerializer(many=True),
         summary="List all orders",
-        description="Get a list of all orders with optional filtering"
+        description="Get a list of all orders with optional filtering",
+        tags=["Orders"]
     )
     def get(self,request):
         status_filter=request.query_params.get('status')
@@ -63,7 +64,8 @@ class OrderCreateView(APIView):
         request=OrderCreateSerializer,
         responses={201: OrderSerializer},
         summary="Create new order",
-        description="Create a new order with items"
+        description="Create a new order with items",
+        tags=["Customer Orders"]
     )
     def post(self,request):
 
@@ -132,7 +134,8 @@ class OrderDetailView(APIView):
     @extend_schema(
         responses=OrderSerializer,
         summary="Get order details",
-        description="Retrieve detailed information about a specific order"
+        description="Retrieve detailed information about a specific order",
+        tags=["Orders"]
     )
 
     def get(self, request, order_id):
@@ -155,7 +158,8 @@ class OrderDetailView(APIView):
         request=OrderUpdateSerializer,
         responses=OrderSerializer,
         summary="Update order",
-        description="Update order information (limited fields)"
+        description="Update order information (limited fields)",
+        tags=["Orders"]
     )
 
     def put(self, request, order_id):
@@ -209,7 +213,8 @@ class OrderDetailView(APIView):
             )
     @extend_schema(
         summary="Delete order",
-        description="Delete an order (only if status is pending)"
+        description="Delete an order (only if status is pending)",
+        tags=["Customer Orders"]
     )
 
     def delete(self,request, order_id):
@@ -242,7 +247,8 @@ class OrderStatusUpdateView(APIView):
         request=OrderUpdateSerializer,
         responses=OrderSerializer,
         summary="Update order status",
-        description="Update order status with automatic history tracking"
+        description="Update order status with automatic history tracking",
+        tags=["Orders"]
     )
 
     def patch(self, request, order_id):
@@ -311,7 +317,8 @@ class OrderHistoryView(APIView):
     @extend_schema(
         responses=OrderStatusHistorySerializer(many=True),
         summary="Get order history",
-        description="Retrieve status change history for an order"
+        description="Retrieve status change history for an order",
+        tags=["Orders"]
     )
     def get(self, request, order_id):
         try:
@@ -349,7 +356,8 @@ class CustomerOrderListView(APIView):
     @extend_schema(
         responses=OrderListSerializer(many=True),
         summary="Get my orders",
-        description="Retrieve all orders for the authenticated customer"
+        description="Retrieve all orders for the authenticated customer",
+        tags=["Customer Orders"]
     )
 
     def get(self,request):
@@ -370,16 +378,29 @@ class TailorOrderListView(APIView):
     @extend_schema(
         responses=OrderListSerializer(many=True),
         summary="Get my tailor orders",
-        description="Retrieve all orders assigned to the authenticated tailor"
+        description="Retrieve all orders assigned to the authenticated tailor. Filter by payment_status=paid to see only paid orders.",
+        tags=["Tailor Orders"]
     )
 
     def get(self,request):
         try:
             tailor_profile = TailorProfile.objects.get(user=request.user)
-            orders = Order.objects.filter(tailor=request.user).select_related('customer', 'delivery_address').order_by('-created_at')
+            orders = Order.objects.filter(tailor=request.user).select_related('customer', 'delivery_address', 'rider').prefetch_related('order_items').order_by('-created_at')
+            
+            # Filter by payment status (default: show all, but can filter for paid only)
+            payment_status = request.query_params.get('payment_status')
+            if payment_status:
+                orders = orders.filter(payment_status=payment_status)
+            
+            # Filter by order status
             status_filter = request.query_params.get('status')
             if status_filter:
                 orders = orders.filter(status=status_filter)
+            
+            # Filter by order type
+            order_type = request.query_params.get('order_type')
+            if order_type:
+                orders = orders.filter(order_type=order_type)
             
             serializer = OrderListSerializer(orders, many=True, context={'request': request})
             
@@ -397,13 +418,108 @@ class TailorOrderListView(APIView):
             )
 
 
+class TailorPaidOrdersView(APIView):
+    """Get orders with payment_status=paid for tailor"""
+    permission_classes=[IsAuthenticated]
+    
+    @extend_schema(
+        responses=OrderListSerializer(many=True),
+        summary="Get paid orders",
+        description="Retrieve all paid orders assigned to the authenticated tailor (ready for processing)",
+        tags=["Tailor Orders"]
+    )
+    def get(self, request):
+        try:
+            tailor_profile = TailorProfile.objects.get(user=request.user)
+            orders = Order.objects.filter(
+                tailor=request.user,
+                payment_status='paid'
+            ).select_related(
+                'customer',
+                'delivery_address',
+                'rider'
+            ).prefetch_related('order_items').order_by('-created_at')
+            
+            # Filter by status if provided
+            status_filter = request.query_params.get('status')
+            if status_filter:
+                orders = orders.filter(status=status_filter)
+            
+            # Filter by order type if provided
+            order_type = request.query_params.get('order_type')
+            if order_type:
+                orders = orders.filter(order_type=order_type)
+            
+            serializer = OrderListSerializer(orders, many=True, context={'request': request})
+            
+            return api_response(
+                success=True,
+                message="Paid orders retrieved successfully",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+        except TailorProfile.DoesNotExist:
+            return api_response(
+                success=False,
+                message="User is not a tailor",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class TailorOrderDetailView(APIView):
+    """Get detailed order information for tailor including rider measurements"""
+    permission_classes=[IsAuthenticated]
+    
+    @extend_schema(
+        responses=OrderSerializer,
+        summary="Get order details",
+        description="Retrieve detailed information about a specific order including rider measurements",
+        tags=["Tailor Orders"]
+    )
+    def get(self, request, order_id):
+        try:
+            tailor_profile = TailorProfile.objects.get(user=request.user)
+            order = get_object_or_404(
+                Order.objects.select_related(
+                    'customer',
+                    'delivery_address',
+                    'rider',
+                    'family_member'
+                ).prefetch_related('order_items__fabric', 'status_history'),
+                id=order_id,
+                tailor=request.user
+            )
+            
+            serializer = OrderSerializer(order, context={'request': request})
+            
+            # Add rider measurements info if available
+            data = serializer.data
+            if order.rider_measurements:
+                data['rider_measurements'] = order.rider_measurements
+                data['measurement_taken_at'] = order.measurement_taken_at.isoformat() if order.measurement_taken_at else None
+            
+            return api_response(
+                success=True,
+                message="Order details retrieved successfully",
+                data=data,
+                status_code=status.HTTP_200_OK
+            )
+        except TailorProfile.DoesNotExist:
+            return api_response(
+                success=False,
+                message="User is not a tailor",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+
 class OrderPaymentStatusUpdateView(APIView):
     permission_classes=[IsAuthenticated]
     @extend_schema(
         request=OrderPaymentStatusUpdateSerializer,
         responses=OrderSerializer,
         summary="Update payment status",
-        description="Update order payment status after payment success"
+        description="Update order payment status after payment success",
+        tags=["Customer Orders"]
     )
     def patch(self, request, order_id):
         try:

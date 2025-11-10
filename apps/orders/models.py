@@ -83,6 +83,14 @@ class Order(BaseModel):
     related_name='tailor_orders',
     help_text='Tailor assigned to this order'
     )
+    rider=models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rider_orders',
+        help_text='Rider assigned to this order for delivery'
+    )
     order_type=models.CharField(
         max_length=25,
         choices=ORDER_TYPE_CHOICES,
@@ -178,6 +186,20 @@ class Order(BaseModel):
     null=True,
     blank=True,
     help_text="Interal notes for tailor/admin"
+    )
+    
+    # Rider measurements (for fabric_with_stitching orders)
+    rider_measurements = models.JSONField(
+        default=dict,
+        blank=True,
+        null=True,
+        help_text="Measurements taken by rider at customer location (for fabric_with_stitching orders)"
+    )
+    
+    measurement_taken_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When measurements were taken by the rider"
     )
 
     class Meta:
