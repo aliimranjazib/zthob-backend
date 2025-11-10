@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.core.validators import FileExtensionValidator, RegexValidator
 from apps.core.models import BaseModel
 
 
@@ -81,12 +82,20 @@ class RiderProfile(BaseModel):
         help_text="Full name of the rider"
     )
     
-    national_id = models.CharField(
-        max_length=20,
+    # National Identity / Iqama
+    iqama_number = models.CharField(
+        max_length=10,
         blank=True,
         null=True,
         unique=True,
-        help_text="National ID or ID number"
+        validators=[RegexValidator(regex=r'^\d{10}$', message='Iqama number must be exactly 10 digits')],
+        help_text="Iqama Number (10-digit) or Saudi National ID for citizens"
+    )
+    
+    iqama_expiry_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Iqama / National ID expiry date"
     )
     
     # Contact Information
@@ -102,6 +111,33 @@ class RiderProfile(BaseModel):
         help_text="Emergency contact number"
     )
     
+    # Driving License Information
+    license_number = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Driving license number"
+    )
+    
+    license_expiry_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Driving license expiry date"
+    )
+    
+    license_type = models.CharField(
+        max_length=50,
+        choices=[
+            ('private', 'Private'),
+            ('general', 'General'),
+            ('motorcycle', 'Motorcycle'),
+            ('commercial', 'Commercial'),
+        ],
+        blank=True,
+        null=True,
+        help_text="Type of driving license"
+    )
+    
     # Vehicle Information
     vehicle_type = models.CharField(
         max_length=50,
@@ -109,17 +145,88 @@ class RiderProfile(BaseModel):
             ('motorcycle', 'Motorcycle'),
             ('car', 'Car'),
             ('bicycle', 'Bicycle'),
+            ('truck', 'Truck'),
+            ('van', 'Van'),
             ('other', 'Other'),
         ],
-        default='motorcycle',
+        blank=True,
+        null=True,
         help_text="Type of vehicle used for delivery"
     )
     
-    vehicle_number = models.CharField(
+    vehicle_plate_number_arabic = models.CharField(
         max_length=50,
         blank=True,
         null=True,
-        help_text="Vehicle registration number"
+        help_text="Vehicle plate number in Arabic"
+    )
+    
+    vehicle_plate_number_english = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Vehicle plate number in English"
+    )
+    
+    vehicle_make = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Vehicle make/brand (e.g., Toyota, Honda)"
+    )
+    
+    vehicle_model = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Vehicle model (e.g., Camry, Accord)"
+    )
+    
+    vehicle_year = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="Vehicle manufacturing year"
+    )
+    
+    vehicle_color = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Vehicle color"
+    )
+    
+    vehicle_registration_number = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Vehicle Registration (Istimara) Number"
+    )
+    
+    vehicle_registration_expiry_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Vehicle Registration (Istimara) expiry date"
+    )
+    
+    # Insurance Details
+    insurance_provider = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Insurance provider name"
+    )
+    
+    insurance_policy_number = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Insurance policy number"
+    )
+    
+    insurance_expiry_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Insurance expiry date"
     )
     
     # Status
@@ -187,6 +294,78 @@ class RiderProfile(BaseModel):
     
     def __str__(self):
         return f"{self.full_name or self.user.username} - {self.phone_number}"
+
+
+class RiderDocument(models.Model):
+    """
+    Model for storing rider documents (Iqama, License, Istimara, Insurance)
+    """
+    DOCUMENT_TYPE_CHOICES = (
+        ('iqama_front', 'Iqama Front'),
+        ('iqama_back', 'Iqama Back'),
+        ('license_front', 'Driving License Front'),
+        ('license_back', 'Driving License Back'),
+        ('istimara_front', 'Istimara Front'),
+        ('istimara_back', 'Istimara Back'),
+        ('insurance', 'Insurance Card'),
+    )
+    
+    rider_profile = models.ForeignKey(
+        RiderProfile,
+        on_delete=models.CASCADE,
+        related_name='documents',
+        help_text="Rider profile this document belongs to"
+    )
+    
+    document_type = models.CharField(
+        max_length=50,
+        choices=DOCUMENT_TYPE_CHOICES,
+        help_text="Type of document"
+    )
+    
+    document_image = models.ImageField(
+        upload_to='rider_documents/',
+        validators=[FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'pdf'])],
+        help_text="Document image (JPG, JPEG, PNG, PDF)"
+    )
+    
+    is_verified = models.BooleanField(
+        default=False,
+        help_text="Whether this document has been verified by admin"
+    )
+    
+    verified_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="When the document was verified"
+    )
+    
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_rider_documents',
+        help_text="Admin who verified this document"
+    )
+    
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Admin notes about this document"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Rider Document"
+        verbose_name_plural = "Rider Documents"
+        ordering = ['-created_at']
+        unique_together = [['rider_profile', 'document_type']]
+    
+    def __str__(self):
+        return f"{self.rider_profile.full_name or self.rider_profile.user.username} - {self.get_document_type_display()}"
 
 
 class RiderOrderAssignment(BaseModel):

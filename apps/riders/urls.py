@@ -6,6 +6,9 @@ from .views import (
     RiderProfileView,
     RiderProfileSubmissionView,
     RiderProfileStatusView,
+    RiderDocumentUploadView,
+    RiderDocumentListView,
+    RiderDocumentDeleteView,
     RiderAvailableOrdersView,
     RiderMyOrdersView,
     RiderOrderDetailView,
@@ -30,6 +33,11 @@ urlpatterns = [
     path('profile/', RiderProfileView.as_view(), name='profile'),
     path('profile/submit/', RiderProfileSubmissionView.as_view(), name='profile-submit'),
     path('profile/status/', RiderProfileStatusView.as_view(), name='profile-status'),
+    
+    # Documents
+    path('documents/', RiderDocumentListView.as_view(), name='documents-list'),
+    path('documents/upload/', RiderDocumentUploadView.as_view(), name='document-upload'),
+    path('documents/<int:document_id>/', RiderDocumentDeleteView.as_view(), name='document-delete'),
     
     # Orders
     path('orders/available/', RiderAvailableOrdersView.as_view(), name='available-orders'),

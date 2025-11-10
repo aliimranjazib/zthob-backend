@@ -20,6 +20,7 @@ from django.contrib import admin
 from django.urls import path, include,re_path
 from rest_framework import permissions
 from django.conf.urls.static import static
+from django.template.response import TemplateResponse
 
 from drf_spectacular.views import (
     SpectacularAPIView,
@@ -31,6 +32,103 @@ from drf_spectacular.views import (
 admin.site.site_header = "Mgask Administration"
 admin.site.site_title = "Mgask Admin"
 admin.site.index_title = "Welcome to Zthob Mgask"
+
+# Override admin index to add image galleries
+original_index = admin.site.index
+
+def custom_admin_index(request, extra_context=None):
+    """Enhanced admin index with image galleries"""
+    from apps.tailors.models import FabricImage, TailorProfile
+    from apps.riders.models import RiderDocument
+    from apps.orders.models import Order
+    from apps.tailors.models import Fabric
+    
+    extra_context = extra_context or {}
+    
+    # Get recent fabric images (primary images)
+    recent_fabric_images = FabricImage.objects.filter(
+        is_primary=True
+    ).select_related('fabric').order_by('-created_at')[:12]
+    
+    # Get tailor shop images
+    tailor_shop_images = TailorProfile.objects.filter(
+        shop_image__isnull=False
+    ).select_related('user').order_by('-created_at')[:12]
+    
+    # Get recent rider documents (verified)
+    recent_rider_documents = RiderDocument.objects.filter(
+        is_verified=True
+    ).select_related('rider_profile__user').order_by('-verified_at')[:12]
+    
+    # Get statistics
+    stats = {
+        'total_fabrics': Fabric.objects.count(),
+        'total_fabric_images': FabricImage.objects.count(),
+        'total_tailors': TailorProfile.objects.count(),
+        'total_tailors_with_images': TailorProfile.objects.filter(shop_image__isnull=False).count(),
+        'total_riders': RiderDocument.objects.values('rider_profile').distinct().count(),
+        'total_verified_documents': RiderDocument.objects.filter(is_verified=True).count(),
+        'total_orders': Order.objects.count(),
+        'pending_orders': Order.objects.filter(status='pending').count(),
+        'paid_orders': Order.objects.filter(payment_status='paid').count(),
+    }
+    
+    # Prepare image data
+    fabric_images_data = []
+    for img in recent_fabric_images:
+        try:
+            if img.image:
+                fabric_images_data.append({
+                    'id': img.id,
+                    'image_url': img.image.url,
+                    'fabric_name': img.fabric.name if img.fabric else 'Unknown',
+                    'fabric_sku': img.fabric.sku if img.fabric else None,
+                    'fabric_url': f'/admin/tailors/fabric/{img.fabric.id}/change/' if img.fabric and img.fabric.id else None,
+                })
+        except (ValueError, AttributeError):
+            continue
+    
+    tailor_images_data = []
+    for profile in tailor_shop_images:
+        try:
+            if profile.shop_image:
+                tailor_images_data.append({
+                    'id': profile.id,
+                    'image_url': profile.shop_image.url,
+                    'shop_name': profile.shop_name or (profile.user.username if profile.user else 'Unknown'),
+                    'tailor_url': f'/admin/tailors/tailorprofile/{profile.id}/change/',
+                })
+        except (ValueError, AttributeError):
+            continue
+    
+    rider_documents_data = []
+    for doc in recent_rider_documents:
+        try:
+            if doc.document_image:
+                rider_name = 'Unknown'
+                if doc.rider_profile:
+                    rider_name = doc.rider_profile.full_name or (doc.rider_profile.user.username if hasattr(doc.rider_profile, 'user') and doc.rider_profile.user else 'Unknown')
+                rider_documents_data.append({
+                    'id': doc.id,
+                    'image_url': doc.document_image.url,
+                    'document_type': doc.get_document_type_display(),
+                    'rider_name': rider_name,
+                    'rider_url': f'/admin/riders/riderprofile/{doc.rider_profile.id}/change/' if doc.rider_profile and doc.rider_profile.id else None,
+                })
+        except (ValueError, AttributeError):
+            continue
+    
+    extra_context.update({
+        'fabric_images': fabric_images_data,
+        'tailor_images': tailor_images_data,
+        'rider_documents': rider_documents_data,
+        'stats': stats,
+    })
+    
+    return original_index(request, extra_context)
+
+# Override the index view
+admin.site.index = custom_admin_index
 
 urlpatterns = [
     path("admin/", admin.site.urls),

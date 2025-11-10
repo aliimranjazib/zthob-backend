@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
-from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview
+from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
 
 
 @admin.register(RiderProfile)
@@ -39,8 +39,12 @@ class RiderProfileAdmin(admin.ModelAdmin):
         'user__email',
         'full_name',
         'phone_number',
-        'national_id',
-        'vehicle_number',
+        'iqama_number',
+        'license_number',
+        'vehicle_plate_number_english',
+        'vehicle_plate_number_arabic',
+        'vehicle_registration_number',
+        'insurance_policy_number',
     ]
     
     raw_id_fields = ['user']
@@ -60,19 +64,41 @@ class RiderProfileAdmin(admin.ModelAdmin):
         ('Personal Information', {
             'fields': (
                 'full_name',
-                'national_id',
-            )
-        }),
-        ('Contact Information', {
-            'fields': (
                 'phone_number',
                 'emergency_contact',
+            )
+        }),
+        ('National Identity / Iqama', {
+            'fields': (
+                'iqama_number',
+                'iqama_expiry_date',
+            )
+        }),
+        ('Driving License', {
+            'fields': (
+                'license_number',
+                'license_expiry_date',
+                'license_type',
             )
         }),
         ('Vehicle Information', {
             'fields': (
                 'vehicle_type',
-                'vehicle_number',
+                'vehicle_plate_number_arabic',
+                'vehicle_plate_number_english',
+                'vehicle_make',
+                'vehicle_model',
+                'vehicle_year',
+                'vehicle_color',
+                'vehicle_registration_number',
+                'vehicle_registration_expiry_date',
+            )
+        }),
+        ('Insurance Details', {
+            'fields': (
+                'insurance_provider',
+                'insurance_policy_number',
+                'insurance_expiry_date',
             )
         }),
         ('Status', {
@@ -470,5 +496,183 @@ class RiderProfileReviewAdmin(admin.ModelAdmin):
         return super().get_queryset(request).select_related(
             'profile__user',
             'reviewed_by'
+        )
+
+
+@admin.register(RiderDocument)
+class RiderDocumentAdmin(admin.ModelAdmin):
+    """Professional Rider Document Admin Interface"""
+    
+    list_display = [
+        'rider_link',
+        'document_type_badge',
+        'is_verified_badge',
+        'verified_by_link',
+        'verified_at_formatted',
+        'created_at_formatted',
+    ]
+    
+    list_display_links = ['rider_link']
+    
+    list_filter = [
+        'document_type',
+        'is_verified',
+        'verified_at',
+        'created_at',
+    ]
+    
+    search_fields = [
+        'rider_profile__user__username',
+        'rider_profile__user__email',
+        'rider_profile__full_name',
+        'rider_profile__iqama_number',
+    ]
+    
+    raw_id_fields = ['rider_profile', 'verified_by']
+    
+    readonly_fields = [
+        'created_at',
+        'updated_at',
+        'document_preview',
+    ]
+    
+    fieldsets = (
+        ('Rider Information', {
+            'fields': ('rider_profile',)
+        }),
+        ('Document Information', {
+            'fields': (
+                'document_type',
+                'document_image',
+                'document_preview',
+            )
+        }),
+        ('Verification', {
+            'fields': (
+                'is_verified',
+                'verified_at',
+                'verified_by',
+                'notes',
+            )
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    list_per_page = 50
+    
+    actions = ['verify_documents', 'unverify_documents']
+    
+    def rider_link(self, obj):
+        """Clickable rider link"""
+        if obj.rider_profile and obj.rider_profile.pk:
+            try:
+                url = reverse('admin:riders_riderprofile_change', args=[obj.rider_profile.pk])
+                name = obj.rider_profile.full_name or obj.rider_profile.user.username if obj.rider_profile.user else 'Unknown'
+                return format_html('<a href="{}">{}</a>', url, name)
+            except Exception:
+                return obj.rider_profile.full_name or '-'
+        return '-'
+    rider_link.short_description = 'Rider'
+    rider_link.admin_order_field = 'rider_profile__full_name'
+    
+    def document_type_badge(self, obj):
+        """Display document type with badge"""
+        colors = {
+            'iqama_front': '#17a2b8',
+            'iqama_back': '#17a2b8',
+            'license_front': '#28a745',
+            'license_back': '#28a745',
+            'istimara_front': '#ffc107',
+            'istimara_back': '#ffc107',
+            'insurance': '#6c757d',
+        }
+        color = colors.get(obj.document_type, '#6c757d')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 4px 10px; border-radius: 4px; font-size: 11px;">{}</span>',
+            color,
+            obj.get_document_type_display()
+        )
+    document_type_badge.short_description = 'Document Type'
+    document_type_badge.admin_order_field = 'document_type'
+    
+    def is_verified_badge(self, obj):
+        """Display verification status"""
+        if obj.is_verified:
+            return format_html(
+                '<span style="background-color: #28a745; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px;">✓ Verified</span>'
+            )
+        return format_html(
+            '<span style="background-color: #ffc107; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px;">Pending</span>'
+        )
+    is_verified_badge.short_description = 'Verified'
+    is_verified_badge.admin_order_field = 'is_verified'
+    
+    def verified_by_link(self, obj):
+        """Clickable verifier link"""
+        if obj.verified_by and obj.verified_by.pk:
+            try:
+                url = reverse('admin:accounts_customuser_change', args=[obj.verified_by.pk])
+                return format_html('<a href="{}">{}</a>', url, obj.verified_by.username or 'No username')
+            except Exception:
+                return obj.verified_by.username or '-'
+        return format_html('<em style="color: #999;">Not verified</em>')
+    verified_by_link.short_description = 'Verified By'
+    verified_by_link.admin_order_field = 'verified_by__username'
+    
+    def verified_at_formatted(self, obj):
+        """Format verified date"""
+        if obj.verified_at:
+            return obj.verified_at.strftime('%Y-%m-%d %H:%M')
+        return format_html('<em style="color: #999;">Not verified</em>')
+    verified_at_formatted.short_description = 'Verified At'
+    verified_at_formatted.admin_order_field = 'verified_at'
+    
+    def created_at_formatted(self, obj):
+        """Format creation date"""
+        if obj.created_at:
+            return obj.created_at.strftime('%Y-%m-%d %H:%M')
+        return '-'
+    created_at_formatted.short_description = 'Created'
+    created_at_formatted.admin_order_field = 'created_at'
+    
+    def document_preview(self, obj):
+        """Preview document image"""
+        if obj.document_image:
+            return format_html(
+                '<img src="{}" style="max-width: 300px; max-height: 300px;" />',
+                obj.document_image.url
+            )
+        return format_html('<em>No document uploaded</em>')
+    document_preview.short_description = 'Preview'
+    
+    def verify_documents(self, request, queryset):
+        """Bulk verify documents"""
+        from django.utils import timezone
+        updated = queryset.filter(is_verified=False).update(
+            is_verified=True,
+            verified_at=timezone.now(),
+            verified_by=request.user
+        )
+        self.message_user(request, f'{updated} document(s) verified successfully.')
+    verify_documents.short_description = "Verify selected documents"
+    
+    def unverify_documents(self, request, queryset):
+        """Bulk unverify documents"""
+        updated = queryset.filter(is_verified=True).update(
+            is_verified=False,
+            verified_at=None,
+            verified_by=None
+        )
+        self.message_user(request, f'{updated} document(s) unverified.')
+    unverify_documents.short_description = "Unverify selected documents"
+    
+    def get_queryset(self, request):
+        """Optimize queryset"""
+        return super().get_queryset(request).select_related(
+            'rider_profile__user',
+            'verified_by'
         )
 

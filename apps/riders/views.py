@@ -10,19 +10,22 @@ from apps.accounts.models import CustomUser
 from apps.orders.models import Order
 from apps.core.services import PhoneVerificationService
 from apps.core.serializers import PhoneVerificationSerializer, OTPVerificationSerializer
-from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview
+from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
 from .serializers import (
     RiderRegisterSerializer,
     RiderProfileSerializer,
     RiderProfileUpdateSerializer,
     RiderProfileSubmissionSerializer,
     RiderProfileStatusSerializer,
+    RiderDocumentUploadSerializer,
+    RiderDocumentSerializer,
     RiderOrderListSerializer,
     RiderOrderDetailSerializer,
     RiderAcceptOrderSerializer,
     RiderAddMeasurementsSerializer,
     RiderUpdateOrderStatusSerializer,
 )
+from rest_framework.parsers import MultiPartParser, FormParser
 from zthob.utils import api_response
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -183,7 +186,7 @@ class RiderProfileView(APIView):
         
         try:
             rider_profile = request.user.rider_profile
-            serializer = RiderProfileSerializer(rider_profile)
+            serializer = RiderProfileSerializer(rider_profile, context={'request': request})
             return api_response(
                 success=True,
                 message="Profile retrieved successfully",
@@ -217,7 +220,7 @@ class RiderProfileView(APIView):
             serializer = RiderProfileUpdateSerializer(rider_profile, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
-                response_serializer = RiderProfileSerializer(rider_profile)
+                response_serializer = RiderProfileSerializer(rider_profile, context={'request': request})
                 return api_response(
                     success=True,
                     message="Profile updated successfully",
@@ -284,7 +287,7 @@ class RiderProfileSubmissionView(APIView):
                 review.rejection_reason = ''  # Clear previous rejection reason
                 review.save()
             
-            response_serializer = RiderProfileSerializer(rider_profile)
+            response_serializer = RiderProfileSerializer(rider_profile, context={'request': request})
             return api_response(
                 success=True,
                 message="Profile submitted for review successfully. Please wait for admin approval.",
@@ -338,6 +341,131 @@ class RiderProfileStatusView(APIView):
             return api_response(
                 success=False,
                 message="Review record not found. Please submit your profile for review.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+
+class RiderDocumentUploadView(APIView):
+    """Upload rider documents (Iqama, License, Istimara, Insurance)"""
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    
+    @extend_schema(
+        request=RiderDocumentUploadSerializer,
+        responses=RiderDocumentSerializer,
+        summary="Upload document",
+        description="Upload a rider document (Iqama front/back, License front/back, Istimara front/back, Insurance card)",
+        tags=["Rider Profile"]
+    )
+    def post(self, request):
+        if request.user.role != 'RIDER':
+            return api_response(
+                success=False,
+                message="Only riders can access this endpoint",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        try:
+            rider_profile = request.user.rider_profile
+        except RiderProfile.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Rider profile not found. Please contact support.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = RiderDocumentUploadSerializer(
+            data=request.data,
+            context={'rider_profile': rider_profile, 'request': request}
+        )
+        if serializer.is_valid():
+            document = serializer.save()
+            response_serializer = RiderDocumentSerializer(document, context={'request': request})
+            return api_response(
+                success=True,
+                message="Document uploaded successfully",
+                data=response_serializer.data,
+                status_code=status.HTTP_201_CREATED
+            )
+        
+        return api_response(
+            success=False,
+            message="Document upload failed",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class RiderDocumentListView(APIView):
+    """List all documents for authenticated rider"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        responses=RiderDocumentSerializer(many=True),
+        summary="List documents",
+        description="Get all documents uploaded by the authenticated rider",
+        tags=["Rider Profile"]
+    )
+    def get(self, request):
+        if request.user.role != 'RIDER':
+            return api_response(
+                success=False,
+                message="Only riders can access this endpoint",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        try:
+            rider_profile = request.user.rider_profile
+            documents = rider_profile.documents.all()
+            serializer = RiderDocumentSerializer(documents, many=True, context={'request': request})
+            return api_response(
+                success=True,
+                message="Documents retrieved successfully",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+        except RiderProfile.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Rider profile not found. Please contact support.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+
+class RiderDocumentDeleteView(APIView):
+    """Delete a rider document"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Delete document",
+        description="Delete a specific document uploaded by the authenticated rider",
+        tags=["Rider Profile"]
+    )
+    def delete(self, request, document_id):
+        if request.user.role != 'RIDER':
+            return api_response(
+                success=False,
+                message="Only riders can access this endpoint",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        try:
+            rider_profile = request.user.rider_profile
+            document = get_object_or_404(
+                RiderDocument,
+                id=document_id,
+                rider_profile=rider_profile
+            )
+            document.delete()
+            return api_response(
+                success=True,
+                message="Document deleted successfully",
+                status_code=status.HTTP_200_OK
+            )
+        except RiderProfile.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Rider profile not found. Please contact support.",
                 status_code=status.HTTP_404_NOT_FOUND
             )
 

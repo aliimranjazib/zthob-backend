@@ -1,10 +1,37 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from apps.core.services import PhoneVerificationService
-from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview
+from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
 from apps.orders.models import Order
 
 User = get_user_model()
+
+
+class RiderDocumentSerializer(serializers.ModelSerializer):
+    """Serializer for rider documents"""
+    document_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = RiderDocument
+        fields = [
+            'id',
+            'document_type',
+            'document_url',
+            'is_verified',
+            'verified_at',
+            'notes',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'is_verified', 'verified_at', 'created_at']
+    
+    def get_document_url(self, obj):
+        """Get full URL for document image"""
+        if obj.document_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.document_image.url)
+            return obj.document_image.url
+        return None
 
 
 class RiderRegisterSerializer(serializers.ModelSerializer):
@@ -65,38 +92,86 @@ class RiderRegisterSerializer(serializers.ModelSerializer):
 
 
 class RiderProfileSerializer(serializers.ModelSerializer):
-    """Serializer for rider profile"""
+    """Serializer for rider profile with all information"""
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
-    phone_verified = serializers.BooleanField(source='user.phone_verified', read_only=True)
+    is_phone_verified = serializers.BooleanField(source='user.phone_verified', read_only=True)
     is_approved = serializers.BooleanField(read_only=True)
     review_status = serializers.CharField(read_only=True)
+    documents = RiderDocumentSerializer(many=True, read_only=True)
     
     class Meta:
         model = RiderProfile
         fields = [
+            # Basic Info
             'id',
             'username',
             'email',
-            'phone_verified',
+            'is_phone_verified',
             'is_approved',
             'review_status',
             'full_name',
-            'national_id',
             'phone_number',
             'emergency_contact',
+            
+            # National Identity / Iqama
+            'iqama_number',
+            'iqama_expiry_date',
+            
+            # Driving License
+            'license_number',
+            'license_expiry_date',
+            'license_type',
+            
+            # Vehicle Information
             'vehicle_type',
-            'vehicle_number',
+            'vehicle_plate_number_arabic',
+            'vehicle_plate_number_english',
+            'vehicle_make',
+            'vehicle_model',
+            'vehicle_year',
+            'vehicle_color',
+            'vehicle_registration_number',
+            'vehicle_registration_expiry_date',
+            
+            # Insurance
+            'insurance_provider',
+            'insurance_policy_number',
+            'insurance_expiry_date',
+            
+            # Status & Location
             'is_active',
             'is_available',
             'current_latitude',
             'current_longitude',
+            
+            # Statistics
             'total_deliveries',
             'rating',
+            
+            # Documents
+            'documents',
+            
+            # Timestamps
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'total_deliveries', 'rating', 'created_at', 'updated_at', 'is_approved', 'review_status']
+        read_only_fields = [
+            'id', 'total_deliveries', 'rating', 'created_at', 'updated_at',
+            'is_approved', 'review_status', 'is_phone_verified', 'documents'
+        ]
+    
+    def to_representation(self, instance):
+        """Add request context to nested serializers"""
+        representation = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and 'documents' in representation:
+            # Re-serialize documents with request context
+            documents = instance.documents.all()
+            representation['documents'] = RiderDocumentSerializer(
+                documents, many=True, context={'request': request}
+            ).data
+        return representation
 
 
 class RiderProfileUpdateSerializer(serializers.ModelSerializer):
@@ -105,12 +180,37 @@ class RiderProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = RiderProfile
         fields = [
+            # Basic Info
             'full_name',
-            'national_id',
             'phone_number',
             'emergency_contact',
+            
+            # National Identity / Iqama
+            'iqama_number',
+            'iqama_expiry_date',
+            
+            # Driving License
+            'license_number',
+            'license_expiry_date',
+            'license_type',
+            
+            # Vehicle Information
             'vehicle_type',
-            'vehicle_number',
+            'vehicle_plate_number_arabic',
+            'vehicle_plate_number_english',
+            'vehicle_make',
+            'vehicle_model',
+            'vehicle_year',
+            'vehicle_color',
+            'vehicle_registration_number',
+            'vehicle_registration_expiry_date',
+            
+            # Insurance
+            'insurance_provider',
+            'insurance_policy_number',
+            'insurance_expiry_date',
+            
+            # Status & Location
             'is_available',
             'current_latitude',
             'current_longitude',
@@ -123,21 +223,97 @@ class RiderProfileSubmissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = RiderProfile
         fields = [
+            # Basic Info
             'full_name',
-            'national_id',
             'phone_number',
             'emergency_contact',
+            
+            # National Identity / Iqama
+            'iqama_number',
+            'iqama_expiry_date',
+            
+            # Driving License
+            'license_number',
+            'license_expiry_date',
+            'license_type',
+            
+            # Vehicle Information
             'vehicle_type',
-            'vehicle_number',
+            'vehicle_plate_number_arabic',
+            'vehicle_plate_number_english',
+            'vehicle_make',
+            'vehicle_model',
+            'vehicle_year',
+            'vehicle_color',
+            'vehicle_registration_number',
+            'vehicle_registration_expiry_date',
+            
+            # Insurance
+            'insurance_provider',
+            'insurance_policy_number',
+            'insurance_expiry_date',
         ]
     
     def validate(self, attrs):
-        # Ensure required fields are present
-        required_fields = ['full_name', 'national_id', 'phone_number', 'vehicle_type']
+        # Ensure required fields are present for submission
+        required_fields = [
+            'full_name',
+            'iqama_number',
+            'phone_number',
+            'license_number',
+            'vehicle_type',
+            'vehicle_plate_number_english',
+            'vehicle_registration_number',
+        ]
+        
+        missing_fields = []
         for field in required_fields:
             if not attrs.get(field):
-                raise serializers.ValidationError({field: f"{field.replace('_', ' ').title()} is required for submission"})
+                missing_fields.append(field.replace('_', ' ').title())
+        
+        if missing_fields:
+            raise serializers.ValidationError({
+                'required_fields': f"The following fields are required for submission: {', '.join(missing_fields)}"
+            })
+        
         return attrs
+
+
+class RiderDocumentUploadSerializer(serializers.ModelSerializer):
+    """Serializer for uploading rider documents"""
+    
+    class Meta:
+        model = RiderDocument
+        fields = [
+            'document_type',
+            'document_image',
+        ]
+    
+    def validate_document_type(self, value):
+        """Validate document type"""
+        valid_types = [choice[0] for choice in RiderDocument.DOCUMENT_TYPE_CHOICES]
+        if value not in valid_types:
+            raise serializers.ValidationError(f"Invalid document type. Must be one of: {', '.join(valid_types)}")
+        return value
+    
+    def create(self, validated_data):
+        """Create or update document"""
+        rider_profile = self.context['rider_profile']
+        document_type = validated_data['document_type']
+        
+        # Get or create document
+        document, created = RiderDocument.objects.update_or_create(
+            rider_profile=rider_profile,
+            document_type=document_type,
+            defaults={
+                'document_image': validated_data['document_image'],
+                'is_verified': False,  # Reset verification when document is updated
+                'verified_at': None,
+                'verified_by': None,
+            }
+        )
+        
+        return document
 
 
 class RiderProfileReviewSerializer(serializers.ModelSerializer):
