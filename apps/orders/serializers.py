@@ -57,6 +57,8 @@ class OrderSerializer(serializers.ModelSerializer):
     customer_email=serializers.CharField(source='customer.email',read_only=True)
     tailor_name=serializers.SerializerMethodField()
     tailor_contact=serializers.SerializerMethodField()
+    rider_name=serializers.SerializerMethodField()
+    rider_phone=serializers.SerializerMethodField()
     family_member_name=serializers.SerializerMethodField()
     delivery_address_text=serializers.SerializerMethodField()
     items=OrderItemSerializer(source='order_items',many=True,read_only=True)
@@ -74,6 +76,9 @@ class OrderSerializer(serializers.ModelSerializer):
             'tailor',
             'tailor_name',
             'tailor_contact',
+            'rider',
+            'rider_name',
+            'rider_phone',
             'order_type',
             'status',
             'subtotal',
@@ -90,6 +95,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'actual_delivery_date',
             'special_instructions',
             'notes',
+            'rider_measurements',
+            'measurement_taken_at',
             'items',
             'items_count',
             'can_be_cancelled',
@@ -112,6 +119,26 @@ class OrderSerializer(serializers.ModelSerializer):
             return obj.tailor.tailor_profile.contact_number
         except TailorProfile.DoesNotExist:
             return None
+
+    def get_rider_name(self, obj):
+        if obj.rider:
+            try:
+                if hasattr(obj.rider, 'rider_profile') and obj.rider.rider_profile:
+                    return obj.rider.rider_profile.full_name or obj.rider.username
+            except:
+                pass
+            return obj.rider.username
+        return None
+
+    def get_rider_phone(self, obj):
+        if obj.rider:
+            try:
+                if hasattr(obj.rider, 'rider_profile') and obj.rider.rider_profile:
+                    return obj.rider.rider_profile.phone_number
+            except:
+                pass
+            return obj.rider.phone
+        return None
 
     def get_family_member_name(self, obj):
         if obj.family_member:

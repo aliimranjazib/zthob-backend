@@ -47,11 +47,12 @@ INSTALLED_APPS = [
     "corsheaders",
     "drf_spectacular",
     # Apps
-    "apps.core",        # ← ADD THIS LINE
+    "apps.core",
     "apps.accounts",
     "apps.tailors",
     "apps.customers",
     "apps.orders",
+    "apps.riders",
 ]
     
 MIDDLEWARE = [
