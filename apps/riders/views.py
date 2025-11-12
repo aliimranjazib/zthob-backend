@@ -21,7 +21,6 @@ from .serializers import (
     RiderDocumentSerializer,
     RiderOrderListSerializer,
     RiderOrderDetailSerializer,
-    RiderAcceptOrderSerializer,
     RiderAddMeasurementsSerializer,
     RiderUpdateOrderStatusSerializer,
 )
@@ -627,13 +626,13 @@ class RiderAcceptOrderView(APIView):
     permission_classes = [IsAuthenticated]
     
     @extend_schema(
-        request=RiderAcceptOrderSerializer,
         responses=RiderOrderDetailSerializer,
         summary="Accept order",
-        description="Rider accepts an available order for delivery. Rider must be approved.",
+        description="Rider accepts an available order for delivery. Rider must be approved. Order ID is provided in the URL.",
         tags=["Rider Orders"]
     )
-    def post(self, request):
+    def post(self, request, order_id):
+        """Accept order - order_id comes from URL path"""
         if request.user.role != 'RIDER':
             return api_response(
                 success=False,
@@ -657,61 +656,52 @@ class RiderAcceptOrderView(APIView):
                 status_code=status.HTTP_404_NOT_FOUND
             )
         
-        serializer = RiderAcceptOrderSerializer(data=request.data)
-        if serializer.is_valid():
-            order_id = serializer.validated_data['order_id']
-            order = get_object_or_404(Order, id=order_id)
-            
-            # Verify order is available
-            if order.payment_status != 'paid':
-                return api_response(
-                    success=False,
-                    message="Order payment must be paid before rider can accept it",
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
-            
-            if order.rider is not None:
-                return api_response(
-                    success=False,
-                    message="Order is already assigned to another rider",
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Assign rider to order
-            order.rider = request.user
-            order.save()
-            
-            # Create rider assignment record
-            assignment = RiderOrderAssignment.objects.create(
-                order=order,
-                rider=request.user,
-                status='accepted',
-                accepted_at=timezone.now()
-            )
-            
-            # Update order status based on order type
-            if order.order_type == 'fabric_only':
-                # For fabric_only: rider picks from tailor, so status stays as is
-                pass
-            elif order.order_type == 'fabric_with_stitching':
-                # For fabric_with_stitching: rider needs to take measurements first
-                if order.status == 'confirmed':
-                    order.status = 'measuring'
-                    order.save()
-            
-            response_serializer = RiderOrderDetailSerializer(order)
+        # Get order from URL parameter
+        order = get_object_or_404(Order, id=order_id)
+        
+        # Verify order is available
+        if order.payment_status != 'paid':
             return api_response(
-                success=True,
-                message="Order accepted successfully",
-                data=response_serializer.data,
-                status_code=status.HTTP_200_OK
+                success=False,
+                message="Order payment must be paid before rider can accept it",
+                status_code=status.HTTP_400_BAD_REQUEST
             )
         
+        if order.rider is not None:
+            return api_response(
+                success=False,
+                message="Order is already assigned to another rider",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Assign rider to order
+        order.rider = request.user
+        order.save()
+        
+        # Create rider assignment record
+        assignment = RiderOrderAssignment.objects.create(
+            order=order,
+            rider=request.user,
+            status='accepted',
+            accepted_at=timezone.now()
+        )
+        
+        # Update order status based on order type
+        if order.order_type == 'fabric_only':
+            # For fabric_only: rider picks from tailor, so status stays as is
+            pass
+        elif order.order_type == 'fabric_with_stitching':
+            # For fabric_with_stitching: rider needs to take measurements first
+            if order.status == 'confirmed':
+                order.status = 'measuring'
+                order.save()
+        
+        response_serializer = RiderOrderDetailSerializer(order)
         return api_response(
-            success=False,
-            message="Failed to accept order",
-            errors=serializer.errors,
-            status_code=status.HTTP_400_BAD_REQUEST
+            success=True,
+            message="Order accepted successfully",
+            data=response_serializer.data,
+            status_code=status.HTTP_200_OK
         )
 
 
