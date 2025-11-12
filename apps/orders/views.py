@@ -2,6 +2,7 @@ from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema
@@ -81,7 +82,7 @@ class OrderCreateView(APIView):
                 message="Order created successfully",
                 data=response_serializer.data,
                 status_code=status.HTTP_201_CREATED)
-            except serializer.ValidationError as e:
+            except ValidationError as e:
                 return api_response(
                 success=False,
                 message="Order creation failed",
