@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.utils import timezone
+from decimal import Decimal
 
 User = get_user_model()
 
@@ -46,3 +47,94 @@ class BaseModel(models.Model):
     class Meta:
         abstract=True
         ordering=['-created_at']
+
+
+class SystemSettings(models.Model):
+    """
+    System-wide settings managed by admin.
+    Singleton pattern - only one instance should exist.
+    """
+    # Tax/VAT Settings
+    tax_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        default=Decimal('0.15'),
+        help_text="Tax/VAT rate as decimal (e.g., 0.15 for 15%)"
+    )
+    
+    # Delivery Fee Settings
+    delivery_fee_under_10km = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('20.00'),
+        help_text="Delivery fee for distances less than 10 KM (SAR)"
+    )
+    
+    delivery_fee_10km_and_above = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('30.00'),
+        help_text="Delivery fee for distances 10 KM and above (SAR)"
+    )
+    
+    distance_threshold_km = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('10.00'),
+        help_text="Distance threshold in KM for different delivery fees"
+    )
+    
+    # Free Delivery Settings
+    free_delivery_threshold = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('500.00'),
+        help_text="Order subtotal threshold for free delivery (SAR). Set to 0 to disable free delivery."
+    )
+    
+    # Metadata
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether these settings are currently active"
+    )
+    
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Admin notes about these settings"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_settings',
+        help_text="Admin who last updated these settings"
+    )
+    
+    class Meta:
+        verbose_name = "System Settings"
+        verbose_name_plural = "System Settings"
+        ordering = ['-updated_at']
+    
+    def __str__(self):
+        return f"System Settings (Tax: {self.tax_rate*100}%, Updated: {self.updated_at.strftime('%Y-%m-%d')})"
+    
+    @classmethod
+    def get_active_settings(cls):
+        """Get the active system settings (singleton pattern)"""
+        settings_obj = cls.objects.filter(is_active=True).first()
+        if not settings_obj:
+            # Create default settings if none exist
+            settings_obj = cls.objects.create()
+        return settings_obj
+    
+    def save(self, *args, **kwargs):
+        """Override save to ensure only one active setting exists"""
+        if self.is_active:
+            # Deactivate all other settings
+            SystemSettings.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
+        super().save(*args, **kwargs)

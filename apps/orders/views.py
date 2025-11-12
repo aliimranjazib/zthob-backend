@@ -606,7 +606,3 @@ class OrderPaymentStatusUpdateView(APIView):
 
 
 
-
-
-
-

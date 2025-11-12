@@ -338,7 +338,7 @@ JAZZMIN_SETTINGS = {
     "hide_models": ["auth.Group"],  # Hide groups
 
     # Organized menu order - most important first
-    "order_with_respect_to": ["accounts", "customers", "tailors", "orders"],
+    "order_with_respect_to": ["accounts", "customers", "tailors", "orders", "core"],
 
     # Simple, clear icons
     "icons": {
@@ -351,6 +351,7 @@ JAZZMIN_SETTINGS = {
         "tailors.FabricCategory": "fas fa-tags",
         "tailors.FabricImage": "fas fa-image",
         "orders.Order": "fas fa-shopping-cart",
+        "core.SystemSettings": "fas fa-cog",
     },
 
     # Simplified forms - single column for easier use

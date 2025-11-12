@@ -152,6 +152,14 @@ class OrderSerializer(serializers.ModelSerializer):
 class OrderCreateSerializer(serializers.ModelSerializer):
 
     items=OrderItemCreateSerializer(many=True)
+    distance_km = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        write_only=True,
+        help_text="Distance in kilometers for delivery fee calculation (optional)"
+    )
 
     class Meta:
         model=Order
@@ -164,7 +172,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'delivery_address',
             'estimated_delivery_date',
             'special_instructions',
-            'items'
+            'items',
+            'distance_km'
         ]
 
     def validate_items(self,value):
@@ -274,10 +283,16 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'measurements': item_data.get('measurements', {}),
             'custom_instructions': item_data.get('custom_instructions', ''),
         })
+        # Get distance_km from validated_data if provided
+        distance_km = validated_data.pop('distance_km', None)
+        if distance_km is not None:
+            distance_km = float(distance_km)
+        
         totals = OrderCalculationService.calculate_all_totals(
-        items_with_fabrics,
-        delivery_address=delivery_address,
-        tailor=tailor
+            items_data=items_with_fabrics,
+            distance_km=distance_km,
+            delivery_address=delivery_address,
+            tailor=tailor
         )
         validated_data.update(totals)
         order = Order.objects.create(**validated_data)
