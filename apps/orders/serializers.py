@@ -232,57 +232,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError('Delivery address must belong to the authenticated customer')
         return value
 
-    def validate(self, data):
-        """Validate order type based on fabric categories"""
-        order_type = data.get('order_type')
-        items_data = data.get('items', [])
-        
-        if items_data:
-            # Check categories of all items
-            fabric_categories = set()
-            for item_data in items_data:
-                fabric_value = item_data.get('fabric')
-                if fabric_value:
-                    try:
-                        from apps.tailors.models import Fabric
-                        
-                        # Handle both ID and Fabric object cases
-                        if isinstance(fabric_value, Fabric):
-                            fabric = fabric_value
-                        else:
-                            # Try to get fabric by ID
-                            fabric = Fabric.objects.get(id=fabric_value)
-                        
-                        if fabric.category:
-                            fabric_categories.add(fabric.category.name.lower())
-                    except (Fabric.DoesNotExist, ValueError, TypeError):
-                        # Skip validation for invalid fabric references
-                        pass
-            
-            # Business rule validation
-            if not fabric_categories:
-                # No valid categories found - allow any order type
-                pass
-            elif len(fabric_categories) > 1:
-                # Mixed categories - only allow fabric_only
-                if order_type != 'fabric_only':
-                    raise serializers.ValidationError(
-                        f"Orders with mixed categories ({', '.join(fabric_categories)}) can only be 'fabric_only' type"
-                    )
-            elif 'fabric' in fabric_categories:
-                # Only fabric category: Can choose either fabric_only or fabric_with_stitching
-                if order_type not in ['fabric_only', 'fabric_with_stitching']:
-                    raise serializers.ValidationError(
-                        "For fabric category items, you can choose either 'fabric_only' or 'fabric_with_stitching'"
-                    )
-            else:
-                # Other categories (caps, handkerchief, etc.): Only fabric_only allowed
-                if order_type != 'fabric_only':
-                    raise serializers.ValidationError(
-                        f"For {', '.join(fabric_categories)} category items, only 'fabric_only' option is available"
-                    )
-        
-        return data
     @transaction.atomic
     def create(self,validated_data):
         items_data=validated_data.pop('items')
