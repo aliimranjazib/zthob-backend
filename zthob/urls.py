@@ -138,6 +138,9 @@ urlpatterns = [
     path('api/orders/',include('apps.orders.urls')),
     path('api/riders/',include('apps.riders.urls')),
     
+    # System Configuration
+    path('api/config/', include('apps.core.urls')),
+    
     # API documentation URLs
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/schema/swagger-ui/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),

@@ -1,9 +1,13 @@
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema
 from .services import PhoneVerificationService
 from .serializers import PhoneVerificationSerializer, OTPVerificationSerializer
+from .models import SystemSettings
+from .serializers import SystemSettingsSerializer
 from zthob.utils import api_response
+from rest_framework import status
 
 class BasePhoneVerificationView(APIView):
     """Base view for phone verification - can be used by any app"""
@@ -56,3 +60,26 @@ class VerifyOTPView(BasePhoneVerificationView):
                 message="Invalid OTP format",
                 errors=serializer.errors
             )
+
+
+class SystemSettingsView(APIView):
+    """Get system settings (tax rate, delivery fees, etc.)"""
+    permission_classes = [AllowAny]  # Public endpoint for frontend calculations
+    
+    @extend_schema(
+        responses={200: SystemSettingsSerializer},
+        summary="Get system settings",
+        description="Get current system settings including tax rate and delivery fees. Public endpoint for frontend calculations.",
+        tags=["System Configuration"]
+    )
+    def get(self, request):
+        """Get active system settings"""
+        settings = SystemSettings.get_active_settings()
+        serializer = SystemSettingsSerializer(settings)
+        
+        return api_response(
+            success=True,
+            message="System settings retrieved successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
