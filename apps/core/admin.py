@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import SystemSettings
+from django.utils.html import format_html
+from .models import SystemSettings, Slider
 
 
 @admin.register(SystemSettings)
@@ -83,4 +84,107 @@ class SystemSettingsAdmin(admin.ModelAdmin):
         readonly = list(super().get_readonly_fields(request, obj))
         # Make sure all fields in fieldsets are editable (except metadata)
         return readonly
+
+
+@admin.register(Slider)
+class SliderAdmin(admin.ModelAdmin):
+    """Admin interface for Slider/Banner management"""
+    
+    list_display = [
+        'id',
+        'image_preview',
+        'title',
+        'button_text',
+        'order',
+        'is_active_badge',
+        'created_at_formatted'
+    ]
+    
+    list_display_links = ['title']
+    
+    list_filter = ['is_active', 'created_at']
+    
+    search_fields = ['title', 'description', 'button_text']
+    
+    readonly_fields = ['created_at', 'updated_at', 'image_preview_detail']
+    
+    fieldsets = (
+        ('Slider Content', {
+            'fields': (
+                'title',
+                'description',
+                'image',
+                'image_preview_detail',
+            )
+        }),
+        ('Button Settings', {
+            'fields': (
+                'button_text',
+                'button_link',
+            ),
+            'description': 'Optional button to display on the slider'
+        }),
+        ('Display Settings', {
+            'fields': (
+                'order',
+                'is_active',
+            )
+        }),
+        ('Metadata', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def image_preview(self, obj):
+        """Display image preview in list view"""
+        if obj.image:
+            try:
+                return format_html(
+                    '<img src="{}" width="80" height="50" style="border-radius: 5px; object-fit: cover;" />',
+                    obj.image.url
+                )
+            except (ValueError, AttributeError):
+                return format_html('<em style="color: #999;">Invalid image</em>')
+        return format_html('<em style="color: #999;">No image</em>')
+    image_preview.short_description = 'Preview'
+    
+    def image_preview_detail(self, obj):
+        """Display larger image preview in detail view"""
+        if obj.image:
+            try:
+                return format_html(
+                    '<img src="{}" width="400" height="250" style="border-radius: 8px; object-fit: cover; border: 2px solid #ddd;" />',
+                    obj.image.url
+                )
+            except (ValueError, AttributeError):
+                return format_html('<em style="color: #999;">Invalid image</em>')
+        return format_html('<em style="color: #999;">No image</em>')
+    image_preview_detail.short_description = 'Image Preview'
+    
+    def is_active_badge(self, obj):
+        """Display active status with badge"""
+        if obj.is_active:
+            return format_html(
+                '<span style="background-color: #28a745; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px;">Active</span>'
+            )
+        return format_html(
+            '<span style="background-color: #dc3545; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px;">Inactive</span>'
+        )
+    is_active_badge.short_description = 'Status'
+    is_active_badge.admin_order_field = 'is_active'
+    
+    def created_at_formatted(self, obj):
+        """Format creation date"""
+        return obj.created_at.strftime('%Y-%m-%d %H:%M')
+    created_at_formatted.short_description = 'Created'
+    created_at_formatted.admin_order_field = 'created_at'
+    
+    def save_model(self, request, obj, form, change):
+        """Set created_by when creating new slider"""
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+    
+    list_per_page = 50
 

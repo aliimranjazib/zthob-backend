@@ -3,9 +3,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
 from .services import PhoneVerificationService
-from .serializers import PhoneVerificationSerializer, OTPVerificationSerializer
-from .models import SystemSettings
-from .serializers import SystemSettingsSerializer
+from .serializers import PhoneVerificationSerializer, OTPVerificationSerializer, SystemSettingsSerializer, SliderSerializer
+from .models import SystemSettings, Slider
 from zthob.utils import api_response
 from rest_framework import status
 
@@ -80,6 +79,29 @@ class SystemSettingsView(APIView):
         return api_response(
             success=True,
             message="System settings retrieved successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+class SliderListView(APIView):
+    """Get all active sliders for mobile app"""
+    permission_classes = [AllowAny]  # Public endpoint
+    
+    @extend_schema(
+        responses={200: SliderSerializer(many=True)},
+        summary="Get active sliders",
+        description="Get all active slider/banner images with text and button information for mobile app display.",
+        tags=["Sliders"]
+    )
+    def get(self, request):
+        """Get all active sliders ordered by display order"""
+        sliders = Slider.objects.filter(is_active=True).order_by('order', '-created_at')
+        serializer = SliderSerializer(sliders, many=True, context={'request': request})
+        
+        return api_response(
+            success=True,
+            message="Sliders retrieved successfully",
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )

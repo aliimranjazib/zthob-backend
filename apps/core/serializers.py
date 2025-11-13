@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import SystemSettings, PhoneVerification
+from .models import SystemSettings, PhoneVerification, Slider
 
 class PhoneVerificationSerializer(serializers.Serializer):
     phone_number = serializers.CharField(max_length=20, required=True)
@@ -46,3 +46,28 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
     def get_tax_rate_percentage(self, obj):
         """Return tax rate as percentage"""
         return f"{obj.tax_rate * 100:.2f}%"
+
+
+class SliderSerializer(serializers.ModelSerializer):
+    """Serializer for Slider model - returns full image URL"""
+    image_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Slider
+        fields = [
+            'id',
+            'title',
+            'description',
+            'image_url',
+            'button_text',
+            'button_link',
+            'order',
+        ]
+        read_only_fields = ['id', 'order']
+    
+    def get_image_url(self, obj):
+        """Return full image URL"""
+        request = self.context.get('request')
+        if obj.image and request:
+            return request.build_absolute_uri(obj.image.url)
+        return obj.image.url if obj.image else None

@@ -352,6 +352,7 @@ JAZZMIN_SETTINGS = {
         "tailors.FabricImage": "fas fa-image",
         "orders.Order": "fas fa-shopping-cart",
         "core.SystemSettings": "fas fa-cog",
+        "core.Slider": "fas fa-images",
     },
 
     # Simplified forms - single column for easier use

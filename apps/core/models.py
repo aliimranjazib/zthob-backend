@@ -2,9 +2,13 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.utils import timezone
+from django.core.validators import FileExtensionValidator
 from decimal import Decimal
 
 User = get_user_model()
+
+# Image validator for slider images
+SLIDER_IMAGE_VALIDATOR = [FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png'])]
 
 class PhoneVerification(models.Model):
     """Reusable phone verification model for all user types"""
@@ -138,3 +142,62 @@ class SystemSettings(models.Model):
             # Deactivate all other settings
             SystemSettings.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
         super().save(*args, **kwargs)
+
+
+class Slider(models.Model):
+    """
+    Slider/Banner model for displaying promotional content on mobile app.
+    Admin can manage slider images with text and button text.
+    """
+    title = models.CharField(
+        max_length=200,
+        help_text="Title/Heading text to display on the slider"
+    )
+    description = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Description text to display on the slider (optional)"
+    )
+    image = models.ImageField(
+        upload_to='sliders/images/',
+        validators=SLIDER_IMAGE_VALIDATOR,
+        help_text="Slider image (JPG, JPEG, PNG only)"
+    )
+    button_text = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Text to display on the button (optional)"
+    )
+    button_link = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="Link/URL to navigate when button is clicked (optional)"
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Display order (lower numbers appear first)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this slider is currently active and should be displayed"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_sliders',
+        help_text="Admin who created this slider"
+    )
+    
+    class Meta:
+        verbose_name = "Slider"
+        verbose_name_plural = "Sliders"
+        ordering = ['order', '-created_at']
+    
+    def __str__(self):
+        return f"{self.title} (Order: {self.order}, Active: {self.is_active})"
