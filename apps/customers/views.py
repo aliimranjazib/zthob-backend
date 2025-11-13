@@ -4,10 +4,11 @@ from django.template.context_processors import request
 from django.contrib.auth.models import User
 from rest_framework import serializers, status
 from apps.customers.models import Address, CustomerProfile, FamilyMember
-from apps.customers.serializers import AddressSerializer, AddressCreateSerializer, AddressResponseSerializer, CustomerProfileSerializer, FabricCatalogSerializer, FamilyMemberSerializer
+from apps.customers.serializers import AddressSerializer, AddressCreateSerializer, AddressResponseSerializer, CustomerProfileSerializer, FabricCatalogSerializer, FamilyMemberSerializer, FamilyMemberCreateSerializer, FamilyMemberSimpleResponseSerializer
 from apps.tailors.models import Fabric
 from zthob.utils import api_response
-from drf_spectacular.views import extend_schema
+from drf_spectacular.utils import extend_schema, OpenApiExample
+from drf_spectacular.types import OpenApiTypes
 from apps.tailors.models import TailorProfile
 from apps.tailors.serializers import TailorProfileSerializer
 
@@ -38,19 +39,36 @@ class FamilyMemberListView(APIView):
                            status_code=status.HTTP_200_OK
                            )
         
-   @extend_schema(operation_id="customers_family_create")
+   @extend_schema(
+       operation_id="customers_family_create",
+       request=FamilyMemberCreateSerializer,
+       responses={201: FamilyMemberSimpleResponseSerializer, 400: OpenApiTypes.OBJECT},
+       examples=[
+           OpenApiExample(
+               'Create Family Member',
+               value={'name': 'ahmad'},
+               request_only=True,
+           ),
+           OpenApiExample(
+               'Success Response',
+               value={'id': 1, 'name': 'ahmad'},
+               response_only=True,
+           ),
+       ]
+   )
    def post(self, request):
-       print("data is valid===============")
-       serializers = FamilyMemberSerializer(data=request.data, context={'user': request.user, 'request': request})
-       if serializers.is_valid():
-           print("data is valid===============")
-           serializers.save()
+       # Use simplified serializer for creation - only requires name
+       serializer = FamilyMemberCreateSerializer(data=request.data, context={'user': request.user})
+       if serializer.is_valid():
+           family_member = serializer.save()
+           # Return simplified response with only id and name
+           response_serializer = FamilyMemberSimpleResponseSerializer(family_member)
            return api_response(success=True, message='family member added successfully',
-                           data=serializers.data,
-                           status_code=status.HTTP_200_OK
+                           data=response_serializer.data,
+                           status_code=status.HTTP_201_CREATED
                            )
        return api_response(success=False, message='family member added failed',
-                           errors=serializers.errors,
+                           errors=serializer.errors,
                            status_code=status.HTTP_400_BAD_REQUEST
                            )
 

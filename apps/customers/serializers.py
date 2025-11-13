@@ -125,6 +125,29 @@ class AddressResponseSerializer(serializers.ModelSerializer):
         return 'Address not specified'
     
     
+class FamilyMemberCreateSerializer(serializers.ModelSerializer):
+    """Simplified serializer for creating family members - only requires name"""
+    class Meta:
+        model = FamilyMember
+        fields = ['name']
+    
+    def create(self, validated_data):
+        """Create family member with only name"""
+        user = self.context.get("user")
+        family_member = FamilyMember.objects.create(
+            user=user,
+            **validated_data
+        )
+        return family_member
+
+
+class FamilyMemberSimpleResponseSerializer(serializers.ModelSerializer):
+    """Simplified response serializer - only returns id and name"""
+    class Meta:
+        model = FamilyMember
+        fields = ['id', 'name']
+
+
 class FamilyMemberSerializer(serializers.ModelSerializer):
     address = AddressCreateSerializer(required=False, write_only=True)
     address_response = AddressResponseSerializer(source='address', read_only=True)
