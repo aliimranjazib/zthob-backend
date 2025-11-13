@@ -600,7 +600,10 @@ class RiderOrderDetailView(APIView):
                 'tailor',
                 'delivery_address',
                 'rider'
-            ).prefetch_related('order_items__fabric'),
+            ).prefetch_related(
+                'order_items__fabric',
+                'order_items__fabric__gallery'  # Prefetch gallery images for fabric images
+            ),
             id=order_id
         )
         
@@ -612,7 +615,7 @@ class RiderOrderDetailView(APIView):
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
-        serializer = RiderOrderDetailSerializer(order)
+        serializer = RiderOrderDetailSerializer(order, context={'request': request})
         return api_response(
             success=True,
             message="Order details retrieved successfully",

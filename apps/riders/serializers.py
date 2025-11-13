@@ -511,11 +511,23 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
     
     def get_items(self, obj):
         items = []
+        request = self.context.get('request')
         for item in obj.order_items.all():
+            fabric_image_url = None
+            if item.fabric:
+                # Get primary image URL
+                primary_image = item.fabric.primary_image
+                if primary_image:
+                    if request:
+                        fabric_image_url = request.build_absolute_uri(primary_image.url)
+                    else:
+                        fabric_image_url = primary_image.url
+            
             items.append({
                 'id': item.id,
                 'fabric_name': item.fabric.name if item.fabric else 'Unknown',
                 'fabric_sku': item.fabric.sku if item.fabric else None,
+                'fabric_image_url': fabric_image_url,
                 'quantity': item.quantity,
                 'unit_price': str(item.unit_price),
                 'total_price': str(item.total_price),
