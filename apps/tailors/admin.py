@@ -23,10 +23,23 @@ class FabricImageInline(admin.TabularInline):
     """Inline admin for FabricImages - shows images directly in Fabric detail view"""
     model = FabricImage
     extra = 1
-    fields = ['image', 'is_primary', 'order']
-    readonly_fields = []
+    fields = ['image_preview', 'image', 'is_primary', 'order']
+    readonly_fields = ['image_preview']
     can_delete = True
     show_change_link = True
+    
+    def image_preview(self, obj):
+        """Display image preview thumbnail"""
+        if obj and obj.pk and obj.image:
+            try:
+                return format_html(
+                    '<img src="{}" width="80" height="80" style="border-radius: 5px; object-fit: cover; border: 2px solid #ddd;" />',
+                    obj.image.url
+                )
+            except (ValueError, AttributeError):
+                return format_html('<em style="color: #999;">Invalid image</em>')
+        return format_html('<em style="color: #999;">No image</em>')
+    image_preview.short_description = 'Preview'
 
 
 # ============================================================================
@@ -640,6 +653,7 @@ class FabricAdmin(admin.ModelAdmin):
         'updated_at',
         'created_by',
         'image_count_display',
+        'image_gallery_display',
     ]
     
     inlines = [FabricImageInline]
@@ -678,6 +692,10 @@ class FabricAdmin(admin.ModelAdmin):
             'fields': ('fabric_image',),
             'classes': ('collapse',),
             'description': 'Legacy single image field - use gallery images instead'
+        }),
+        ('Fabric Images', {
+            'fields': ('image_gallery_display',),
+            'description': 'Manage fabric images using the inline section below. Images are displayed here for quick reference.',
         }),
         ('Statistics', {
             'fields': ('image_count_display',),
@@ -789,6 +807,41 @@ class FabricAdmin(admin.ModelAdmin):
         """Display image count in detail view"""
         return obj.gallery.count()
     image_count_display.short_description = 'Total Images'
+    
+    def image_gallery_display(self, obj):
+        """Display all fabric images in a gallery view"""
+        if not obj or not obj.pk:
+            return format_html('<p style="color: #999;">Save the fabric first to manage images.</p>')
+        
+        images = obj.gallery.all().order_by('order', 'id')
+        if not images:
+            return format_html('<p style="color: #999;">No images uploaded yet. Add images using the "Fabric Images" section below.</p>')
+        
+        html_parts = ['<div style="display: flex; flex-wrap: wrap; gap: 15px; margin-top: 10px;">']
+        for img in images:
+            try:
+                primary_badge = ''
+                if img.is_primary:
+                    primary_badge = '<span style="position: absolute; top: 5px; right: 5px; background: #28a745; color: white; padding: 2px 8px; border-radius: 3px; font-size: 10px;">PRIMARY</span>'
+                
+                html_parts.append(format_html(
+                    '<div style="position: relative; border: 2px solid {}; border-radius: 8px; padding: 5px; background: white;">'
+                    '<img src="{}" width="150" height="150" style="border-radius: 5px; object-fit: cover; display: block;" />'
+                    '{}'
+                    '<div style="text-align: center; margin-top: 5px; font-size: 11px; color: #666;">Order: {}</div>'
+                    '</div>',
+                    '#28a745' if img.is_primary else '#ddd',
+                    img.image.url,
+                    primary_badge,
+                    img.order
+                ))
+            except (ValueError, AttributeError):
+                continue
+        
+        html_parts.append('</div>')
+        html_parts.append('<p style="margin-top: 15px; color: #666; font-size: 12px;"><strong>Note:</strong> Use the "Fabric Images" section below to add, edit, or delete images.</p>')
+        return format_html(''.join(html_parts))
+    image_gallery_display.short_description = 'Image Gallery'
     
     def created_at_formatted(self, obj):
         """Format creation date"""
