@@ -632,7 +632,8 @@ class FabricAdmin(admin.ModelAdmin):
         'fabric_type__name',
     ]
     
-    raw_id_fields = ['tailor', 'category', 'fabric_type']
+    autocomplete_fields = ['tailor']  # Use autocomplete for better UX
+    raw_id_fields = ['category', 'fabric_type']  # Keep raw_id for other fields
     
     readonly_fields = [
         'sku',
