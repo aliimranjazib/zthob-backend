@@ -1,0 +1,4963 @@
+openapi: 3.0.3
+info:
+  title: Zthob API
+  version: 1.0.0
+  description: Zthob API documentation
+paths:
+  /api/accounts/change-password/:
+    post:
+      operationId: accounts_change_password_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangePassword'
+          description: ''
+  /api/accounts/login/:
+    post:
+      operationId: accounts_login_create
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLogin'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserLogin'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserLogin'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserLogin'
+          description: ''
+  /api/accounts/profile/:
+    get:
+      operationId: accounts_profile_retrieve
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+          description: ''
+    put:
+      operationId: accounts_profile_update
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserProfile'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserProfile'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserProfile'
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+          description: ''
+  /api/accounts/register/:
+    post:
+      operationId: accounts_register_create
+      summary: Retrieve logged-in user profile
+      tags:
+      - Profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegister'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserRegister'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserRegister'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRegister'
+          description: ''
+  /api/accounts/test-deployment/:
+    get:
+      operationId: accounts_test_deployment_retrieve
+      tags:
+      - accounts
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/customers/addresses/:
+    get:
+      operationId: address_list
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddressResponse'
+          description: ''
+  /api/customers/addresses/{id}/:
+    get:
+      operationId: customers_addresses_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddressResponse'
+          description: ''
+    put:
+      operationId: customers_addresses_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - customers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressResponse'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddressResponse'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddressResponse'
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddressResponse'
+          description: ''
+    delete:
+      operationId: customers_addresses_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '204':
+          description: No response body
+  /api/customers/addresses/create/:
+    post:
+      operationId: address_create
+      tags:
+      - customers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddressCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddressCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddressCreate'
+          description: ''
+  /api/customers/allfabrics/:
+    get:
+      operationId: customers_allfabrics_retrieve
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FabricCatalog'
+          description: ''
+  /api/customers/customerprofile/:
+    get:
+      operationId: customers_customerprofile_retrieve
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerProfile'
+          description: ''
+    put:
+      operationId: customers_customerprofile_update
+      tags:
+      - customers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerProfile'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomerProfile'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomerProfile'
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerProfile'
+          description: ''
+  /api/customers/family/:
+    get:
+      operationId: customers_family_list
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamilyMember'
+          description: ''
+    post:
+      operationId: customers_family_create
+      tags:
+      - customers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FamilyMember'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FamilyMember'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FamilyMember'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamilyMember'
+          description: ''
+  /api/customers/family/{id}/:
+    get:
+      operationId: customers_family_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamilyMember'
+          description: ''
+    put:
+      operationId: customers_family_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - customers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FamilyMember'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FamilyMember'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FamilyMember'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamilyMember'
+          description: ''
+    delete:
+      operationId: customers_family_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '204':
+          description: No response body
+  /api/customers/phone/send-otp/:
+    post:
+      operationId: customers_phone_send_otp_create
+      description: Send OTP to phone number - works for any user type
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/customers/phone/verify-otp/:
+    post:
+      operationId: customers_phone_verify_otp_create
+      description: Verify OTP code - works for any user type
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/customers/tailors/:
+    get:
+      operationId: customers_tailor_list
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TailorProfile'
+          description: ''
+  /api/customers/tailors/{tailor_id}/fabrics:
+    get:
+      operationId: customers_tailor_fabrics
+      description: |-
+        Fetch all fabrics of a specific tailor
+        URL: /api/customers/tailors/{tailor_id}/fabrics/
+      parameters:
+      - in: path
+        name: tailor_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FabricCatalog'
+          description: ''
+  /api/orders/:
+    get:
+      operationId: orders_list
+      description: Get a list of all orders with optional filtering
+      summary: List all orders
+      tags:
+      - Orders
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderList'
+          description: ''
+  /api/orders/{order_id}/:
+    get:
+      operationId: orders_retrieve
+      description: Retrieve detailed information about a specific order
+      summary: Get order details
+      parameters:
+      - in: path
+        name: order_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Orders
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+    put:
+      operationId: orders_update
+      description: Update order information (limited fields)
+      summary: Update order
+      parameters:
+      - in: path
+        name: order_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrderUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrderUpdate'
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+    delete:
+      operationId: orders_destroy
+      description: Delete an order (only if status is pending)
+      summary: Delete order
+      parameters:
+      - in: path
+        name: order_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Customer Orders
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '204':
+          description: No response body
+  /api/orders/{order_id}/history/:
+    get:
+      operationId: orders_history_list
+      description: Retrieve status change history for an order
+      summary: Get order history
+      parameters:
+      - in: path
+        name: order_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Orders
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderStatusHistory'
+          description: ''
+  /api/orders/{order_id}/payment-status/:
+    patch:
+      operationId: orders_payment_status_partial_update
+      description: Update order payment status after payment success
+      summary: Update payment status
+      parameters:
+      - in: path
+        name: order_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Customer Orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderPaymentStatusUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderPaymentStatusUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderPaymentStatusUpdate'
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+  /api/orders/{order_id}/status/:
+    patch:
+      operationId: orders_status_partial_update
+      description: Update order status with automatic history tracking
+      summary: Update order status
+      parameters:
+      - in: path
+        name: order_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderUpdate'
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+  /api/orders/create/:
+    post:
+      operationId: orders_create_create
+      description: Create a new order with items
+      summary: Create new order
+      tags:
+      - Customer Orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrderCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrderCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+  /api/orders/customer/my-orders/:
+    get:
+      operationId: orders_customer_my_orders_list
+      description: Retrieve all orders for the authenticated customer
+      summary: Get my orders
+      tags:
+      - Customer Orders
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderList'
+          description: ''
+  /api/orders/tailor/{order_id}/:
+    get:
+      operationId: orders_tailor_retrieve
+      description: Retrieve detailed information about a specific order including
+        rider measurements
+      summary: Get order details
+      parameters:
+      - in: path
+        name: order_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Tailor Orders
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+  /api/orders/tailor/my-orders/:
+    get:
+      operationId: orders_tailor_my_orders_list
+      description: Retrieve all orders assigned to the authenticated tailor. Filter
+        by payment_status=paid to see only paid orders.
+      summary: Get my tailor orders
+      tags:
+      - Tailor Orders
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderList'
+          description: ''
+  /api/orders/tailor/paid-orders/:
+    get:
+      operationId: orders_tailor_paid_orders_list
+      description: Retrieve all paid orders assigned to the authenticated tailor (ready
+        for processing)
+      summary: Get paid orders
+      tags:
+      - Tailor Orders
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderList'
+          description: ''
+  /api/riders/admin/reviews/:
+    get:
+      operationId: riders_admin_reviews_retrieve
+      description: Get all rider profiles pending review (Admin only)
+      tags:
+      - Admin - Rider Review
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/riders/admin/reviews/{id}/:
+    get:
+      operationId: riders_admin_reviews_retrieve_2
+      description: Get individual rider profile review details (Admin only)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Admin - Rider Review
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: riders_admin_reviews_update
+      description: Get individual rider profile review details (Admin only)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Admin - Rider Review
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/riders/documents/:
+    get:
+      operationId: riders_documents_list
+      description: Get all documents uploaded by the authenticated rider
+      summary: List documents
+      tags:
+      - Rider Profile
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RiderDocument'
+          description: ''
+  /api/riders/documents/{document_id}/:
+    delete:
+      operationId: riders_documents_destroy
+      description: Delete a specific document uploaded by the authenticated rider
+      summary: Delete document
+      parameters:
+      - in: path
+        name: document_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Rider Profile
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '204':
+          description: No response body
+  /api/riders/documents/upload/:
+    post:
+      operationId: riders_documents_upload_create
+      description: Upload a rider document (Iqama front/back, License front/back,
+        Istimara front/back, Insurance card)
+      summary: Upload document
+      tags:
+      - Rider Profile
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RiderDocumentUpload'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RiderDocumentUpload'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiderDocument'
+          description: ''
+  /api/riders/orders/{order_id}/:
+    get:
+      operationId: riders_orders_retrieve
+      description: Retrieve detailed information about a specific order
+      summary: Get order details
+      parameters:
+      - in: path
+        name: order_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Rider Orders
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiderOrderDetail'
+          description: ''
+  /api/riders/orders/{order_id}/accept/:
+    post:
+      operationId: riders_orders_accept_create
+      description: Rider accepts an available order for delivery. Rider must be approved.
+        Order ID is provided in the URL path parameter.
+      summary: Accept order
+      parameters:
+      - in: path
+        name: order_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Rider Orders
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiderOrderDetail'
+          description: ''
+  /api/riders/orders/{order_id}/measurements/:
+    post:
+      operationId: riders_orders_measurements_create
+      description: Rider adds measurements taken at customer location (for fabric_with_stitching
+        orders)
+      summary: Add measurements
+      parameters:
+      - in: path
+        name: order_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Rider Orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiderAddMeasurements'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RiderAddMeasurements'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RiderAddMeasurements'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiderOrderDetail'
+          description: ''
+  /api/riders/orders/{order_id}/update-status/:
+    patch:
+      operationId: riders_orders_update_status_partial_update
+      description: Rider updates order status (ready_for_delivery, delivered)
+      summary: Update order status
+      parameters:
+      - in: path
+        name: order_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Rider Orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRiderUpdateOrderStatus'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedRiderUpdateOrderStatus'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedRiderUpdateOrderStatus'
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiderOrderDetail'
+          description: ''
+  /api/riders/orders/available/:
+    get:
+      operationId: riders_orders_available_list
+      description: Get list of orders available for riders (paid orders without assigned
+        rider). Rider must be approved.
+      summary: List available orders
+      tags:
+      - Rider Orders
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RiderOrderList'
+          description: ''
+  /api/riders/orders/my-orders/:
+    get:
+      operationId: riders_orders_my_orders_list
+      description: Get list of orders assigned to the authenticated rider
+      summary: List my orders
+      tags:
+      - Rider Orders
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RiderOrderList'
+          description: ''
+  /api/riders/profile/:
+    get:
+      operationId: riders_profile_retrieve
+      description: Retrieve authenticated rider's profile information
+      summary: Get rider profile
+      tags:
+      - Rider Profile
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiderProfile'
+          description: ''
+    put:
+      operationId: riders_profile_update
+      description: Update authenticated rider's profile information
+      summary: Update rider profile
+      tags:
+      - Rider Profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiderProfileUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RiderProfileUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RiderProfileUpdate'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiderProfile'
+          description: ''
+  /api/riders/profile/status/:
+    get:
+      operationId: riders_profile_status_retrieve
+      description: Check the review status of your rider profile
+      summary: Check review status
+      tags:
+      - Rider Profile
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiderProfileStatus'
+          description: ''
+  /api/riders/profile/submit/:
+    post:
+      operationId: riders_profile_submit_create
+      description: Submit rider profile for admin review. Profile must be complete
+        before submission.
+      summary: Submit profile for review
+      tags:
+      - Rider Profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiderProfileSubmission'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RiderProfileSubmission'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RiderProfileSubmission'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiderProfile'
+          description: ''
+  /api/riders/register/:
+    post:
+      operationId: riders_register_create
+      description: Register a new rider account. Phone verification required after
+        registration.
+      summary: Register new rider
+      tags:
+      - Rider Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiderRegister'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RiderRegister'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RiderRegister'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/riders/send-otp/:
+    post:
+      operationId: riders_send_otp_create
+      description: Send OTP code to rider's phone number for verification
+      summary: Send OTP to rider phone
+      tags:
+      - Rider Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhoneVerification'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PhoneVerification'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PhoneVerification'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/riders/verify-otp/:
+    post:
+      operationId: riders_verify_otp_create
+      description: Verify OTP code sent to rider's phone number
+      summary: Verify rider OTP
+      tags:
+      - Rider Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OTPVerification'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OTPVerification'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OTPVerification'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/tailors/address/:
+    get:
+      operationId: tailors_address_retrieve
+      description: Get tailor's single address
+      tags:
+      - Tailor Address
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/tailors/address/delete/:
+    delete:
+      operationId: tailors_address_delete_destroy
+      description: Delete tailor's address
+      tags:
+      - Tailor Address
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '204':
+          description: No response body
+  /api/tailors/address/manage/:
+    post:
+      operationId: tailors_address_manage_create
+      description: Create or update tailor's single address
+      tags:
+      - Tailor Address
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: tailors_address_manage_update
+      description: Create or update tailor's single address
+      tags:
+      - Tailor Address
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/tailors/admin/profiles/review/:
+    get:
+      operationId: tailors_admin_profiles_review_retrieve
+      description: Get all profiles pending review (Admin only)
+      tags:
+      - Admin - Profile Review
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/tailors/admin/profiles/review/{id}/:
+    get:
+      operationId: tailors_admin_profiles_review_retrieve_2
+      description: Get individual profile review details (Admin only)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Admin - Profile Review
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: tailors_admin_profiles_review_update
+      description: Get individual profile review details (Admin only)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Admin - Profile Review
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/tailors/admin/service-areas/:
+    get:
+      operationId: tailors_admin_service_areas_retrieve
+      description: Admin management of service areas
+      tags:
+      - Admin - Service Areas
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: tailors_admin_service_areas_create
+      description: Admin management of service areas
+      tags:
+      - Admin - Service Areas
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/tailors/admin/service-areas/{id}/:
+    get:
+      operationId: tailors_admin_service_areas_retrieve_2
+      description: Admin management of individual service areas
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Admin - Service Areas
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: tailors_admin_service_areas_update
+      description: Admin management of individual service areas
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Admin - Service Areas
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: tailors_admin_service_areas_destroy
+      description: Admin management of individual service areas
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Admin - Service Areas
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '204':
+          description: No response body
+  /api/tailors/category/:
+    get:
+      operationId: tailors_category_retrieve
+      description: Fabric category management operations
+      tags:
+      - Fabric Categories
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FabricCategory'
+          description: ''
+    post:
+      operationId: tailors_category_create
+      description: Fabric category management operations
+      tags:
+      - Fabric Categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FabricCategory'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FabricCategory'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FabricCategory'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FabricCategory'
+          description: ''
+  /api/tailors/category/{id}/:
+    delete:
+      operationId: tailors_category_destroy
+      description: Fabric category detail operations
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Categories
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/tailors/fabric-tags/:
+    get:
+      operationId: fabric_tags_list
+      description: Get all fabric tags
+      tags:
+      - Fabric Tags
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FabricTag'
+          description: ''
+    post:
+      operationId: fabric_tags_create
+      description: Create a new fabric tag
+      tags:
+      - Fabric Tags
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FabricTag'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FabricTag'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FabricTag'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FabricTag'
+          description: ''
+  /api/tailors/fabric-tags/{id}/:
+    get:
+      operationId: fabric_tags_retrieve
+      description: Get fabric tag details by ID
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Tags
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FabricTag'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fabric tag not found
+          description: ''
+    put:
+      operationId: fabric_tags_update
+      description: Update fabric tag completely
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Tags
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FabricTag'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FabricTag'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FabricTag'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FabricTag'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fabric tag not found
+          description: ''
+    patch:
+      operationId: fabric_tags_partial_update
+      description: Update fabric tag partially
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Tags
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFabricTag'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFabricTag'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFabricTag'
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FabricTag'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fabric tag not found
+          description: ''
+    delete:
+      operationId: fabric_tags_destroy
+      description: Delete fabric tag
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Tags
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Fabric tag deleted successfully
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fabric tag not found
+          description: ''
+  /api/tailors/fabric-type/:
+    get:
+      operationId: tailors_fabric_type_list
+      description: Get all available fabric types
+      tags:
+      - Fabric Types
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FabricType'
+          description: ''
+    post:
+      operationId: tailors_fabric_type_create
+      description: Create a new fabric type
+      tags:
+      - Fabric Types
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FabricType'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FabricType'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FabricType'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FabricType'
+          description: ''
+  /api/tailors/fabric-type/{id}/:
+    get:
+      operationId: tailors_fabric_type_retrieve
+      description: Get fabric type details by ID
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Types
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FabricType'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fabric type not found
+          description: ''
+    put:
+      operationId: tailors_fabric_type_update
+      description: Update fabric type completely
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Types
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FabricType'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FabricType'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FabricType'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FabricType'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fabric type not found
+          description: ''
+    patch:
+      operationId: tailors_fabric_type_partial_update
+      description: Update fabric type partially
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Types
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFabricType'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFabricType'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFabricType'
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FabricType'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fabric type not found
+          description: ''
+    delete:
+      operationId: tailors_fabric_type_destroy
+      description: Delete fabric type
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Types
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: Fabric type deleted successfully
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fabric type not found
+          description: ''
+  /api/tailors/fabrics/:
+    get:
+      operationId: tailors_fabrics_list
+      description: Get all fabrics for the authenticated tailor
+      tags:
+      - Fabric Management
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Fabric'
+          description: ''
+    post:
+      operationId: tailors_fabrics_create
+      description: Create a new fabric with multiple images and metadata
+      tags:
+      - Fabric Management
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FabricCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FabricCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fabric'
+          description: ''
+  /api/tailors/fabrics/{id}/:
+    get:
+      operationId: tailors_fabrics_retrieve
+      description: Get single fabric details by ID
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Management
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fabric'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fabric not found
+          description: ''
+    put:
+      operationId: tailors_fabrics_update
+      description: Update fabric completely (all fields required)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Management
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FabricUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FabricUpdate'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fabric'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Validation failed
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fabric not found
+          description: ''
+    patch:
+      operationId: tailors_fabrics_partial_update
+      description: Update fabric partially (only provided fields)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Management
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFabricUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFabricUpdate'
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fabric'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Validation failed
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fabric not found
+          description: ''
+    delete:
+      operationId: tailors_fabrics_destroy
+      description: Delete fabric permanently
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Management
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Fabric deleted successfully
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Fabric not found
+          description: ''
+  /api/tailors/images/{image_id}/delete/:
+    delete:
+      operationId: tailors_images_delete_destroy
+      description: Delete a fabric image. If it's the primary image, the first remaining
+        image will become primary.
+      parameters:
+      - in: path
+        name: image_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Images
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: Image deleted successfully
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Image not found or doesn't belong to your fabrics
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: You don't have permission to delete this image
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: Cannot delete the last image of a fabric
+          description: ''
+  /api/tailors/images/{image_id}/set-primary/:
+    post:
+      operationId: tailors_images_set_primary_create
+      description: Set an existing image as the primary image for a fabric
+      parameters:
+      - in: path
+        name: image_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Fabric Images
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fabric'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: Image not found or doesn't belong to your fabrics
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: You don't have permission to modify this image
+          description: ''
+  /api/tailors/phone/send-otp/:
+    post:
+      operationId: tailors_phone_send_otp_create
+      description: Send OTP to phone number - works for any user type
+      tags:
+      - tailors
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/tailors/phone/verify-otp/:
+    post:
+      operationId: tailors_phone_verify_otp_create
+      description: Verify OTP code - works for any user type
+      tags:
+      - tailors
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/tailors/profile/:
+    get:
+      operationId: tailors_profile_retrieve
+      description: Tailor profile management operations - supports GET, PUT, and PATCH
+        methods
+      tags:
+      - Tailor Profile
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TailorProfile'
+          description: ''
+    put:
+      operationId: tailors_profile_update
+      description: Tailor profile management operations - supports GET, PUT, and PATCH
+        methods
+      tags:
+      - Tailor Profile
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TailorProfile'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TailorProfile'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TailorProfile'
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TailorProfile'
+          description: ''
+    patch:
+      operationId: tailors_profile_partial_update
+      description: Tailor profile management operations - supports GET, PUT, and PATCH
+        methods
+      tags:
+      - Tailor Profile
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTailorProfile'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTailorProfile'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTailorProfile'
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TailorProfile'
+          description: ''
+  /api/tailors/profile/status/:
+    get:
+      operationId: tailors_profile_status_retrieve
+      description: Check tailor profile review status
+      tags:
+      - Tailor Profile
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+  /api/tailors/profile/submit/:
+    post:
+      operationId: tailors_profile_submit_create
+      description: Submit tailor profile for admin review
+      tags:
+      - Tailor Profile
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TailorProfileSubmission'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TailorProfileSubmission'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TailorProfileSubmission'
+        required: true
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TailorProfileSubmission'
+          description: ''
+  /api/tailors/service-areas/available/:
+    get:
+      operationId: tailors_service_areas_available_retrieve
+      description: Get all service areas available for delivery calculation
+      tags:
+      - Service Areas
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/tailors/shop/status/:
+    put:
+      operationId: tailors_shop_status_update
+      description: Update shop status (on/off)
+      tags:
+      - Tailor Profile
+      security:
+      - jwtAuth: []
+      - Bearer:
+          type: apiKey
+          name: Authorization
+          in: header
+      responses:
+        '200':
+          description: No response body
+components:
+  schemas:
+    AddressCreate:
+      type: object
+      description: Simplified serializer for address creation with only required fields.
+      properties:
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        address:
+          type: string
+          description: Full address text
+          maxLength: 255
+        extra_info:
+          type: string
+          nullable: true
+          description: Additional address information
+        address_tag:
+          allOf:
+          - $ref: '#/components/schemas/AddressTagEnum'
+          default: home
+          description: |-
+            Address type: home, office, work, other
+
+            * `home` - Home
+            * `office` - Office
+            * `work` - Work
+            * `other` - Other
+        is_default:
+          type: boolean
+          default: false
+          description: Whether this is the default address
+      required:
+      - address
+    AddressResponse:
+      type: object
+      description: Simplified response serializer for addresses.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        address:
+          type: string
+          readOnly: true
+        extra_info:
+          type: string
+          nullable: true
+          description: Additional address information
+        is_default:
+          type: boolean
+        address_tag:
+          allOf:
+          - $ref: '#/components/schemas/AddressTagEnum'
+          description: |-
+            Address type: home, office, work, other
+
+            * `home` - Home
+            * `office` - Office
+            * `work` - Work
+            * `other` - Other
+      required:
+      - address
+      - id
+    AddressTagEnum:
+      enum:
+      - home
+      - office
+      - work
+      - other
+      type: string
+      description: |-
+        * `home` - Home
+        * `office` - Office
+        * `work` - Work
+        * `other` - Other
+    BlankEnum:
+      enum:
+      - ''
+    ChangePassword:
+      type: object
+      properties:
+        old_password:
+          type: string
+        new_password:
+          type: string
+        confirm_new_password:
+          type: string
+      required:
+      - confirm_new_password
+      - new_password
+      - old_password
+    CustomerProfile:
+      type: object
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/UserProfile'
+          readOnly: true
+        default_address:
+          allOf:
+          - $ref: '#/components/schemas/AddressResponse'
+          readOnly: true
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/AddressResponse'
+          readOnly: true
+        phone_verified:
+          type: string
+          readOnly: true
+      required:
+      - addresses
+      - default_address
+      - phone_verified
+      - user
+    DocumentTypeEnum:
+      enum:
+      - iqama_front
+      - iqama_back
+      - license_front
+      - license_back
+      - istimara_front
+      - istimara_back
+      - insurance
+      type: string
+      description: |-
+        * `iqama_front` - Iqama Front
+        * `iqama_back` - Iqama Back
+        * `license_front` - Driving License Front
+        * `license_back` - Driving License Back
+        * `istimara_front` - Istimara Front
+        * `istimara_back` - Istimara Back
+        * `insurance` - Insurance Card
+    Fabric:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        category:
+          allOf:
+          - $ref: '#/components/schemas/FabricCategoryBasic'
+          readOnly: true
+        name:
+          type: string
+          description: Name of the fabric
+          maxLength: 100
+        description:
+          type: string
+          nullable: true
+          description: Detailed description of the fabric
+        seasons:
+          allOf:
+          - $ref: '#/components/schemas/SeasonsEnum'
+          description: |-
+            Best suited season for this fabric
+
+            * `summer` - Summer
+            * `winter` - Winter
+            * `all_season` - All Season
+        fabric_type:
+          allOf:
+          - $ref: '#/components/schemas/FabricTypeBasic'
+          readOnly: true
+        fabric_tag:
+          allOf:
+          - $ref: '#/components/schemas/FabricTagBasic'
+          readOnly: true
+        sku:
+          type: string
+          readOnly: true
+          description: Stock Keeping Unit - auto-generated
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Price per unit
+        stock:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Available stock quantity
+        is_low_stock:
+          type: string
+          readOnly: true
+        is_out_of_stock:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          description: Whether this fabric is available for sale
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        gallery:
+          type: array
+          items:
+            $ref: '#/components/schemas/FabricImage'
+          readOnly: true
+      required:
+      - category
+      - created_at
+      - fabric_tag
+      - fabric_type
+      - gallery
+      - id
+      - is_low_stock
+      - is_out_of_stock
+      - name
+      - price
+      - sku
+      - updated_at
+    FabricCatalog:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          description: Name of the fabric
+          maxLength: 100
+        description:
+          type: string
+          nullable: true
+          description: Detailed description of the fabric
+        sku:
+          type: string
+          readOnly: true
+          description: Stock Keeping Unit - auto-generated
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Price per unit
+        stock:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Available stock quantity
+        is_active:
+          type: boolean
+          description: Whether this fabric is available for sale
+        seasons:
+          allOf:
+          - $ref: '#/components/schemas/SeasonsEnum'
+          description: |-
+            Best suited season for this fabric
+
+            * `summer` - Summer
+            * `winter` - Winter
+            * `all_season` - All Season
+        fabric_type:
+          allOf:
+          - $ref: '#/components/schemas/FabricTypeBasic'
+          readOnly: true
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/FabricTagBasic'
+          readOnly: true
+        fabric_image:
+          type: string
+          nullable: true
+          readOnly: true
+        gallery:
+          type: array
+          items:
+            $ref: '#/components/schemas/FabricImage'
+          readOnly: true
+        category:
+          allOf:
+          - $ref: '#/components/schemas/FabricCategory'
+          readOnly: true
+        tailor:
+          allOf:
+          - $ref: '#/components/schemas/TailorProfile'
+          readOnly: true
+      required:
+      - category
+      - fabric_image
+      - fabric_type
+      - gallery
+      - id
+      - name
+      - price
+      - sku
+      - tags
+      - tailor
+    FabricCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          description: Name of the fabric category
+          maxLength: 100
+        slug:
+          type: string
+          maxLength: 120
+          pattern: ^[-a-zA-Z0-9_]+$
+        is_active:
+          type: boolean
+          description: Whether this category is active
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - slug
+      - updated_at
+    FabricCategoryBasic:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          description: Name of the fabric category
+          maxLength: 100
+        is_active:
+          type: boolean
+          description: Whether this category is active
+      required:
+      - id
+      - name
+    FabricCreate:
+      type: object
+      properties:
+        category:
+          type: integer
+          nullable: true
+          description: Category of fabric
+        name:
+          type: string
+          description: Name of the fabric
+          maxLength: 100
+        seasons:
+          allOf:
+          - $ref: '#/components/schemas/SeasonsEnum'
+          description: |-
+            Best suited season for this fabric
+
+            * `summer` - Summer
+            * `winter` - Winter
+            * `all_season` - All Season
+        fabric_type:
+          type: integer
+          nullable: true
+          description: Type of fabric
+        description:
+          type: string
+          nullable: true
+          description: Detailed description of the fabric
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Price per unit
+        stock:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Available stock quantity
+        is_active:
+          type: boolean
+          description: Whether this fabric is available for sale
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImageWithMetadata'
+          writeOnly: true
+          description: List of images with metadata (is_primary, order)
+        tags:
+          type: array
+          items:
+            type: integer
+          writeOnly: true
+          description: List of fabric tag IDs
+      required:
+      - images
+      - name
+      - price
+    FabricImage:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        image:
+          type: string
+          nullable: true
+          readOnly: true
+        order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Display order of the image
+        is_primary:
+          type: boolean
+          description: Designates this image as the primary image
+      required:
+      - id
+      - image
+    FabricTag:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 50
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - slug
+      - updated_at
+    FabricTagBasic:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 50
+      required:
+      - id
+      - name
+    FabricType:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          description: Name of the fabric type (e.g., Cotton, Silk, Wool)
+          maxLength: 100
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - updated_at
+    FabricTypeBasic:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          description: Name of the fabric type (e.g., Cotton, Silk, Wool)
+          maxLength: 100
+      required:
+      - id
+      - name
+    FabricUpdate:
+      type: object
+      description: Serializer for updating existing fabrics.
+      properties:
+        category:
+          type: integer
+          nullable: true
+          description: Category of fabric
+        fabric_type:
+          type: integer
+          description: Fabric type ID
+        seasons:
+          allOf:
+          - $ref: '#/components/schemas/SeasonsEnum'
+          description: |-
+            Best suited season for this fabric
+
+            * `summer` - Summer
+            * `winter` - Winter
+            * `all_season` - All Season
+        name:
+          type: string
+          description: Name of the fabric
+          maxLength: 100
+        description:
+          type: string
+          nullable: true
+          description: Detailed description of the fabric
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Price per unit
+        stock:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Available stock quantity
+        is_active:
+          type: boolean
+          description: Whether this fabric is available for sale
+        tags:
+          type: array
+          items:
+            type: integer
+          writeOnly: true
+          description: List of fabric tag IDs
+      required:
+      - name
+      - price
+    FamilyMember:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        gender:
+          type: string
+          nullable: true
+          maxLength: 10
+        relationship:
+          type: string
+          nullable: true
+          maxLength: 50
+        measurements:
+          nullable: true
+        address:
+          allOf:
+          - $ref: '#/components/schemas/AddressCreate'
+          writeOnly: true
+        address_response:
+          allOf:
+          - $ref: '#/components/schemas/AddressResponse'
+          readOnly: true
+      required:
+      - address_response
+      - id
+      - name
+    ImageWithMetadata:
+      type: object
+      description: Serializer for image upload with metadata.
+      properties:
+        image:
+          type: string
+          format: uri
+          pattern: (?:jpg|jpeg|png)$
+        is_primary:
+          type: boolean
+          default: false
+        order:
+          type: integer
+          default: 0
+      required:
+      - image
+    LicenseTypeEnum:
+      enum:
+      - private
+      - general
+      - motorcycle
+      - commercial
+      type: string
+      description: |-
+        * `private` - Private
+        * `general` - General
+        * `motorcycle` - Motorcycle
+        * `commercial` - Commercial
+    NullEnum:
+      enum:
+      - null
+    OTPVerification:
+      type: object
+      properties:
+        otp_code:
+          type: string
+          maxLength: 6
+      required:
+      - otp_code
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        order_number:
+          type: string
+          readOnly: true
+          description: Unique order number generated automatically
+        customer:
+          type: integer
+          description: The customer who placed the order
+        customer_name:
+          type: string
+          readOnly: true
+        customer_email:
+          type: string
+          readOnly: true
+        tailor:
+          type: integer
+          description: Tailor assigned to this order
+        tailor_name:
+          type: string
+          readOnly: true
+        tailor_contact:
+          type: string
+          readOnly: true
+        rider:
+          type: integer
+          nullable: true
+          description: Rider assigned to this order for delivery
+        rider_name:
+          type: string
+          readOnly: true
+        rider_phone:
+          type: string
+          readOnly: true
+        order_type:
+          allOf:
+          - $ref: '#/components/schemas/OrderTypeEnum'
+          description: |-
+            Type of order - fabric only or fabric with stitching
+
+            * `fabric_only` - Fabric Purchase Only
+            * `fabric_with_stitching` - Fabric + Stitching
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status8a5Enum'
+          description: |-
+            current status of the order
+
+            * `pending` - Pending
+            * `confirmed` - Confirmed
+            * `measuring` - Measuring
+            * `cutting` - Cutting
+            * `stitching` - Stitching
+            * `ready_for_delivery` - Ready for Delivery
+            * `delivered` - Delivered
+            * `cancelled` - Cancelled
+        subtotal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: sub total before taxes and fees
+        tax_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Tax amount
+        delivery_fee:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: delivery fee
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Total amount including taxes and fees
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          description: |-
+            Payment_status
+
+            * `pending` - Pending
+            * `paid` - Paid
+            * `refunded` - Refunded
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          description: |-
+            Payment method chosen by customer
+
+            * `cod` - Cash on Delivery
+            * `credit_card` - Credit Card
+            * `bank_transfer` - Bank Transfer
+        family_member:
+          type: integer
+          nullable: true
+          description: Family member this order is for (optional - if not specified,
+            order is for the customer)
+        family_member_name:
+          type: string
+          readOnly: true
+        delivery_address:
+          type: integer
+          nullable: true
+          description: Delivery address for this order
+        delivery_address_text:
+          type: string
+          readOnly: true
+        estimated_delivery_date:
+          type: string
+          format: date
+          nullable: true
+          description: Estimated delivery time
+        actual_delivery_date:
+          type: string
+          format: date
+          nullable: true
+          description: Actual delivery time
+        special_instructions:
+          type: string
+          nullable: true
+          description: Special instructions from customer
+        notes:
+          type: string
+          nullable: true
+          description: Interal notes for tailor/admin
+        rider_measurements:
+          nullable: true
+          description: Measurements taken by rider at customer location (for fabric_with_stitching
+            orders)
+        measurement_taken_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When measurements were taken by the rider
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+          readOnly: true
+        items_count:
+          type: integer
+          readOnly: true
+        can_be_cancelled:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - can_be_cancelled
+      - created_at
+      - customer
+      - customer_email
+      - customer_name
+      - delivery_address_text
+      - family_member_name
+      - id
+      - items
+      - items_count
+      - order_number
+      - rider_name
+      - rider_phone
+      - tailor
+      - tailor_contact
+      - tailor_name
+      - total_amount
+      - updated_at
+    OrderCreate:
+      type: object
+      properties:
+        customer:
+          type: integer
+          description: The customer who placed the order
+        tailor:
+          type: integer
+          description: Tailor assigned to this order
+        order_type:
+          allOf:
+          - $ref: '#/components/schemas/OrderTypeEnum'
+          description: |-
+            Type of order - fabric only or fabric with stitching
+
+            * `fabric_only` - Fabric Purchase Only
+            * `fabric_with_stitching` - Fabric + Stitching
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          description: |-
+            Payment method chosen by customer
+
+            * `cod` - Cash on Delivery
+            * `credit_card` - Credit Card
+            * `bank_transfer` - Bank Transfer
+        family_member:
+          type: integer
+          nullable: true
+          description: Family member this order is for (optional - if not specified,
+            order is for the customer)
+        delivery_address:
+          type: integer
+          nullable: true
+          description: Delivery address for this order
+        estimated_delivery_date:
+          type: string
+          format: date
+          nullable: true
+          description: Estimated delivery time
+        special_instructions:
+          type: string
+          nullable: true
+          description: Special instructions from customer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItemCreate'
+        distance_km:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          writeOnly: true
+          nullable: true
+          description: Distance in kilometers for delivery fee calculation (optional)
+      required:
+      - customer
+      - items
+      - tailor
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        fabric:
+          type: integer
+          description: Fabric beginf ordered
+        fabric_name:
+          type: string
+          readOnly: true
+        fabric_sku:
+          type: string
+          readOnly: true
+        fabric_image:
+          type: string
+          readOnly: true
+        quantity:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Quantity of this fabric
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Price per unit at time of order
+        total_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Total price for this item (quantity × unit_price)
+        measurements:
+          description: Customer measurements for this item
+        custom_instructions:
+          type: string
+          nullable: true
+          description: Custom instructions for this specific item
+        is_ready:
+          type: boolean
+          description: Whether this item is ready for delivery
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - fabric
+      - fabric_image
+      - fabric_name
+      - fabric_sku
+      - id
+      - total_price
+      - unit_price
+    OrderItemCreate:
+      type: object
+      properties:
+        fabric:
+          type: integer
+          description: Fabric beginf ordered
+        quantity:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Quantity of this fabric
+        measurements:
+          description: Customer measurements for this item
+        custom_instructions:
+          type: string
+          nullable: true
+          description: Custom instructions for this specific item
+      required:
+      - fabric
+    OrderList:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        order_number:
+          type: string
+          readOnly: true
+          description: Unique order number generated automatically
+        customer_name:
+          type: string
+          readOnly: true
+        tailor_name:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status8a5Enum'
+          description: |-
+            current status of the order
+
+            * `pending` - Pending
+            * `confirmed` - Confirmed
+            * `measuring` - Measuring
+            * `cutting` - Cutting
+            * `stitching` - Stitching
+            * `ready_for_delivery` - Ready for Delivery
+            * `delivered` - Delivered
+            * `cancelled` - Cancelled
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Total amount including taxes and fees
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          description: |-
+            Payment_status
+
+            * `pending` - Pending
+            * `paid` - Paid
+            * `refunded` - Refunded
+        items_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - customer_name
+      - id
+      - items_count
+      - order_number
+      - tailor_name
+    OrderStatusHistory:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status8a5Enum'
+          description: |-
+            Status that was set
+
+            * `pending` - Pending
+            * `confirmed` - Confirmed
+            * `measuring` - Measuring
+            * `cutting` - Cutting
+            * `stitching` - Stitching
+            * `ready_for_delivery` - Ready for Delivery
+            * `delivered` - Delivered
+            * `cancelled` - Cancelled
+        previous_status:
+          nullable: true
+          description: |-
+            Previous status before this change
+
+            * `pending` - Pending
+            * `confirmed` - Confirmed
+            * `measuring` - Measuring
+            * `cutting` - Cutting
+            * `stitching` - Stitching
+            * `ready_for_delivery` - Ready for Delivery
+            * `delivered` - Delivered
+            * `cancelled` - Cancelled
+          oneOf:
+          - $ref: '#/components/schemas/PreviousStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        changed_by_name:
+          type: string
+          readOnly: true
+        notes:
+          type: string
+          nullable: true
+          description: Notes about this status change
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - changed_by_name
+      - created_at
+      - id
+      - status
+    OrderTypeEnum:
+      enum:
+      - fabric_only
+      - fabric_with_stitching
+      type: string
+      description: |-
+        * `fabric_only` - Fabric Purchase Only
+        * `fabric_with_stitching` - Fabric + Stitching
+    OrderUpdate:
+      type: object
+      properties:
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status8a5Enum'
+          description: |-
+            current status of the order
+
+            * `pending` - Pending
+            * `confirmed` - Confirmed
+            * `measuring` - Measuring
+            * `cutting` - Cutting
+            * `stitching` - Stitching
+            * `ready_for_delivery` - Ready for Delivery
+            * `delivered` - Delivered
+            * `cancelled` - Cancelled
+        notes:
+          type: string
+          nullable: true
+          description: Interal notes for tailor/admin
+    PatchedFabricTag:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 50
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedFabricType:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          description: Name of the fabric type (e.g., Cotton, Silk, Wool)
+          maxLength: 100
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedFabricUpdate:
+      type: object
+      description: Serializer for updating existing fabrics.
+      properties:
+        category:
+          type: integer
+          nullable: true
+          description: Category of fabric
+        fabric_type:
+          type: integer
+          description: Fabric type ID
+        seasons:
+          allOf:
+          - $ref: '#/components/schemas/SeasonsEnum'
+          description: |-
+            Best suited season for this fabric
+
+            * `summer` - Summer
+            * `winter` - Winter
+            * `all_season` - All Season
+        name:
+          type: string
+          description: Name of the fabric
+          maxLength: 100
+        description:
+          type: string
+          nullable: true
+          description: Detailed description of the fabric
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Price per unit
+        stock:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Available stock quantity
+        is_active:
+          type: boolean
+          description: Whether this fabric is available for sale
+        tags:
+          type: array
+          items:
+            type: integer
+          writeOnly: true
+          description: List of fabric tag IDs
+    PatchedOrderPaymentStatusUpdate:
+      type: object
+      description: Serializer for updating payment status only
+      properties:
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          description: |-
+            Payment status: pending, paid, or refunded
+
+            * `pending` - Pending
+            * `paid` - Paid
+            * `refunded` - Refunded
+    PatchedOrderUpdate:
+      type: object
+      properties:
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status8a5Enum'
+          description: |-
+            current status of the order
+
+            * `pending` - Pending
+            * `confirmed` - Confirmed
+            * `measuring` - Measuring
+            * `cutting` - Cutting
+            * `stitching` - Stitching
+            * `ready_for_delivery` - Ready for Delivery
+            * `delivered` - Delivered
+            * `cancelled` - Cancelled
+        notes:
+          type: string
+          nullable: true
+          description: Interal notes for tailor/admin
+    PatchedRiderUpdateOrderStatus:
+      type: object
+      description: Serializer for rider updating order status
+      properties:
+        status:
+          $ref: '#/components/schemas/RiderUpdateOrderStatusStatusEnum'
+        notes:
+          type: string
+    PatchedTailorProfile:
+      type: object
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/UserProfile'
+          readOnly: true
+        shop_name:
+          type: string
+          nullable: true
+          description: Name of the tailor's shop
+          maxLength: 100
+        establishment_year:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Year the business was established
+        tailor_experience:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Years of tailoring experience
+        working_hours:
+          nullable: true
+          description: 'Working hours stored as JSON. Format: {''monday'': {''is_open'':
+            true, ''start_time'': ''09:00'', ''end_time'': ''18:00''}}'
+        address:
+          type: string
+          readOnly: true
+        shop_status:
+          type: boolean
+          description: Whether the shop is currently open
+        shop_image:
+          type: string
+          format: uri
+          nullable: true
+          description: Shop image (JPG, JPEG, PNG only)
+          pattern: (?:jpg|jpeg|png)$
+        shop_image_url:
+          type: string
+          readOnly: true
+        review_status:
+          type: string
+          readOnly: true
+        submitted_at:
+          type: string
+          readOnly: true
+        reviewed_at:
+          type: string
+          readOnly: true
+        rejection_reason:
+          type: string
+          readOnly: true
+        service_areas:
+          type: string
+          readOnly: true
+        phone_verified:
+          type: string
+          readOnly: true
+    PaymentMethodEnum:
+      enum:
+      - cod
+      - credit_card
+      - bank_transfer
+      type: string
+      description: |-
+        * `cod` - Cash on Delivery
+        * `credit_card` - Credit Card
+        * `bank_transfer` - Bank Transfer
+    PaymentStatusEnum:
+      enum:
+      - pending
+      - paid
+      - refunded
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `paid` - Paid
+        * `refunded` - Refunded
+    PhoneVerification:
+      type: object
+      properties:
+        phone_number:
+          type: string
+          maxLength: 20
+      required:
+      - phone_number
+    PreviousStatusEnum:
+      enum:
+      - pending
+      - confirmed
+      - measuring
+      - cutting
+      - stitching
+      - ready_for_delivery
+      - delivered
+      - cancelled
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `confirmed` - Confirmed
+        * `measuring` - Measuring
+        * `cutting` - Cutting
+        * `stitching` - Stitching
+        * `ready_for_delivery` - Ready for Delivery
+        * `delivered` - Delivered
+        * `cancelled` - Cancelled
+    ReviewStatusEnum:
+      enum:
+      - draft
+      - pending
+      - approved
+      - rejected
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `pending` - Pending Review
+        * `approved` - Approved
+        * `rejected` - Rejected
+    RiderAddMeasurements:
+      type: object
+      description: Serializer for rider adding measurements
+      properties:
+        measurements: {}
+        notes:
+          type: string
+      required:
+      - measurements
+    RiderDocument:
+      type: object
+      description: Serializer for rider documents
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        document_type:
+          allOf:
+          - $ref: '#/components/schemas/DocumentTypeEnum'
+          description: |-
+            Type of document
+
+            * `iqama_front` - Iqama Front
+            * `iqama_back` - Iqama Back
+            * `license_front` - Driving License Front
+            * `license_back` - Driving License Back
+            * `istimara_front` - Istimara Front
+            * `istimara_back` - Istimara Back
+            * `insurance` - Insurance Card
+        document_url:
+          type: string
+          readOnly: true
+        is_verified:
+          type: boolean
+          readOnly: true
+          description: Whether this document has been verified by admin
+        verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When the document was verified
+        notes:
+          type: string
+          nullable: true
+          description: Admin notes about this document
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - document_type
+      - document_url
+      - id
+      - is_verified
+      - verified_at
+    RiderDocumentUpload:
+      type: object
+      description: Serializer for uploading rider documents
+      properties:
+        document_type:
+          allOf:
+          - $ref: '#/components/schemas/DocumentTypeEnum'
+          description: |-
+            Type of document
+
+            * `iqama_front` - Iqama Front
+            * `iqama_back` - Iqama Back
+            * `license_front` - Driving License Front
+            * `license_back` - Driving License Back
+            * `istimara_front` - Istimara Front
+            * `istimara_back` - Istimara Back
+            * `insurance` - Insurance Card
+        document_image:
+          type: string
+          format: uri
+          description: Document image (JPG, JPEG, PNG, PDF)
+          pattern: (?:jpg|jpeg|png|pdf)$
+      required:
+      - document_image
+      - document_type
+    RiderOrderDetail:
+      type: object
+      description: Serializer for order details for riders
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        order_number:
+          type: string
+          readOnly: true
+          description: Unique order number generated automatically
+        order_type:
+          allOf:
+          - $ref: '#/components/schemas/OrderTypeEnum'
+          description: |-
+            Type of order - fabric only or fabric with stitching
+
+            * `fabric_only` - Fabric Purchase Only
+            * `fabric_with_stitching` - Fabric + Stitching
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status8a5Enum'
+          description: |-
+            current status of the order
+
+            * `pending` - Pending
+            * `confirmed` - Confirmed
+            * `measuring` - Measuring
+            * `cutting` - Cutting
+            * `stitching` - Stitching
+            * `ready_for_delivery` - Ready for Delivery
+            * `delivered` - Delivered
+            * `cancelled` - Cancelled
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          description: |-
+            Payment_status
+
+            * `pending` - Pending
+            * `paid` - Paid
+            * `refunded` - Refunded
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          description: |-
+            Payment method chosen by customer
+
+            * `cod` - Cash on Delivery
+            * `credit_card` - Credit Card
+            * `bank_transfer` - Bank Transfer
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Total amount including taxes and fees
+        subtotal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: sub total before taxes and fees
+        tax_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Tax amount
+        delivery_fee:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: delivery fee
+        customer_info:
+          type: string
+          readOnly: true
+        tailor_info:
+          type: string
+          readOnly: true
+        delivery_address:
+          type: string
+          readOnly: true
+        items:
+          type: string
+          readOnly: true
+        assignment_status:
+          type: string
+          readOnly: true
+        estimated_delivery_date:
+          type: string
+          format: date
+          nullable: true
+          description: Estimated delivery time
+        actual_delivery_date:
+          type: string
+          format: date
+          nullable: true
+          description: Actual delivery time
+        special_instructions:
+          type: string
+          nullable: true
+          description: Special instructions from customer
+        rider_measurements:
+          nullable: true
+          description: Measurements taken by rider at customer location (for fabric_with_stitching
+            orders)
+        measurement_taken_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When measurements were taken by the rider
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - assignment_status
+      - created_at
+      - customer_info
+      - delivery_address
+      - id
+      - items
+      - order_number
+      - tailor_info
+    RiderOrderList:
+      type: object
+      description: Serializer for listing orders available for riders
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        order_number:
+          type: string
+          readOnly: true
+          description: Unique order number generated automatically
+        order_type:
+          allOf:
+          - $ref: '#/components/schemas/OrderTypeEnum'
+          description: |-
+            Type of order - fabric only or fabric with stitching
+
+            * `fabric_only` - Fabric Purchase Only
+            * `fabric_with_stitching` - Fabric + Stitching
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status8a5Enum'
+          description: |-
+            current status of the order
+
+            * `pending` - Pending
+            * `confirmed` - Confirmed
+            * `measuring` - Measuring
+            * `cutting` - Cutting
+            * `stitching` - Stitching
+            * `ready_for_delivery` - Ready for Delivery
+            * `delivered` - Delivered
+            * `cancelled` - Cancelled
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          description: |-
+            Payment_status
+
+            * `pending` - Pending
+            * `paid` - Paid
+            * `refunded` - Refunded
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Total amount including taxes and fees
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
+        tailor_name:
+          type: string
+          readOnly: true
+        tailor_phone:
+          type: string
+          readOnly: true
+        delivery_address:
+          type: string
+          readOnly: true
+        items_count:
+          type: string
+          readOnly: true
+        estimated_delivery_date:
+          type: string
+          format: date
+          nullable: true
+          description: Estimated delivery time
+        special_instructions:
+          type: string
+          nullable: true
+          description: Special instructions from customer
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - customer_name
+      - customer_phone
+      - delivery_address
+      - id
+      - items_count
+      - order_number
+      - tailor_name
+      - tailor_phone
+    RiderProfile:
+      type: object
+      description: Serializer for rider profile with all information
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        is_phone_verified:
+          type: boolean
+          readOnly: true
+        is_approved:
+          type: boolean
+          readOnly: true
+        review_status:
+          type: string
+          readOnly: true
+        full_name:
+          type: string
+          nullable: true
+          description: Full name of the rider
+          maxLength: 255
+        phone_number:
+          type: string
+          description: Primary contact number
+          maxLength: 20
+        emergency_contact:
+          type: string
+          nullable: true
+          description: Emergency contact number
+          maxLength: 20
+        iqama_number:
+          type: string
+          nullable: true
+          description: Iqama Number (10-digit) or Saudi National ID for citizens
+          pattern: ^\d{10}$
+          maxLength: 10
+        iqama_expiry_date:
+          type: string
+          format: date
+          nullable: true
+          description: Iqama / National ID expiry date
+        license_number:
+          type: string
+          nullable: true
+          description: Driving license number
+          maxLength: 50
+        license_expiry_date:
+          type: string
+          format: date
+          nullable: true
+          description: Driving license expiry date
+        license_type:
+          nullable: true
+          description: |-
+            Type of driving license
+
+            * `private` - Private
+            * `general` - General
+            * `motorcycle` - Motorcycle
+            * `commercial` - Commercial
+          oneOf:
+          - $ref: '#/components/schemas/LicenseTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        vehicle_type:
+          nullable: true
+          description: |-
+            Type of vehicle used for delivery
+
+            * `motorcycle` - Motorcycle
+            * `car` - Car
+            * `bicycle` - Bicycle
+            * `truck` - Truck
+            * `van` - Van
+            * `other` - Other
+          oneOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        vehicle_plate_number_arabic:
+          type: string
+          nullable: true
+          description: Vehicle plate number in Arabic
+          maxLength: 50
+        vehicle_plate_number_english:
+          type: string
+          nullable: true
+          description: Vehicle plate number in English
+          maxLength: 50
+        vehicle_make:
+          type: string
+          nullable: true
+          description: Vehicle make/brand (e.g., Toyota, Honda)
+          maxLength: 100
+        vehicle_model:
+          type: string
+          nullable: true
+          description: Vehicle model (e.g., Camry, Accord)
+          maxLength: 100
+        vehicle_year:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Vehicle manufacturing year
+        vehicle_color:
+          type: string
+          nullable: true
+          description: Vehicle color
+          maxLength: 50
+        vehicle_registration_number:
+          type: string
+          nullable: true
+          description: Vehicle Registration (Istimara) Number
+          maxLength: 50
+        vehicle_registration_expiry_date:
+          type: string
+          format: date
+          nullable: true
+          description: Vehicle Registration (Istimara) expiry date
+        insurance_provider:
+          type: string
+          nullable: true
+          description: Insurance provider name
+          maxLength: 200
+        insurance_policy_number:
+          type: string
+          nullable: true
+          description: Insurance policy number
+          maxLength: 100
+        insurance_expiry_date:
+          type: string
+          format: date
+          nullable: true
+          description: Insurance expiry date
+        is_active:
+          type: boolean
+          description: Whether the rider is currently active
+        is_available:
+          type: boolean
+          description: Whether the rider is currently available for new orders
+        current_latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+          description: Current latitude location
+        current_longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+          description: Current longitude location
+        total_deliveries:
+          type: integer
+          readOnly: true
+          description: Total number of completed deliveries
+        rating:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,1}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Average rating from customers
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiderDocument'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - documents
+      - email
+      - id
+      - is_approved
+      - is_phone_verified
+      - phone_number
+      - rating
+      - review_status
+      - total_deliveries
+      - updated_at
+      - username
+    RiderProfileStatus:
+      type: object
+      description: Serializer for rider to check their profile review status.
+      properties:
+        review_status:
+          allOf:
+          - $ref: '#/components/schemas/ReviewStatusEnum'
+          readOnly: true
+          description: |-
+            Review status of the rider profile
+
+            * `draft` - Draft
+            * `pending` - Pending Review
+            * `approved` - Approved
+            * `rejected` - Rejected
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When the profile was submitted for review
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When the profile was reviewed by admin
+        rejection_reason:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Reason for rejection if applicable
+      required:
+      - rejection_reason
+      - review_status
+      - reviewed_at
+      - submitted_at
+    RiderProfileSubmission:
+      type: object
+      description: Serializer for rider to submit profile for review
+      properties:
+        full_name:
+          type: string
+          nullable: true
+          description: Full name of the rider
+          maxLength: 255
+        phone_number:
+          type: string
+          description: Primary contact number
+          maxLength: 20
+        emergency_contact:
+          type: string
+          nullable: true
+          description: Emergency contact number
+          maxLength: 20
+        iqama_number:
+          type: string
+          nullable: true
+          description: Iqama Number (10-digit) or Saudi National ID for citizens
+          pattern: ^\d{10}$
+          maxLength: 10
+        iqama_expiry_date:
+          type: string
+          format: date
+          nullable: true
+          description: Iqama / National ID expiry date
+        license_number:
+          type: string
+          nullable: true
+          description: Driving license number
+          maxLength: 50
+        license_expiry_date:
+          type: string
+          format: date
+          nullable: true
+          description: Driving license expiry date
+        license_type:
+          nullable: true
+          description: |-
+            Type of driving license
+
+            * `private` - Private
+            * `general` - General
+            * `motorcycle` - Motorcycle
+            * `commercial` - Commercial
+          oneOf:
+          - $ref: '#/components/schemas/LicenseTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        vehicle_type:
+          nullable: true
+          description: |-
+            Type of vehicle used for delivery
+
+            * `motorcycle` - Motorcycle
+            * `car` - Car
+            * `bicycle` - Bicycle
+            * `truck` - Truck
+            * `van` - Van
+            * `other` - Other
+          oneOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        vehicle_plate_number_arabic:
+          type: string
+          nullable: true
+          description: Vehicle plate number in Arabic
+          maxLength: 50
+        vehicle_plate_number_english:
+          type: string
+          nullable: true
+          description: Vehicle plate number in English
+          maxLength: 50
+        vehicle_make:
+          type: string
+          nullable: true
+          description: Vehicle make/brand (e.g., Toyota, Honda)
+          maxLength: 100
+        vehicle_model:
+          type: string
+          nullable: true
+          description: Vehicle model (e.g., Camry, Accord)
+          maxLength: 100
+        vehicle_year:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Vehicle manufacturing year
+        vehicle_color:
+          type: string
+          nullable: true
+          description: Vehicle color
+          maxLength: 50
+        vehicle_registration_number:
+          type: string
+          nullable: true
+          description: Vehicle Registration (Istimara) Number
+          maxLength: 50
+        vehicle_registration_expiry_date:
+          type: string
+          format: date
+          nullable: true
+          description: Vehicle Registration (Istimara) expiry date
+        insurance_provider:
+          type: string
+          nullable: true
+          description: Insurance provider name
+          maxLength: 200
+        insurance_policy_number:
+          type: string
+          nullable: true
+          description: Insurance policy number
+          maxLength: 100
+        insurance_expiry_date:
+          type: string
+          format: date
+          nullable: true
+          description: Insurance expiry date
+      required:
+      - phone_number
+    RiderProfileUpdate:
+      type: object
+      description: Serializer for updating rider profile
+      properties:
+        full_name:
+          type: string
+          nullable: true
+          description: Full name of the rider
+          maxLength: 255
+        phone_number:
+          type: string
+          description: Primary contact number
+          maxLength: 20
+        emergency_contact:
+          type: string
+          nullable: true
+          description: Emergency contact number
+          maxLength: 20
+        iqama_number:
+          type: string
+          nullable: true
+          description: Iqama Number (10-digit) or Saudi National ID for citizens
+          pattern: ^\d{10}$
+          maxLength: 10
+        iqama_expiry_date:
+          type: string
+          format: date
+          nullable: true
+          description: Iqama / National ID expiry date
+        license_number:
+          type: string
+          nullable: true
+          description: Driving license number
+          maxLength: 50
+        license_expiry_date:
+          type: string
+          format: date
+          nullable: true
+          description: Driving license expiry date
+        license_type:
+          nullable: true
+          description: |-
+            Type of driving license
+
+            * `private` - Private
+            * `general` - General
+            * `motorcycle` - Motorcycle
+            * `commercial` - Commercial
+          oneOf:
+          - $ref: '#/components/schemas/LicenseTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        vehicle_type:
+          nullable: true
+          description: |-
+            Type of vehicle used for delivery
+
+            * `motorcycle` - Motorcycle
+            * `car` - Car
+            * `bicycle` - Bicycle
+            * `truck` - Truck
+            * `van` - Van
+            * `other` - Other
+          oneOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        vehicle_plate_number_arabic:
+          type: string
+          nullable: true
+          description: Vehicle plate number in Arabic
+          maxLength: 50
+        vehicle_plate_number_english:
+          type: string
+          nullable: true
+          description: Vehicle plate number in English
+          maxLength: 50
+        vehicle_make:
+          type: string
+          nullable: true
+          description: Vehicle make/brand (e.g., Toyota, Honda)
+          maxLength: 100
+        vehicle_model:
+          type: string
+          nullable: true
+          description: Vehicle model (e.g., Camry, Accord)
+          maxLength: 100
+        vehicle_year:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Vehicle manufacturing year
+        vehicle_color:
+          type: string
+          nullable: true
+          description: Vehicle color
+          maxLength: 50
+        vehicle_registration_number:
+          type: string
+          nullable: true
+          description: Vehicle Registration (Istimara) Number
+          maxLength: 50
+        vehicle_registration_expiry_date:
+          type: string
+          format: date
+          nullable: true
+          description: Vehicle Registration (Istimara) expiry date
+        insurance_provider:
+          type: string
+          nullable: true
+          description: Insurance provider name
+          maxLength: 200
+        insurance_policy_number:
+          type: string
+          nullable: true
+          description: Insurance policy number
+          maxLength: 100
+        insurance_expiry_date:
+          type: string
+          format: date
+          nullable: true
+          description: Insurance expiry date
+        is_available:
+          type: boolean
+          description: Whether the rider is currently available for new orders
+        current_latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+          description: Current latitude location
+        current_longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+          description: Current longitude location
+      required:
+      - phone_number
+    RiderRegister:
+      type: object
+      description: Serializer for rider registration
+      properties:
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 100
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+        password_confirm:
+          type: string
+          writeOnly: true
+        phone_number:
+          type: string
+        full_name:
+          type: string
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+      required:
+      - email
+      - full_name
+      - password
+      - password_confirm
+      - phone_number
+      - username
+    RiderUpdateOrderStatusStatusEnum:
+      enum:
+      - measuring
+      - ready_for_delivery
+      - delivered
+      type: string
+      description: |-
+        * `measuring` - measuring
+        * `ready_for_delivery` - ready_for_delivery
+        * `delivered` - delivered
+    RoleEnum:
+      enum:
+      - USER
+      - RIDER
+      - TAILOR
+      - ADMIN
+      type: string
+      description: |-
+        * `USER` - User
+        * `RIDER` - Rider
+        * `TAILOR` - Tailor
+        * `ADMIN` - Admin
+    SeasonsEnum:
+      enum:
+      - summer
+      - winter
+      - all_season
+      type: string
+      description: |-
+        * `summer` - Summer
+        * `winter` - Winter
+        * `all_season` - All Season
+    Status8a5Enum:
+      enum:
+      - pending
+      - confirmed
+      - measuring
+      - cutting
+      - stitching
+      - ready_for_delivery
+      - delivered
+      - cancelled
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `confirmed` - Confirmed
+        * `measuring` - Measuring
+        * `cutting` - Cutting
+        * `stitching` - Stitching
+        * `ready_for_delivery` - Ready for Delivery
+        * `delivered` - Delivered
+        * `cancelled` - Cancelled
+    TailorProfile:
+      type: object
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/UserProfile'
+          readOnly: true
+        shop_name:
+          type: string
+          nullable: true
+          description: Name of the tailor's shop
+          maxLength: 100
+        establishment_year:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Year the business was established
+        tailor_experience:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Years of tailoring experience
+        working_hours:
+          nullable: true
+          description: 'Working hours stored as JSON. Format: {''monday'': {''is_open'':
+            true, ''start_time'': ''09:00'', ''end_time'': ''18:00''}}'
+        address:
+          type: string
+          readOnly: true
+        shop_status:
+          type: boolean
+          description: Whether the shop is currently open
+        shop_image:
+          type: string
+          format: uri
+          nullable: true
+          description: Shop image (JPG, JPEG, PNG only)
+          pattern: (?:jpg|jpeg|png)$
+        shop_image_url:
+          type: string
+          readOnly: true
+        review_status:
+          type: string
+          readOnly: true
+        submitted_at:
+          type: string
+          readOnly: true
+        reviewed_at:
+          type: string
+          readOnly: true
+        rejection_reason:
+          type: string
+          readOnly: true
+        service_areas:
+          type: string
+          readOnly: true
+        phone_verified:
+          type: string
+          readOnly: true
+      required:
+      - address
+      - phone_verified
+      - rejection_reason
+      - review_status
+      - reviewed_at
+      - service_areas
+      - shop_image_url
+      - submitted_at
+      - user
+    TailorProfileSubmission:
+      type: object
+      description: Serializer for tailor profile submission for review.
+      properties:
+        shop_name:
+          type: string
+          nullable: true
+          description: Name of the tailor's shop
+          maxLength: 100
+        contact_number:
+          type: string
+        establishment_year:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Year the business was established
+        tailor_experience:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Years of tailoring experience
+        address:
+          type: string
+          nullable: true
+          description: Business address
+          maxLength: 250
+        working_hours:
+          nullable: true
+        shop_image:
+          type: string
+          format: uri
+          nullable: true
+          description: Shop image (JPG, JPEG, PNG only)
+          pattern: (?:jpg|jpeg|png)$
+        service_areas:
+          type: integer
+          writeOnly: true
+          description: Service area ID that the tailor serves
+      required:
+      - service_areas
+    UserLogin:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+      required:
+      - password
+      - username
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+        email:
+          type: string
+          format: email
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        phone:
+          type: string
+          nullable: true
+          maxLength: 15
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - date_joined
+      - email
+      - id
+      - role
+      - username
+    UserRegister:
+      type: object
+      properties:
+        name:
+          type: string
+          writeOnly: true
+        email:
+          type: string
+          format: email
+          description: Valid email address required
+          maxLength: 100
+        password:
+          type: string
+          writeOnly: true
+        confirm_password:
+          type: string
+          writeOnly: true
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+      required:
+      - confirm_password
+      - email
+      - name
+      - password
+    VehicleTypeEnum:
+      enum:
+      - motorcycle
+      - car
+      - bicycle
+      - truck
+      - van
+      - other
+      type: string
+      description: |-
+        * `motorcycle` - Motorcycle
+        * `car` - Car
+        * `bicycle` - Bicycle
+        * `truck` - Truck
+        * `van` - Van
+        * `other` - Other
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

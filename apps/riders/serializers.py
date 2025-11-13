@@ -359,7 +359,7 @@ class RiderProfileStatusSerializer(serializers.ModelSerializer):
             'review_status', 'submitted_at', 'reviewed_at', 
             'rejection_reason'
         ]
-        read_only_fields = '__all__'
+        read_only_fields = ['review_status', 'submitted_at', 'reviewed_at', 'rejection_reason']
 
 
 class RiderOrderListSerializer(serializers.ModelSerializer):

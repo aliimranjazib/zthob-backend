@@ -43,4 +43,4 @@ class TailorProfileStatusSerializer(serializers.ModelSerializer):
             'review_status', 'submitted_at', 'reviewed_at', 
             'rejection_reason', 'service_areas'
         ]
-        read_only_fields = '__all__'
+        read_only_fields = ['review_status', 'submitted_at', 'reviewed_at', 'rejection_reason', 'service_areas']

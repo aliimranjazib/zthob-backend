@@ -626,10 +626,20 @@ class RiderAcceptOrderView(APIView):
     permission_classes = [IsAuthenticated]
     
     @extend_schema(
-        responses=RiderOrderDetailSerializer,
+        request=None,
+        responses={200: RiderOrderDetailSerializer},
         summary="Accept order",
-        description="Rider accepts an available order for delivery. Rider must be approved. Order ID is provided in the URL.",
-        tags=["Rider Orders"]
+        description="Rider accepts an available order for delivery. Rider must be approved. Order ID is provided in the URL path parameter.",
+        tags=["Rider Orders"],
+        parameters=[
+            {
+                'name': 'order_id',
+                'in': 'path',
+                'required': True,
+                'description': 'Order ID to accept',
+                'schema': {'type': 'integer'}
+            }
+        ]
     )
     def post(self, request, order_id):
         """Accept order - order_id comes from URL path"""
