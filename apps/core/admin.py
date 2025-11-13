@@ -18,6 +18,8 @@ class SystemSettingsAdmin(admin.ModelAdmin):
         'updated_by'
     ]
     
+    list_display_links = ['id', 'tax_rate_percentage']  # Make ID clickable to edit
+    
     list_filter = ['is_active', 'updated_at']
     
     fieldsets = (
@@ -45,7 +47,7 @@ class SystemSettingsAdmin(admin.ModelAdmin):
         }),
     )
     
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'updated_by']
     
     def tax_rate_percentage(self, obj):
         """Display tax rate as percentage"""
@@ -66,9 +68,19 @@ class SystemSettingsAdmin(admin.ModelAdmin):
             return False
         return super().has_add_permission(request)
     
+    def has_change_permission(self, request, obj=None):
+        """Allow editing of system settings"""
+        return super().has_change_permission(request, obj)
+    
     def has_delete_permission(self, request, obj=None):
         """Prevent deletion of active settings"""
         if obj and obj.is_active:
             return False
         return super().has_delete_permission(request, obj)
+    
+    def get_readonly_fields(self, request, obj=None):
+        """Return readonly fields - ensure editable fields are not readonly"""
+        readonly = list(super().get_readonly_fields(request, obj))
+        # Make sure all fields in fieldsets are editable (except metadata)
+        return readonly
 
