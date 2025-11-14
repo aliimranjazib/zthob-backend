@@ -1181,6 +1181,10 @@ class TailorProfileReviewAdmin(admin.ModelAdmin):
     
     list_per_page = 50
     
+    # Ensure actions are visible
+    actions_on_top = True
+    actions_on_bottom = True
+    
     actions = [
         'approve_profiles',
         'reject_profiles',
@@ -1276,7 +1280,8 @@ class TailorProfileReviewAdmin(admin.ModelAdmin):
             f'{count} profile(s) approved successfully.',
             messages.SUCCESS
         )
-    approve_profiles.short_description = "Approve selected profiles"
+    approve_profiles.short_description = "✅ Approve selected profiles"
+    approve_profiles.allowed_permissions = ('change',)
     
     def reject_profiles(self, request, queryset):
         """Reject selected profiles"""
@@ -1291,7 +1296,8 @@ class TailorProfileReviewAdmin(admin.ModelAdmin):
             f'{count} profile(s) rejected. Please add rejection reasons manually.',
             messages.SUCCESS
         )
-    reject_profiles.short_description = "Reject selected profiles"
+    reject_profiles.short_description = "❌ Reject selected profiles"
+    reject_profiles.allowed_permissions = ('change',)
     
     def export_reviews_csv(self, request, queryset):
         """Export reviews to CSV"""
@@ -1327,7 +1333,8 @@ class TailorProfileReviewAdmin(admin.ModelAdmin):
             ])
         
         return response
-    export_reviews_csv.short_description = 'Export selected reviews to CSV'
+    export_reviews_csv.short_description = '📥 Export selected reviews to CSV'
+    export_reviews_csv.allowed_permissions = ('view',)
     
     def get_queryset(self, request):
         """Optimize queries"""
