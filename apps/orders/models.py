@@ -213,6 +213,14 @@ class Order(BaseModel):
         blank=True,
         help_text="Appointment time for customer (optional)"
     )
+    
+    # Custom styles for the order
+    custom_styles = models.JSONField(
+        default=None,
+        blank=True,
+        null=True,
+        help_text="Array of custom style selections (optional). Format: [{'style_type': 'collar', 'index': 0, 'label': 'Collar Style 1', 'asset_path': 'assets/thobs/collar/collar1.png'}]"
+    )
 
     class Meta:
         ordering=['-created_at']

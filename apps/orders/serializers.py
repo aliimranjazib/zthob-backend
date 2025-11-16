@@ -64,6 +64,7 @@ class OrderSerializer(serializers.ModelSerializer):
     items=OrderItemSerializer(source='order_items',many=True,read_only=True)
     items_count=serializers.IntegerField(read_only=True)
     can_be_cancelled=serializers.BooleanField(read_only=True)
+    custom_styles = serializers.SerializerMethodField()
 
     class Meta:
         model=Order
@@ -96,6 +97,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'special_instructions',
             'appointment_date',
             'appointment_time',
+            'custom_styles',
             'notes',
             'rider_measurements',
             'measurement_taken_at',
@@ -151,6 +153,10 @@ class OrderSerializer(serializers.ModelSerializer):
         if obj.delivery_address:
             return f"{obj.delivery_address.street}, {obj.delivery_address.city}, {obj.delivery_address.country}"
         return None
+    
+    def get_custom_styles(self, obj):
+        """Return custom_styles, or empty array if None"""
+        return obj.custom_styles if obj.custom_styles is not None else []
 class OrderCreateSerializer(serializers.ModelSerializer):
 
     items=OrderItemCreateSerializer(many=True)
@@ -176,6 +182,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'special_instructions',
             'appointment_date',
             'appointment_time',
+            'custom_styles',
             'items',
             'distance_km'
         ]
@@ -243,6 +250,58 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             customer = self.context.get('request').user
             if value.user != customer:
                 raise serializers.ValidationError('Delivery address must belong to the authenticated customer')
+        return value
+    
+    def validate_custom_styles(self, value):
+        """Validate custom_styles array structure"""
+        if value is None:
+            return None
+        
+        if not isinstance(value, list):
+            raise serializers.ValidationError("custom_styles must be an array")
+        
+        required_fields = ['style_type', 'index', 'label', 'asset_path']
+        
+        for idx, style in enumerate(value):
+            if not isinstance(style, dict):
+                raise serializers.ValidationError(
+                    f"custom_styles[{idx}] must be an object"
+                )
+            
+            # Check required fields
+            for field in required_fields:
+                if field not in style:
+                    raise serializers.ValidationError(
+                        f"custom_styles[{idx}] is missing required field: {field}"
+                    )
+            
+            # Validate field types
+            if not isinstance(style['style_type'], str):
+                raise serializers.ValidationError(
+                    f"custom_styles[{idx}].style_type must be a string"
+                )
+            
+            if not isinstance(style['index'], int):
+                raise serializers.ValidationError(
+                    f"custom_styles[{idx}].index must be an integer"
+                )
+            
+            if not isinstance(style['label'], str):
+                raise serializers.ValidationError(
+                    f"custom_styles[{idx}].label must be a string"
+                )
+            
+            if not isinstance(style['asset_path'], str):
+                raise serializers.ValidationError(
+                    f"custom_styles[{idx}].asset_path must be a string"
+                )
+            
+            # Validate index is non-negative
+            if style['index'] < 0:
+                raise serializers.ValidationError(
+                    f"custom_styles[{idx}].index must be a non-negative integer"
+                )
+        
         return value
 
     @transaction.atomic
@@ -340,7 +399,60 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 class OrderUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model=Order
-        fields=['status','notes','appointment_date','appointment_time']
+        fields=['status','notes','appointment_date','appointment_time','custom_styles']
+    
+    def validate_custom_styles(self, value):
+        """Validate custom_styles array structure"""
+        if value is None:
+            return None
+        
+        if not isinstance(value, list):
+            raise serializers.ValidationError("custom_styles must be an array")
+        
+        required_fields = ['style_type', 'index', 'label', 'asset_path']
+        
+        for idx, style in enumerate(value):
+            if not isinstance(style, dict):
+                raise serializers.ValidationError(
+                    f"custom_styles[{idx}] must be an object"
+                )
+            
+            # Check required fields
+            for field in required_fields:
+                if field not in style:
+                    raise serializers.ValidationError(
+                        f"custom_styles[{idx}] is missing required field: {field}"
+                    )
+            
+            # Validate field types
+            if not isinstance(style['style_type'], str):
+                raise serializers.ValidationError(
+                    f"custom_styles[{idx}].style_type must be a string"
+                )
+            
+            if not isinstance(style['index'], int):
+                raise serializers.ValidationError(
+                    f"custom_styles[{idx}].index must be an integer"
+                )
+            
+            if not isinstance(style['label'], str):
+                raise serializers.ValidationError(
+                    f"custom_styles[{idx}].label must be a string"
+                )
+            
+            if not isinstance(style['asset_path'], str):
+                raise serializers.ValidationError(
+                    f"custom_styles[{idx}].asset_path must be a string"
+                )
+            
+            # Validate index is non-negative
+            if style['index'] < 0:
+                raise serializers.ValidationError(
+                    f"custom_styles[{idx}].index must be a non-negative integer"
+                )
+        
+        return value
+    
     def validate_status(self,value):
         instance=self.instance
         if instance and value != instance.status:  # Only validate if status is actually changing
@@ -376,6 +488,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     customer_name=serializers.CharField(source='customer.username',read_only=True)
     tailor_name = serializers.SerializerMethodField()
     items_count = serializers.IntegerField(read_only=True)
+    custom_styles = serializers.SerializerMethodField()
 
     class Meta:
         model=Order
@@ -389,6 +502,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'payment_status',
             'appointment_date',
             'appointment_time',
+            'custom_styles',
             'items_count',
             'created_at'
         ]
@@ -398,6 +512,10 @@ class OrderListSerializer(serializers.ModelSerializer):
             return obj.tailor.tailor_profile.shop_name
         except TailorProfile.DoesNotExist:
             return obj.tailor.username
+    
+    def get_custom_styles(self, obj):
+        """Return custom_styles, or empty array if None"""
+        return obj.custom_styles if obj.custom_styles is not None else []
 
 class OrderStatusHistorySerializer(serializers.ModelSerializer):
     changed_by_name = serializers.CharField(source='changed_by.username', read_only=True)
