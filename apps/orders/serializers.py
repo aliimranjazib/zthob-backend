@@ -94,6 +94,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'estimated_delivery_date',
             'actual_delivery_date',
             'special_instructions',
+            'appointment_date',
+            'appointment_time',
             'notes',
             'rider_measurements',
             'measurement_taken_at',
@@ -172,6 +174,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'delivery_address',
             'estimated_delivery_date',
             'special_instructions',
+            'appointment_date',
+            'appointment_time',
             'items',
             'distance_km'
         ]
@@ -336,7 +340,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 class OrderUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model=Order
-        fields=['status','notes']
+        fields=['status','notes','appointment_date','appointment_time']
     def validate_status(self,value):
         instance=self.instance
         if instance and value != instance.status:  # Only validate if status is actually changing
@@ -383,6 +387,8 @@ class OrderListSerializer(serializers.ModelSerializer):
             'status',
             'total_amount',
             'payment_status',
+            'appointment_date',
+            'appointment_time',
             'items_count',
             'created_at'
         ]

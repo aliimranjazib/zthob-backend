@@ -201,6 +201,18 @@ class Order(BaseModel):
         blank=True,
         help_text="When measurements were taken by the rider"
     )
+    
+    # Appointment fields
+    appointment_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Appointment date for customer (optional)"
+    )
+    appointment_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Appointment time for customer (optional)"
+    )
 
     class Meta:
         ordering=['-created_at']
