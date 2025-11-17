@@ -701,6 +701,7 @@ class RiderAcceptOrderView(APIView):
         
         # Update order status based on order type
         old_status = order.status
+        status_changed = False
         if order.order_type == 'fabric_only':
             # For fabric_only: rider picks from tailor, so status stays as is
             pass
@@ -709,6 +710,18 @@ class RiderAcceptOrderView(APIView):
             if order.status == 'confirmed':
                 order.status = 'measuring'
                 order.save()
+                status_changed = True
+        
+        # Create status history if status changed
+        if status_changed:
+            from apps.orders.models import OrderStatusHistory
+            OrderStatusHistory.objects.create(
+                order=order,
+                status=order.status,
+                previous_status=old_status,
+                changed_by=request.user,
+                notes='Status automatically changed to measuring when rider accepted order'
+            )
         
         # Send push notification for rider assignment
         try:
@@ -722,6 +735,22 @@ class RiderAcceptOrderView(APIView):
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to send rider assignment notification: {str(e)}")
+        
+        # Send push notification for order status change (if status changed)
+        if status_changed:
+            try:
+                from apps.notifications.services import NotificationService
+                NotificationService.send_order_status_notification(
+                    order=order,
+                    old_status=old_status,
+                    new_status=order.status,
+                    changed_by=request.user
+                )
+            except Exception as e:
+                # Log error but don't fail the assignment
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to send order status notification: {str(e)}")
         
         response_serializer = RiderOrderDetailSerializer(order)
         return api_response(
