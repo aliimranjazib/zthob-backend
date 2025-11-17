@@ -137,6 +137,7 @@ urlpatterns = [
     path('api/customers/',include('apps.customers.urls')),
     path('api/orders/',include('apps.orders.urls')),
     path('api/riders/',include('apps.riders.urls')),
+    path('api/notifications/',include('apps.notifications.urls')),
     
     # System Configuration
     path('api/config/', include('apps.core.urls')),

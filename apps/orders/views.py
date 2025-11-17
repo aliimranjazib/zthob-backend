@@ -577,6 +577,20 @@ class OrderPaymentStatusUpdateView(APIView):
                 notes=f"Payment status changed from {old_payment_status} to {payment_status}"
             )
 
+            # Send push notification for payment status change
+            try:
+                from apps.notifications.services import NotificationService
+                NotificationService.send_payment_status_notification(
+                    order=order,
+                    old_status=old_payment_status,
+                    new_status=payment_status
+                )
+            except Exception as e:
+                # Log error but don't fail the update
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to send payment status notification: {str(e)}")
+
             response_serializer=OrderSerializer(order, context={'request':request})
             return api_response(
                 success=True,

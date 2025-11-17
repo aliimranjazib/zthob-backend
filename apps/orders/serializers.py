@@ -482,6 +482,20 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
             changed_by=self.context.get('request').user,
             notes=validated_data.get('notes','')
         )
+            # Send push notification for order status change
+            try:
+                from apps.notifications.services import NotificationService
+                NotificationService.send_order_status_notification(
+                    order=instance,
+                    old_status=old_status,
+                    new_status=new_status,
+                    changed_by=self.context.get('request').user
+                )
+            except Exception as e:
+                # Log error but don't fail the update
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to send order status notification: {str(e)}")
         return instance
 
 class OrderListSerializer(serializers.ModelSerializer):

@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "apps.customers",
     "apps.orders",
     "apps.riders",
+    "apps.notifications",
 ]
     
 MIDDLEWARE = [
