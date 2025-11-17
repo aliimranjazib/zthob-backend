@@ -489,6 +489,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     tailor_name = serializers.SerializerMethodField()
     items_count = serializers.IntegerField(read_only=True)
     custom_styles = serializers.SerializerMethodField()
+    items = OrderItemSerializer(source='order_items', many=True, read_only=True)
 
     class Meta:
         model=Order
@@ -504,6 +505,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'appointment_time',
             'custom_styles',
             'items_count',
+            'items',
             'created_at'
         ]
 

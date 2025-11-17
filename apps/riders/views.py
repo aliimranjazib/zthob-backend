@@ -515,7 +515,7 @@ class RiderAvailableOrdersView(APIView):
             'customer',
             'tailor',
             'delivery_address'
-        ).prefetch_related('order_items').order_by('-created_at')
+        ).prefetch_related('order_items__fabric').order_by('-created_at')
         
         # Filter by status if provided
         status_filter = request.query_params.get('status')
@@ -527,7 +527,7 @@ class RiderAvailableOrdersView(APIView):
         if order_type:
             orders = orders.filter(order_type=order_type)
         
-        serializer = RiderOrderListSerializer(orders, many=True)
+        serializer = RiderOrderListSerializer(orders, many=True, context={'request': request})
         return api_response(
             success=True,
             message="Available orders retrieved successfully",
@@ -560,14 +560,14 @@ class RiderMyOrdersView(APIView):
             'customer',
             'tailor',
             'delivery_address'
-        ).prefetch_related('order_items').order_by('-created_at')
+        ).prefetch_related('order_items__fabric').order_by('-created_at')
         
         # Filter by status if provided
         status_filter = request.query_params.get('status')
         if status_filter:
             orders = orders.filter(status=status_filter)
         
-        serializer = RiderOrderListSerializer(orders, many=True)
+        serializer = RiderOrderListSerializer(orders, many=True, context={'request': request})
         return api_response(
             success=True,
             message="Your orders retrieved successfully",

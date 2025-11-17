@@ -362,7 +362,7 @@ class CustomerOrderListView(APIView):
     )
 
     def get(self,request):
-        orders = Order.objects.filter(customer=request.user).select_related('tailor', 'delivery_address').order_by('-created_at')
+        orders = Order.objects.filter(customer=request.user).select_related('tailor', 'delivery_address').prefetch_related('order_items__fabric').order_by('-created_at')
         status_filter=request.query_params.get('status')
         if status_filter:
             orders=orders.filter(status=status_filter)
@@ -386,7 +386,7 @@ class TailorOrderListView(APIView):
     def get(self,request):
         try:
             tailor_profile = TailorProfile.objects.get(user=request.user)
-            orders = Order.objects.filter(tailor=request.user).select_related('customer', 'delivery_address', 'rider').prefetch_related('order_items').order_by('-created_at')
+            orders = Order.objects.filter(tailor=request.user).select_related('customer', 'delivery_address', 'rider').prefetch_related('order_items__fabric').order_by('-created_at')
             
             # Filter by payment status (default: show all, but can filter for paid only)
             payment_status = request.query_params.get('payment_status')

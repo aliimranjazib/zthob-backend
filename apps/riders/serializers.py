@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from apps.core.services import PhoneVerificationService
 from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
 from apps.orders.models import Order
+from apps.orders.serializers import OrderItemSerializer
 
 User = get_user_model()
 
@@ -371,6 +372,7 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
     delivery_address = serializers.SerializerMethodField()
     items_count = serializers.SerializerMethodField()
     custom_styles = serializers.SerializerMethodField()
+    items = OrderItemSerializer(source='order_items', many=True, read_only=True)
     
     class Meta:
         model = Order
@@ -387,6 +389,7 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'tailor_phone',
             'delivery_address',
             'items_count',
+            'items',
             'estimated_delivery_date',
             'appointment_date',
             'appointment_time',
