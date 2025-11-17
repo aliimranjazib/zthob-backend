@@ -370,6 +370,7 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
     tailor_phone = serializers.SerializerMethodField()
     delivery_address = serializers.SerializerMethodField()
     items_count = serializers.SerializerMethodField()
+    custom_styles = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -387,6 +388,9 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'delivery_address',
             'items_count',
             'estimated_delivery_date',
+            'appointment_date',
+            'appointment_time',
+            'custom_styles',
             'special_instructions',
             'created_at',
         ]
@@ -429,6 +433,10 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
     
     def get_items_count(self, obj):
         return obj.items_count
+    
+    def get_custom_styles(self, obj):
+        """Return custom_styles, or empty array if None"""
+        return obj.custom_styles if obj.custom_styles is not None else []
 
 
 class RiderOrderDetailSerializer(serializers.ModelSerializer):
@@ -438,6 +446,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
     delivery_address = serializers.SerializerMethodField()
     items = serializers.SerializerMethodField()
     assignment_status = serializers.SerializerMethodField()
+    custom_styles = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -459,6 +468,9 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'assignment_status',
             'estimated_delivery_date',
             'actual_delivery_date',
+            'appointment_date',
+            'appointment_time',
+            'custom_styles',
             'special_instructions',
             'rider_measurements',
             'measurement_taken_at',
@@ -546,6 +558,10 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             }
         except RiderOrderAssignment.DoesNotExist:
             return None
+    
+    def get_custom_styles(self, obj):
+        """Return custom_styles, or empty array if None"""
+        return obj.custom_styles if obj.custom_styles is not None else []
 
 
 class RiderAcceptOrderSerializer(serializers.Serializer):
