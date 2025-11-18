@@ -54,12 +54,16 @@ def get_firebase_app():
             else:
                 _firebase_app = firebase_admin.get_app()
         except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
             logger.error(f"Failed to initialize Firebase: {str(e)}")
-            logger.error("If you see 'service account key creation restricted' error:")
-            logger.error("1. Use Application Default Credentials: gcloud auth application-default login")
-            logger.error("2. Set FIREBASE_PROJECT_ID in settings.py (already set to 'mgask-2025')")
-            logger.error("3. Or set GOOGLE_CLOUD_PROJECT environment variable")
-            logger.error("4. Or use Firebase REST API with FIREBASE_SERVER_KEY (see FIREBASE_SETUP_ALTERNATIVES.md)")
+            logger.error(f"Error details: {error_details}")
+            logger.error("Troubleshooting steps:")
+            logger.error("1. Verify Application Default Credentials: gcloud auth application-default login")
+            logger.error("2. Verify project: gcloud config set project mgask-2025")
+            logger.error("3. Check FIREBASE_PROJECT_ID in settings.py (should be 'mgask-2025')")
+            logger.error("4. Test: python manage.py shell -> from apps.notifications.services import get_firebase_app")
+            logger.error("5. Or use Firebase REST API with FIREBASE_SERVER_KEY (see FIREBASE_SETUP_ALTERNATIVES.md)")
             # Don't raise - allow the app to continue without Firebase
             # Notifications will be logged but not sent
             _firebase_app = None
