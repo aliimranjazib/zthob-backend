@@ -30,7 +30,7 @@ brew install google-cloud-sdk
 gcloud auth application-default login
 
 # Set your Firebase project
-gcloud config set project YOUR_PROJECT_ID
+gcloud config set project mgask-2025
 ```
 
 ### Step 3: That's It! 🎉
