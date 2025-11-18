@@ -48,9 +48,16 @@ def get_firebase_app():
                     # - Running on Google Cloud (Cloud Run, App Engine, Compute Engine)
                     # - Using gcloud auth application-default login (local dev)
                     # - Service account is attached to the instance
-                    # IMPORTANT: Must specify projectId when using ADC
-                    _firebase_app = initialize_app({'projectId': project_id})
-                    logger.info(f"Firebase initialized using Application Default Credentials for project: {project_id}")
+                    # When using ADC, initialize_app() will automatically detect credentials
+                    # and project ID from environment or gcloud config
+                    try:
+                        # Try with explicit project ID first
+                        _firebase_app = initialize_app({'projectId': project_id})
+                        logger.info(f"Firebase initialized using Application Default Credentials for project: {project_id}")
+                    except ValueError:
+                        # If that fails, try without projectId (ADC will detect it)
+                        _firebase_app = initialize_app()
+                        logger.info(f"Firebase initialized using Application Default Credentials (auto-detected project)")
             else:
                 _firebase_app = firebase_admin.get_app()
         except Exception as e:
