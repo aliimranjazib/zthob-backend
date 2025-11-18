@@ -30,27 +30,36 @@ def get_firebase_app():
             # Check if Firebase is already initialized
             if not firebase_admin._apps:
                 import os
+                # Get project ID from settings or environment variable
+                project_id = getattr(settings, 'FIREBASE_PROJECT_ID', None) or os.environ.get('GOOGLE_CLOUD_PROJECT') or os.environ.get('FIREBASE_PROJECT_ID')
+                
+                if not project_id:
+                    raise ValueError("FIREBASE_PROJECT_ID must be set in settings.py or GOOGLE_CLOUD_PROJECT environment variable")
+                
                 # Method 1: Try credentials file path
                 cred_path = getattr(settings, 'FIREBASE_CREDENTIALS_PATH', None)
                 if cred_path and os.path.exists(cred_path):
                     cred = credentials.Certificate(cred_path)
-                    _firebase_app = initialize_app(cred)
-                    logger.info("Firebase initialized using credentials file")
+                    _firebase_app = initialize_app(cred, {'projectId': project_id})
+                    logger.info(f"Firebase initialized using credentials file for project: {project_id}")
                 else:
                     # Method 2: Use Application Default Credentials (ADC)
                     # This works when:
                     # - Running on Google Cloud (Cloud Run, App Engine, Compute Engine)
                     # - Using gcloud auth application-default login (local dev)
                     # - Service account is attached to the instance
-                    _firebase_app = initialize_app()
-                    logger.info("Firebase initialized using Application Default Credentials")
+                    # IMPORTANT: Must specify projectId when using ADC
+                    _firebase_app = initialize_app({'projectId': project_id})
+                    logger.info(f"Firebase initialized using Application Default Credentials for project: {project_id}")
             else:
                 _firebase_app = firebase_admin.get_app()
         except Exception as e:
             logger.error(f"Failed to initialize Firebase: {str(e)}")
             logger.error("If you see 'service account key creation restricted' error:")
             logger.error("1. Use Application Default Credentials: gcloud auth application-default login")
-            logger.error("2. Or use Firebase REST API with FIREBASE_SERVER_KEY (see FIREBASE_SETUP_ALTERNATIVES.md)")
+            logger.error("2. Set FIREBASE_PROJECT_ID in settings.py (already set to 'mgask-2025')")
+            logger.error("3. Or set GOOGLE_CLOUD_PROJECT environment variable")
+            logger.error("4. Or use Firebase REST API with FIREBASE_SERVER_KEY (see FIREBASE_SETUP_ALTERNATIVES.md)")
             # Don't raise - allow the app to continue without Firebase
             # Notifications will be logged but not sent
             _firebase_app = None
