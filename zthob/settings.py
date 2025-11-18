@@ -309,6 +309,14 @@ SPECTACULAR_SETTINGS = {
     }],
 }
 
+# Firebase Configuration
+# Using Application Default Credentials (ADC) - recommended method
+# No FIREBASE_CREDENTIALS_PATH needed - ADC will be used automatically
+# To set up: run 'gcloud auth application-default login' and 'gcloud config set project mgask-2025'
+FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID', 'mgask-2025')
+# Optional: Set FIREBASE_CREDENTIALS_PATH only if using JSON file (not recommended)
+# FIREBASE_CREDENTIALS_PATH = os.getenv('FIREBASE_CREDENTIALS_PATH', None)
+
 # Jazzmin Admin UI Configuration - Simplified
 JAZZMIN_SETTINGS = {
     # Simple branding

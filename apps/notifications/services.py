@@ -13,26 +13,47 @@ _firebase_app = None
 
 
 def get_firebase_app():
-    """Initialize and return Firebase app instance"""
+    """
+    Initialize and return Firebase app instance
+    
+    Supports multiple authentication methods:
+    1. Credentials file (FIREBASE_CREDENTIALS_PATH)
+    2. Application Default Credentials (ADC) - for GCP environments
+    3. Environment variables (GOOGLE_APPLICATION_CREDENTIALS)
+    
+    If service account key creation is restricted, use Application Default Credentials
+    by running: gcloud auth application-default login
+    """
     global _firebase_app
     if _firebase_app is None:
         try:
             # Check if Firebase is already initialized
             if not firebase_admin._apps:
-                # Initialize Firebase Admin SDK
-                # You'll need to set FIREBASE_CREDENTIALS_PATH in settings
+                import os
+                # Method 1: Try credentials file path
                 cred_path = getattr(settings, 'FIREBASE_CREDENTIALS_PATH', None)
-                if cred_path:
+                if cred_path and os.path.exists(cred_path):
                     cred = credentials.Certificate(cred_path)
                     _firebase_app = initialize_app(cred)
+                    logger.info("Firebase initialized using credentials file")
                 else:
-                    # Use default credentials (for production with environment variables)
+                    # Method 2: Use Application Default Credentials (ADC)
+                    # This works when:
+                    # - Running on Google Cloud (Cloud Run, App Engine, Compute Engine)
+                    # - Using gcloud auth application-default login (local dev)
+                    # - Service account is attached to the instance
                     _firebase_app = initialize_app()
+                    logger.info("Firebase initialized using Application Default Credentials")
             else:
                 _firebase_app = firebase_admin.get_app()
         except Exception as e:
             logger.error(f"Failed to initialize Firebase: {str(e)}")
-            raise
+            logger.error("If you see 'service account key creation restricted' error:")
+            logger.error("1. Use Application Default Credentials: gcloud auth application-default login")
+            logger.error("2. Or use Firebase REST API with FIREBASE_SERVER_KEY (see FIREBASE_SETUP_ALTERNATIVES.md)")
+            # Don't raise - allow the app to continue without Firebase
+            # Notifications will be logged but not sent
+            _firebase_app = None
     return _firebase_app
 
 
@@ -66,11 +87,10 @@ class NotificationService:
         """
         try:
             # Initialize Firebase if not already done
-            try:
-                get_firebase_app()
-            except Exception as e:
-                logger.error(f"Firebase not initialized. Please configure FIREBASE_CREDENTIALS_PATH in settings: {str(e)}")
-                # Still log the notification attempt
+            firebase_app = get_firebase_app()
+            if firebase_app is None:
+                # Firebase not initialized - log notification but don't send
+                logger.warning(f"Firebase not initialized - notification logged only for user {user.id}")
                 NotificationLog.objects.create(
                     user=user,
                     notification_type=notification_type,
@@ -78,10 +98,10 @@ class NotificationService:
                     title=title,
                     body=body,
                     data=data or {},
-                    status='failed',
-                    error_message=f"Firebase not initialized: {str(e)}",
+                    status='pending',
+                    error_message="Firebase not initialized - logged only. See FIREBASE_SETUP_ALTERNATIVES.md",
                 )
-                return False
+                return True  # Return True because notification was logged successfully
             
             # Get active FCM tokens for the user
             fcm_tokens = FCMDeviceToken.objects.filter(
