@@ -1,0 +1,1240 @@
+{
+	"info": {
+		"_postman_id": "order-status-flow-2024",
+		"name": "Order Status Flow - Updated APIs",
+		"description": "Updated API collection for new order status flow with rider_status and tailor_status fields. Includes examples for fabric_only and fabric_with_stitching flows.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "order-status-flow"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login (Customer)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.tokens) {",
+									"        pm.collectionVariables.set('customer_token', jsonData.data.tokens.access_token);",
+									"        pm.collectionVariables.set('customer_refresh_token', jsonData.data.tokens.refresh);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"customer_username\",\n    \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/accounts/login/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "accounts", "login", ""]
+						}
+					}
+				},
+				{
+					"name": "Login (Tailor)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.tokens) {",
+									"        pm.collectionVariables.set('tailor_token', jsonData.data.tokens.access_token);",
+									"        pm.collectionVariables.set('tailor_refresh_token', jsonData.data.tokens.refresh);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"tailor_username\",\n    \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/accounts/login/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "accounts", "login", ""]
+						}
+					}
+				},
+				{
+					"name": "Login (Rider)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.tokens) {",
+									"        pm.collectionVariables.set('rider_token', jsonData.data.tokens.access_token);",
+									"        pm.collectionVariables.set('rider_refresh_token', jsonData.data.tokens.refresh);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"rider_username\",\n    \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/accounts/login/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "accounts", "login", ""]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Order Management - Tailor",
+			"item": [
+				{
+					"name": "Get Tailor Orders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{tailor_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/orders/tailor/my-orders/?status=pending&order_type=fabric_only",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "tailor", "my-orders", ""],
+							"query": [
+								{
+									"key": "status",
+									"value": "pending"
+								},
+								{
+									"key": "order_type",
+									"value": "fabric_only"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Accept Order (Tailor) - Fabric Only",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{tailor_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"confirmed\",\n    \"tailor_status\": \"accepted\",\n    \"notes\": \"Order accepted by tailor\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "{{order_id}}", "status", ""]
+						}
+					}
+				},
+				{
+					"name": "Accept Order (Tailor) - Fabric With Stitching",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{tailor_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"confirmed\",\n    \"tailor_status\": \"accepted\",\n    \"notes\": \"Order accepted, waiting for measurements\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "{{order_id}}", "status", ""]
+						}
+					}
+				},
+				{
+					"name": "Update Status - In Progress (Tailor)",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{tailor_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"in_progress\",\n    \"notes\": \"Order is now in progress\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "{{order_id}}", "status", ""]
+						}
+					}
+				},
+				{
+					"name": "Start Stitching (Tailor) - Fabric With Stitching",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{tailor_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tailor_status\": \"stitching_started\",\n    \"notes\": \"Started stitching the garment\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "{{order_id}}", "status", ""]
+						}
+					}
+				},
+				{
+					"name": "Finish Stitching (Tailor) - Fabric With Stitching",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{tailor_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tailor_status\": \"stitched\",\n    \"status\": \"ready_for_delivery\",\n    \"notes\": \"Stitching completed, ready for pickup\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "{{order_id}}", "status", ""]
+						}
+					}
+				},
+				{
+					"name": "Mark Ready for Delivery (Tailor) - Fabric Only",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{tailor_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"ready_for_delivery\",\n    \"notes\": \"Order ready for pickup\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "{{order_id}}", "status", ""]
+						}
+					}
+				},
+				{
+					"name": "Get Order Details (Tailor)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{tailor_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/orders/tailor/{{order_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "tailor", "{{order_id}}", ""]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Order Management - Rider",
+			"item": [
+				{
+					"name": "Get Available Orders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{rider_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/riders/orders/available/?status=confirmed&order_type=fabric_only",
+							"host": ["{{base_url}}"],
+							"path": ["api", "riders", "orders", "available", ""],
+							"query": [
+								{
+									"key": "status",
+									"value": "confirmed"
+								},
+								{
+									"key": "order_type",
+									"value": "fabric_only"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Accept Order (Rider)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.id) {",
+									"        pm.collectionVariables.set('order_id', jsonData.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{rider_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/accept/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "riders", "orders", "{{order_id}}", "accept", ""]
+						}
+					}
+				},
+				{
+					"name": "Update Status - On Way to Pickup (Fabric Only)",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{rider_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"rider_status\": \"on_way_to_pickup\",\n    \"notes\": \"Rider is on the way to pickup order from tailor\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
+						}
+					}
+				},
+				{
+					"name": "Update Status - Picked Up",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{rider_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"rider_status\": \"picked_up\",\n    \"notes\": \"Order picked up from tailor\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
+						}
+					}
+				},
+				{
+					"name": "Update Status - On Way to Delivery",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{rider_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"rider_status\": \"on_way_to_delivery\",\n    \"notes\": \"Rider is on the way to deliver order to customer\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
+						}
+					}
+				},
+				{
+					"name": "Update Status - Delivered",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{rider_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"rider_status\": \"delivered\",\n    \"notes\": \"Order delivered successfully to customer\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
+						}
+					}
+				},
+				{
+					"name": "Update Status - On Way to Measurement (Fabric With Stitching)",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{rider_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"rider_status\": \"on_way_to_measurement\",\n    \"notes\": \"Rider is on the way to take customer measurements\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
+						}
+					}
+				},
+				{
+					"name": "Add Measurements (Fabric With Stitching)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{rider_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"measurements\": {\n        \"chest\": \"40\",\n        \"waist\": \"36\",\n        \"shoulder\": \"18\",\n        \"sleeve_length\": \"24\",\n        \"length\": \"42\"\n    },\n    \"notes\": \"Measurements taken successfully\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/measurements/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "riders", "orders", "{{order_id}}", "measurements", ""]
+						}
+					}
+				},
+				{
+					"name": "Get My Orders (Rider)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{rider_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/riders/orders/my-orders/?status=in_progress",
+							"host": ["{{base_url}}"],
+							"path": ["api", "riders", "orders", "my-orders", ""],
+							"query": [
+								{
+									"key": "status",
+									"value": "in_progress"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Order Details (Rider)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{rider_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "riders", "orders", "{{order_id}}", ""]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Order Management - Customer",
+			"item": [
+				{
+					"name": "Get My Orders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/orders/customer/my-orders/?status=pending",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "customer", "my-orders", ""],
+							"query": [
+								{
+									"key": "status",
+									"value": "pending"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Cancel Order",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"cancelled\",\n    \"notes\": \"Customer cancelled the order\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "{{order_id}}", "status", ""]
+						}
+					}
+				},
+				{
+					"name": "Get Order Details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "{{order_id}}", ""]
+						}
+					}
+				},
+				{
+					"name": "Get Order History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/history/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "{{order_id}}", "history", ""]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Complete Flow Examples",
+			"item": [
+				{
+					"name": "Fabric Only - Complete Flow",
+					"item": [
+						{
+							"name": "1. Tailor Accepts Order",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{tailor_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"status\": \"confirmed\",\n    \"tailor_status\": \"accepted\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/orders/{{order_id}}/status/"
+								}
+							}
+						},
+						{
+							"name": "2. Rider Accepts Order",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{rider_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/accept/"
+								}
+							}
+						},
+						{
+							"name": "3. Rider On Way to Pickup",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{rider_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"rider_status\": \"on_way_to_pickup\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+								}
+							}
+						},
+						{
+							"name": "4. Rider Picked Up",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{rider_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"rider_status\": \"picked_up\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+								}
+							}
+						},
+						{
+							"name": "5. Rider On Way to Delivery",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{rider_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"rider_status\": \"on_way_to_delivery\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+								}
+							}
+						},
+						{
+							"name": "6. Rider Delivered",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{rider_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"rider_status\": \"delivered\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Fabric With Stitching - Complete Flow",
+					"item": [
+						{
+							"name": "1. Tailor Accepts Order",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{tailor_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"status\": \"confirmed\",\n    \"tailor_status\": \"accepted\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/orders/{{order_id}}/status/"
+								}
+							}
+						},
+						{
+							"name": "2. Rider Accepts Order",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{rider_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/accept/"
+								}
+							}
+						},
+						{
+							"name": "3. Rider On Way to Measurement",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{rider_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"rider_status\": \"on_way_to_measurement\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+								}
+							}
+						},
+						{
+							"name": "4. Rider Takes Measurements",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{rider_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"measurements\": {\n        \"chest\": \"40\",\n        \"waist\": \"36\",\n        \"shoulder\": \"18\",\n        \"sleeve_length\": \"24\",\n        \"length\": \"42\"\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/measurements/"
+								}
+							}
+						},
+						{
+							"name": "5. Tailor Starts Stitching",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{tailor_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"tailor_status\": \"stitching_started\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/orders/{{order_id}}/status/"
+								}
+							}
+						},
+						{
+							"name": "6. Tailor Finishes Stitching",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{tailor_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"tailor_status\": \"stitched\",\n    \"status\": \"ready_for_delivery\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/orders/{{order_id}}/status/"
+								}
+							}
+						},
+						{
+							"name": "7. Rider On Way to Pickup",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{rider_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"rider_status\": \"on_way_to_pickup\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+								}
+							}
+						},
+						{
+							"name": "8. Rider Picked Up",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{rider_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"rider_status\": \"picked_up\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+								}
+							}
+						},
+						{
+							"name": "9. Rider On Way to Delivery",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{rider_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"rider_status\": \"on_way_to_delivery\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+								}
+							}
+						},
+						{
+							"name": "10. Rider Delivered",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{rider_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"rider_status\": \"delivered\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+								}
+							}
+						}
+					]
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "customer_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "tailor_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "rider_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "order_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+
+
+

@@ -397,9 +397,20 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         
 
 class OrderUpdateSerializer(serializers.ModelSerializer):
+    rider_status = serializers.ChoiceField(
+        choices=Order.RIDER_STATUS_CHOICES,
+        required=False,
+        allow_null=True
+    )
+    tailor_status = serializers.ChoiceField(
+        choices=Order.TAILOR_STATUS_CHOICES,
+        required=False,
+        allow_null=True
+    )
+    
     class Meta:
         model=Order
-        fields=['status','notes','appointment_date','appointment_time','custom_styles']
+        fields=['status', 'rider_status', 'tailor_status', 'notes', 'appointment_date', 'appointment_time', 'custom_styles']
     
     def validate_custom_styles(self, value):
         """Validate custom_styles array structure"""
@@ -453,49 +464,87 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         
         return value
     
-    def validate_status(self,value):
-        instance=self.instance
-        if instance and value != instance.status:  # Only validate if status is actually changing
-            
-            # Get allowed transitions based on order type
-            allowed_transitions = instance.get_allowed_status_transitions()
-            
-            current_status=instance.status
-            if value not in allowed_transitions.get(current_status,[]):
-                raise serializers.ValidationError(
-                    f"Cannot change status from {current_status} to {value}. "
-                    f"Allowed transitions from {current_status}: {allowed_transitions.get(current_status, [])}"
-                )
-        return value
-    def update(self,instance,validated_data):
-        old_status=instance.status
-        new_status=validated_data.get('status',instance.status)
-
-    # Update the order first
-        instance = super().update(instance, validated_data)
-    
-        if old_status!=new_status:
-            OrderStatusHistory.objects.create(
+    def validate(self, attrs):
+        """Validate status transitions using OrderStatusTransitionService"""
+        instance = self.instance
+        if not instance:
+            return attrs
+        
+        request = self.context.get('request')
+        if not request or not request.user:
+            return attrs
+        
+        user_role = request.user.role
+        new_status = attrs.get('status', instance.status)
+        new_rider_status = attrs.get('rider_status', instance.rider_status)
+        new_tailor_status = attrs.get('tailor_status', instance.tailor_status)
+        
+        # Use transition service for validation
+        from apps.orders.services import OrderStatusTransitionService
+        
+        is_valid, error_msg = OrderStatusTransitionService.validate_transition(
             order=instance,
-            status=new_status,
-            previous_status=old_status,
-            changed_by=self.context.get('request').user,
-            notes=validated_data.get('notes','')
+            new_status=new_status if new_status != instance.status else None,
+            new_rider_status=new_rider_status if new_rider_status != instance.rider_status else None,
+            new_tailor_status=new_tailor_status if new_tailor_status != instance.tailor_status else None,
+            user_role=user_role,
+            user=request.user
         )
-            # Send push notification for order status change
-            try:
-                from apps.notifications.services import NotificationService
-                NotificationService.send_order_status_notification(
-                    order=instance,
-                    old_status=old_status,
-                    new_status=new_status,
-                    changed_by=self.context.get('request').user
-                )
-            except Exception as e:
-                # Log error but don't fail the update
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Failed to send order status notification: {str(e)}")
+        
+        if not is_valid:
+            raise serializers.ValidationError({'status': error_msg})
+        
+        return attrs
+    def update(self, instance, validated_data):
+        """Update order using OrderStatusTransitionService"""
+        request = self.context.get('request')
+        user = request.user if request else None
+        user_role = user.role if user else None
+        
+        # Extract status fields
+        new_status = validated_data.pop('status', None)
+        new_rider_status = validated_data.pop('rider_status', None)
+        new_tailor_status = validated_data.pop('tailor_status', None)
+        notes = validated_data.pop('notes', None)
+        
+        # Update other fields first (appointment_date, appointment_time, custom_styles)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        # Use transition service for status updates
+        from apps.orders.services import OrderStatusTransitionService
+        
+        if new_status is not None or new_rider_status is not None or new_tailor_status is not None:
+            success, error_msg, updated_order = OrderStatusTransitionService.transition(
+                order=instance,
+                new_status=new_status,
+                new_rider_status=new_rider_status,
+                new_tailor_status=new_tailor_status,
+                user_role=user_role,
+                user=user,
+                notes=notes
+            )
+            
+            if not success:
+                raise serializers.ValidationError({'status': error_msg})
+            
+            instance = updated_order
+        
+        # Send push notification for order status change
+        try:
+            from apps.notifications.services import NotificationService
+            NotificationService.send_order_status_notification(
+                order=instance,
+                old_status=instance.status,  # This will be handled by history
+                new_status=instance.status,
+                changed_by=user
+            )
+        except Exception as e:
+            # Log error but don't fail the update
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to send order status notification: {str(e)}")
+        
         return instance
 
 class OrderListSerializer(serializers.ModelSerializer):

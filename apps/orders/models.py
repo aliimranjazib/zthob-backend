@@ -50,15 +50,34 @@ class Order(BaseModel):
         ('fabric_with_stitching', 'Fabric + Stitching'),
     )
     
+    # Main order status (simplified)
     ORDER_STATUS_CHOICES=(
         ("pending", "Pending"),                    # Initial state - waiting for tailor
         ("confirmed", "Confirmed"),                # Tailor accepted the order
-        ("measuring", "Measuring"),                # Taking measurements (stitching only)
-        ("cutting", "Cutting"),                    # Cutting fabric (stitching only)
-        ("stitching", "Stitching"),                # Sewing garment (stitching only)
+        ("in_progress", "In Progress"),           # Order being processed
         ("ready_for_delivery", "Ready for Delivery"), # Order ready for delivery
         ("delivered", "Delivered"),                # Order completed (final state)
         ("cancelled", "Cancelled"),                # Order cancelled (final state)
+    )
+    
+    # Rider activity status
+    RIDER_STATUS_CHOICES = (
+        ("none", "Not Assigned"),                  # No rider assigned yet
+        ("accepted", "Accepted Order"),            # Rider accepted the order
+        ("on_way_to_pickup", "On Way to Pickup"),  # Rider en route to pickup from tailor
+        ("picked_up", "Picked Up"),               # Rider picked up order from tailor
+        ("on_way_to_delivery", "On Way to Delivery"), # Rider en route to customer
+        ("on_way_to_measurement", "On Way to Measurement"), # Rider en route to take measurements (stitching only)
+        ("measurement_taken", "Measurement Taken"), # Rider took measurements (stitching only)
+        ("delivered", "Delivered"),                # Rider delivered to customer
+    )
+    
+    # Tailor activity status
+    TAILOR_STATUS_CHOICES = (
+        ("none", "None"),                          # No tailor activity
+        ("accepted", "Accepted Order"),           # Tailor accepted the order
+        ("stitching_started", "Started Stitching"), # Tailor started stitching (stitching only)
+        ("stitched", "Finished Stitching"),       # Tailor finished stitching (stitching only)
     )
     PAYMENT_STATUS_CHOICES = (
         ("pending", "Pending"),
@@ -108,7 +127,21 @@ class Order(BaseModel):
     max_length=20,
     choices=ORDER_STATUS_CHOICES,
     default="pending",
-    help_text="current status of the order"
+    help_text="Main status of the order"
+    )
+    
+    rider_status=models.CharField(
+        max_length=30,
+        choices=RIDER_STATUS_CHOICES,
+        default="none",
+        help_text="Current rider activity status"
+    )
+    
+    tailor_status=models.CharField(
+        max_length=30,
+        choices=TAILOR_STATUS_CHOICES,
+        default="none",
+        help_text="Current tailor activity status"
     )
 
     subtotal=models.DecimalField(
@@ -291,27 +324,42 @@ class Order(BaseModel):
         """Check if order can still be cancelled"""
         return self.status in ['pending','confirmed']
     
-    def get_allowed_status_transitions(self):
-        """Get allowed status transitions based on order type"""
-        if self.order_type == 'fabric_only':
-            return {
-                'pending': ['confirmed', 'cancelled'],
-                'confirmed': ['ready_for_delivery'],
-                'ready_for_delivery': ['delivered'],
-                'delivered': [],
-                'cancelled': []
-            }
-        else:  # fabric_with_stitching
-            return {
-                'pending': ['confirmed', 'cancelled'],
-                'confirmed': ['measuring'],
-                'measuring': ['cutting'],
-                'cutting': ['stitching'],
-                'stitching': ['ready_for_delivery'],
-                'ready_for_delivery': ['delivered'],
-                'delivered': [],
-                'cancelled': []
-            }
+    def get_allowed_status_transitions(self, user_role=None):
+        """
+        Get allowed status transitions based on order type.
+        Now uses OrderStatusTransitionService for consistency.
+        For backward compatibility, returns old format if user_role not provided.
+        """
+        from apps.orders.services import OrderStatusTransitionService
+        
+        if user_role:
+            # Use the new service-based approach
+            transitions = OrderStatusTransitionService.get_allowed_transitions(self, user_role)
+            # Convert to old format for backward compatibility
+            result = {}
+            if transitions['status']:
+                result[self.status] = transitions['status']
+            return result
+        else:
+            # Legacy format for backward compatibility
+            if self.order_type == 'fabric_only':
+                return {
+                    'pending': ['confirmed', 'cancelled'],
+                    'confirmed': ['in_progress'],
+                    'in_progress': ['ready_for_delivery'],
+                    'ready_for_delivery': ['delivered'],
+                    'delivered': [],
+                    'cancelled': []
+                }
+            else:  # fabric_with_stitching
+                return {
+                    'pending': ['confirmed', 'cancelled'],
+                    'confirmed': ['in_progress'],
+                    'in_progress': ['ready_for_delivery'],
+                    'ready_for_delivery': ['delivered'],
+                    'delivered': [],
+                    'cancelled': []
+                }
 
 class OrderItem(BaseModel):
 
