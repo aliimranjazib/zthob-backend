@@ -16,14 +16,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v2
-      with:
-        workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ secrets.SERVICE_ACCOUNT }}
-    
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
+    # Google Cloud authentication is optional - only needed if you set up Workload Identity Federation
+    # The server uses ADC directly, so this step is not required for deployment
+    # Uncomment these steps if you want to use Workload Identity Federation:
+    # - name: Authenticate to Google Cloud
+    #   if: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+    #   uses: google-github-actions/auth@v2
+    #   with:
+    #     workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+    #     service_account: ${{ secrets.SERVICE_ACCOUNT }}
+    # 
+    # - name: Set up Cloud SDK
+    #   if: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+    #   uses: google-github-actions/setup-gcloud@v2
     
     - name: Deploy to server
       run: |
