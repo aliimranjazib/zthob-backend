@@ -36,14 +36,21 @@ def get_firebase_app():
                 if not project_id:
                     raise ValueError("FIREBASE_PROJECT_ID must be set in settings.py or GOOGLE_CLOUD_PROJECT environment variable")
                 
-                # Method 1: Try credentials file path
+                # Method 1: Try credentials file path (service account JSON)
                 cred_path = getattr(settings, 'FIREBASE_CREDENTIALS_PATH', None)
                 if cred_path and os.path.exists(cred_path):
                     cred = credentials.Certificate(cred_path)
                     _firebase_app = initialize_app(cred, {'projectId': project_id})
                     logger.info(f"Firebase initialized using credentials file for project: {project_id}")
                 else:
-                    # Method 2: Use Application Default Credentials (ADC)
+                    # Method 2: Try ADC credentials file explicitly
+                    # Check standard ADC location and set environment variable
+                    adc_path = os.path.expanduser('~/.config/gcloud/application_default_credentials.json')
+                    if os.path.exists(adc_path) and not os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'):
+                        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = adc_path
+                        logger.info(f"Found ADC credentials at {adc_path}, setting GOOGLE_APPLICATION_CREDENTIALS")
+                    
+                    # Method 3: Use Application Default Credentials (ADC)
                     # This works when:
                     # - Running on Google Cloud (Cloud Run, App Engine, Compute Engine)
                     # - Using gcloud auth application-default login (local dev)

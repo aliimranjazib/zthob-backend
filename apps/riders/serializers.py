@@ -598,11 +598,15 @@ class RiderAddMeasurementsSerializer(serializers.Serializer):
 
 class RiderUpdateOrderStatusSerializer(serializers.Serializer):
     """Serializer for rider updating order status"""
-    status = serializers.ChoiceField(
+    rider_status = serializers.ChoiceField(
         choices=[
-            'measuring',  # For fabric_with_stitching: after taking measurements
-            'ready_for_delivery',  # For fabric_only: after picking from tailor
-            'delivered',  # After delivery
+            'accepted',  # Rider accepts order
+            'on_way_to_pickup',  # Rider on way to pickup
+            'picked_up',  # Rider picked up
+            'on_way_to_delivery',  # Rider on way to delivery
+            'on_way_to_measurement',  # Rider on way to take measurements (stitching only)
+            'measurement_taken',  # Rider took measurements (stitching only)
+            'delivered',  # Rider delivered
         ],
         required=True
     )
