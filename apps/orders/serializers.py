@@ -65,6 +65,9 @@ class OrderSerializer(serializers.ModelSerializer):
     items_count=serializers.IntegerField(read_only=True)
     can_be_cancelled=serializers.BooleanField(read_only=True)
     custom_styles = serializers.SerializerMethodField()
+    rider_status = serializers.CharField(read_only=True)
+    tailor_status = serializers.CharField(read_only=True)
+    status_info = serializers.SerializerMethodField()
 
     class Meta:
         model=Order
@@ -82,6 +85,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'rider_phone',
             'order_type',
             'status',
+            'rider_status',
+            'tailor_status',
             'subtotal',
             'tax_amount',
             'delivery_fee',
@@ -104,6 +109,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'items',
             'items_count',
             'can_be_cancelled',
+            'status_info',
             'created_at',
             'updated_at'
         ]
@@ -157,6 +163,144 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_custom_styles(self, obj):
         """Return custom_styles, or empty array if None"""
         return obj.custom_styles if obj.custom_styles is not None else []
+    
+    def get_status_info(self, obj):
+        """Get status information including next available actions"""
+        request = self.context.get('request')
+        if not request or not request.user:
+            return None
+        
+        user_role = request.user.role
+        
+        # Get allowed transitions from service
+        from apps.orders.services import OrderStatusTransitionService
+        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, user_role)
+        
+        # Build next available actions
+        next_actions = []
+        
+        # Add status actions
+        for status_value in allowed_transitions.get('status', []):
+            action = self._build_status_action('status', status_value, user_role)
+            if action:
+                next_actions.append(action)
+        
+        # Add rider_status actions
+        for rider_status_value in allowed_transitions.get('rider_status', []):
+            action = self._build_status_action('rider_status', rider_status_value, user_role)
+            if action:
+                next_actions.append(action)
+        
+        # Add tailor_status actions
+        for tailor_status_value in allowed_transitions.get('tailor_status', []):
+            action = self._build_status_action('tailor_status', tailor_status_value, user_role)
+            if action:
+                next_actions.append(action)
+        
+        # Check if order can be cancelled
+        can_cancel = False
+        cancel_reason = None
+        if user_role == 'USER' and obj.status == 'pending':
+            can_cancel = True
+        elif obj.status in ['delivered', 'cancelled']:
+            cancel_reason = f"Order is {obj.status} and cannot be cancelled"
+        elif obj.status != 'pending':
+            cancel_reason = "Orders can only be cancelled when status is pending"
+        
+        # Calculate status progress
+        status_progress = self._calculate_status_progress(obj)
+        
+        return {
+            'current_status': obj.status,
+            'current_rider_status': obj.rider_status,
+            'current_tailor_status': obj.tailor_status,
+            'next_available_actions': next_actions,
+            'can_cancel': can_cancel,
+            'cancel_reason': cancel_reason,
+            'status_progress': status_progress,
+        }
+    
+    def _build_status_action(self, action_type, value, user_role):
+        """Build action object for status transition"""
+        # Map status values to labels and icons
+        status_labels = {
+            'status': {
+                'confirmed': {'label': 'Accept Order', 'icon': 'check-circle', 'description': 'Accept this order'},
+                'in_progress': {'label': 'Mark In Progress', 'icon': 'play-circle', 'description': 'Start processing this order'},
+                'ready_for_delivery': {'label': 'Mark Ready for Delivery', 'icon': 'package', 'description': 'Order is ready for pickup/delivery'},
+                'delivered': {'label': 'Mark Delivered', 'icon': 'checkmark-done', 'description': 'Mark order as delivered'},
+                'cancelled': {'label': 'Cancel Order', 'icon': 'close-circle', 'description': 'Cancel this order'},
+            },
+            'rider_status': {
+                'accepted': {'label': 'Accept Order', 'icon': 'check-circle', 'description': 'Accept this order for delivery'},
+                'on_way_to_pickup': {'label': 'Start Pickup', 'icon': 'car', 'description': 'On way to pickup order from tailor'},
+                'picked_up': {'label': 'Mark Picked Up', 'icon': 'checkmark-circle', 'description': 'Order picked up from tailor'},
+                'on_way_to_delivery': {'label': 'Start Delivery', 'icon': 'navigate', 'description': 'On way to deliver order to customer'},
+                'on_way_to_measurement': {'label': 'Start Measurement', 'icon': 'ruler', 'description': 'On way to take customer measurements'},
+                'measurement_taken': {'label': 'Complete Measurement', 'icon': 'checkmark', 'description': 'Measurements taken successfully'},
+                'delivered': {'label': 'Mark Delivered', 'icon': 'checkmark-done', 'description': 'Order delivered to customer'},
+            },
+            'tailor_status': {
+                'accepted': {'label': 'Accept Order', 'icon': 'check-circle', 'description': 'Accept this order'},
+                'stitching_started': {'label': 'Start Stitching', 'icon': 'cut', 'description': 'Start stitching the garment'},
+                'stitched': {'label': 'Finish Stitching', 'icon': 'checkmark-done', 'description': 'Stitching completed'},
+            }
+        }
+        
+        action_info = status_labels.get(action_type, {}).get(value)
+        if not action_info:
+            return None
+        
+        # Determine if confirmation is required
+        requires_confirmation = value in ['cancelled', 'delivered', 'accepted']
+        
+        return {
+            'type': action_type,
+            'value': value,
+            'label': action_info['label'],
+            'description': action_info['description'],
+            'icon': action_info['icon'],
+            'role': user_role,
+            'requires_confirmation': requires_confirmation,
+            'confirmation_message': f"Are you sure you want to {action_info['label'].lower()}?" if requires_confirmation else None
+        }
+    
+    def _calculate_status_progress(self, obj):
+        """Calculate progress percentage based on order type and current status"""
+        if obj.order_type == 'fabric_only':
+            # Fabric only: pending -> confirmed -> in_progress -> ready_for_delivery -> delivered (5 steps)
+            steps = {
+                'pending': 1,
+                'confirmed': 2,
+                'in_progress': 3,
+                'ready_for_delivery': 4,
+                'delivered': 5,
+                'cancelled': 0
+            }
+            current_step = steps.get(obj.status, 0)
+            total_steps = 5
+        else:  # fabric_with_stitching
+            # Fabric with stitching: pending -> confirmed -> in_progress -> ready_for_delivery -> delivered (5 main steps)
+            # But with more granular tracking via rider_status and tailor_status
+            steps = {
+                'pending': 1,
+                'confirmed': 2,
+                'in_progress': 3,
+                'ready_for_delivery': 4,
+                'delivered': 5,
+                'cancelled': 0
+            }
+            current_step = steps.get(obj.status, 0)
+            total_steps = 5
+        
+        percentage = int((current_step / total_steps) * 100) if total_steps > 0 else 0
+        
+        return {
+            'current_step': current_step,
+            'total_steps': total_steps,
+            'percentage': percentage
+        }
+
 class OrderCreateSerializer(serializers.ModelSerializer):
 
     items=OrderItemCreateSerializer(many=True)
@@ -553,6 +697,8 @@ class OrderListSerializer(serializers.ModelSerializer):
     items_count = serializers.IntegerField(read_only=True)
     custom_styles = serializers.SerializerMethodField()
     items = OrderItemSerializer(source='order_items', many=True, read_only=True)
+    rider_status = serializers.CharField(read_only=True)
+    tailor_status = serializers.CharField(read_only=True)
 
     class Meta:
         model=Order
@@ -561,12 +707,17 @@ class OrderListSerializer(serializers.ModelSerializer):
             'order_number',
             'customer_name',
             'tailor_name',
+            'order_type',
             'status',
+            'rider_status',
+            'tailor_status',
             'total_amount',
             'payment_status',
             'appointment_date',
             'appointment_time',
             'custom_styles',
+            'rider_measurements',
+            'measurement_taken_at',
             'items_count',
             'items',
             'created_at'

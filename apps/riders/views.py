@@ -509,10 +509,12 @@ class RiderAvailableOrdersView(APIView):
         
         # Get orders that are paid, don't have a rider assigned, and tailor has confirmed
         # Riders should only see orders after tailor has accepted them (status != 'pending')
+        # AND rider_status must be 'none' (not yet accepted by any rider)
         orders = Order.objects.filter(
             payment_status='paid',
             rider__isnull=True,
-            status__in=['confirmed', 'measuring', 'cutting', 'stitching', 'ready_for_delivery']
+            rider_status='none',  # Only show orders not yet accepted by any rider
+            status__in=['confirmed', 'in_progress', 'ready_for_delivery']
         ).select_related(
             'customer',
             'tailor',
@@ -556,8 +558,11 @@ class RiderMyOrdersView(APIView):
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
+        # Only show orders that rider has accepted (rider is assigned and rider_status != 'none')
         orders = Order.objects.filter(
-            rider=request.user
+            rider=request.user,
+            rider_status__in=['accepted', 'on_way_to_pickup', 'picked_up', 'on_way_to_delivery', 
+                             'on_way_to_measurement', 'measurement_taken', 'delivered']
         ).select_related(
             'customer',
             'tailor',
