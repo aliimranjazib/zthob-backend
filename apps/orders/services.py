@@ -152,7 +152,8 @@ class OrderStatusTransitionService:
                 # Tailor can't change status once ready for delivery
                 pass
         elif user_role == OrderStatusTransitionService.ROLE_RIDER:
-            if order.status == 'confirmed' and order.rider_status == 'none':
+            # Rider can accept order if status is confirmed, in_progress, or ready_for_delivery
+            if order.rider_status == 'none' and order.status in ['confirmed', 'in_progress', 'ready_for_delivery']:
                 transitions['rider_status'] = ['accepted']
             elif order.rider_status == 'accepted':
                 transitions['rider_status'] = ['on_way_to_pickup']
@@ -197,7 +198,8 @@ class OrderStatusTransitionService:
                 # Tailor can't change status once ready for delivery
                 pass
         elif user_role == OrderStatusTransitionService.ROLE_RIDER:
-            if order.status == 'confirmed' and order.rider_status == 'none':
+            # Rider can accept order if status is confirmed, in_progress, or ready_for_delivery
+            if order.rider_status == 'none' and order.status in ['confirmed', 'in_progress', 'ready_for_delivery']:
                 transitions['rider_status'] = ['accepted']
             elif order.rider_status == 'accepted':
                 transitions['rider_status'] = ['on_way_to_measurement']

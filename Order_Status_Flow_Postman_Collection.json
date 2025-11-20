@@ -832,7 +832,9 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/orders/{{order_id}}/status/"
+									"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "orders", "{{order_id}}", "status", ""]
 								}
 							}
 						},
@@ -847,7 +849,9 @@
 									}
 								],
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/accept/"
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/accept/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "riders", "orders", "{{order_id}}", "accept", ""]
 								}
 							}
 						},
@@ -875,7 +879,9 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
 							}
 						},
@@ -903,7 +909,9 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
 							}
 						},
@@ -931,7 +939,9 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
 							}
 						},
@@ -959,7 +969,9 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
 							}
 						}
@@ -992,7 +1004,9 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/orders/{{order_id}}/status/"
+									"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "orders", "{{order_id}}", "status", ""]
 								}
 							}
 						},
@@ -1007,7 +1021,9 @@
 									}
 								],
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/accept/"
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/accept/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "riders", "orders", "{{order_id}}", "accept", ""]
 								}
 							}
 						},
@@ -1035,7 +1051,9 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
 							}
 						},
@@ -1063,7 +1081,9 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/measurements/"
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/measurements/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "riders", "orders", "{{order_id}}", "measurements", ""]
 								}
 							}
 						},
@@ -1091,7 +1111,9 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/orders/{{order_id}}/status/"
+									"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "orders", "{{order_id}}", "status", ""]
 								}
 							}
 						},
@@ -1119,7 +1141,9 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/orders/{{order_id}}/status/"
+									"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "orders", "{{order_id}}", "status", ""]
 								}
 							}
 						},
@@ -1147,7 +1171,9 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
 							}
 						},
@@ -1175,7 +1201,9 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
 							}
 						},
@@ -1203,7 +1231,9 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
 							}
 						},
@@ -1231,7 +1261,9 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/"
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
 							}
 						}
