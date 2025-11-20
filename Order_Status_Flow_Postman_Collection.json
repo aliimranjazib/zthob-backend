@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "order-status-flow-2024",
 		"name": "Order Status Flow - Updated APIs",
-		"description": "Updated API collection for new order status flow with rider_status and tailor_status fields. Includes examples for fabric_only and fabric_with_stitching flows.",
+		"description": "Updated API collection for new order status flow with rider_status and tailor_status fields. Includes examples for fabric_only and fabric_with_stitching flows.\n\n**New Features:**\n- status_info field with next_available_actions (includes icons for UI)\n- rider_measurements visible in tailor my-orders API\n- Separated available-orders vs my-orders for tailors\n- Icons in next_available_actions: play-circle, check-circle, car, package, ruler, cut, navigate, checkmark-done, close-circle",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "order-status-flow"
 	},
@@ -145,7 +145,7 @@
 			"name": "Order Management - Tailor",
 			"item": [
 				{
-					"name": "Get Tailor Orders",
+					"name": "Get Available Orders (Tailor)",
 					"request": {
 						"method": "GET",
 						"header": [
@@ -156,20 +156,50 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/orders/tailor/my-orders/?status=pending&order_type=fabric_only",
+							"raw": "{{base_url}}/api/orders/tailor/available-orders/?payment_status=paid&order_type=fabric_only",
 							"host": ["{{base_url}}"],
-							"path": ["api", "orders", "tailor", "my-orders", ""],
+							"path": ["api", "orders", "tailor", "available-orders", ""],
 							"query": [
 								{
-									"key": "status",
-									"value": "pending"
+									"key": "payment_status",
+									"value": "paid"
 								},
 								{
 									"key": "order_type",
 									"value": "fabric_only"
 								}
 							]
-						}
+						},
+						"description": "Get orders available for tailor to accept (status='pending', tailor_status='none'). These are new orders waiting for tailor acceptance."
+					}
+				},
+				{
+					"name": "Get My Orders (Tailor)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{tailor_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/orders/tailor/my-orders/?status=in_progress&order_type=fabric_with_stitching",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "tailor", "my-orders", ""],
+							"query": [
+								{
+									"key": "status",
+									"value": "in_progress"
+								},
+								{
+									"key": "order_type",
+									"value": "fabric_with_stitching"
+								}
+							]
+						},
+						"description": "Get orders that tailor has accepted (tailor_status IN ('accepted', 'stitching_started', 'stitched')). Includes rider_measurements for fabric_with_stitching orders."
 					}
 				},
 				{
@@ -373,7 +403,8 @@
 							"raw": "{{base_url}}/api/orders/tailor/{{order_id}}/",
 							"host": ["{{base_url}}"],
 							"path": ["api", "orders", "tailor", "{{order_id}}", ""]
-						}
+						},
+						"description": "Get detailed order information including rider_measurements and status_info with next_available_actions (includes icons for UI). Response includes: rider_measurements, measurement_taken_at, status_info with next_available_actions array containing icon, label, description, and role fields."
 					}
 				}
 			]
@@ -668,7 +699,8 @@
 							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/",
 							"host": ["{{base_url}}"],
 							"path": ["api", "riders", "orders", "{{order_id}}", ""]
-						}
+						},
+						"description": "Get detailed order information including status_info with next_available_actions (includes icons for UI). Response includes status_info with next_available_actions array containing icon, label, description, and role fields."
 					}
 				}
 			]
@@ -746,7 +778,8 @@
 							"raw": "{{base_url}}/api/orders/{{order_id}}/",
 							"host": ["{{base_url}}"],
 							"path": ["api", "orders", "{{order_id}}", ""]
-						}
+						},
+						"description": "Get detailed order information including status_info with next_available_actions (includes icons for UI). Response includes status_info with next_available_actions array containing icon, label, description, and role fields."
 					}
 				},
 				{
@@ -1205,6 +1238,85 @@
 					]
 				}
 			]
+		},
+		{
+			"name": "Example Responses",
+			"item": [
+				{
+					"name": "Order Detail Response with status_info",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "{{order_id}}", ""]
+						},
+						"description": "Example response showing status_info with next_available_actions including icons"
+					},
+					"response": [
+						{
+							"name": "Example Response",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/orders/123/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "orders", "123", ""]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Order retrieved successfully\",\n    \"data\": {\n        \"id\": 123,\n        \"order_number\": \"ORD-A1B2C3D4\",\n        \"order_type\": \"fabric_with_stitching\",\n        \"status\": \"confirmed\",\n        \"rider_status\": \"none\",\n        \"tailor_status\": \"accepted\",\n        \"rider_measurements\": null,\n        \"measurement_taken_at\": null,\n        \"status_info\": {\n            \"current_status\": \"confirmed\",\n            \"current_rider_status\": \"none\",\n            \"current_tailor_status\": \"accepted\",\n            \"next_available_actions\": [\n                {\n                    \"type\": \"status\",\n                    \"value\": \"in_progress\",\n                    \"label\": \"Mark In Progress\",\n                    \"description\": \"Start processing this order\",\n                    \"icon\": \"play-circle\",\n                    \"role\": \"TAILOR\",\n                    \"requires_confirmation\": false,\n                    \"confirmation_message\": null\n                },\n                {\n                    \"type\": \"rider_status\",\n                    \"value\": \"accepted\",\n                    \"label\": \"Accept Order\",\n                    \"description\": \"Accept this order for delivery\",\n                    \"icon\": \"check-circle\",\n                    \"role\": \"RIDER\",\n                    \"requires_confirmation\": true,\n                    \"confirmation_message\": \"Are you sure you want to accept order?\"\n                }\n            ],\n            \"can_cancel\": false,\n            \"cancel_reason\": \"Orders can only be cancelled when status is pending\",\n            \"status_progress\": {\n                \"current_step\": 2,\n                \"total_steps\": 5,\n                \"percentage\": 40\n            }\n        }\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Tailor My Orders Response with rider_measurements",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/orders/tailor/my-orders/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "tailor", "my-orders", ""]
+						},
+						"description": "Example response showing rider_measurements in tailor my-orders list (for fabric_with_stitching orders)"
+					},
+					"response": [
+						{
+							"name": "Example Response",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/orders/tailor/my-orders/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "orders", "tailor", "my-orders", ""]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Your tailor orders retrieved successfully\",\n    \"data\": [\n        {\n            \"id\": 123,\n            \"order_number\": \"ORD-A1B2C3D4\",\n            \"order_type\": \"fabric_with_stitching\",\n            \"status\": \"in_progress\",\n            \"rider_status\": \"measurement_taken\",\n            \"tailor_status\": \"accepted\",\n            \"rider_measurements\": {\n                \"chest\": \"40\",\n                \"waist\": \"36\",\n                \"shoulder\": \"18\",\n                \"sleeve_length\": \"24\",\n                \"length\": \"42\"\n            },\n            \"measurement_taken_at\": \"2024-12-18T11:30:00Z\",\n            \"total_amount\": \"600.00\",\n            \"payment_status\": \"paid\",\n            \"items_count\": 2,\n            \"created_at\": \"2024-12-18T10:00:00Z\"\n        }\n    ]\n}"
+						}
+					]
+				}
+			]
 		}
 	],
 	"variable": [
@@ -1235,6 +1347,10 @@
 		}
 	]
 }
+
+
+
+
 
 
 

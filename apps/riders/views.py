@@ -509,10 +509,12 @@ class RiderAvailableOrdersView(APIView):
         
         # Get orders that are paid, don't have a rider assigned, and tailor has confirmed
         # Riders should only see orders after tailor has accepted them (status != 'pending')
+        # AND rider_status must be 'none' (not yet accepted by any rider)
         orders = Order.objects.filter(
             payment_status='paid',
             rider__isnull=True,
-            status__in=['confirmed', 'measuring', 'cutting', 'stitching', 'ready_for_delivery']
+            rider_status='none',  # Only show orders not yet accepted by any rider
+            status__in=['confirmed', 'in_progress', 'ready_for_delivery']
         ).select_related(
             'customer',
             'tailor',
@@ -545,7 +547,7 @@ class RiderMyOrdersView(APIView):
     @extend_schema(
         responses=RiderOrderListSerializer(many=True),
         summary="List my orders",
-        description="Get list of orders assigned to the authenticated rider",
+        description="Get list of orders assigned to the authenticated rider. Includes orders with rider_status='none' (assigned but not yet accepted) so riders can accept manually assigned orders.",
         tags=["Rider Orders"]
     )
     def get(self, request):
@@ -556,6 +558,9 @@ class RiderMyOrdersView(APIView):
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
+        # Show all orders assigned to this rider, including those with rider_status='none' 
+        # (which means assigned but not yet accepted - allows rider to accept them)
+        # This ensures manually assigned orders are visible even if rider_status wasn't updated
         orders = Order.objects.filter(
             rider=request.user
         ).select_related(

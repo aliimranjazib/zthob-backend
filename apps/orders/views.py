@@ -374,19 +374,69 @@ class CustomerOrderListView(APIView):
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )
+class TailorAvailableOrdersView(APIView):
+    """Get orders available for tailor to accept (pending orders not yet accepted)"""
+    permission_classes=[IsAuthenticated]
+    
+    @extend_schema(
+        responses=OrderListSerializer(many=True),
+        summary="Get available orders for tailor",
+        description="Retrieve orders assigned to tailor that are pending acceptance (status=pending, tailor_status=none). These are orders that tailor can accept.",
+        tags=["Tailor Orders"]
+    )
+    def get(self, request):
+        try:
+            tailor_profile = TailorProfile.objects.get(user=request.user)
+            # Only show orders that are pending and not yet accepted by this tailor
+            orders = Order.objects.filter(
+                tailor=request.user,
+                status='pending',
+                tailor_status='none'
+            ).select_related('customer', 'delivery_address').prefetch_related('order_items__fabric').order_by('-created_at')
+            
+            # Filter by payment status
+            payment_status = request.query_params.get('payment_status')
+            if payment_status:
+                orders = orders.filter(payment_status=payment_status)
+            
+            # Filter by order type
+            order_type = request.query_params.get('order_type')
+            if order_type:
+                orders = orders.filter(order_type=order_type)
+            
+            serializer = OrderListSerializer(orders, many=True, context={'request': request})
+            
+            return api_response(
+                success=True,
+                message="Available orders retrieved successfully",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+        except TailorProfile.DoesNotExist:
+            return api_response(
+                success=False,
+                message="User is not a tailor",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+
 class TailorOrderListView(APIView):
     permission_classes=[IsAuthenticated]
     @extend_schema(
         responses=OrderListSerializer(many=True),
         summary="Get my tailor orders",
-        description="Retrieve all orders assigned to the authenticated tailor. Filter by payment_status=paid to see only paid orders.",
+        description="Retrieve all orders that tailor has accepted (tailor_status != 'none'). These are orders tailor is working on.",
         tags=["Tailor Orders"]
     )
 
     def get(self,request):
         try:
             tailor_profile = TailorProfile.objects.get(user=request.user)
-            orders = Order.objects.filter(tailor=request.user).select_related('customer', 'delivery_address', 'rider').prefetch_related('order_items__fabric').order_by('-created_at')
+            # Only show orders that tailor has accepted (tailor_status != 'none')
+            orders = Order.objects.filter(
+                tailor=request.user,
+                tailor_status__in=['accepted', 'stitching_started', 'stitched']
+            ).select_related('customer', 'delivery_address', 'rider').prefetch_related('order_items__fabric').order_by('-created_at')
             
             # Filter by payment status (default: show all, but can filter for paid only)
             payment_status = request.query_params.get('payment_status')
