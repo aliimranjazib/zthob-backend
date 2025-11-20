@@ -547,7 +547,7 @@ class RiderMyOrdersView(APIView):
     @extend_schema(
         responses=RiderOrderListSerializer(many=True),
         summary="List my orders",
-        description="Get list of orders assigned to the authenticated rider",
+        description="Get list of orders assigned to the authenticated rider. Includes orders with rider_status='none' (assigned but not yet accepted) so riders can accept manually assigned orders.",
         tags=["Rider Orders"]
     )
     def get(self, request):
@@ -558,11 +558,11 @@ class RiderMyOrdersView(APIView):
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
-        # Only show orders that rider has accepted (rider is assigned and rider_status != 'none')
+        # Show all orders assigned to this rider, including those with rider_status='none' 
+        # (which means assigned but not yet accepted - allows rider to accept them)
+        # This ensures manually assigned orders are visible even if rider_status wasn't updated
         orders = Order.objects.filter(
-            rider=request.user,
-            rider_status__in=['accepted', 'on_way_to_pickup', 'picked_up', 'on_way_to_delivery', 
-                             'on_way_to_measurement', 'measurement_taken', 'delivered']
+            rider=request.user
         ).select_related(
             'customer',
             'tailor',
