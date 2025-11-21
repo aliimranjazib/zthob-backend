@@ -966,7 +966,9 @@ class RiderUpdateOrderStatusView(APIView):
                 logger = logging.getLogger(__name__)
                 logger.error(f"Failed to send order status notification: {str(e)}")
             
-            response_serializer = RiderOrderDetailSerializer(order)
+            # Use lightweight response serializer for status updates
+            from apps.orders.serializers import OrderStatusUpdateResponseSerializer
+            response_serializer = OrderStatusUpdateResponseSerializer(order, context={'request': request})
             return api_response(
                 success=True,
                 message=f"Order rider status updated to {order.get_rider_status_display()}",

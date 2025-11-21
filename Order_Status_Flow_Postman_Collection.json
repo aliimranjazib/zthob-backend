@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "order-status-flow-2024",
 		"name": "Order Status Flow - Updated APIs",
-		"description": "Updated API collection for new order status flow with rider_status and tailor_status fields. Includes examples for fabric_only and fabric_with_stitching flows.\n\n**New Features:**\n- status_info field with next_available_actions (includes icons for UI)\n- rider_measurements visible in tailor my-orders API\n- Separated available-orders vs my-orders for tailors\n- Icons in next_available_actions: play-circle, check-circle, car, package, ruler, cut, navigate, checkmark-done, close-circle",
+		"description": "Updated API collection for new order status flow with rider_status and tailor_status fields. Includes examples for fabric_only and fabric_with_stitching flows.\n\n**New Features:**\n- status_info field with next_available_actions in ALL list and detail APIs\n- Lightweight response serializer for status updates (90% smaller)\n- rider_measurements visible in tailor my-orders API\n- Separated available-orders vs my-orders for tailors\n- No icon field in actions (frontend determines icons)\n- Fixed rider acceptance for ready_for_delivery orders",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "order-status-flow"
 	},
@@ -170,7 +170,7 @@
 								}
 							]
 						},
-						"description": "Get orders available for tailor to accept (status='pending', tailor_status='none'). These are new orders waiting for tailor acceptance."
+						"description": "Get orders available for tailor to accept (status='pending', tailor_status='none'). These are new orders waiting for tailor acceptance. Response includes status_info with next_available_actions."
 					}
 				},
 				{
@@ -199,7 +199,7 @@
 								}
 							]
 						},
-						"description": "Get orders that tailor has accepted (tailor_status IN ('accepted', 'stitching_started', 'stitched')). Includes rider_measurements for fabric_with_stitching orders."
+						"description": "Get orders that tailor has accepted (tailor_status IN ('accepted', 'stitching_started', 'stitched')). Includes rider_measurements for fabric_with_stitching orders. Response includes status_info with next_available_actions showing what tailor can do next."
 					}
 				},
 				{
@@ -404,7 +404,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "orders", "tailor", "{{order_id}}", ""]
 						},
-						"description": "Get detailed order information including rider_measurements and status_info with next_available_actions (includes icons for UI). Response includes: rider_measurements, measurement_taken_at, status_info with next_available_actions array containing icon, label, description, and role fields."
+						"description": "Get detailed order information including rider_measurements and status_info with next_available_actions. Response includes: rider_measurements, measurement_taken_at, status_info with next_available_actions array containing type, value, label, description, role, and requires_confirmation fields."
 					}
 				}
 			]
@@ -499,10 +499,11 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/update-status/",
 							"host": ["{{base_url}}"],
-							"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
-						}
+							"path": ["api", "riders", "orders", "{{order_id}}", "update-status", ""]
+						},
+						"description": "Update rider status. Returns lightweight response."
 					}
 				},
 				{
@@ -530,10 +531,11 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/update-status/",
 							"host": ["{{base_url}}"],
-							"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
-						}
+							"path": ["api", "riders", "orders", "{{order_id}}", "update-status", ""]
+						},
+						"description": "Update rider status. Returns lightweight response."
 					}
 				},
 				{
@@ -561,10 +563,11 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/update-status/",
 							"host": ["{{base_url}}"],
-							"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
-						}
+							"path": ["api", "riders", "orders", "{{order_id}}", "update-status", ""]
+						},
+						"description": "Update rider status. Returns lightweight response."
 					}
 				},
 				{
@@ -592,10 +595,11 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/update-status/",
 							"host": ["{{base_url}}"],
-							"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
-						}
+							"path": ["api", "riders", "orders", "{{order_id}}", "update-status", ""]
+						},
+						"description": "Update rider status. Returns lightweight response."
 					}
 				},
 				{
@@ -623,7 +627,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+							"raw": "{{base_url}}/api/riders/orders/{{order_id}}/update-status/",
 							"host": ["{{base_url}}"],
 							"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 						}
@@ -700,7 +704,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "riders", "orders", "{{order_id}}", ""]
 						},
-						"description": "Get detailed order information including status_info with next_available_actions (includes icons for UI). Response includes status_info with next_available_actions array containing icon, label, description, and role fields."
+						"description": "Get detailed order information including status_info with next_available_actions. Response includes status_info with next_available_actions array containing type, value, label, description, role, and requires_confirmation fields."
 					}
 				}
 			]
@@ -779,7 +783,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "orders", "{{order_id}}", ""]
 						},
-						"description": "Get detailed order information including status_info with next_available_actions (includes icons for UI). Response includes status_info with next_available_actions array containing icon, label, description, and role fields."
+						"description": "Get detailed order information including status_info with next_available_actions. Response includes status_info with next_available_actions array containing type, value, label, description, role, and requires_confirmation fields."
 					}
 				},
 				{
@@ -879,7 +883,7 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/update-status/",
 									"host": ["{{base_url}}"],
 									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
@@ -909,7 +913,7 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/update-status/",
 									"host": ["{{base_url}}"],
 									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
@@ -939,7 +943,7 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/update-status/",
 									"host": ["{{base_url}}"],
 									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
@@ -969,7 +973,7 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/update-status/",
 									"host": ["{{base_url}}"],
 									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
@@ -1051,7 +1055,7 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/update-status/",
 									"host": ["{{base_url}}"],
 									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
@@ -1171,7 +1175,7 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/update-status/",
 									"host": ["{{base_url}}"],
 									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
@@ -1201,7 +1205,7 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/update-status/",
 									"host": ["{{base_url}}"],
 									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
@@ -1231,7 +1235,7 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/update-status/",
 									"host": ["{{base_url}}"],
 									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
@@ -1261,7 +1265,7 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/status/",
+									"raw": "{{base_url}}/api/riders/orders/{{order_id}}/update-status/",
 									"host": ["{{base_url}}"],
 									"path": ["api", "riders", "orders", "{{order_id}}", "status", ""]
 								}
@@ -1284,7 +1288,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "orders", "{{order_id}}", ""]
 						},
-						"description": "Example response showing status_info with next_available_actions including icons"
+						"description": "Example response showing status_info with next_available_actions (no icon field - frontend determines icons)"
 					},
 					"response": [
 						{
@@ -1321,7 +1325,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "orders", "tailor", "my-orders", ""]
 						},
-						"description": "Example response showing rider_measurements in tailor my-orders list (for fabric_with_stitching orders)"
+						"description": "Example response showing rider_measurements and status_info in tailor my-orders list (for fabric_with_stitching orders). Includes next_available_actions showing what tailor can do next."
 					},
 					"response": [
 						{
@@ -1344,7 +1348,62 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"success\": true,\n    \"message\": \"Your tailor orders retrieved successfully\",\n    \"data\": [\n        {\n            \"id\": 123,\n            \"order_number\": \"ORD-A1B2C3D4\",\n            \"order_type\": \"fabric_with_stitching\",\n            \"status\": \"in_progress\",\n            \"rider_status\": \"measurement_taken\",\n            \"tailor_status\": \"accepted\",\n            \"rider_measurements\": {\n                \"chest\": \"40\",\n                \"waist\": \"36\",\n                \"shoulder\": \"18\",\n                \"sleeve_length\": \"24\",\n                \"length\": \"42\"\n            },\n            \"measurement_taken_at\": \"2024-12-18T11:30:00Z\",\n            \"total_amount\": \"600.00\",\n            \"payment_status\": \"paid\",\n            \"items_count\": 2,\n            \"created_at\": \"2024-12-18T10:00:00Z\"\n        }\n    ]\n}"
+							"body": "{\n    \"success\": true,\n    \"message\": \"Your tailor orders retrieved successfully\",\n    \"data\": [\n        {\n            \"id\": 123,\n            \"order_number\": \"ORD-A1B2C3D4\",\n            \"order_type\": \"fabric_with_stitching\",\n            \"status\": \"in_progress\",\n            \"rider_status\": \"measurement_taken\",\n            \"tailor_status\": \"accepted\",\n            \"rider_measurements\": {\n                \"chest\": \"40\",\n                \"waist\": \"36\",\n                \"shoulder\": \"18\",\n                \"sleeve_length\": \"24\",\n                \"length\": \"42\"\n            },\n            \"measurement_taken_at\": \"2024-12-18T11:30:00Z\",\n            \"total_amount\": \"600.00\",\n            \"payment_status\": \"paid\",\n            \"items_count\": 2,\n            \"status_info\": {\n                \"current_status\": \"in_progress\",\n                \"current_rider_status\": \"measurement_taken\",\n                \"current_tailor_status\": \"accepted\",\n                \"next_available_actions\": [\n                    {\n                        \"type\": \"tailor_status\",\n                        \"value\": \"stitching_started\",\n                        \"label\": \"Start Stitching\",\n                        \"description\": \"Start stitching the garment\",\n                        \"role\": \"TAILOR\",\n                        \"requires_confirmation\": false\n                    }\n                ],\n                \"can_cancel\": false,\n                \"cancel_reason\": \"Orders can only be cancelled when status is pending\",\n                \"status_progress\": {\n                    \"current_step\": 3,\n                    \"total_steps\": 5,\n                    \"percentage\": 60\n                }\n            },\n            \"created_at\": \"2024-12-18T10:00:00Z\"\n        }\n    ]\n}"
+						}
+					]
+				},
+				{
+					"name": "Status Update Response (Lightweight)",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "orders", "{{order_id}}", "status", ""]
+						},
+						"description": "Example lightweight response from status update endpoint. Returns only 7 essential fields: id, order_number, status, rider_status, tailor_status, status_info, updated_at. This is ~90% smaller than full order response."
+					},
+					"response": [
+						{
+							"name": "Example Lightweight Response",
+							"originalRequest": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{tailor_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"status\": \"in_progress\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/orders/123/status/",
+									"host": ["{{base_url}}"],
+									"path": ["api", "orders", "123", "status", ""]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Order status updated successfully\",\n    \"data\": {\n        \"id\": 123,\n        \"order_number\": \"ORD-A1B2C3D4\",\n        \"status\": \"in_progress\",\n        \"rider_status\": \"none\",\n        \"tailor_status\": \"accepted\",\n        \"status_info\": {\n            \"current_status\": \"in_progress\",\n            \"current_rider_status\": \"none\",\n            \"current_tailor_status\": \"accepted\",\n            \"next_available_actions\": [\n                {\n                    \"type\": \"status\",\n                    \"value\": \"ready_for_delivery\",\n                    \"label\": \"Mark Ready for Delivery\",\n                    \"description\": \"Order is ready for pickup/delivery\",\n                    \"role\": \"TAILOR\",\n                    \"requires_confirmation\": false\n                }\n            ],\n            \"can_cancel\": false,\n            \"cancel_reason\": \"Orders can only be cancelled when status is pending\",\n            \"status_progress\": {\n                \"current_step\": 3,\n                \"total_steps\": 5,\n                \"percentage\": 60\n            }\n        },\n        \"updated_at\": \"2024-12-18T12:00:00Z\"\n    }\n}"
 						}
 					]
 				}
