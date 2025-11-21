@@ -16,6 +16,7 @@ OrderUpdateSerializer,
 OrderListSerializer,
 OrderStatusHistorySerializer,
 OrderPaymentStatusUpdateSerializer,
+OrderStatusUpdateResponseSerializer,
 )
 from apps.tailors.models import TailorProfile
 from apps.customers.models import CustomerProfile
@@ -193,7 +194,13 @@ class OrderDetailView(APIView):
             serializer=OrderUpdateSerializer(order,data=request.data, partial=True)
             if serializer.is_valid():
                 updated_order=serializer.save()
-                response_serializer = OrderSerializer(updated_order,context={'request':request})
+                # Check if status was updated - if so, use lightweight response
+                status_updated = 'status' in request.data or 'rider_status' in request.data or 'tailor_status' in request.data
+                if status_updated:
+                    response_serializer = OrderStatusUpdateResponseSerializer(updated_order,context={'request':request})
+                else:
+                    # For non-status updates, return full order details
+                    response_serializer = OrderSerializer(updated_order,context={'request':request})
                 return api_response(
                     success=True,
                     message="Order updated successfully",
@@ -246,9 +253,9 @@ class OrderStatusUpdateView(APIView):
     permission_classes=[IsAuthenticated]
     @extend_schema(
         request=OrderUpdateSerializer,
-        responses=OrderSerializer,
+        responses=OrderStatusUpdateResponseSerializer,
         summary="Update order status",
-        description="Update order status with automatic history tracking",
+        description="Update order status with automatic history tracking. Returns lightweight response with only essential fields (id, order_number, status, rider_status, tailor_status, status_info, updated_at).",
         tags=["Orders"]
     )
 
@@ -291,7 +298,7 @@ class OrderStatusUpdateView(APIView):
             serializer=OrderUpdateSerializer(order, data=request.data,partial=True, context={'request':request})
             if serializer.is_valid():
                 updated_order=serializer.save()
-                response_serializer=OrderSerializer(updated_order,context={'request': request})
+                response_serializer=OrderStatusUpdateResponseSerializer(updated_order,context={'request': request})
                 return api_response(
                     success=True,
                     message="Order status updated successfully",
