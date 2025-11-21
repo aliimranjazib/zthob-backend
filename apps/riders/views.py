@@ -907,6 +907,16 @@ class RiderUpdateOrderStatusView(APIView):
             new_rider_status = serializer.validated_data['rider_status']
             notes = serializer.validated_data.get('notes', '')
             
+            # Security check: For fabric_with_stitching orders, prevent setting measurement_taken
+            # without actually adding measurements via the /measurements/ endpoint
+            if new_rider_status == 'measurement_taken' and order.order_type == 'fabric_with_stitching':
+                if not order.rider_measurements or not order.measurement_taken_at:
+                    return api_response(
+                        success=False,
+                        message="Cannot mark measurements as taken without adding measurements",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+            
             # Use transition service
             from apps.orders.services import OrderStatusTransitionService
             
