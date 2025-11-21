@@ -349,19 +349,48 @@ JAZZMIN_SETTINGS = {
     # Organized menu order - most important first
     "order_with_respect_to": ["accounts", "customers", "tailors", "orders", "core"],
 
-    # Simple, clear icons
+    # Simple, clear icons - comprehensive icon set for all models
     "icons": {
+        # Auth (hidden but icon needed for completeness)
+        "auth.Group": "fas fa-users-cog",
+        
+        # Accounts
         "accounts.CustomUser": "fas fa-users",
+        
+        # Customers
         "customers.CustomerProfile": "fas fa-user",
-        "customers.Address": "fas fa-map-marker",
+        "customers.Address": "fas fa-map-marker-alt",
         "customers.FamilyMember": "fas fa-user-friends",
+        
+        # Tailors
         "tailors.TailorProfile": "fas fa-cut",
         "tailors.Fabric": "fas fa-tshirt",
         "tailors.FabricCategory": "fas fa-tags",
+        "tailors.FabricType": "fas fa-layer-group",
+        "tailors.FabricTag": "fas fa-tag",
         "tailors.FabricImage": "fas fa-image",
+        "tailors.TailorProfileReview": "fas fa-clipboard-check",
+        "tailors.ServiceArea": "fas fa-map-marked-alt",
+        
+        # Orders
         "orders.Order": "fas fa-shopping-cart",
+        "orders.OrderItem": "fas fa-shopping-bag",
+        "orders.OrderStatusHistory": "fas fa-history",
+        
+        # Riders
+        "riders.RiderProfile": "fas fa-motorcycle",
+        "riders.RiderOrderAssignment": "fas fa-route",
+        "riders.RiderProfileReview": "fas fa-user-check",
+        "riders.RiderDocument": "fas fa-file-alt",
+        
+        # Notifications
+        "notifications.FCMDeviceToken": "fas fa-mobile-alt",
+        "notifications.NotificationLog": "fas fa-bell",
+        
+        # Core
         "core.SystemSettings": "fas fa-cog",
         "core.Slider": "fas fa-images",
+        "core.PhoneVerification": "fas fa-phone-alt",
     },
 
     # Simplified forms - single column for easier use

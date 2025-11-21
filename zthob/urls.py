@@ -37,11 +37,15 @@ admin.site.index_title = "Welcome to Zthob Mgask"
 original_index = admin.site.index
 
 def custom_admin_index(request, extra_context=None):
-    """Enhanced admin index with image galleries"""
+    """Enhanced admin index with image galleries and order statistics"""
     from apps.tailors.models import FabricImage, TailorProfile
     from apps.riders.models import RiderDocument
     from apps.orders.models import Order
     from apps.tailors.models import Fabric
+    from django.utils import timezone
+    from datetime import timedelta
+    from django.db.models import Count, Sum
+    from decimal import Decimal
     
     extra_context = extra_context or {}
     
@@ -59,6 +63,62 @@ def custom_admin_index(request, extra_context=None):
     recent_rider_documents = RiderDocument.objects.filter(
         is_verified=True
     ).select_related('rider_profile__user').order_by('-verified_at')[:12]
+    
+    # Calculate date ranges for order statistics
+    now = timezone.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today_start - timedelta(days=1)
+    yesterday_end = today_start
+    week_start = today_start - timedelta(days=7)
+    month_start = today_start - timedelta(days=30)
+    
+    # Get order statistics
+    today_orders = Order.objects.filter(created_at__gte=today_start)
+    yesterday_orders = Order.objects.filter(created_at__gte=yesterday_start, created_at__lt=today_start)
+    weekly_orders = Order.objects.filter(created_at__gte=week_start)
+    monthly_orders = Order.objects.filter(created_at__gte=month_start)
+    
+    # Calculate order counts and revenue
+    order_stats = {
+        'today': {
+            'count': today_orders.count(),
+            'revenue': today_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00'),
+            'pending': today_orders.filter(status='pending').count(),
+            'confirmed': today_orders.filter(status='confirmed').count(),
+            'delivered': today_orders.filter(status='delivered').count(),
+        },
+        'yesterday': {
+            'count': yesterday_orders.count(),
+            'revenue': yesterday_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00'),
+            'pending': yesterday_orders.filter(status='pending').count(),
+            'confirmed': yesterday_orders.filter(status='confirmed').count(),
+            'delivered': yesterday_orders.filter(status='delivered').count(),
+        },
+        'weekly': {
+            'count': weekly_orders.count(),
+            'revenue': weekly_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00'),
+            'pending': weekly_orders.filter(status='pending').count(),
+            'confirmed': weekly_orders.filter(status='confirmed').count(),
+            'delivered': weekly_orders.filter(status='delivered').count(),
+        },
+        'monthly': {
+            'count': monthly_orders.count(),
+            'revenue': monthly_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00'),
+            'pending': monthly_orders.filter(status='pending').count(),
+            'confirmed': monthly_orders.filter(status='confirmed').count(),
+            'delivered': monthly_orders.filter(status='delivered').count(),
+        },
+    }
+    
+    # Get daily order counts for the last 7 days (for line chart)
+    daily_orders_data = []
+    daily_labels = []
+    for i in range(6, -1, -1):  # Last 7 days including today
+        date = today_start - timedelta(days=i)
+        date_end = date + timedelta(days=1)
+        count = Order.objects.filter(created_at__gte=date, created_at__lt=date_end).count()
+        daily_orders_data.append(count)
+        daily_labels.append(date.strftime('%b %d'))
     
     # Get statistics
     stats = {
@@ -123,6 +183,9 @@ def custom_admin_index(request, extra_context=None):
         'tailor_images': tailor_images_data,
         'rider_documents': rider_documents_data,
         'stats': stats,
+        'order_stats': order_stats,
+        'daily_orders_data': daily_orders_data,
+        'daily_labels': daily_labels,
     })
     
     return original_index(request, extra_context)
