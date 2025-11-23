@@ -31,6 +31,9 @@ from .address import (
     TailorAddressCreateUpdateView,
     TailorAddressDeleteView
 )
+from .analytics import (
+    TailorAnalyticsView
+)
 
 # Export all views
 __all__ = [
@@ -65,4 +68,7 @@ __all__ = [
     'TailorAddressView',
     'TailorAddressCreateUpdateView',
     'TailorAddressDeleteView',
+    
+    # Analytics views
+    'TailorAnalyticsView',
 ]

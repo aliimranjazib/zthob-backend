@@ -31,6 +31,12 @@ from .address import (
     TailorAddressUpdateSerializer
 )
 from .base import ImageWithMetadataSerializer
+from .analytics import (
+    TailorAnalyticsSerializer,
+    DailyEarningsSerializer,
+    WeeklyTrendSerializer,
+    AnalyticsPeriodSerializer
+)
 
 # Export all serializers
 __all__ = [
@@ -67,4 +73,10 @@ __all__ = [
     
     # Base serializers
     'ImageWithMetadataSerializer',
+    
+    # Analytics serializers
+    'TailorAnalyticsSerializer',
+    'DailyEarningsSerializer',
+    'WeeklyTrendSerializer',
+    'AnalyticsPeriodSerializer',
 ]
