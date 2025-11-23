@@ -33,6 +33,9 @@ from apps.tailors.views import (
     TailorAddressView,
     TailorAddressCreateUpdateView,
     TailorAddressDeleteView,
+    
+    # Analytics views
+    TailorAnalyticsView,
 )
 
 urlpatterns = [
@@ -77,6 +80,9 @@ urlpatterns = [
     path('address/', TailorAddressView.as_view(), name='tailor-address'),
     path('address/manage/', TailorAddressCreateUpdateView.as_view(), name='tailor-address-manage'),
     path('address/delete/', TailorAddressDeleteView.as_view(), name='tailor-address-delete'),
+
+    # Analytics URLs
+    path('analytics/', TailorAnalyticsView.as_view(), name='tailor-analytics'),
 
     path('phone/send-otp/', SendOTPView.as_view(), name='customer-send-otp'),
     path('phone/verify-otp/', VerifyOTPView.as_view(), name='customer-verify-otp'),

@@ -102,6 +102,8 @@ class TailorProfileAdmin(admin.ModelAdmin):
         'experience_display',
         'shop_status_badge',
         'fabric_count',
+        'revenue_display',
+        'orders_count_display',
         'shop_image_preview',
         'created_at_formatted'
     ]
@@ -130,6 +132,7 @@ class TailorProfileAdmin(admin.ModelAdmin):
         'updated_at',
         'shop_image_preview',
         'fabric_count_display',
+        'analytics_summary',
     ]
     
     date_hierarchy = 'created_at'
@@ -162,6 +165,11 @@ class TailorProfileAdmin(admin.ModelAdmin):
         ('Statistics', {
             'fields': ('fabric_count_display',),
             'classes': ('collapse',)
+        }),
+        ('Analytics Summary', {
+            'fields': ('analytics_summary',),
+            'classes': ('collapse',),
+            'description': 'Revenue and order statistics for this tailor'
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
@@ -218,10 +226,93 @@ class TailorProfileAdmin(admin.ModelAdmin):
         return '0'
     fabric_count.short_description = 'Fabrics'
     
+    def revenue_display(self, obj):
+        """Display total revenue from completed orders"""
+        from apps.tailors.services import TailorAnalyticsService
+        try:
+            revenue = TailorAnalyticsService.calculate_total_revenue(obj.user)
+            return format_html(
+                '<strong style="color: #28a745;">${:,.2f}</strong>',
+                float(revenue)
+            )
+        except Exception:
+            return format_html('<em style="color: #999;">N/A</em>')
+    revenue_display.short_description = 'Revenue'
+    revenue_display.admin_order_field = 'user__tailor_orders__total_amount'
+    
+    def orders_count_display(self, obj):
+        """Display completed orders count"""
+        from apps.tailors.services import TailorAnalyticsService
+        try:
+            completed = TailorAnalyticsService.get_completed_orders_count(obj.user)
+            total = TailorAnalyticsService.get_total_orders_count(obj.user)
+            return format_html(
+                '<span style="color: #17a2b8;">{}</span> / <span style="color: #6c757d;">{}</span>',
+                completed,
+                total
+            )
+        except Exception:
+            return format_html('<em style="color: #999;">N/A</em>')
+    orders_count_display.short_description = 'Orders (C/T)'
+    
     def fabric_count_display(self, obj):
         """Display fabric count in detail view"""
         return obj.fabrics.count()
     fabric_count_display.short_description = 'Total Fabrics'
+    
+    def analytics_summary(self, obj):
+        """Display analytics summary for the tailor"""
+        from apps.tailors.services import TailorAnalyticsService
+        
+        try:
+            analytics = TailorAnalyticsService.get_comprehensive_analytics(
+                tailor_user=obj.user,
+                days=30,
+                weeks=12
+            )
+            
+            return format_html(
+                '<div style="padding: 15px; background: #f8f9fa; border-radius: 5px;">'
+                '<h3 style="margin-top: 0; color: #333;">📊 Analytics Summary</h3>'
+                '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 10px;">'
+                '<div style="background: white; padding: 12px; border-radius: 5px; border-left: 4px solid #28a745;">'
+                '<div style="font-size: 11px; color: #666; text-transform: uppercase;">Total Revenue</div>'
+                '<div style="font-size: 20px; font-weight: bold; color: #28a745;">${}</div>'
+                '</div>'
+                '<div style="background: white; padding: 12px; border-radius: 5px; border-left: 4px solid #17a2b8;">'
+                '<div style="font-size: 11px; color: #666; text-transform: uppercase;">Completed Orders</div>'
+                '<div style="font-size: 20px; font-weight: bold; color: #17a2b8;">{}</div>'
+                '</div>'
+                '<div style="background: white; padding: 12px; border-radius: 5px; border-left: 4px solid #ffc107;">'
+                '<div style="font-size: 11px; color: #666; text-transform: uppercase;">Total Orders</div>'
+                '<div style="font-size: 20px; font-weight: bold; color: #ffc107;">{}</div>'
+                '</div>'
+                '<div style="background: white; padding: 12px; border-radius: 5px; border-left: 4px solid #6f42c1;">'
+                '<div style="font-size: 11px; color: #666; text-transform: uppercase;">Completion Rate</div>'
+                '<div style="font-size: 20px; font-weight: bold; color: #6f42c1;">{}%</div>'
+                '</div>'
+                '</div>'
+                '<div style="margin-top: 15px; padding: 10px; background: white; border-radius: 5px;">'
+                '<div style="font-size: 12px; color: #666;">📈 Last 30 Days Revenue: <strong>${:.2f}</strong></div>'
+                '<div style="font-size: 12px; color: #666; margin-top: 5px;">📅 Analytics Generated: {}</div>'
+                '</div>'
+                '</div>',
+                analytics['formatted_total_revenue'],
+                analytics['completed_orders_count'],
+                analytics['total_orders_count'],
+                analytics['formatted_completion_percentage'],
+                sum(float(day['earnings']) for day in analytics['daily_earnings']),
+                analytics['analytics_period']['generated_at'][:19].replace('T', ' ')
+            )
+        except Exception as e:
+            return format_html(
+                '<div style="padding: 15px; background: #fff3cd; border-radius: 5px; color: #856404;">'
+                '<strong>⚠️ Error loading analytics:</strong> {}'
+                '</div>',
+                str(e)
+            )
+    analytics_summary.short_description = 'Analytics Summary'
+    analytics_summary.allow_tags = True
     
     def shop_image_preview(self, obj):
         """Display shop image preview"""
