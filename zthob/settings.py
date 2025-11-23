@@ -65,6 +65,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "corsheaders.middleware.CorsMiddleware",
+    "zthob.middleware.TranslationMiddleware",  # For automatic API response translation
 ]
 
 ROOT_URLCONF = "zthob.urls"

@@ -5,11 +5,13 @@ from rest_framework import status
 from django.http import Http404
 from django.core.exceptions import PermissionDenied
 from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated
+from .translations import get_language_from_request, translate_message, translate_errors
+from .middleware import get_current_request
 import re
 
-def api_response(*,success:bool, message:str, data:dict=None, errors:dict=None, status_code:int=200):
+def api_response(*,success:bool, message:str, data:dict=None, errors:dict=None, status_code:int=200, request=None):
     """
-    Standardized API response format
+    Standardized API response format with automatic translation support
     
     Args:
         success: Boolean indicating if the request was successful
@@ -17,7 +19,16 @@ def api_response(*,success:bool, message:str, data:dict=None, errors:dict=None, 
         data: Response data (for successful requests)
         errors: Error details (for failed requests) - can be dict or string
         status_code: HTTP status code
+        request: Optional request object for language detection (if provided, messages will be auto-translated)
     """
+    # Detect language from request if provided, or try to get from context
+    language = 'en'  # Default to English
+    if not request:
+        # Try to get request from context (set by middleware)
+        request = get_current_request()
+    if request:
+        language = get_language_from_request(request)
+    
     # Format errors consistently
     formatted_errors = None
     if errors:
@@ -68,27 +79,33 @@ def api_response(*,success:bool, message:str, data:dict=None, errors:dict=None, 
                         match = re.search(pk_error_pattern, error_str)
                         if match:
                             pk_value = match.group(1)
-                            # Map field names to user-friendly messages
+                            # Map field names to user-friendly messages (with placeholders for translation)
                             field_messages = {
-                                'tailor': f'Tailor with ID {pk_value} does not exist. Please select a valid tailor.',
-                                'delivery_address': f'Delivery address with ID {pk_value} does not exist. Please select a valid address.',
-                                'family_member': f'Family member with ID {pk_value} does not exist. Please select a valid family member.',
-                                'fabric': f'Fabric with ID {pk_value} does not exist. Please select a valid fabric.',
-                                'customer': f'Customer with ID {pk_value} does not exist.',
+                                'tailor': 'Tailor with ID {id} does not exist. Please select a valid tailor.',
+                                'delivery_address': 'Delivery address with ID {id} does not exist. Please select a valid address.',
+                                'family_member': 'Family member with ID {id} does not exist. Please select a valid family member.',
+                                'fabric': 'Fabric with ID {id} does not exist. Please select a valid fabric.',
+                                'customer': 'Customer with ID {id} does not exist.',
                             }
-                            formatted_errors = field_messages.get(
+                            error_template = field_messages.get(
                                 error_field, 
-                                f'{error_field.replace("_", " ").title()} with ID {pk_value} does not exist.'
+                                '{field} with ID {id} does not exist.'.format(
+                                    field=error_field.replace("_", " ").title(),
+                                    id=pk_value
+                                )
                             )
+                            # Translate the error message
+                            formatted_errors = translate_message(error_template, language, id=pk_value)
                         else:
-                            formatted_errors = error_str
+                            # Translate the extracted error string
+                            formatted_errors = translate_message(error_str, language)
                     else:
                         formatted_errors = str(error_str)
                 else:
-                    formatted_errors = "Validation failed"
+                    formatted_errors = translate_message("Validation failed", language)
             else:
-                # Regular dict errors
-                formatted_errors = errors
+                # Regular dict errors - translate them
+                formatted_errors = translate_errors(errors, language)
         else:
             # String or other format - also check for pk errors in strings
             error_str = str(errors)
@@ -96,13 +113,20 @@ def api_response(*,success:bool, message:str, data:dict=None, errors:dict=None, 
             match = re.search(pk_error_pattern, error_str)
             if match:
                 pk_value = match.group(1)
-                formatted_errors = f"The requested resource with ID {pk_value} does not exist."
+                formatted_errors = translate_message(
+                    "The requested resource with ID {id} does not exist.",
+                    language,
+                    id=pk_value
+                )
             else:
-                formatted_errors = error_str
+                formatted_errors = translate_message(error_str, language)
+    
+    # Translate the main message
+    translated_message = translate_message(message, language)
     
     return Response({
         'success': success,
-        'message': message,
+        'message': translated_message,
         'data': data,
         'errors': formatted_errors
     }, status=status_code)
@@ -112,6 +136,9 @@ def custom_exception_handler(exc, context):
     """
     Custom exception handler that returns responses in the format defined by api_response
     """
+    # Get request from context for language detection
+    request = context.get('request') if context else None
+    
     # Get the standard error response
     response = exception_handler(exc, context)
     
@@ -122,7 +149,8 @@ def custom_exception_handler(exc, context):
                 success=False,
                 message="Authentication failed. Please provide a valid token.",
                 errors="Invalid or expired token",
-                status_code=response.status_code
+                status_code=response.status_code,
+                request=request
             )
         
         # Handle permission denied errors
@@ -131,7 +159,8 @@ def custom_exception_handler(exc, context):
                 success=False,
                 message="You do not have permission to perform this action.",
                 errors=str(exc),
-                status_code=response.status_code
+                status_code=response.status_code,
+                request=request
             )
         
         # Handle 404 errors
@@ -140,7 +169,8 @@ def custom_exception_handler(exc, context):
                 success=False,
                 message="The requested resource was not found.",
                 errors="Not found",
-                status_code=response.status_code
+                status_code=response.status_code,
+                request=request
             )
         
         # Handle other DRF exceptions
@@ -160,7 +190,8 @@ def custom_exception_handler(exc, context):
                 success=False,
                 message=message,
                 errors=errors,
-                status_code=response.status_code
+                status_code=response.status_code,
+                request=request
             )
     
     return response
