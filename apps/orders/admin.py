@@ -806,8 +806,10 @@ class OrderStatusHistoryAdmin(admin.ModelAdmin):
         return False
     
     def has_delete_permission(self, request, obj=None):
-        """Prevent deletion of history records (audit trail)"""
-        return False
+        """Allow deletion for superusers/admins (needed for cascade deletion of orders)"""
+        # Allow superusers and admins to delete (needed for cascade deletion)
+        # Regular users still cannot delete history records directly
+        return request.user.is_superuser or request.user.is_staff
     
     def order_link(self, obj):
         """Clickable order number"""
