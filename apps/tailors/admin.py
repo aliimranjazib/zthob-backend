@@ -42,6 +42,40 @@ class FabricImageInline(admin.TabularInline):
     image_preview.short_description = 'Preview'
 
 
+class TailorProfileReviewInline(admin.StackedInline):
+    """Inline admin for TailorProfileReview - shows review directly in TailorProfile detail view"""
+    model = TailorProfileReview
+    extra = 0
+    max_num = 1  # Only one review per profile (OneToOne relationship)
+    can_delete = False
+    fields = [
+        'review_status',
+        'submitted_at',
+        'reviewed_at',
+        'reviewed_by',
+        'rejection_reason',
+        'service_areas',
+    ]
+    readonly_fields = [
+        'submitted_at',
+        'reviewed_at',
+        'reviewed_by',
+    ]
+    verbose_name = "Profile Review"
+    verbose_name_plural = "Profile Review"
+    
+    def has_add_permission(self, request, obj=None):
+        """Allow adding review if it doesn't exist"""
+        if obj and obj.pk:
+            # Check if review already exists for this profile
+            return not TailorProfileReview.objects.filter(profile=obj).exists()
+        return True
+    
+    def has_delete_permission(self, request, obj=None):
+        """Prevent deletion of review"""
+        return False
+
+
 # ============================================================================
 # CUSTOM FILTERS
 # ============================================================================
@@ -101,6 +135,7 @@ class TailorProfileAdmin(admin.ModelAdmin):
         'contact_number',
         'experience_display',
         'shop_status_badge',
+        'review_status_display',
         'fabric_count',
         'revenue_display',
         'orders_count_display',
@@ -125,7 +160,7 @@ class TailorProfileAdmin(admin.ModelAdmin):
         'address',
     ]
     
-    raw_id_fields = ['user']
+    autocomplete_fields = ['user']  # Use autocomplete instead of raw_id_fields for better UX
     
     readonly_fields = [
         'created_at',
@@ -133,7 +168,10 @@ class TailorProfileAdmin(admin.ModelAdmin):
         'shop_image_preview',
         'fabric_count_display',
         'analytics_summary',
+        'review_status_display',
     ]
+    
+    inlines = [TailorProfileReviewInline]  # Add inline for reviews
     
     date_hierarchy = 'created_at'
     
@@ -333,6 +371,48 @@ class TailorProfileAdmin(admin.ModelAdmin):
         return obj.created_at.strftime('%Y-%m-%d %H:%M')
     created_at_formatted.short_description = 'Created'
     created_at_formatted.admin_order_field = 'created_at'
+    
+    def review_status_display(self, obj):
+        """Display review status with link to review"""
+        try:
+            review = obj.review
+            colors = {
+                'draft': '#6c757d',
+                'pending': '#ffc107',
+                'approved': '#28a745',
+                'rejected': '#dc3545',
+            }
+            color = colors.get(review.review_status, '#6c757d')
+            status_text = review.get_review_status_display()
+            
+            # Link to review admin page
+            try:
+                url = reverse('admin:tailors_tailorprofilereview_change', args=[review.pk])
+                return format_html(
+                    '<a href="{}"><span style="background-color: {}; color: white; padding: 4px 10px; border-radius: 4px; font-weight: 500; font-size: 11px;">{}</span></a>',
+                    url,
+                    color,
+                    status_text
+                )
+            except Exception:
+                return format_html(
+                    '<span style="background-color: {}; color: white; padding: 4px 10px; border-radius: 4px; font-weight: 500; font-size: 11px;">{}</span>',
+                    color,
+                    status_text
+                )
+        except TailorProfileReview.DoesNotExist:
+            # Link to add review
+            try:
+                url = reverse('admin:tailors_tailorprofilereview_add')
+                url += f'?profile={obj.pk}'
+                return format_html(
+                    '<a href="{}" style="color: #6c757d; text-decoration: none;">➕ Add Review</a>',
+                    url
+                )
+            except Exception:
+                return format_html('<em style="color: #999;">No review</em>')
+    review_status_display.short_description = 'Review Status'
+    review_status_display.admin_order_field = 'review__review_status'
     
     def activate_shops(self, request, queryset):
         """Bulk action to activate shops"""
@@ -1247,7 +1327,8 @@ class TailorProfileReviewAdmin(admin.ModelAdmin):
         'rejection_reason',
     ]
     
-    raw_id_fields = ['profile', 'reviewed_by']
+    # Use autocomplete instead of raw_id_fields for better UX
+    autocomplete_fields = ['profile', 'reviewed_by']
     
     readonly_fields = [
         'created_at',
@@ -1459,6 +1540,21 @@ class TailorProfileReviewAdmin(admin.ModelAdmin):
             readonly_fields.append('review_status')
             
         return readonly_fields
+    
+    def get_form(self, request, obj=None, **kwargs):
+        """Pre-populate profile field when adding from TailorProfile page"""
+        form = super().get_form(request, obj, **kwargs)
+        
+        # Pre-populate profile if coming from TailorProfile page
+        if not obj and 'profile' in request.GET:
+            try:
+                profile_id = request.GET.get('profile')
+                if profile_id:
+                    form.base_fields['profile'].initial = profile_id
+            except (ValueError, TypeError):
+                pass
+        
+        return form
     
     def save_model(self, request, obj, form, change):
         """Custom save to handle review status changes"""
