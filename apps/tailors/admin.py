@@ -709,6 +709,7 @@ class FabricAdmin(admin.ModelAdmin):
         'category',
         'fabric_type',
         'price_formatted',
+        'stitching_price_formatted',
         'stock_badge',
         'season_badge',
         'is_active_badge',
@@ -775,6 +776,7 @@ class FabricAdmin(admin.ModelAdmin):
         ('Pricing & Stock', {
             'fields': (
                 'price',
+                'stitching_price',
                 'stock',
                 'is_active',
             )
@@ -836,6 +838,21 @@ class FabricAdmin(admin.ModelAdmin):
             return format_html('<em style="color: #999;">N/A</em>')
     price_formatted.short_description = 'Price'
     price_formatted.admin_order_field = 'price'
+    
+    def stitching_price_formatted(self, obj):
+        """Format stitching price"""
+        try:
+            if obj.stitching_price is not None:
+                price = float(obj.stitching_price)
+                return format_html(
+                    '<strong style="color: #007bff;">${:,.2f}</strong>',
+                    price
+                )
+            return format_html('<em style="color: #999;">Not set</em>')
+        except (ValueError, TypeError):
+            return format_html('<em style="color: #999;">N/A</em>')
+    stitching_price_formatted.short_description = 'Stitching Price'
+    stitching_price_formatted.admin_order_field = 'stitching_price'
     
     def stock_badge(self, obj):
         """Display stock with color-coded badge"""

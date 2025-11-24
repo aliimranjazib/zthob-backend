@@ -23,6 +23,7 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
             "description",
             "sku",
             "price",
+            "stitching_price",
             "stock",
             "is_active",
             "seasons",

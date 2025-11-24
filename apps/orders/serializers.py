@@ -14,11 +14,12 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     fabric_name = serializers.CharField(source='fabric.name', read_only=True)
     fabric_sku = serializers.CharField(source='fabric.sku', read_only=True)
+    fabric_stitching_price = serializers.DecimalField(source='fabric.stitching_price', max_digits=10, decimal_places=2, read_only=True)
     fabric_image = serializers.SerializerMethodField()
     class Meta:
         model = OrderItem
         fields = [
-            'id','fabric','fabric_name','fabric_sku', 'fabric_image','quantity',
+            'id','fabric','fabric_name','fabric_sku', 'fabric_stitching_price', 'fabric_image','quantity',
             'unit_price','total_price','measurements','custom_instructions',
             'is_ready','created_at'
         ]
