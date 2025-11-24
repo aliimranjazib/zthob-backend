@@ -37,3 +37,5 @@ class TranslationMiddleware:
         
         return response
 
+
+
