@@ -69,7 +69,7 @@ class FabricSerializer(serializers.ModelSerializer):
         model = Fabric
         fields = [
             "id", "category", "name", "description", "seasons",
-            "fabric_type", "fabric_tag", "sku", "price", "stock",
+            "fabric_type", "fabric_tag", "sku", "price", "stitching_price", "stock",
             "is_low_stock", "is_out_of_stock", "is_active", 
             "created_at", "updated_at", "gallery",
         ]
@@ -94,7 +94,7 @@ class FabricCreateSerializer(serializers.ModelSerializer):
         model = Fabric
         fields = [
             "category", "name", "seasons", "fabric_type",
-            "description", "price", "stock", "is_active", "images", "tags",
+            "description", "price", "stitching_price", "stock", "is_active", "images", "tags",
         ]
 
     def validate_images(self, images):
@@ -215,7 +215,7 @@ class FabricUpdateSerializer(serializers.ModelSerializer):
         model = Fabric
         fields = [
             "category", "fabric_type", "seasons", "name",
-            "description", "price", "stock", "is_active", "tags",
+            "description", "price", "stitching_price", "stock", "is_active", "tags",
         ]
     
     def validate_tags(self, tags):
