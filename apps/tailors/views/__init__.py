@@ -15,7 +15,9 @@ from .catalog import (
     TailorFabricView,
     TailorFabricDetailView,
     FabricImagePrimaryView,
-    FabricImageDeleteView
+    FabricImageDeleteView,
+    FabricImageAddView,
+    FabricImageUpdateView
 )
 from .review import (
     TailorProfileReviewListView,
@@ -54,6 +56,8 @@ __all__ = [
     'TailorFabricDetailView',
     'FabricImagePrimaryView',
     'FabricImageDeleteView',
+    'FabricImageAddView',
+    'FabricImageUpdateView',
     
     # Review views
     'TailorProfileReviewListView',

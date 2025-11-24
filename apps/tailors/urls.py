@@ -19,6 +19,8 @@ from apps.tailors.views import (
     TailorFabricTagsListCreateView,
     TailorFabricTagsRetrieveUpdateDestroyView,
     FabricImageDeleteView,
+    FabricImageAddView,
+    FabricImageUpdateView,
     
     # Review views
     TailorProfileReviewListView,
@@ -64,6 +66,8 @@ urlpatterns = [
     # Fabric Image URLs
     path('images/<int:image_id>/set-primary/', FabricImagePrimaryView.as_view(), name='fabric-image-set-primary'),
     path('images/<int:image_id>/delete/', FabricImageDeleteView.as_view(), name='fabric-image-delete'),
+    path('images/<int:image_id>/update/', FabricImageUpdateView.as_view(), name='fabric-image-update'),
+    path('fabrics/<int:fabric_id>/images/add/', FabricImageAddView.as_view(), name='fabric-image-add'),
     
     # Admin Review URLs
     path('admin/profiles/review/', TailorProfileReviewListView.as_view(), name='admin-profiles-review'),

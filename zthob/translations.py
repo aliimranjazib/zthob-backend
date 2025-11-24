@@ -212,3 +212,5 @@ def add_translation(message_key, arabic_translation):
     """
     TRANSLATIONS[message_key] = arabic_translation
 
+
+

@@ -539,9 +539,12 @@ class FabricImageDeleteView(BaseTailorAuthenticatedView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
         
+        # Store fabric reference before deletion
+        fabric = image.fabric
+        
         # If this is the primary image, set another image as primary
         if image.is_primary:
-            remaining_images = image.fabric.gallery.exclude(pk=image_id)
+            remaining_images = fabric.gallery.exclude(pk=image_id)
             if remaining_images.exists():
                 new_primary = remaining_images.first()
                 new_primary.is_primary = True
@@ -550,11 +553,245 @@ class FabricImageDeleteView(BaseTailorAuthenticatedView):
         # Delete the image
         image.delete()
         
+        # Refresh fabric from database to get updated gallery
+        fabric.refresh_from_db()
+        
         # Return the updated fabric
-        fabric_serializer = FabricSerializer(image.fabric, context={'request': request})
+        fabric_serializer = FabricSerializer(fabric, context={'request': request})
         return api_response(
             success=True, 
             message="Image deleted successfully", 
+            data=fabric_serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+@extend_schema(
+    tags=["Fabric Images"],
+    description="Add new images to an existing fabric"
+)
+class FabricImageAddView(BaseTailorAuthenticatedView):
+    """
+    View to add new images to an existing fabric
+    """
+    parser_classes = [MultiPartParser, FormParser]
+    
+    @extend_schema(
+        description="Add one or more images to an existing fabric. Maximum 4 images total per fabric.",
+        responses={
+            200: FabricSerializer,
+            400: {"description": "Validation failed - maximum images exceeded or invalid data"},
+            404: {"description": "Fabric not found"},
+            403: {"description": "You don't have permission to modify this fabric"}
+        }
+    )
+    def post(self, request, fabric_id):
+        # Get the fabric
+        try:
+            fabric = Fabric.objects.select_related('tailor').get(pk=fabric_id)
+        except Fabric.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Fabric not found",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check permissions
+        if fabric.tailor.user != request.user:
+            return api_response(
+                success=False,
+                message="You don't have permission to modify this fabric",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check current image count
+        current_image_count = fabric.gallery.count()
+        
+        # Extract images from request
+        images_data = []
+        i = 0
+        while True:
+            image_key = f'images[{i}][image]'
+            is_primary_key = f'images[{i}][is_primary]'
+            order_key = f'images[{i}][order]'
+            
+            if image_key in request.FILES:
+                image_data = {
+                    'image': request.FILES[image_key],
+                    'is_primary': request.POST.get(is_primary_key, 'false').lower() == 'true',
+                    'order': int(request.POST.get(order_key, str(current_image_count + i)))
+                }
+                images_data.append(image_data)
+                i += 1
+            else:
+                break
+        
+        if not images_data:
+            return api_response(
+                success=False,
+                message="No images provided",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check total image count limit (max 4 images)
+        total_images_after_add = current_image_count + len(images_data)
+        if total_images_after_add > 4:
+            return api_response(
+                success=False,
+                message=f"Maximum 4 images allowed per fabric. Currently have {current_image_count}, trying to add {len(images_data)}",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate images
+        for img_data in images_data:
+            image = img_data['image']
+            # Check file size (5MB limit)
+            if image.size > 5 * 1024 * 1024:
+                return api_response(
+                    success=False,
+                    message=f"Image size exceeds 5MB limit: {image.name}",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            # Check file format
+            allowed_extensions = ['jpg', 'jpeg', 'png']
+            file_extension = image.name.split('.')[-1].lower()
+            if file_extension not in allowed_extensions:
+                return api_response(
+                    success=False,
+                    message=f"Invalid file format for {image.name}. Only JPG, JPEG, and PNG files are allowed.",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Check if any image is marked as primary
+        primary_images = [img for img in images_data if img.get('is_primary', False)]
+        if len(primary_images) > 1:
+            return api_response(
+                success=False,
+                message="Only one image can be marked as primary",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # If marking one as primary, unset existing primary
+        if primary_images:
+            fabric.gallery.filter(is_primary=True).update(is_primary=False)
+        
+        # Create new images
+        for img_data in images_data:
+            FabricImage.objects.create(
+                fabric=fabric,
+                image=img_data['image'],
+                is_primary=img_data.get('is_primary', False),
+                order=img_data.get('order', current_image_count),
+            )
+        
+        # Refresh fabric to get updated gallery
+        fabric.refresh_from_db()
+        
+        # Return the updated fabric
+        fabric_serializer = FabricSerializer(fabric, context={'request': request})
+        return api_response(
+            success=True,
+            message=f"Successfully added {len(images_data)} image(s) to fabric",
+            data=fabric_serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+@extend_schema(
+    tags=["Fabric Images"],
+    description="Update or replace an existing fabric image"
+)
+class FabricImageUpdateView(BaseTailorAuthenticatedView):
+    """
+    View to update/replace an existing fabric image file
+    """
+    parser_classes = [MultiPartParser, FormParser]
+    
+    @extend_schema(
+        description="Replace an existing fabric image file. Optionally update is_primary and order.",
+        responses={
+            200: FabricSerializer,
+            400: {"description": "Validation failed"},
+            404: {"description": "Image not found"},
+            403: {"description": "You don't have permission to modify this image"}
+        }
+    )
+    def patch(self, request, image_id):
+        # Find the image
+        try:
+            image = FabricImage.objects.select_related('fabric', 'fabric__tailor').get(pk=image_id)
+        except FabricImage.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Image not found",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check permissions
+        if image.fabric.tailor.user != request.user:
+            return api_response(
+                success=False,
+                message="You don't have permission to modify this image",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Update image file if provided
+        if 'image' in request.FILES:
+            new_image = request.FILES['image']
+            
+            # Validate file size (5MB limit)
+            if new_image.size > 5 * 1024 * 1024:
+                return api_response(
+                    success=False,
+                    message=f"Image size exceeds 5MB limit: {new_image.name}",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate file format
+            allowed_extensions = ['jpg', 'jpeg', 'png']
+            file_extension = new_image.name.split('.')[-1].lower()
+            if file_extension not in allowed_extensions:
+                return api_response(
+                    success=False,
+                    message=f"Invalid file format for {new_image.name}. Only JPG, JPEG, and PNG files are allowed.",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Delete old image file
+            if image.image:
+                image.image.delete(save=False)
+            
+            # Set new image
+            image.image = new_image
+        
+        # Update is_primary if provided
+        if 'is_primary' in request.POST:
+            is_primary = request.POST.get('is_primary', 'false').lower() == 'true'
+            if is_primary:
+                # Unset other primary images
+                image.fabric.gallery.filter(is_primary=True).exclude(pk=image_id).update(is_primary=False)
+            image.is_primary = is_primary
+        
+        # Update order if provided
+        if 'order' in request.POST:
+            try:
+                image.order = int(request.POST.get('order'))
+            except ValueError:
+                return api_response(
+                    success=False,
+                    message="Invalid order value",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Save the image
+        image.save()
+        
+        # Refresh fabric to get updated gallery
+        image.fabric.refresh_from_db()
+        
+        # Return the updated fabric
+        fabric_serializer = FabricSerializer(image.fabric, context={'request': request})
+        return api_response(
+            success=True,
+            message="Image updated successfully",
             data=fabric_serializer.data,
             status_code=status.HTTP_200_OK
         )
