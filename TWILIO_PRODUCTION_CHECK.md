@@ -29,7 +29,7 @@ journalctl -u gunicorn --since "10 minutes ago" | grep -i "sms\|twilio"
 # SSH to server
 ssh root@69.62.126.95
 cd /home/zthob-backend
-
+# okkkk
 # Check if .env file exists and has Twilio credentials
 cat .env | grep TWILIO
 
