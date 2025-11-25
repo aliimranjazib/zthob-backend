@@ -522,6 +522,9 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
     items = serializers.SerializerMethodField()
     assignment_status = serializers.SerializerMethodField()
     custom_styles = serializers.SerializerMethodField()
+    status_info = serializers.SerializerMethodField()
+    rider_status = serializers.CharField(read_only=True)
+    tailor_status = serializers.CharField(read_only=True)
     
     class Meta:
         model = Order
@@ -530,6 +533,8 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'order_number',
             'order_type',
             'status',
+            'rider_status',
+            'tailor_status',
             'payment_status',
             'payment_method',
             'total_amount',
@@ -549,6 +554,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'special_instructions',
             'rider_measurements',
             'measurement_taken_at',
+            'status_info',
             'created_at',
         ]
     
@@ -637,6 +643,72 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
     def get_custom_styles(self, obj):
         """Return custom_styles, or empty array if None"""
         return obj.custom_styles if obj.custom_styles is not None else []
+    
+    def get_status_info(self, obj):
+        """Get status information including next available actions for riders"""
+        request = self.context.get('request')
+        if not request or not request.user:
+            return None
+        
+        user_role = request.user.role
+        
+        # Get allowed transitions from service
+        from apps.orders.services import OrderStatusTransitionService
+        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, user_role)
+        
+        # Build next available actions
+        next_actions = []
+        
+        # Add status actions
+        for status_value in allowed_transitions.get('status', []):
+            action = self._build_status_action('status', status_value, user_role)
+            if action:
+                next_actions.append(action)
+        
+        # Add rider_status actions
+        for rider_status_value in allowed_transitions.get('rider_status', []):
+            action = self._build_status_action('rider_status', rider_status_value, user_role)
+            if action:
+                next_actions.append(action)
+        
+        # Add tailor_status actions
+        for tailor_status_value in allowed_transitions.get('tailor_status', []):
+            action = self._build_status_action('tailor_status', tailor_status_value, user_role)
+            if action:
+                next_actions.append(action)
+        
+        # Check if order can be cancelled
+        can_cancel = False
+        cancel_reason = None
+        if user_role == 'USER' and obj.status == 'pending':
+            can_cancel = True
+        elif obj.status in ['delivered', 'cancelled']:
+            cancel_reason = f"Order is {obj.status} and cannot be cancelled"
+        elif obj.status != 'pending':
+            cancel_reason = "Orders can only be cancelled when status is pending"
+        
+        # Calculate status progress
+        status_progress = self._calculate_status_progress(obj)
+        
+        return {
+            'current_status': obj.status,
+            'current_rider_status': obj.rider_status,
+            'current_tailor_status': obj.tailor_status,
+            'next_available_actions': next_actions,
+            'can_cancel': can_cancel,
+            'cancel_reason': cancel_reason,
+            'status_progress': status_progress,
+        }
+    
+    def _build_status_action(self, action_type, value, user_role):
+        """Build action object for status transition - reuse from OrderSerializer"""
+        from apps.orders.serializers import OrderSerializer
+        return OrderSerializer._build_status_action(OrderSerializer(), action_type, value, user_role)
+    
+    def _calculate_status_progress(self, obj):
+        """Calculate progress percentage - reuse from OrderSerializer"""
+        from apps.orders.serializers import OrderSerializer
+        return OrderSerializer._calculate_status_progress(OrderSerializer(), obj)
 
 
 class RiderAcceptOrderSerializer(serializers.Serializer):
