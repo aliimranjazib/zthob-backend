@@ -19,14 +19,30 @@ class SendOTPView(BasePhoneVerificationView):
         serializer = PhoneVerificationSerializer(data=request.data)
         if serializer.is_valid():
             phone_number = serializer.validated_data['phone_number']
-            verification, otp_code = PhoneVerificationService.create_verification(
+            verification, otp_code, sms_success, sms_message = PhoneVerificationService.create_verification(
                 user=request.user,
                 phone_number=phone_number
             )
-            return api_response(
-                success=True,
-                message=f"OTP sent to {phone_number}"
-            )
+            
+            # Include SMS status in response for debugging
+            response_data = {
+                "sms_sent": sms_success,
+                "sms_message": sms_message if not sms_success else "SMS sent successfully"
+            }
+            
+            if sms_success:
+                return api_response(
+                    success=True,
+                    message=f"OTP sent to {phone_number}",
+                    data=response_data
+                )
+            else:
+                # Still return success but warn about SMS failure
+                return api_response(
+                    success=True,
+                    message=f"OTP generated for {phone_number}, but SMS sending failed. Please check server logs.",
+                    data=response_data
+                )
         else:
             return api_response(
                 success=False,

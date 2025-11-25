@@ -41,9 +41,12 @@ class PhoneVerificationService:
         
         if not sms_success:
             # Log error but don't fail - OTP is still created
-            logger.error(f"Failed to send SMS OTP: {sms_message}")
+            logger.error(f"Failed to send SMS OTP to {formatted_phone}: {sms_message}")
+            logger.error(f"OTP Code: {otp_code} (for manual testing if SMS fails)")
+        else:
+            logger.info(f"SMS OTP sent successfully to {formatted_phone}: {sms_message}")
         
-        return verification, otp_code
+        return verification, otp_code, sms_success, sms_message
     
     @staticmethod
     def verify_otp(user, otp_code):
