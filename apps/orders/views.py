@@ -382,24 +382,24 @@ class CustomerOrderListView(APIView):
             status_code=status.HTTP_200_OK
         )
 class TailorAvailableOrdersView(APIView):
-    """Get orders available for tailor to accept (pending orders not yet accepted)"""
+    """Get all non-completed orders assigned to tailor (includes both pending and accepted orders)"""
     permission_classes=[IsAuthenticated]
     
     @extend_schema(
         responses=OrderListSerializer(many=True),
         summary="Get available orders for tailor",
-        description="Retrieve orders assigned to tailor that are pending acceptance (status=pending, tailor_status=none). These are orders that tailor can accept.",
+        description="Retrieve all non-completed orders assigned to tailor (excludes 'delivered' and 'cancelled' statuses). Includes both pending orders and orders that tailor has already accepted, allowing frontend to manage all active orders in one screen.",
         tags=["Tailor Orders"]
     )
     def get(self, request):
         try:
             tailor_profile = TailorProfile.objects.get(user=request.user)
-            # Only show orders that are pending and not yet accepted by this tailor
+            # Show all orders that are not completed yet (exclude delivered and cancelled)
             orders = Order.objects.filter(
-                tailor=request.user,
-                status='pending',
-                tailor_status='none'
-            ).select_related('customer', 'delivery_address').prefetch_related('order_items__fabric').order_by('-created_at')
+                tailor=request.user
+            ).exclude(
+                status__in=['delivered', 'cancelled']
+            ).select_related('customer', 'delivery_address', 'rider').prefetch_related('order_items__fabric').order_by('-created_at')
             
             # Filter by payment status
             payment_status = request.query_params.get('payment_status')
