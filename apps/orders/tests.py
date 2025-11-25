@@ -911,3 +911,385 @@ class OrderPaymentStatusUpdateViewTest(TestCase):
         self.assertEqual(response3.status_code, status.HTTP_400_BAD_REQUEST)
         self.order.refresh_from_db()
         self.assertEqual(self.order.payment_status, 'refunded')  # Should remain refunded
+
+
+class TailorAvailableOrdersViewTest(TestCase):
+    """Comprehensive tests for TailorAvailableOrdersView - shows all non-completed orders"""
+    
+    def setUp(self):
+        """Set up test data"""
+        # Create tailor
+        self.tailor_user = User.objects.create_user(
+            username=f'tailor_avail_{id(self)}',
+            email=f'tailor_avail_{id(self)}@example.com',
+            password='testpass123',
+            role='TAILOR'
+        )
+        self.tailor_profile, _ = TailorProfile.objects.get_or_create(
+            user=self.tailor_user,
+            defaults={
+                'shop_name': 'Test Tailor Shop',
+                'shop_status': True
+            }
+        )
+        
+        # Create another tailor (for isolation tests)
+        self.other_tailor_user = User.objects.create_user(
+            username=f'other_tailor_{id(self)}',
+            email=f'other_tailor_{id(self)}@example.com',
+            password='testpass123',
+            role='TAILOR'
+        )
+        TailorProfile.objects.get_or_create(
+            user=self.other_tailor_user,
+            defaults={
+                'shop_name': 'Other Tailor Shop',
+                'shop_status': True
+            }
+        )
+        
+        # Create customer
+        self.customer = User.objects.create_user(
+            username=f'customer_avail_{id(self)}',
+            email=f'customer_avail_{id(self)}@example.com',
+            password='testpass123',
+            role='USER'
+        )
+        
+        # Create fabric category
+        self.fabric_category = FabricCategory.objects.create(
+            name='Fabric',
+            slug='fabric'
+        )
+        
+        # Create fabric
+        self.fabric = Fabric.objects.create(
+            tailor=self.tailor_profile,
+            name='Test Fabric',
+            price=Decimal('100.00'),
+            stock=10,
+            is_active=True,
+            category=self.fabric_category
+        )
+        
+        # Create delivery address
+        self.address = Address.objects.create(
+            user=self.customer,
+            street='123 Test St',
+            city='Riyadh',
+            country='Saudi Arabia'
+        )
+        
+        # Create API client
+        self.tailor_client = APIClient()
+        self.tailor_client.force_authenticate(user=self.tailor_user)
+        
+        self.unauth_client = APIClient()
+    
+    def create_order(self, status='pending', tailor_status='none', payment_status='paid', order_type='fabric_only', tailor=None):
+        """Helper method to create orders"""
+        tailor = tailor or self.tailor_user
+        order = Order.objects.create(
+            customer=self.customer,
+            tailor=tailor,
+            order_type=order_type,
+            payment_method='cod',
+            delivery_address=self.address,
+            status=status,
+            tailor_status=tailor_status,
+            payment_status=payment_status,
+            subtotal=Decimal('100.00'),
+            tax_amount=Decimal('15.00'),
+            delivery_fee=Decimal('25.00'),
+            total_amount=Decimal('140.00')
+        )
+        OrderItem.objects.create(
+            order=order,
+            fabric=self.fabric,
+            quantity=1,
+            unit_price=Decimal('100.00')
+        )
+        return order
+    
+    # ========== BASIC FUNCTIONALITY TESTS ==========
+    
+    def test_shows_pending_orders(self):
+        """Test that pending orders are shown"""
+        order = self.create_order(status='pending', tailor_status='none')
+        
+        url = '/api/orders/tailor/available-orders/'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get('success'))
+        self.assertEqual(len(response.data['data']), 1)
+        self.assertEqual(response.data['data'][0]['id'], order.id)
+        self.assertEqual(response.data['data'][0]['status'], 'pending')
+    
+    def test_shows_accepted_orders(self):
+        """Test that accepted orders are shown (new behavior)"""
+        order = self.create_order(status='confirmed', tailor_status='accepted')
+        
+        url = '/api/orders/tailor/available-orders/'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get('success'))
+        self.assertEqual(len(response.data['data']), 1)
+        self.assertEqual(response.data['data'][0]['id'], order.id)
+        self.assertEqual(response.data['data'][0]['status'], 'confirmed')
+        self.assertEqual(response.data['data'][0]['tailor_status'], 'accepted')
+    
+    def test_shows_in_progress_orders(self):
+        """Test that in_progress orders are shown"""
+        order = self.create_order(status='in_progress', tailor_status='accepted')
+        
+        url = '/api/orders/tailor/available-orders/'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']), 1)
+        self.assertEqual(response.data['data'][0]['id'], order.id)
+        self.assertEqual(response.data['data'][0]['status'], 'in_progress')
+    
+    def test_shows_ready_for_delivery_orders(self):
+        """Test that ready_for_delivery orders are shown"""
+        order = self.create_order(status='ready_for_delivery', tailor_status='stitched')
+        
+        url = '/api/orders/tailor/available-orders/'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']), 1)
+        self.assertEqual(response.data['data'][0]['id'], order.id)
+        self.assertEqual(response.data['data'][0]['status'], 'ready_for_delivery')
+    
+    def test_excludes_delivered_orders(self):
+        """Test that delivered orders are excluded"""
+        self.create_order(status='delivered', tailor_status='stitched')
+        
+        url = '/api/orders/tailor/available-orders/'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']), 0)
+    
+    def test_excludes_cancelled_orders(self):
+        """Test that cancelled orders are excluded"""
+        self.create_order(status='cancelled', tailor_status='none')
+        
+        url = '/api/orders/tailor/available-orders/'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']), 0)
+    
+    def test_shows_multiple_non_completed_orders(self):
+        """Test that multiple non-completed orders are shown"""
+        order1 = self.create_order(status='pending', tailor_status='none')
+        order2 = self.create_order(status='confirmed', tailor_status='accepted')
+        order3 = self.create_order(status='in_progress', tailor_status='stitching_started')
+        order4 = self.create_order(status='ready_for_delivery', tailor_status='stitched')
+        
+        # These should be excluded
+        self.create_order(status='delivered', tailor_status='stitched')
+        self.create_order(status='cancelled', tailor_status='none')
+        
+        url = '/api/orders/tailor/available-orders/'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']), 4)
+        
+        order_ids = [order['id'] for order in response.data['data']]
+        self.assertIn(order1.id, order_ids)
+        self.assertIn(order2.id, order_ids)
+        self.assertIn(order3.id, order_ids)
+        self.assertIn(order4.id, order_ids)
+    
+    # ========== FILTER TESTS ==========
+    
+    def test_filter_by_payment_status_paid(self):
+        """Test filtering by payment_status=paid"""
+        order1 = self.create_order(payment_status='paid', status='pending')
+        order2 = self.create_order(payment_status='paid', status='confirmed')
+        self.create_order(payment_status='pending', status='pending')
+        
+        url = '/api/orders/tailor/available-orders/?payment_status=paid'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']), 2)
+        
+        order_ids = [order['id'] for order in response.data['data']]
+        self.assertIn(order1.id, order_ids)
+        self.assertIn(order2.id, order_ids)
+    
+    def test_filter_by_payment_status_pending(self):
+        """Test filtering by payment_status=pending"""
+        order1 = self.create_order(payment_status='pending', status='pending')
+        self.create_order(payment_status='paid', status='pending')
+        
+        url = '/api/orders/tailor/available-orders/?payment_status=pending'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']), 1)
+        self.assertEqual(response.data['data'][0]['id'], order1.id)
+    
+    def test_filter_by_order_type_fabric_only(self):
+        """Test filtering by order_type=fabric_only"""
+        order1 = self.create_order(order_type='fabric_only', status='pending')
+        order2 = self.create_order(order_type='fabric_only', status='confirmed')
+        self.create_order(order_type='fabric_with_stitching', status='pending')
+        
+        url = '/api/orders/tailor/available-orders/?order_type=fabric_only'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']), 2)
+        
+        order_ids = [order['id'] for order in response.data['data']]
+        self.assertIn(order1.id, order_ids)
+        self.assertIn(order2.id, order_ids)
+    
+    def test_filter_by_order_type_fabric_with_stitching(self):
+        """Test filtering by order_type=fabric_with_stitching"""
+        order1 = self.create_order(order_type='fabric_with_stitching', status='pending')
+        self.create_order(order_type='fabric_only', status='pending')
+        
+        url = '/api/orders/tailor/available-orders/?order_type=fabric_with_stitching'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']), 1)
+        self.assertEqual(response.data['data'][0]['id'], order1.id)
+    
+    def test_filter_by_payment_status_and_order_type(self):
+        """Test filtering by both payment_status and order_type"""
+        order1 = self.create_order(
+            payment_status='paid',
+            order_type='fabric_only',
+            status='pending'
+        )
+        self.create_order(payment_status='pending', order_type='fabric_only', status='pending')
+        self.create_order(payment_status='paid', order_type='fabric_with_stitching', status='pending')
+        
+        url = '/api/orders/tailor/available-orders/?payment_status=paid&order_type=fabric_only'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']), 1)
+        self.assertEqual(response.data['data'][0]['id'], order1.id)
+    
+    # ========== ISOLATION TESTS ==========
+    
+    def test_only_shows_orders_for_authenticated_tailor(self):
+        """Test that only orders assigned to authenticated tailor are shown"""
+        order1 = self.create_order(tailor=self.tailor_user, status='pending')
+        order2 = self.create_order(tailor=self.tailor_user, status='confirmed')
+        # Order for another tailor
+        self.create_order(tailor=self.other_tailor_user, status='pending')
+        
+        url = '/api/orders/tailor/available-orders/'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']), 2)
+        
+        order_ids = [order['id'] for order in response.data['data']]
+        self.assertIn(order1.id, order_ids)
+        self.assertIn(order2.id, order_ids)
+    
+    # ========== PERMISSION TESTS ==========
+    
+    def test_unauthenticated_user_cannot_access(self):
+        """Test that unauthenticated user cannot access"""
+        url = '/api/orders/tailor/available-orders/'
+        response = self.unauth_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+    
+    def test_non_tailor_user_cannot_access(self):
+        """Test that non-tailor user cannot access"""
+        customer_client = APIClient()
+        customer_client.force_authenticate(user=self.customer)
+        
+        url = '/api/orders/tailor/available-orders/'
+        response = customer_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data.get('success'))
+        self.assertIn('not a tailor', response.data.get('message', '').lower())
+    
+    # ========== EDGE CASE TESTS ==========
+    
+    def test_empty_result_when_no_orders(self):
+        """Test empty result when tailor has no non-completed orders"""
+        url = '/api/orders/tailor/available-orders/'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get('success'))
+        self.assertEqual(len(response.data['data']), 0)
+    
+    def test_orders_sorted_by_created_at_descending(self):
+        """Test that orders are sorted by created_at descending (newest first)"""
+        import time
+        order1 = self.create_order(status='pending')
+        time.sleep(0.01)  # Small delay to ensure different timestamps
+        order2 = self.create_order(status='confirmed')
+        time.sleep(0.01)
+        order3 = self.create_order(status='in_progress')
+        
+        url = '/api/orders/tailor/available-orders/'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']), 3)
+        
+        # Should be ordered newest first
+        self.assertEqual(response.data['data'][0]['id'], order3.id)
+        self.assertEqual(response.data['data'][1]['id'], order2.id)
+        self.assertEqual(response.data['data'][2]['id'], order1.id)
+    
+    def test_includes_all_tailor_statuses(self):
+        """Test that orders with different tailor_statuses are included"""
+        order1 = self.create_order(status='pending', tailor_status='none')
+        order2 = self.create_order(status='confirmed', tailor_status='accepted')
+        order3 = self.create_order(status='in_progress', tailor_status='stitching_started')
+        order4 = self.create_order(status='ready_for_delivery', tailor_status='stitched')
+        
+        url = '/api/orders/tailor/available-orders/'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']), 4)
+        
+        order_ids = [order['id'] for order in response.data['data']]
+        self.assertIn(order1.id, order_ids)
+        self.assertIn(order2.id, order_ids)
+        self.assertIn(order3.id, order_ids)
+        self.assertIn(order4.id, order_ids)
+    
+    def test_mixed_completed_and_non_completed_orders(self):
+        """Test that only non-completed orders are shown when mixed with completed ones"""
+        # Non-completed orders
+        order1 = self.create_order(status='pending', tailor_status='none')
+        order2 = self.create_order(status='confirmed', tailor_status='accepted')
+        order3 = self.create_order(status='in_progress', tailor_status='stitching_started')
+        
+        # Completed orders (should be excluded)
+        self.create_order(status='delivered', tailor_status='stitched')
+        self.create_order(status='cancelled', tailor_status='none')
+        
+        url = '/api/orders/tailor/available-orders/'
+        response = self.tailor_client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']), 3)
+        
+        order_ids = [order['id'] for order in response.data['data']]
+        self.assertIn(order1.id, order_ids)
+        self.assertIn(order2.id, order_ids)
+        self.assertIn(order3.id, order_ids)
