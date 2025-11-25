@@ -111,8 +111,7 @@ class RiderSendOTPView(APIView):
             
             return api_response(
                 success=True,
-                message=f"OTP sent to {phone_number}",
-                data={"otp": otp_code}  # Remove in production!
+                message=f"OTP sent to {phone_number}"
             )
         return api_response(
             success=False,

@@ -13,4 +13,5 @@ dependencies = [
     "pillow>=11.3.0",
     "django-jazzmin>=2.6.0",
     "firebase-admin>=6.0.0",
+    "twilio>=8.0.0",
 ]

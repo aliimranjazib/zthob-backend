@@ -318,6 +318,11 @@ FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID', 'mgask-2025')
 # Optional: Set FIREBASE_CREDENTIALS_PATH only if using JSON file (not recommended)
 # FIREBASE_CREDENTIALS_PATH = os.getenv('FIREBASE_CREDENTIALS_PATH', None)
 
+# Twilio SMS Configuration
+TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID', None)
+TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN', None)
+TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER', None)
+
 # Jazzmin Admin UI Configuration - Simplified
 JAZZMIN_SETTINGS = {
     # Simple branding

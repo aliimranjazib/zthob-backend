@@ -1,7 +1,11 @@
 import random
+import logging
 from django.utils import timezone
 from datetime import timedelta
 from .models import PhoneVerification
+from .twilio_service import TwilioSMSService
+
+logger = logging.getLogger(__name__)
 
 class PhoneVerificationService:
     """Reusable service for phone verification"""
@@ -13,7 +17,7 @@ class PhoneVerificationService:
     
     @staticmethod
     def create_verification(user, phone_number):
-        """Create new phone verification record"""
+        """Create new phone verification record and send OTP via SMS"""
         # Generate OTP
         otp_code = PhoneVerificationService.generate_otp()
         
@@ -27,6 +31,17 @@ class PhoneVerificationService:
             otp_code=otp_code,
             expires_at=expires_at
         )
+        
+        # Send OTP via SMS using Twilio
+        formatted_phone = TwilioSMSService.format_phone_number(phone_number)
+        sms_success, sms_message = TwilioSMSService.send_otp_sms(
+            phone_number=formatted_phone,
+            otp_code=otp_code
+        )
+        
+        if not sms_success:
+            # Log error but don't fail - OTP is still created
+            logger.error(f"Failed to send SMS OTP: {sms_message}")
         
         return verification, otp_code
     

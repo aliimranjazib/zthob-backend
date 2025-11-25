@@ -25,8 +25,7 @@ class SendOTPView(BasePhoneVerificationView):
             )
             return api_response(
                 success=True,
-                message=f"OTP sent to {phone_number}",
-                data={"otp": otp_code}  # Remove this in production!
+                message=f"OTP sent to {phone_number}"
             )
         else:
             return api_response(
