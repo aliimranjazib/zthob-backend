@@ -142,6 +142,17 @@ class NotificationLog(BaseModel):
         help_text="When notification was sent"
     )
     
+    is_read = models.BooleanField(
+        default=False,
+        help_text="Whether the user has read this notification"
+    )
+    
+    read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the notification was read by the user"
+    )
+    
     class Meta:
         verbose_name = "Notification Log"
         verbose_name_plural = "Notification Logs"
@@ -150,6 +161,7 @@ class NotificationLog(BaseModel):
             models.Index(fields=['user', 'status']),
             models.Index(fields=['notification_type', 'status']),
             models.Index(fields=['created_at']),
+            models.Index(fields=['user', 'is_read']),
         ]
     
     def __str__(self):

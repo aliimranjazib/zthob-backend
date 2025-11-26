@@ -3,6 +3,8 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.core.paginator import Paginator
 
 from zthob.utils import api_response
 from .models import FCMDeviceToken, NotificationLog
@@ -159,26 +161,180 @@ class UnregisterFCMTokenView(APIView):
 
 
 class NotificationLogListView(APIView):
-    """Get notification logs for authenticated user"""
+    """Get notification logs for authenticated user with pagination and filtering"""
     permission_classes = [IsAuthenticated]
     
     @extend_schema(
         responses=NotificationLogSerializer(many=True),
         summary="Get Notification Logs",
-        description="Retrieve notification history for the authenticated user",
+        description="Retrieve notification history for the authenticated user with pagination, filtering, and unread count. Supports filtering by notification_type, category, and is_read status.",
         tags=["Notifications"]
     )
     def get(self, request):
-        notification_logs = NotificationLog.objects.filter(
-            user=request.user
-        ).order_by('-created_at')[:50]  # Limit to last 50
+        # Base queryset - filter by user
+        queryset = NotificationLog.objects.filter(user=request.user)
         
-        serializer = NotificationLogSerializer(notification_logs, many=True)
+        # Filter by notification_type
+        notification_type = request.query_params.get('notification_type')
+        if notification_type:
+            queryset = queryset.filter(notification_type=notification_type)
+        
+        # Filter by category
+        category = request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category=category)
+        
+        # Filter by is_read status
+        is_read_param = request.query_params.get('is_read')
+        if is_read_param is not None:
+            is_read = is_read_param.lower() in ('true', '1', 'yes')
+            queryset = queryset.filter(is_read=is_read)
+        
+        # Order by created_at descending (newest first)
+        queryset = queryset.order_by('-created_at')
+        
+        # Calculate unread count before pagination
+        unread_count = NotificationLog.objects.filter(
+            user=request.user,
+            is_read=False
+        ).count()
+        
+        # Pagination
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        
+        # Limit page_size to max 100
+        if page_size > 100:
+            page_size = 100
+        
+        paginator = Paginator(queryset, page_size)
+        total_count = paginator.count
+        
+        try:
+            page_obj = paginator.page(page)
+        except Exception:
+            page_obj = paginator.page(1)
+            page = 1
+        
+        serializer = NotificationLogSerializer(page_obj.object_list, many=True)
+        
+        # Build pagination response
+        response_data = {
+            'count': total_count,
+            'unread_count': unread_count,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': paginator.num_pages,
+            'results': serializer.data,
+        }
+        
+        # Add next and previous page URLs if available
+        if page_obj.has_next():
+            response_data['next'] = f"?page={page_obj.next_page_number()}&page_size={page_size}"
+        else:
+            response_data['next'] = None
+            
+        if page_obj.has_previous():
+            response_data['previous'] = f"?page={page_obj.previous_page_number()}&page_size={page_size}"
+        else:
+            response_data['previous'] = None
         
         return api_response(
             success=True,
             message="Notification logs retrieved successfully",
+            data=response_data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+class MarkNotificationReadView(APIView):
+    """Mark a single notification as read"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Mark Notification as Read",
+        description="Mark a specific notification as read by the authenticated user",
+        tags=["Notifications"]
+    )
+    def patch(self, request, notification_id):
+        notification = get_object_or_404(
+            NotificationLog,
+            id=notification_id,
+            user=request.user
+        )
+        
+        if not notification.is_read:
+            notification.is_read = True
+            notification.read_at = timezone.now()
+            notification.save(update_fields=['is_read', 'read_at'])
+        
+        serializer = NotificationLogSerializer(notification)
+        
+        return api_response(
+            success=True,
+            message="Notification marked as read",
             data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+class MarkAllNotificationsReadView(APIView):
+    """Mark all notifications as read for authenticated user"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Mark All Notifications as Read",
+        description="Mark all unread notifications as read for the authenticated user",
+        tags=["Notifications"]
+    )
+    def patch(self, request):
+        # Get count before update
+        unread_count = NotificationLog.objects.filter(
+            user=request.user,
+            is_read=False
+        ).count()
+        
+        # Mark all unread notifications as read
+        updated_count = NotificationLog.objects.filter(
+            user=request.user,
+            is_read=False
+        ).update(
+            is_read=True,
+            read_at=timezone.now()
+        )
+        
+        return api_response(
+            success=True,
+            message=f"Marked {updated_count} notification(s) as read",
+            data={
+                'updated_count': updated_count,
+                'unread_count': unread_count - updated_count
+            },
+            status_code=status.HTTP_200_OK
+        )
+
+
+class UnreadCountView(APIView):
+    """Get unread notification count for authenticated user"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Get Unread Notification Count",
+        description="Get the count of unread notifications for the authenticated user. Useful for badge counts.",
+        tags=["Notifications"]
+    )
+    def get(self, request):
+        unread_count = NotificationLog.objects.filter(
+            user=request.user,
+            is_read=False
+        ).count()
+        
+        return api_response(
+            success=True,
+            message="Unread count retrieved successfully",
+            data={
+                'unread_count': unread_count
+            },
             status_code=status.HTTP_200_OK
         )
 
