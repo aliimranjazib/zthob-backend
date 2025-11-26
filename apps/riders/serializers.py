@@ -4,6 +4,7 @@ from apps.core.services import PhoneVerificationService
 from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
 from apps.orders.models import Order
 from apps.orders.serializers import OrderItemSerializer
+from zthob.translations import get_language_from_request, translate_message
 
 User = get_user_model()
 
@@ -483,12 +484,14 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
         # Check if order can be cancelled
         can_cancel = False
         cancel_reason = None
+        language = get_language_from_request(request) if request else 'en'
+        
         if user_role == 'USER' and obj.status == 'pending':
             can_cancel = True
         elif obj.status in ['delivered', 'cancelled']:
-            cancel_reason = f"Order is {obj.status} and cannot be cancelled"
+            cancel_reason = translate_message("Order is {status} and cannot be cancelled", language, status=obj.status)
         elif obj.status != 'pending':
-            cancel_reason = "Orders can only be cancelled when status is pending"
+            cancel_reason = translate_message("Orders can only be cancelled when status is pending", language)
         
         # Calculate status progress
         status_progress = self._calculate_status_progress(obj)
@@ -506,7 +509,9 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
     def _build_status_action(self, action_type, value, user_role):
         """Build action object for status transition - reuse from OrderSerializer"""
         from apps.orders.serializers import OrderSerializer
-        return OrderSerializer._build_status_action(OrderSerializer(), action_type, value, user_role)
+        # Pass self to preserve context (request) for translation
+        serializer_instance = OrderSerializer(context=self.context)
+        return OrderSerializer._build_status_action(serializer_instance, action_type, value, user_role)
     
     def _calculate_status_progress(self, obj):
         """Calculate progress percentage - reuse from OrderSerializer"""
@@ -680,12 +685,14 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
         # Check if order can be cancelled
         can_cancel = False
         cancel_reason = None
+        language = get_language_from_request(request) if request else 'en'
+        
         if user_role == 'USER' and obj.status == 'pending':
             can_cancel = True
         elif obj.status in ['delivered', 'cancelled']:
-            cancel_reason = f"Order is {obj.status} and cannot be cancelled"
+            cancel_reason = translate_message("Order is {status} and cannot be cancelled", language, status=obj.status)
         elif obj.status != 'pending':
-            cancel_reason = "Orders can only be cancelled when status is pending"
+            cancel_reason = translate_message("Orders can only be cancelled when status is pending", language)
         
         # Calculate status progress
         status_progress = self._calculate_status_progress(obj)
@@ -703,7 +710,9 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
     def _build_status_action(self, action_type, value, user_role):
         """Build action object for status transition - reuse from OrderSerializer"""
         from apps.orders.serializers import OrderSerializer
-        return OrderSerializer._build_status_action(OrderSerializer(), action_type, value, user_role)
+        # Pass self to preserve context (request) for translation
+        serializer_instance = OrderSerializer(context=self.context)
+        return OrderSerializer._build_status_action(serializer_instance, action_type, value, user_role)
     
     def _calculate_status_progress(self, obj):
         """Calculate progress percentage - reuse from OrderSerializer"""

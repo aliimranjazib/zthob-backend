@@ -72,6 +72,53 @@ TRANSLATIONS = {
     "Notification sent successfully": "تم إرسال الإشعار بنجاح",
     "Notifications retrieved successfully": "تم استرجاع الإشعارات بنجاح",
     
+    # Order Status Actions - Labels
+    "Accept Order": "قبول الطلب",
+    "Mark In Progress": "تعيين قيد التنفيذ",
+    "Mark Ready for Delivery": "تعيين جاهز للتسليم",
+    "Mark Delivered": "تعيين تم التسليم",
+    "Cancel Order": "إلغاء الطلب",
+    "Start Pickup": "بدء الاستلام",
+    "Mark Picked Up": "تعيين تم الاستلام",
+    "Start Delivery": "بدء التسليم",
+    "Start Measurement": "بدء القياس",
+    "Complete Measurement": "إكمال القياس",
+    "Start Stitching": "بدء الخياطة",
+    "Finish Stitching": "إنهاء الخياطة",
+    
+    # Order Status Actions - Descriptions
+    "Accept this order": "قبول هذا الطلب",
+    "Start processing this order": "بدء معالجة هذا الطلب",
+    "Order is ready for pickup/delivery": "الطلب جاهز للاستلام/التسليم",
+    "Mark order as delivered": "تعيين الطلب كتم التسليم",
+    "Cancel this order": "إلغاء هذا الطلب",
+    "Accept this order for delivery": "قبول هذا الطلب للتسليم",
+    "On way to pickup order from tailor": "في الطريق لاستلام الطلب من الخياط",
+    "Order picked up from tailor": "تم استلام الطلب من الخياط",
+    "On way to deliver order to customer": "في الطريق لتسليم الطلب للعميل",
+    "On way to take customer measurements": "في الطريق لأخذ قياسات العميل",
+    "Measurements taken successfully": "تم أخذ القياسات بنجاح",
+    "Order delivered to customer": "تم تسليم الطلب للعميل",
+    "Start stitching the garment": "بدء خياطة الثوب",
+    "Stitching completed": "اكتملت الخياطة",
+    
+    # Order Status Actions - Confirmation Messages
+    "Are you sure you want to accept order?": "هل أنت متأكد أنك تريد قبول الطلب؟",
+    "Are you sure you want to accept this order?": "هل أنت متأكد أنك تريد قبول هذا الطلب؟",
+    "Are you sure you want to mark delivered?": "هل أنت متأكد أنك تريد تعيين تم التسليم؟",
+    "Are you sure you want to cancel order?": "هل أنت متأكد أنك تريد إلغاء الطلب؟",
+    
+    # Cancel Reason Messages
+    "Orders can only be cancelled when status is pending": "يمكن إلغاء الطلبات فقط عندما تكون الحالة معلقة",
+    "Order is {status} and cannot be cancelled": "الطلب {status} ولا يمكن إلغاؤه",
+    
+    # Shop Status Messages
+    "Shop is now ON": "المتجر الآن مفتوح",
+    "Shop is now OFF": "المتجر الآن مغلق",
+    "shop_status field is required": "حقل حالة المتجر مطلوب",
+    "shop_status must be true or false": "يجب أن تكون حالة المتجر true أو false",
+    "Profile not found": "الملف الشخصي غير موجود",
+    
     # Generic fallbacks
     "Success": "نجاح",
     "Error": "خطأ",

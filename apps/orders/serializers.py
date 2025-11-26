@@ -6,6 +6,7 @@ from apps.customers.models import Address
 from decimal import Decimal
 from django.db import transaction
 from apps.orders.services import OrderCalculationService
+from zthob.translations import get_language_from_request, translate_message
 
 
 User = get_user_model()
@@ -201,12 +202,14 @@ class OrderSerializer(serializers.ModelSerializer):
         # Check if order can be cancelled
         can_cancel = False
         cancel_reason = None
+        language = get_language_from_request(request) if request else 'en'
+        
         if user_role == 'USER' and obj.status == 'pending':
             can_cancel = True
         elif obj.status in ['delivered', 'cancelled']:
-            cancel_reason = f"Order is {obj.status} and cannot be cancelled"
+            cancel_reason = translate_message("Order is {status} and cannot be cancelled", language, status=obj.status)
         elif obj.status != 'pending':
-            cancel_reason = "Orders can only be cancelled when status is pending"
+            cancel_reason = translate_message("Orders can only be cancelled when status is pending", language)
         
         # Calculate status progress
         status_progress = self._calculate_status_progress(obj)
@@ -222,7 +225,11 @@ class OrderSerializer(serializers.ModelSerializer):
         }
     
     def _build_status_action(self, action_type, value, user_role):
-        """Build action object for status transition"""
+        """Build action object for status transition with translation support"""
+        # Get request from context for language detection
+        request = self.context.get('request')
+        language = get_language_from_request(request) if request else 'en'
+        
         # Map status values to labels and descriptions
         status_labels = {
             'status': {
@@ -252,17 +259,31 @@ class OrderSerializer(serializers.ModelSerializer):
         if not action_info:
             return None
         
+        # Translate label and description
+        translated_label = translate_message(action_info['label'], language)
+        translated_description = translate_message(action_info['description'], language)
+        
         # Determine if confirmation is required
         requires_confirmation = value in ['cancelled', 'delivered', 'accepted']
+        
+        # Build confirmation message with translation
+        confirmation_message = None
+        if requires_confirmation:
+            if value == 'accepted':
+                confirmation_message = translate_message("Are you sure you want to accept this order?", language)
+            elif value == 'delivered':
+                confirmation_message = translate_message("Are you sure you want to mark delivered?", language)
+            elif value == 'cancelled':
+                confirmation_message = translate_message("Are you sure you want to cancel order?", language)
         
         return {
             'type': action_type,
             'value': value,
-            'label': action_info['label'],
-            'description': action_info['description'],
+            'label': translated_label,
+            'description': translated_description,
             'role': user_role,
             'requires_confirmation': requires_confirmation,
-            'confirmation_message': f"Are you sure you want to {action_info['label'].lower()}?" if requires_confirmation else None
+            'confirmation_message': confirmation_message
         }
     
     def _calculate_status_progress(self, obj):
@@ -772,12 +793,14 @@ class OrderListSerializer(serializers.ModelSerializer):
         # Check if order can be cancelled
         can_cancel = False
         cancel_reason = None
+        language = get_language_from_request(request) if request else 'en'
+        
         if user_role == 'USER' and obj.status == 'pending':
             can_cancel = True
         elif obj.status in ['delivered', 'cancelled']:
-            cancel_reason = f"Order is {obj.status} and cannot be cancelled"
+            cancel_reason = translate_message("Order is {status} and cannot be cancelled", language, status=obj.status)
         elif obj.status != 'pending':
-            cancel_reason = "Orders can only be cancelled when status is pending"
+            cancel_reason = translate_message("Orders can only be cancelled when status is pending", language)
         
         # Calculate status progress
         status_progress = OrderSerializer._calculate_status_progress(self, obj)

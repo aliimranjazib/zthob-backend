@@ -275,7 +275,8 @@ class TailorShopStatusView(BaseTailorAuthenticatedView):
             return api_response(
                 success=False,
                 message="Profile not found",
-                status_code=status.HTTP_404_NOT_FOUND
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request
             )
         
         # Get shop_status from request data
@@ -284,7 +285,8 @@ class TailorShopStatusView(BaseTailorAuthenticatedView):
             return api_response(
                 success=False,
                 message="shop_status field is required",
-                status_code=status.HTTP_400_BAD_REQUEST
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request
             )
         
         # Validate that shop_status is a boolean
@@ -292,7 +294,8 @@ class TailorShopStatusView(BaseTailorAuthenticatedView):
             return api_response(
                 success=False,
                 message="shop_status must be true or false",
-                status_code=status.HTTP_400_BAD_REQUEST
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request
             )
         
         profile.shop_status = shop_status
@@ -304,5 +307,6 @@ class TailorShopStatusView(BaseTailorAuthenticatedView):
             success=True,
             message=status_message,
             data={'shop_status': shop_status},
-            status_code=status.HTTP_200_OK
+            status_code=status.HTTP_200_OK,
+            request=request
         )
