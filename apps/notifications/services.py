@@ -55,16 +55,18 @@ def get_firebase_app():
                     # - Running on Google Cloud (Cloud Run, App Engine, Compute Engine)
                     # - Using gcloud auth application-default login (local dev)
                     # - Service account is attached to the instance
-                    # When using ADC, initialize_app() will automatically detect credentials
-                    # and project ID from environment or gcloud config
-                    try:
-                        # Try with explicit project ID first
-                        _firebase_app = initialize_app({'projectId': project_id})
-                        logger.info(f"Firebase initialized using Application Default Credentials for project: {project_id}")
-                    except ValueError:
-                        # If that fails, try without projectId (ADC will detect it)
-                        _firebase_app = initialize_app()
-                        logger.info(f"Firebase initialized using Application Default Credentials (auto-detected project)")
+                    # IMPORTANT: On GCP, ensure instance service account has Firebase permissions
+                    # Clear any user ADC credentials that might interfere
+                    if 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
+                        adc_file = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+                        if 'application_default_credentials.json' in adc_file:
+                            # Remove expired user credentials to use instance service account
+                            logger.info(f"Clearing user ADC credentials to use instance service account")
+                            os.environ.pop('GOOGLE_APPLICATION_CREDENTIALS', None)
+                    
+                    # Initialize with explicit project ID - this ensures Firebase uses instance service account
+                    _firebase_app = initialize_app({'projectId': project_id})
+                    logger.info(f"Firebase initialized using Application Default Credentials for project: {project_id}")
             else:
                 _firebase_app = firebase_admin.get_app()
         except Exception as e:
@@ -186,8 +188,8 @@ class NotificationService:
                         )
                     )
                     
-                    # Send notification
-                    response = messaging.send(message)
+                    # Send notification - explicitly use the initialized app
+                    response = messaging.send(message, app=firebase_app)
                     logger.info(f"Successfully sent notification to user {user.id}, token {fcm_token.id}: {response}")
                     
                     # Log successful notification
