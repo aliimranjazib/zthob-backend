@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     # Third Pary Packages
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "drf_spectacular",
     # Apps
@@ -299,7 +300,7 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME" : timedelta(days=7),
     "REFRESH_TOKEN_LIFETIME" : timedelta(days=14),
     "ROTATE_REFRESH_TOKENS" : True,
-    "BACKLIST_AFTER_ROTATION":True, 
+    "BLACKLIST_AFTER_ROTATION": True, 
 }
 
 CORS_ALLOWED_ORIGINS=[
