@@ -69,7 +69,33 @@ class OrderCalculationService:
         return system_settings.delivery_fee_under_10km
 
     @staticmethod
-    def calculate_all_totals(items_data, distance_km=None, delivery_address=None, tailor=None, tax_rate=None):
+    def calculate_stitching_price(items_data, order_type):
+        """
+        Calculate stitching price from fabric items.
+        
+        Args:
+            items_data: List of items with fabric and quantity
+            order_type: Type of order ('fabric_only' or 'fabric_with_stitching')
+        
+        Returns:
+            Decimal: Total stitching price
+        """
+        if order_type != 'fabric_with_stitching':
+            return Decimal('0.00')
+        
+        stitching_total = Decimal('0.00')
+        for item in items_data:
+            fabric = item['fabric']
+            quantity = Decimal(str(item.get('quantity', 1)))
+            
+            # Get stitching price from fabric (from tailor)
+            if fabric.stitching_price is not None:
+                stitching_total += fabric.stitching_price * quantity
+        
+        return stitching_total.quantize(Decimal('0.01'))
+
+    @staticmethod
+    def calculate_all_totals(items_data, distance_km=None, delivery_address=None, tailor=None, tax_rate=None, order_type='fabric_only'):
         """
         Calculate all order totals.
         
@@ -79,19 +105,31 @@ class OrderCalculationService:
             delivery_address: Delivery address (optional)
             tailor: Tailor object (optional)
             tax_rate: Custom tax rate (optional, uses system settings if not provided)
+            order_type: Type of order ('fabric_only' or 'fabric_with_stitching') - determines if stitching price is included
         """
         subtotal = OrderCalculationService.calculate_subtotal(items_data)
+        
+        # Calculate stitching price if order type is fabric_with_stitching
+        stitching_price = OrderCalculationService.calculate_stitching_price(items_data, order_type)
+        
+        # Subtotal includes fabric price, stitching price is added separately
+        # Tax is calculated on subtotal (fabric price only)
         tax_amount = OrderCalculationService.calculate_tax(subtotal, tax_rate)
+        
+        # Delivery fee is calculated on subtotal (fabric price only)
         delivery_fee = OrderCalculationService.calculate_delivery_fee(
             subtotal, 
             distance_km=distance_km,
             delivery_address=delivery_address,
             tailor=tailor
         )
-        total_amount = subtotal + tax_amount + delivery_fee
+        
+        # Total includes: subtotal (fabric) + stitching_price + tax + delivery_fee
+        total_amount = subtotal + stitching_price + tax_amount + delivery_fee
         
         return {
             'subtotal': subtotal,
+            'stitching_price': stitching_price,
             'tax_amount': tax_amount,
             'delivery_fee': delivery_fee,
             'total_amount': total_amount.quantize(Decimal('0.01'))

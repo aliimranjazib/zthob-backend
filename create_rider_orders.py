@@ -153,7 +153,8 @@ def create_order(order_type, customer, tailor, fabrics, address, rider, order_nu
         items_data=items_data,
         distance_km=distance_km,
         delivery_address=address,
-        tailor=tailor
+        tailor=tailor,
+        order_type=order_type
     )
     
     # Create order
