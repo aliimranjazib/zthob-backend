@@ -5,12 +5,14 @@ from apps.accounts.views import (
     UserLoginView,
     UserProfileView,
     ChangePasswordView,
+    UserLogoutView,
     test_deployment)
 
 
 urlpatterns = [
     path('register/',UserRegistrationView.as_view(),name='user-register'),
     path('login/',UserLoginView.as_view(),name='user-login'),
+    path('logout/',UserLogoutView.as_view(),name='user-logout'),
     path('profile/',UserProfileView.as_view(),name='user-profile'),
     path('change-password/',ChangePasswordView.as_view(),name='change-password'),
     path('test-deployment/', test_deployment, name='test-deployment'),

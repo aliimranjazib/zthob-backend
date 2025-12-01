@@ -285,11 +285,14 @@ class Order(BaseModel):
         totals = OrderCalculationService.calculate_all_totals(
                 items_data,
                 delivery_address=self.delivery_address,
-                tailor=self.tailor
+                tailor=self.tailor,
+                order_type=self.order_type
         )
         self.subtotal = totals['subtotal']
         self.tax_amount = totals['tax_amount']
         self.delivery_fee = totals['delivery_fee']
+        # Remove stitching_price from totals if it exists (Order model doesn't have this field yet)
+        totals.pop('stitching_price', None)
         self.total_amount = totals['total_amount']
         self.save(update_fields=['subtotal', 'tax_amount', 'delivery_fee', 'total_amount'])
 

@@ -516,12 +516,21 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         if distance_km is not None:
             distance_km = float(distance_km)
         
+        # Get order_type to pass to calculation service
+        order_type = validated_data.get('order_type', 'fabric_only')
+        
         totals = OrderCalculationService.calculate_all_totals(
             items_data=items_with_fabrics,
             distance_km=distance_km,
             delivery_address=delivery_address,
-            tailor=tailor
+            tailor=tailor,
+            order_type=order_type
         )
+        
+        # Remove stitching_price from totals if it exists (Order model doesn't have this field yet)
+        # It's already included in total_amount
+        totals.pop('stitching_price', None)
+        
         validated_data.update(totals)
         order = Order.objects.create(**validated_data)
         for item_data in items_with_fabrics:

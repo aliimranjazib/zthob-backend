@@ -15,6 +15,7 @@ from .serializers import (
     ChangePasswordSerializer,
     )
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 from zthob.utils import api_response
 from drf_spectacular.utils import extend_schema
 
@@ -138,6 +139,45 @@ class ChangePasswordView(APIView):
             errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
         )
+
+class UserLogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        tags=["Profile"],
+        summary="Logout user and invalidate refresh token"
+    )
+    def post(self, request):
+        try:
+            refresh_token = request.data.get('refresh_token')
+            if not refresh_token:
+                return api_response(
+                    success=False,
+                    message="Refresh token is required",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            
+            return api_response(
+                success=True,
+                message="Logout successful",
+                status_code=status.HTTP_200_OK
+            )
+        except TokenError:
+            return api_response(
+                success=False,
+                message="Invalid or expired token",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return api_response(
+                success=False,
+                message="Logout failed",
+                errors=str(e),
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
 
 @api_view(['GET'])
 def test_deployment(request):
