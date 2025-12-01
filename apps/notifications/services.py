@@ -30,11 +30,36 @@ def get_firebase_app():
             # Check if Firebase is already initialized
             if not firebase_admin._apps:
                 import os
-                # Get project ID from settings or environment variable
-                project_id = getattr(settings, 'FIREBASE_PROJECT_ID', None) or os.environ.get('GOOGLE_CLOUD_PROJECT') or os.environ.get('FIREBASE_PROJECT_ID')
+                # Get project ID from multiple sources (priority order)
+                project_id = None
+                
+                # 1. Try from settings
+                project_id = getattr(settings, 'FIREBASE_PROJECT_ID', None)
+                
+                # 2. Try from environment variables
+                if not project_id:
+                    project_id = os.environ.get('GOOGLE_CLOUD_PROJECT') or os.environ.get('FIREBASE_PROJECT_ID')
+                
+                # 3. If on GCP, try to get from metadata server
+                if not project_id:
+                    try:
+                        import urllib.request
+                        req = urllib.request.Request(
+                            'http://169.254.169.254/computeMetadata/v1/project/project-id',
+                            headers={'Metadata-Flavor': 'Google'}
+                        )
+                        project_id = urllib.request.urlopen(req, timeout=2).read().decode('utf-8')
+                        logger.info(f"Got project ID from GCP metadata server: {project_id}")
+                    except:
+                        pass
                 
                 if not project_id:
-                    raise ValueError("FIREBASE_PROJECT_ID must be set in settings.py or GOOGLE_CLOUD_PROJECT environment variable")
+                    raise ValueError("FIREBASE_PROJECT_ID must be set in settings.py, GOOGLE_CLOUD_PROJECT environment variable, or available from GCP metadata server")
+                
+                # Set GOOGLE_CLOUD_PROJECT environment variable for Firebase SDK
+                if not os.environ.get('GOOGLE_CLOUD_PROJECT'):
+                    os.environ['GOOGLE_CLOUD_PROJECT'] = project_id
+                    logger.info(f"Set GOOGLE_CLOUD_PROJECT environment variable to: {project_id}")
                 
                 # Method 1: Try credentials file path (service account JSON)
                 cred_path = getattr(settings, 'FIREBASE_CREDENTIALS_PATH', None)
@@ -55,16 +80,11 @@ def get_firebase_app():
                     # - Running on Google Cloud (Cloud Run, App Engine, Compute Engine)
                     # - Using gcloud auth application-default login (local dev)
                     # - Service account is attached to the instance
-                    # When using ADC, initialize_app() will automatically detect credentials
-                    # and project ID from environment or gcloud config
-                    try:
-                        # Try with explicit project ID first
-                        _firebase_app = initialize_app({'projectId': project_id})
-                        logger.info(f"Firebase initialized using Application Default Credentials for project: {project_id}")
-                    except ValueError:
-                        # If that fails, try without projectId (ADC will detect it)
-                        _firebase_app = initialize_app()
-                        logger.info(f"Firebase initialized using Application Default Credentials (auto-detected project)")
+                    # IMPORTANT: Must specify projectId when using ADC
+                    # Also set GOOGLE_CLOUD_PROJECT to ensure Firebase SDK can access it
+                    firebase_config = {'projectId': project_id}
+                    _firebase_app = initialize_app(firebase_config)
+                    logger.info(f"Firebase initialized using Application Default Credentials for project: {project_id}")
             else:
                 _firebase_app = firebase_admin.get_app()
         except Exception as e:
