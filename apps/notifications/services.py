@@ -61,6 +61,10 @@ def get_firebase_app():
                             cred_data = json.load(f)
                             if cred_data.get('type') == 'external_account':
                                 # Workload Identity Federation credentials
+                                # Enable executable commands for Workload Identity
+                                os.environ['GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES'] = '1'
+                                logger.info("Enabled GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES for Workload Identity")
+                                
                                 from google.auth import load_credentials_from_file
                                 cred, _ = load_credentials_from_file(
                                     cred_path,
