@@ -1,12 +1,27 @@
 import logging
-from typing import List, Dict, Optional
+import requests
+from typing import List, Dict, Optional, Tuple
 from django.conf import settings
 from django.utils import timezone
-from firebase_admin import messaging, credentials, initialize_app
-import firebase_admin
 from .models import FCMDeviceToken, NotificationLog
 
+# Try to import Firebase Admin SDK (optional - only if using SDK method)
+try:
+    from firebase_admin import messaging, credentials, initialize_app
+    import firebase_admin
+    FIREBASE_SDK_AVAILABLE = True
+except ImportError:
+    FIREBASE_SDK_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.info("Firebase Admin SDK not available - using REST API only")
+
 logger = logging.getLogger(__name__)
+
+# Initialize Firebase Admin SDK (will be initialized once) - only if using SDK
+_firebase_app = None
+
+# FCM REST API endpoint
+FCM_LEGACY_API_URL = "https://fcm.googleapis.com/fcm/send"
 
 # Initialize Firebase Admin SDK (will be initialized once)
 _firebase_app = None
@@ -36,12 +51,31 @@ def get_firebase_app():
                 if not project_id:
                     raise ValueError("FIREBASE_PROJECT_ID must be set in settings.py or GOOGLE_CLOUD_PROJECT environment variable")
                 
-                # Method 1: Try credentials file path (service account JSON)
+                # Method 1: Try credentials file path (service account JSON or Workload Identity)
                 cred_path = getattr(settings, 'FIREBASE_CREDENTIALS_PATH', None)
                 if cred_path and os.path.exists(cred_path):
-                    cred = credentials.Certificate(cred_path)
-                    _firebase_app = initialize_app(cred, {'projectId': project_id})
-                    logger.info(f"Firebase initialized using credentials file for project: {project_id}")
+                    # Check if it's a Workload Identity credentials file
+                    try:
+                        import json
+                        with open(cred_path, 'r') as f:
+                            cred_data = json.load(f)
+                            if cred_data.get('type') == 'external_account':
+                                # Workload Identity Federation credentials
+                                from google.auth import load_credentials_from_file
+                                cred, _ = load_credentials_from_file(
+                                    cred_path,
+                                    scopes=['https://www.googleapis.com/auth/firebase.messaging']
+                                )
+                                _firebase_app = initialize_app(cred, {'projectId': project_id})
+                                logger.info(f"Firebase initialized using Workload Identity credentials for project: {project_id}")
+                            else:
+                                # Regular service account JSON
+                                cred = credentials.Certificate(cred_path)
+                                _firebase_app = initialize_app(cred, {'projectId': project_id})
+                                logger.info(f"Firebase initialized using credentials file for project: {project_id}")
+                    except Exception as e:
+                        logger.error(f"Error loading credentials file: {str(e)}")
+                        # Fall through to next method
                 else:
                     # Method 2: Try ADC credentials file explicitly
                     # Check standard ADC location and set environment variable
@@ -102,6 +136,96 @@ def get_firebase_app():
     return _firebase_app
 
 
+def send_fcm_via_rest_api(token: str, title: str, body: str, data: Dict = None, priority: str = 'high') -> Tuple[bool, str]:
+    """
+    Send FCM notification using REST API (Server Key method)
+    
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    server_key = getattr(settings, 'FIREBASE_SERVER_KEY', None)
+    
+    if not server_key:
+        return False, "FIREBASE_SERVER_KEY not configured"
+    
+    # Build payload
+    payload = {
+        'to': token,
+        'notification': {
+            'title': title,
+            'body': body,
+            'sound': 'default',
+        },
+        'priority': 'high' if priority == 'high' else 'normal',
+    }
+    
+    # Add data payload if provided
+    if data:
+        # Convert all values to strings (FCM requirement)
+        payload['data'] = {str(k): str(v) for k, v in data.items()}
+    
+    # Add Android-specific config
+    payload['android'] = {
+        'priority': 'high' if priority == 'high' else 'normal',
+        'notification': {
+            'sound': 'default',
+            'priority': 'high' if priority == 'high' else 'default',
+        }
+    }
+    
+    # Add iOS-specific config
+    payload['apns'] = {
+        'payload': {
+            'aps': {
+                'sound': 'default',
+                'badge': 1,
+            }
+        }
+    }
+    
+    try:
+        headers = {
+            'Authorization': f'key={server_key}',
+            'Content-Type': 'application/json',
+        }
+        
+        response = requests.post(
+            FCM_LEGACY_API_URL,
+            json=payload,
+            headers=headers,
+            timeout=10
+        )
+        
+        response.raise_for_status()
+        result = response.json()
+        
+        # Check response
+        if result.get('success') == 1:
+            message_id = result.get('results', [{}])[0].get('message_id', 'unknown')
+            return True, f"Notification sent successfully. Message ID: {message_id}"
+        elif result.get('failure') == 1:
+            error = result.get('results', [{}])[0].get('error', 'Unknown error')
+            
+            # Handle specific errors
+            if error == 'InvalidRegistration':
+                return False, "InvalidRegistration: Token is invalid or expired"
+            elif error == 'NotRegistered':
+                return False, "NotRegistered: Token is not registered"
+            elif error == 'Unavailable':
+                return False, "Unavailable: FCM service temporarily unavailable"
+            else:
+                return False, f"FCM Error: {error}"
+        else:
+            return False, f"Unexpected response: {result}"
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"FCM REST API request failed: {str(e)}")
+        return False, f"Request failed: {str(e)}"
+    except Exception as e:
+        logger.error(f"FCM REST API error: {str(e)}")
+        return False, f"Error: {str(e)}"
+
+
 class NotificationService:
     """Service for sending push notifications via Firebase Cloud Messaging"""
     
@@ -131,22 +255,26 @@ class NotificationService:
             bool: True if notification was sent successfully, False otherwise
         """
         try:
-            # Initialize Firebase if not already done
-            firebase_app = get_firebase_app()
-            if firebase_app is None:
-                # Firebase not initialized - log notification but don't send
-                logger.warning(f"Firebase not initialized - notification logged only for user {user.id}")
-                NotificationLog.objects.create(
-                    user=user,
-                    notification_type=notification_type,
-                    category=category,
-                    title=title,
-                    body=body,
-                    data=data or {},
-                    status='pending',
-                    error_message="Firebase not initialized - logged only. See FIREBASE_SETUP_ALTERNATIVES.md",
-                )
-                return True  # Return True because notification was logged successfully
+            # Check which method to use: REST API (preferred) or SDK (fallback)
+            server_key = getattr(settings, 'FIREBASE_SERVER_KEY', None)
+            use_rest_api = bool(server_key)
+            
+            if not use_rest_api:
+                # Fallback to SDK if Server Key not available
+                firebase_app = get_firebase_app()
+                if firebase_app is None:
+                    logger.warning(f"Firebase not configured - notification logged only for user {user.id}")
+                    NotificationLog.objects.create(
+                        user=user,
+                        notification_type=notification_type,
+                        category=category,
+                        title=title,
+                        body=body,
+                        data=data or {},
+                        status='pending',
+                        error_message="Firebase not configured. Set FIREBASE_SERVER_KEY or configure SDK credentials.",
+                    )
+                    return True  # Return True because notification was logged successfully
             
             # Get active FCM tokens for the user
             fcm_tokens = FCMDeviceToken.objects.filter(
@@ -161,52 +289,111 @@ class NotificationService:
             success_count = 0
             failed_tokens = []
             
+            # Build data payload
+            payload_data = {
+                'type': notification_type,
+                'category': category,
+                'title': title,
+                'body': body,
+            }
+            
+            if data:
+                # Add custom data (convert to strings for FCM)
+                for key, value in data.items():
+                    payload_data[str(key)] = str(value)
+            
             for fcm_token in fcm_tokens:
                 try:
-                    # Build notification payload
-                    notification = messaging.Notification(
-                        title=title,
-                        body=body
-                    )
-                    
-                    # Build data payload
-                    payload_data = {
-                        'type': notification_type,
-                        'category': category,
-                        'title': title,
-                        'body': body,
-                    }
-                    
-                    if data:
-                        # Add custom data (convert to strings for FCM)
-                        for key, value in data.items():
-                            payload_data[str(key)] = str(value)
-                    
-                    # Build message
-                    message = messaging.Message(
-                        notification=notification,
-                        data=payload_data,
-                        token=fcm_token.token,
-                        android=messaging.AndroidConfig(
-                            priority='high' if priority == 'high' else 'normal',
-                            notification=messaging.AndroidNotification(
-                                sound='default',
-                                priority='high' if priority == 'high' else 'default',
+                    if use_rest_api:
+                        # Method 1: REST API (preferred - no authentication issues)
+                        success, message = send_fcm_via_rest_api(
+                            token=fcm_token.token,
+                            title=title,
+                            body=body,
+                            data=payload_data,
+                            priority=priority
+                        )
+                        
+                        if success:
+                            logger.info(f"Successfully sent notification via REST API to user {user.id}, token {fcm_token.id}: {message}")
+                            
+                            # Log successful notification
+                            NotificationLog.objects.create(
+                                user=user,
+                                fcm_token=fcm_token,
+                                notification_type=notification_type,
+                                category=category,
+                                title=title,
+                                body=body,
+                                data=data or {},
+                                status='sent',
+                                sent_at=timezone.now()
                             )
-                        ),
-                        apns=messaging.APNSConfig(
-                            payload=messaging.APNSPayload(
-                                aps=messaging.Aps(
+                            
+                            success_count += 1
+                        else:
+                            # Check if token is invalid
+                            if 'InvalidRegistration' in message or 'NotRegistered' in message:
+                                logger.warning(f"FCM token {fcm_token.id} is invalid, marking as inactive: {message}")
+                                fcm_token.is_active = False
+                                fcm_token.save()
+                                failed_tokens.append(fcm_token)
+                            else:
+                                logger.error(f"Failed to send notification via REST API to token {fcm_token.id}: {message}")
+                                
+                                # Log failed notification
+                                NotificationLog.objects.create(
+                                    user=user,
+                                    fcm_token=fcm_token,
+                                    notification_type=notification_type,
+                                    category=category,
+                                    title=title,
+                                    body=body,
+                                    data=data or {},
+                                    status='failed',
+                                    error_message=message,
+                                    sent_at=timezone.now()
+                                )
+                                
+                                failed_tokens.append(fcm_token)
+                    else:
+                        # Method 2: SDK (fallback)
+                        if not FIREBASE_SDK_AVAILABLE:
+                            logger.error("Firebase SDK not available and FIREBASE_SERVER_KEY not set")
+                            failed_tokens.append(fcm_token)
+                            continue
+                        
+                        # Build notification payload
+                        notification = messaging.Notification(
+                            title=title,
+                            body=body
+                        )
+                        
+                        # Build message
+                        message = messaging.Message(
+                            notification=notification,
+                            data=payload_data,
+                            token=fcm_token.token,
+                            android=messaging.AndroidConfig(
+                                priority='high' if priority == 'high' else 'normal',
+                                notification=messaging.AndroidNotification(
                                     sound='default',
-                                    badge=1,
+                                    priority='high' if priority == 'high' else 'default',
+                                )
+                            ),
+                            apns=messaging.APNSConfig(
+                                payload=messaging.APNSPayload(
+                                    aps=messaging.Aps(
+                                        sound='default',
+                                        badge=1,
+                                    )
                                 )
                             )
                         )
-                    )
-                    
-                    # Send notification - explicitly use the initialized app
-                    response = messaging.send(message, app=firebase_app)
-                    logger.info(f"Successfully sent notification to user {user.id}, token {fcm_token.id}: {response}")
+                        
+                        # Send notification - explicitly use the initialized app
+                        response = messaging.send(message, app=firebase_app)
+                        logger.info(f"Successfully sent notification via SDK to user {user.id}, token {fcm_token.id}: {response}")
                     
                     # Log successful notification
                     NotificationLog.objects.create(

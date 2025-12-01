@@ -325,12 +325,17 @@ SPECTACULAR_SETTINGS = {
 }
 
 # Firebase Configuration
-# Using Application Default Credentials (ADC) - recommended method
-# No FIREBASE_CREDENTIALS_PATH needed - ADC will be used automatically
-# To set up: run 'gcloud auth application-default login' and 'gcloud config set project mgask-2025'
+# Option 1: REST API with Server Key (Recommended - No authentication issues, works anywhere)
+FIREBASE_SERVER_KEY = os.getenv('FIREBASE_SERVER_KEY', None)
+
+# Option 2: Service Account JSON or Workload Identity Credentials
+# Can be:
+# - Service Account JSON file
+# - Workload Identity Federation credentials file (from gcloud iam workload-identity-pools create-cred-config)
+FIREBASE_CREDENTIALS_PATH = os.getenv('FIREBASE_CREDENTIALS_PATH', None)
+
+# Option 3: Application Default Credentials (ADC) - for GCP environments
 FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID', 'mgask-2025')
-# Optional: Set FIREBASE_CREDENTIALS_PATH only if using JSON file (not recommended)
-# FIREBASE_CREDENTIALS_PATH = os.getenv('FIREBASE_CREDENTIALS_PATH', None)
 
 # Twilio SMS Configuration
 TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID', None)
