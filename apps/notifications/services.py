@@ -51,20 +51,36 @@ def get_firebase_app():
                         logger.info(f"Found ADC credentials at {adc_path}, setting GOOGLE_APPLICATION_CREDENTIALS")
                     
                     # Method 3: Use Application Default Credentials (ADC)
-                    # This works when:
-                    # - Running on Google Cloud (Cloud Run, App Engine, Compute Engine)
-                    # - Using gcloud auth application-default login (local dev)
-                    # - Service account is attached to the instance
-                    # IMPORTANT: On GCP, ensure instance service account has Firebase permissions
-                    # Clear any user ADC credentials that might interfere
-                    if 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
-                        adc_file = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
-                        if 'application_default_credentials.json' in adc_file:
-                            # Remove expired user credentials to use instance service account
-                            logger.info(f"Clearing user ADC credentials to use instance service account")
-                            os.environ.pop('GOOGLE_APPLICATION_CREDENTIALS', None)
+                    # Check if running on GCP first
+                    is_gcp = False
+                    try:
+                        import urllib.request
+                        req = urllib.request.Request(
+                            'http://169.254.169.254/computeMetadata/v1/instance/id',
+                            headers={'Metadata-Flavor': 'Google'}
+                        )
+                        urllib.request.urlopen(req, timeout=2)
+                        is_gcp = True
+                        logger.info("Detected GCP environment - will use instance service account")
+                    except:
+                        is_gcp = False
                     
-                    # Initialize with explicit project ID - this ensures Firebase uses instance service account
+                    if is_gcp:
+                        # On GCP: Clear any user ADC credentials that might interfere
+                        if 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
+                            adc_file = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+                            if 'application_default_credentials.json' in adc_file:
+                                logger.info(f"Clearing user ADC credentials to use instance service account")
+                                os.environ.pop('GOOGLE_APPLICATION_CREDENTIALS', None)
+                        
+                        # Also remove user ADC file if it exists (to force instance service account)
+                        adc_path = os.expanduser('~/.config/gcloud/application_default_credentials.json')
+                        if os.path.exists(adc_path):
+                            logger.info(f"User ADC file exists at {adc_path} - instance service account will be used instead")
+                    
+                    # Initialize with explicit project ID
+                    # On GCP, this will use instance service account automatically
+                    # Off GCP, this will use user ADC credentials if available
                     _firebase_app = initialize_app({'projectId': project_id})
                     logger.info(f"Firebase initialized using Application Default Credentials for project: {project_id}")
             else:
