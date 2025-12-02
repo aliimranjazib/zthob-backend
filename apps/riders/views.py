@@ -11,19 +11,46 @@ from apps.orders.models import Order
 from apps.core.services import PhoneVerificationService
 from apps.core.serializers import PhoneVerificationSerializer, OTPVerificationSerializer
 from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
-from .serializers import (
-    RiderRegisterSerializer,
-    RiderProfileSerializer,
-    RiderProfileUpdateSerializer,
-    RiderProfileSubmissionSerializer,
-    RiderProfileStatusSerializer,
-    RiderDocumentUploadSerializer,
-    RiderDocumentSerializer,
-    RiderOrderListSerializer,
-    RiderOrderDetailSerializer,
-    RiderAddMeasurementsSerializer,
-    RiderUpdateOrderStatusSerializer,
-)
+# Import serializers from serializers.py file directly
+import importlib.util
+import sys
+from pathlib import Path
+
+# Load serializers.py as a module with proper package context
+_serializers_file = Path(__file__).parent / 'serializers.py'
+_spec = importlib.util.spec_from_file_location("riders_serializers_file", _serializers_file)
+_serializers_module = importlib.util.module_from_spec(_spec)
+
+# Set up the module's package context for relative imports to work
+_serializers_module.__package__ = 'apps.riders'
+_serializers_module.__file__ = str(_serializers_file)
+
+# Add apps.riders to sys.modules temporarily if needed
+_original_module = sys.modules.get('apps.riders.serializers')
+try:
+    # Temporarily remove the directory-based module
+    if 'apps.riders.serializers' in sys.modules:
+        del sys.modules['apps.riders.serializers']
+    
+    # Execute the module
+    _spec.loader.exec_module(_serializers_module)
+    
+    # Import the classes
+    RiderRegisterSerializer = _serializers_module.RiderRegisterSerializer
+    RiderProfileSerializer = _serializers_module.RiderProfileSerializer
+    RiderProfileUpdateSerializer = _serializers_module.RiderProfileUpdateSerializer
+    RiderProfileSubmissionSerializer = _serializers_module.RiderProfileSubmissionSerializer
+    RiderProfileStatusSerializer = _serializers_module.RiderProfileStatusSerializer
+    RiderDocumentUploadSerializer = _serializers_module.RiderDocumentUploadSerializer
+    RiderDocumentSerializer = _serializers_module.RiderDocumentSerializer
+    RiderOrderListSerializer = _serializers_module.RiderOrderListSerializer
+    RiderOrderDetailSerializer = _serializers_module.RiderOrderDetailSerializer
+    RiderAddMeasurementsSerializer = _serializers_module.RiderAddMeasurementsSerializer
+    RiderUpdateOrderStatusSerializer = _serializers_module.RiderUpdateOrderStatusSerializer
+finally:
+    # Restore original module if it existed
+    if _original_module:
+        sys.modules['apps.riders.serializers'] = _original_module
 from rest_framework.parsers import MultiPartParser, FormParser
 from zthob.utils import api_response
 from rest_framework_simplejwt.tokens import RefreshToken
