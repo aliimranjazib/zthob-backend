@@ -1007,3 +1007,118 @@ class RiderUpdateOrderStatusView(APIView):
             status_code=status.HTTP_400_BAD_REQUEST
         )
 
+
+# ============================================================================
+# ANALYTICS VIEWS
+# ============================================================================
+
+@extend_schema(
+    tags=["Rider Analytics"],
+    description="Get comprehensive analytics for the authenticated rider including deliveries, completion rates, and trends"
+)
+class RiderAnalyticsView(APIView):
+    """
+    API endpoint for rider analytics dashboard.
+    
+    Provides:
+    - Total delivery fees from completed deliveries
+    - Daily deliveries breakdown
+    - Total completed deliveries count
+    - Completion percentage
+    - Weekly delivery trends
+    
+    Query Parameters:
+    - days: Number of days for daily deliveries (default: 30, max: 365)
+    - weeks: Number of weeks for trends (default: 12, max: 52)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        description="Get comprehensive rider analytics",
+        parameters=[
+            {
+                'name': 'days',
+                'in': 'query',
+                'description': 'Number of days for daily deliveries breakdown (default: 30, max: 365)',
+                'required': False,
+                'schema': {'type': 'integer', 'minimum': 1, 'maximum': 365, 'default': 30}
+            },
+            {
+                'name': 'weeks',
+                'in': 'query',
+                'description': 'Number of weeks for weekly trends (default: 12, max: 52)',
+                'required': False,
+                'schema': {'type': 'integer', 'minimum': 1, 'maximum': 52, 'default': 12}
+            }
+        ],
+        responses={
+            200: 'apps.riders.serializers.analytics.RiderAnalyticsSerializer',
+            400: {"description": "Invalid query parameters"},
+            403: {"description": "User is not a rider"}
+        }
+    )
+    def get(self, request):
+        """
+        Get comprehensive analytics for the authenticated rider.
+        """
+        from apps.riders.services import RiderAnalyticsService
+        from apps.riders.serializers.analytics import RiderAnalyticsSerializer
+        
+        # Check if user is a rider
+        if request.user.role != 'RIDER':
+            return api_response(
+                success=False,
+                message="Only riders can access this endpoint",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get query parameters with defaults and validation
+        try:
+            days = int(request.query_params.get('days', 30))
+            weeks = int(request.query_params.get('weeks', 12))
+            
+            # Validate ranges
+            if days < 1 or days > 365:
+                return api_response(
+                    success=False,
+                    message="Days parameter must be between 1 and 365",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if weeks < 1 or weeks > 52:
+                return api_response(
+                    success=False,
+                    message="Weeks parameter must be between 1 and 52",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+        except ValueError:
+            return api_response(
+                success=False,
+                message="Invalid query parameters. Days and weeks must be integers.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get analytics data
+        try:
+            analytics_data = RiderAnalyticsService.get_comprehensive_analytics(
+                rider_user=request.user,
+                days=days,
+                weeks=weeks
+            )
+            
+            # Serialize the data
+            serializer = RiderAnalyticsSerializer(analytics_data)
+            
+            return api_response(
+                success=True,
+                message="Analytics data retrieved successfully",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return api_response(
+                success=False,
+                message=f"Error retrieving analytics: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+

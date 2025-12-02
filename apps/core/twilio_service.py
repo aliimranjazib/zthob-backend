@@ -1,9 +1,16 @@
 import logging
 from django.conf import settings
-from twilio.rest import Client
-from twilio.base.exceptions import TwilioRestException
 
 logger = logging.getLogger(__name__)
+
+# Try to import Twilio (optional - only if using Twilio)
+try:
+    from twilio.rest import Client
+    from twilio.base.exceptions import TwilioRestException
+    TWILIO_AVAILABLE = True
+except ImportError:
+    TWILIO_AVAILABLE = False
+    logger.info("Twilio SDK not available - SMS functionality will be disabled")
 
 class TwilioSMSService:
     """Service for sending SMS via Twilio"""
@@ -20,6 +27,11 @@ class TwilioSMSService:
         Returns:
             tuple: (success: bool, message: str)
         """
+        # Check if Twilio SDK is available
+        if not TWILIO_AVAILABLE:
+            logger.error("Twilio SDK not installed. Please install twilio package.")
+            return False, "SMS service not available - Twilio SDK not installed"
+        
         # Check if Twilio is configured
         if not all([
             settings.TWILIO_ACCOUNT_SID,

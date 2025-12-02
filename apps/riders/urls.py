@@ -15,6 +15,7 @@ from .views import (
     RiderAcceptOrderView,
     RiderAddMeasurementsView,
     RiderUpdateOrderStatusView,
+    RiderAnalyticsView,
 )
 from .views_review import (
     RiderProfileReviewListView,
@@ -46,6 +47,9 @@ urlpatterns = [
     path('orders/<int:order_id>/accept/', RiderAcceptOrderView.as_view(), name='accept-order'),
     path('orders/<int:order_id>/measurements/', RiderAddMeasurementsView.as_view(), name='add-measurements'),
     path('orders/<int:order_id>/update-status/', RiderUpdateOrderStatusView.as_view(), name='update-status'),
+    
+    # Analytics
+    path('analytics/', RiderAnalyticsView.as_view(), name='rider-analytics'),
     
     # Admin Review
     path('admin/reviews/', RiderProfileReviewListView.as_view(), name='admin-reviews'),
