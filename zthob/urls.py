@@ -121,6 +121,10 @@ def custom_admin_index(request, extra_context=None):
         daily_labels.append(date.strftime('%b %d'))
     
     # Get statistics
+    from apps.customers.models import CustomerProfile
+    from apps.riders.models import RiderProfile
+    from apps.tailors.models import TailorProfileReview
+    
     stats = {
         'total_fabrics': Fabric.objects.count(),
         'total_fabric_images': FabricImage.objects.count(),
@@ -131,6 +135,9 @@ def custom_admin_index(request, extra_context=None):
         'total_orders': Order.objects.count(),
         'pending_orders': Order.objects.filter(status='pending').count(),
         'paid_orders': Order.objects.filter(payment_status='paid').count(),
+        'total_customer_profiles': CustomerProfile.objects.count(),
+        'total_rider_profiles': RiderProfile.objects.count(),
+        'pending_tailor_reviews': TailorProfileReview.objects.filter(review_status='pending').count(),
     }
     
     # Prepare image data

@@ -239,6 +239,36 @@ new Chart(statusCtx, {
         </div>
     </div>
 
+    <!-- Profile Statistics Section -->
+    <div class="dashboard-widget" style="background: #fff; border: 1px solid #e9ecef; border-radius: 6px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h3 style="color: #2c3e50; margin-bottom: 20px; font-size: 1.3rem; border-bottom: 2px solid #3498db; padding-bottom: 10px;">
+            <i class="fas fa-users"></i> Profile Statistics
+        </h3>
+        <div class="dashboard-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+            <div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <div class="stat-number" style="font-size: 2.5rem; font-weight: bold; margin-bottom: 5px;">{{ stats.total_customer_profiles|default:0 }}</div>
+                <div class="stat-label" style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase;">Customer Profiles</div>
+            </div>
+            <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <div class="stat-number" style="font-size: 2.5rem; font-weight: bold; margin-bottom: 5px;">{{ stats.total_tailors|default:0 }}</div>
+                <div class="stat-label" style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase;">Tailor Profiles</div>
+            </div>
+            <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <div class="stat-number" style="font-size: 2.5rem; font-weight: bold; margin-bottom: 5px;">{{ stats.total_rider_profiles|default:0 }}</div>
+                <div class="stat-label" style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase;">Rider Profiles</div>
+            </div>
+            {% if stats.pending_tailor_reviews %}
+            <div class="stat-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <div class="stat-number" style="font-size: 2.5rem; font-weight: bold; margin-bottom: 5px;">{{ stats.pending_tailor_reviews|default:0 }}</div>
+                <div class="stat-label" style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase;">Pending Reviews</div>
+                <div style="margin-top: 10px;">
+                    <a href="/admin/tailors/tailorprofilereview/?review_status__exact=pending" style="color: white; text-decoration: underline; font-size: 0.85rem;">View Pending</a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
     <!-- Fabric Images Gallery -->
     {% if fabric_images %}
     <div class="dashboard-widget" style="background: #fff; border: 1px solid #e9ecef; border-radius: 6px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">

@@ -434,6 +434,41 @@ class TailorProfileAdmin(admin.ModelAdmin):
         )
     deactivate_shops.short_description = 'Deactivate selected shops'
     
+    def save_formset(self, request, form, formset, change):
+        """Handle saving of inline formsets, specifically for TailorProfileReview"""
+        from django.utils import timezone
+        
+        instances = formset.save(commit=False)
+        for instance in instances:
+            if isinstance(instance, TailorProfileReview):
+                # Get original status if this is an update
+                if instance.pk:
+                    try:
+                        original = TailorProfileReview.objects.get(pk=instance.pk)
+                        original_status = original.review_status
+                    except TailorProfileReview.DoesNotExist:
+                        original_status = None
+                else:
+                    original_status = None
+                
+                # Check if review_status has changed
+                status_changed = not instance.pk or (original_status and original_status != instance.review_status)
+                
+                if status_changed and instance.review_status in ['approved', 'rejected']:
+                    instance.reviewed_at = timezone.now()
+                    instance.reviewed_by = request.user
+                    
+                    if instance.review_status == 'approved':
+                        instance.rejection_reason = ''
+                
+                instance.save()
+        
+        # Delete any marked for deletion
+        for obj in formset.deleted_objects:
+            obj.delete()
+        
+        formset.save_m2m()
+    
     def export_profiles_csv(self, request, queryset):
         """Export tailor profiles to CSV"""
         import csv
@@ -1560,13 +1595,25 @@ class TailorProfileReviewAdmin(admin.ModelAdmin):
         """Custom save to handle review status changes"""
         from django.utils import timezone
         
-        if change and 'review_status' in form.changed_data:
-            if obj.review_status in ['approved', 'rejected']:
-                obj.reviewed_at = timezone.now()
-                obj.reviewed_by = request.user
-                
-                if obj.review_status == 'approved':
-                    obj.rejection_reason = ''
+        # Get the original object to compare review_status
+        if change and obj.pk:
+            try:
+                original_obj = TailorProfileReview.objects.get(pk=obj.pk)
+                original_status = original_obj.review_status
+            except TailorProfileReview.DoesNotExist:
+                original_status = None
+        else:
+            original_status = None
+        
+        # Check if review_status has changed
+        status_changed = not change or (original_status and original_status != obj.review_status)
+        
+        if status_changed and obj.review_status in ['approved', 'rejected']:
+            obj.reviewed_at = timezone.now()
+            obj.reviewed_by = request.user
+            
+            if obj.review_status == 'approved':
+                obj.rejection_reason = ''
                     
         super().save_model(request, obj, form, change)
     

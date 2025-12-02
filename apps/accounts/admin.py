@@ -135,11 +135,6 @@ class CustomUserAdmin(UserAdmin):
             'fields': ('last_login', 'date_joined'),
             'classes': ('collapse',)
         }),
-        ('Groups & Permissions', {
-            'fields': ('groups', 'user_permissions'),
-            'classes': ('collapse',),
-            'description': 'Django groups and permissions'
-        }),
     )
     
     # Add form fieldsets
