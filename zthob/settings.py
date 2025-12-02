@@ -326,16 +326,11 @@ SPECTACULAR_SETTINGS = {
 }
 
 # Firebase Configuration
-# Option 1: REST API with Server Key (Recommended - No authentication issues, works anywhere)
-FIREBASE_SERVER_KEY = os.getenv('FIREBASE_SERVER_KEY', None)
-
-# Option 2: Service Account JSON or Workload Identity Credentials
-# Can be:
-# - Service Account JSON file
-# - Workload Identity Federation credentials file (from gcloud iam workload-identity-pools create-cred-config)
+# Service Account JSON file path (required for Firebase Admin SDK)
+# Set FIREBASE_CREDENTIALS_PATH in .env to point to your service account JSON file
 FIREBASE_CREDENTIALS_PATH = os.getenv('FIREBASE_CREDENTIALS_PATH', None)
 
-# Option 3: Application Default Credentials (ADC) - for GCP environments
+# Firebase Project ID
 FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID', 'mgask-2025')
 
 # Twilio SMS Configuration

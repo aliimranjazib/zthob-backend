@@ -20,59 +20,37 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.ERROR("   ❌ FIREBASE_PROJECT_ID not set in settings.py"))
         
-        # Check environment variables
-        self.stdout.write("\n2. Checking Environment Variables...")
-        env_project = os.environ.get('GOOGLE_CLOUD_PROJECT') or os.environ.get('FIREBASE_PROJECT_ID')
-        if env_project:
-            self.stdout.write(self.style.SUCCESS(f"   ✅ GOOGLE_CLOUD_PROJECT: {env_project}"))
-        else:
-            self.stdout.write(self.style.WARNING("   ⚠️  GOOGLE_CLOUD_PROJECT not set (using settings.py)"))
-        
         # Check credentials file
-        self.stdout.write("\n3. Checking Credentials File...")
+        self.stdout.write("\n2. Checking Credentials File...")
         cred_path = getattr(settings, 'FIREBASE_CREDENTIALS_PATH', None)
         if cred_path:
             if os.path.exists(cred_path):
                 self.stdout.write(self.style.SUCCESS(f"   ✅ Credentials file exists: {cred_path}"))
+                # Check if file is readable
+                try:
+                    with open(cred_path, 'r') as f:
+                        import json
+                        cred_data = json.load(f)
+                        if cred_data.get('type') == 'service_account':
+                            self.stdout.write(self.style.SUCCESS(f"   ✅ Valid service account JSON file"))
+                            if cred_data.get('project_id'):
+                                self.stdout.write(self.style.SUCCESS(f"   ✅ Project ID in JSON: {cred_data.get('project_id')}"))
+                                if cred_data.get('project_id') != project_id:
+                                    self.stdout.write(self.style.WARNING(f"   ⚠️  Project ID mismatch! JSON: {cred_data.get('project_id')}, settings: {project_id}"))
+                        else:
+                            self.stdout.write(self.style.WARNING(f"   ⚠️  File type: {cred_data.get('type')} (expected: service_account)"))
+                except json.JSONDecodeError:
+                    self.stdout.write(self.style.ERROR(f"   ❌ Invalid JSON file"))
+                except Exception as e:
+                    self.stdout.write(self.style.WARNING(f"   ⚠️  Could not read file: {str(e)}"))
             else:
-                self.stdout.write(self.style.WARNING(f"   ⚠️  Credentials file not found: {cred_path}"))
+                self.stdout.write(self.style.ERROR(f"   ❌ Credentials file not found: {cred_path}"))
         else:
-            self.stdout.write(self.style.SUCCESS("   ✅ Using Application Default Credentials (no file needed)"))
-        
-        # Check gcloud authentication
-        self.stdout.write("\n4. Checking gcloud Authentication...")
-        try:
-            import subprocess
-            result = subprocess.run(['gcloud', 'auth', 'list', '--filter=status:ACTIVE', '--format=value(account)'], 
-                                  capture_output=True, text=True, timeout=5)
-            if result.returncode == 0 and result.stdout.strip():
-                accounts = result.stdout.strip().split('\n')
-                self.stdout.write(self.style.SUCCESS(f"   ✅ Active gcloud accounts: {', '.join(accounts)}"))
-            else:
-                self.stdout.write(self.style.WARNING("   ⚠️  No active gcloud accounts found"))
-        except FileNotFoundError:
-            self.stdout.write(self.style.WARNING("   ⚠️  gcloud CLI not found (install: brew install google-cloud-sdk)"))
-        except Exception as e:
-            self.stdout.write(self.style.WARNING(f"   ⚠️  Could not check gcloud: {str(e)}"))
-        
-        # Check gcloud project
-        self.stdout.write("\n5. Checking gcloud Project...")
-        try:
-            import subprocess
-            result = subprocess.run(['gcloud', 'config', 'get-value', 'project'], 
-                                  capture_output=True, text=True, timeout=5)
-            if result.returncode == 0 and result.stdout.strip():
-                gcloud_project = result.stdout.strip()
-                self.stdout.write(self.style.SUCCESS(f"   ✅ gcloud project: {gcloud_project}"))
-                if gcloud_project != project_id:
-                    self.stdout.write(self.style.WARNING(f"   ⚠️  Project mismatch! gcloud: {gcloud_project}, settings: {project_id}"))
-            else:
-                self.stdout.write(self.style.WARNING("   ⚠️  No gcloud project set"))
-        except Exception as e:
-            self.stdout.write(self.style.WARNING(f"   ⚠️  Could not check gcloud project: {str(e)}"))
+            self.stdout.write(self.style.ERROR("   ❌ FIREBASE_CREDENTIALS_PATH not set in .env file"))
+            self.stdout.write(self.style.WARNING("   Set FIREBASE_CREDENTIALS_PATH in .env to point to your service account JSON file"))
         
         # Test Firebase initialization
-        self.stdout.write("\n6. Testing Firebase Initialization...")
+        self.stdout.write("\n3. Testing Firebase Initialization...")
         try:
             app = get_firebase_app()
             if app:
@@ -84,15 +62,17 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(self.style.ERROR("   ❌ Firebase not initialized"))
                 self.stdout.write(self.style.WARNING("\n   Troubleshooting:"))
-                self.stdout.write("   1. Run: gcloud auth application-default login")
-                self.stdout.write("   2. Run: gcloud config set project mgask-2025")
-                self.stdout.write("   3. Check Django logs for detailed error messages")
+                self.stdout.write("   1. Set FIREBASE_CREDENTIALS_PATH in .env to point to your service account JSON file")
+                self.stdout.write("   2. Verify FIREBASE_PROJECT_ID in settings.py (should be 'mgask-2025')")
+                self.stdout.write("   3. Ensure the JSON file exists and is readable")
+                self.stdout.write("   4. Check Django logs for detailed error messages")
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"   ❌ Error initializing Firebase: {str(e)}"))
             self.stdout.write(self.style.WARNING("\n   Troubleshooting:"))
-            self.stdout.write("   1. Run: gcloud auth application-default login")
-            self.stdout.write("   2. Run: gcloud config set project mgask-2025")
-            self.stdout.write("   3. Check Django logs for detailed error messages")
+            self.stdout.write("   1. Set FIREBASE_CREDENTIALS_PATH in .env to point to your service account JSON file")
+            self.stdout.write("   2. Verify FIREBASE_PROJECT_ID in settings.py (should be 'mgask-2025')")
+            self.stdout.write("   3. Ensure the JSON file exists and is readable")
+            self.stdout.write("   4. Check Django logs for detailed error messages")
         
         self.stdout.write("")
 
