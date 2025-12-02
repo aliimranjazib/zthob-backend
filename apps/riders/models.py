@@ -101,6 +101,8 @@ class RiderProfile(BaseModel):
     # Contact Information
     phone_number = models.CharField(
         max_length=20,
+        blank=True,
+        null=True,
         help_text="Primary contact number"
     )
     

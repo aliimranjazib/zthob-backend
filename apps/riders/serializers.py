@@ -37,51 +37,53 @@ class RiderDocumentSerializer(serializers.ModelSerializer):
 
 
 class RiderRegisterSerializer(serializers.ModelSerializer):
-    """Serializer for rider registration"""
+    """Serializer for rider registration - simplified like customer registration"""
+    name = serializers.CharField(write_only=True)
     password = serializers.CharField(write_only=True, min_length=8)
-    password_confirm = serializers.CharField(write_only=True)
-    phone_number = serializers.CharField(required=True)
-    full_name = serializers.CharField(required=True)
+    confirm_password = serializers.CharField(write_only=True)
     
     class Meta:
         model = User
-        fields = [
-            'username',
-            'email',
-            'password',
-            'password_confirm',
-            'phone_number',
-            'full_name',
-            'first_name',
-            'last_name',
-        ]
+        fields = ['name', 'email', 'password', 'confirm_password', 'role']
         extra_kwargs = {
             'email': {'required': True},
         }
     
     def validate(self, attrs):
-        if attrs['password'] != attrs['password_confirm']:
+        if attrs['password'] != attrs['confirm_password']:
             raise serializers.ValidationError({"password": "Passwords do not match"})
         return attrs
     
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError('email must be unique')
+        return value
+    
     def create(self, validated_data):
-        password = validated_data.pop('password')
-        password_confirm = validated_data.pop('password_confirm')
-        phone_number = validated_data.pop('phone_number')
-        full_name = validated_data.pop('full_name')
+        name = validated_data.pop("name")
+        password = validated_data.pop("password")
+        validated_data.pop('confirm_password')
+
+        # Split name into first_name and last_name
+        first_name, *last_name = name.split(" ", 1)
+        validated_data["first_name"] = first_name
+        validated_data["last_name"] = last_name[0] if last_name else ""
+
+        # Set username = email
+        validated_data["username"] = validated_data["email"]
         
-        # Create user with RIDER role
-        user = User.objects.create_user(
-            role='RIDER',
-            password=password,
-            **validated_data
-        )
+        # Ensure role is RIDER
+        validated_data["role"] = "RIDER"
+
+        # Create user
+        user = User.objects.create_user(password=password, **validated_data)
         
-        # Create rider profile
+        # Create rider profile with name as full_name
+        # phone_number will be set when rider verifies phone via OTP
         rider_profile = RiderProfile.objects.create(
             user=user,
-            phone_number=phone_number,
-            full_name=full_name
+            full_name=name,
+            phone_number=None  # Will be updated when rider verifies phone
         )
         
         # Create review record with 'draft' status

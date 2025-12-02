@@ -82,7 +82,7 @@ class RiderRegisterView(APIView):
                 data={
                     'user': {
                         'id': user.id,
-                        'username': user.username,
+                        'name': user.get_full_name() or user.username,
                         'email': user.email,
                         'role': user.role,
                     },
