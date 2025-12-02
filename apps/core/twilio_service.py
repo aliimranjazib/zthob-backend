@@ -33,13 +33,18 @@ class TwilioSMSService:
             return False, "SMS service not available - Twilio SDK not installed"
         
         # Check if Twilio is configured
-        if not all([
-            settings.TWILIO_ACCOUNT_SID,
-            settings.TWILIO_AUTH_TOKEN,
-            settings.TWILIO_PHONE_NUMBER
-        ]):
-            logger.error("Twilio not configured. Missing credentials in settings.")
-            return False, "SMS service not configured"
+        missing = []
+        if not settings.TWILIO_ACCOUNT_SID:
+            missing.append("TWILIO_ACCOUNT_SID")
+        if not settings.TWILIO_AUTH_TOKEN:
+            missing.append("TWILIO_AUTH_TOKEN")
+        if not settings.TWILIO_PHONE_NUMBER:
+            missing.append("TWILIO_PHONE_NUMBER")
+        
+        if missing:
+            error_msg = f"Twilio not configured. Missing: {', '.join(missing)}"
+            logger.error(error_msg)
+            return False, error_msg
         
         try:
             # Initialize Twilio client
@@ -65,8 +70,16 @@ class TwilioSMSService:
             return True, f"SMS sent successfully. SID: {message.sid}"
             
         except TwilioRestException as e:
-            logger.error(f"Twilio error: {str(e)}")
-            return False, f"Failed to send SMS: {str(e)}"
+            error_msg = str(e)
+            logger.error(f"Twilio error: {error_msg}")
+            
+            # Provide more specific error messages
+            if "401" in error_msg or "Authenticate" in error_msg:
+                return False, f"Failed to send SMS: HTTP 401 error: Unable to create record: Authenticate. Please check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are correct."
+            elif "403" in error_msg:
+                return False, f"Failed to send SMS: HTTP 403 error: Forbidden. Please check Twilio account permissions."
+            else:
+                return False, f"Failed to send SMS: {error_msg}"
         except Exception as e:
             logger.error(f"Unexpected error sending SMS: {str(e)}")
             return False, f"Failed to send SMS: {str(e)}"
