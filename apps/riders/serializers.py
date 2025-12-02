@@ -83,7 +83,7 @@ class RiderRegisterSerializer(serializers.ModelSerializer):
         rider_profile = RiderProfile.objects.create(
             user=user,
             full_name=name,
-            phone_number=None  # Will be updated when rider verifies phone
+            phone_number=""  # Empty string until migration is run, then can be None
         )
         
         # Create review record with 'draft' status
