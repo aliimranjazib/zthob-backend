@@ -18,8 +18,25 @@ def reset_database():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'zthob.settings')
     django.setup()
     
+    # CRITICAL SAFETY CHECK: Prevent running in production
+    from django.conf import settings
+    environment = os.getenv('DJANGO_ENVIRONMENT', 'development')
+    
+    if environment == 'production':
+        print("=" * 50)
+        print("🚨 CRITICAL ERROR: Database reset is BLOCKED in production!")
+        print("=" * 50)
+        print("This script will DELETE ALL PRODUCTION DATA!")
+        print("If you need to reset production database:")
+        print("1. Create a full backup first")
+        print("2. Manually set DJANGO_ENVIRONMENT=development (temporarily)")
+        print("3. Or use database-specific tools (pg_dump, etc.)")
+        print("=" * 50)
+        sys.exit(1)
+    
     print("⚠️  WARNING: This will reset your database!")
     print("Make sure you have backups before proceeding.")
+    print(f"Environment: {environment}")
     
     # Backup current database
     import shutil

@@ -61,11 +61,11 @@ jobs:
           
           echo "Running migrations..."
           python3 manage.py migrate --verbosity=2 || {
-            echo "Migration failed, attempting to fix..."
-            python3 fix_migrations.py || {
-              echo "Fix failed, resetting database..."
-              python3 reset_database.py
-            }
+            echo "❌ Migration failed!"
+            echo "⚠️  CRITICAL: Database reset is DISABLED for production safety"
+            echo "Please manually investigate and fix migration issues"
+            echo "DO NOT run reset_database.py in production - it will DELETE all data!"
+            exit 1
           }
           
           echo "Checking migration status..."
