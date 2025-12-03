@@ -7,6 +7,7 @@ from .views import (
     MarkAllNotificationsReadView,
     UnreadCountView,
     TestNotificationView,
+    RiderTestNotificationView,
 )
 
 app_name = 'notifications'
@@ -20,5 +21,6 @@ urlpatterns = [
     path('mark-all-read/', MarkAllNotificationsReadView.as_view(), name='mark-all-read'),
     path('unread-count/', UnreadCountView.as_view(), name='unread-count'),
     path('test/', TestNotificationView.as_view(), name='test-notification'),
+    path('test-rider/', RiderTestNotificationView.as_view(), name='test-notification-rider'),
 ]
 

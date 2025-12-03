@@ -411,3 +411,76 @@ class TestNotificationView(APIView):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
+class RiderTestNotificationView(APIView):
+    """Send a test notification to the authenticated rider"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Send Test Notification (Rider)",
+        description="Send a test push notification to the authenticated rider. Requires FCM token to be registered first.",
+        tags=["Notifications"]
+    )
+    def post(self, request):
+        # Check if user is a rider
+        if getattr(request.user, 'role', None) != 'RIDER':
+            return api_response(
+                success=False,
+                message="This endpoint is only available for riders",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if user has registered FCM token
+        fcm_tokens = FCMDeviceToken.objects.filter(
+            user=request.user,
+            is_active=True
+        )
+        
+        if not fcm_tokens.exists():
+            return api_response(
+                success=False,
+                message="No active FCM token found. Please register your FCM token first using /api/notifications/fcm-token/register/",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Send test notification
+        try:
+            success = NotificationService.send_notification(
+                user=request.user,
+                title="Test Notification",
+                body=f"Hello {request.user.username}! This is a test notification from Zthob.",
+                notification_type='SYSTEM',
+                category='test_notification',
+                data={
+                    'test': 'true',
+                    'timestamp': str(request.user.id)
+                },
+                priority='high'
+            )
+            
+            if success:
+                return api_response(
+                    success=True,
+                    message="Test notification sent successfully! Check your device.",
+                    data={
+                        'user': request.user.username,
+                        'fcm_tokens_count': fcm_tokens.count()
+                    },
+                    status_code=status.HTTP_200_OK
+                )
+            else:
+                return api_response(
+                    success=False,
+                    message="Failed to send test notification. Check notification logs for details.",
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error sending test notification: {str(e)}")
+            return api_response(
+                success=False,
+                message=f"Error sending test notification: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
