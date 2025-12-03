@@ -232,3 +232,4 @@ local.py
 magsk_venv/
 rollback.sh
 udo systemctl restart gunicorn
+config/firebase-credentials.json
