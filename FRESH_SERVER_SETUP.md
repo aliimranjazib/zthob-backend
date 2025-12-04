@@ -58,16 +58,16 @@ sudo systemctl status postgresql
 sudo -u postgres psql
 
 # Inside PostgreSQL prompt, run:
-CREATE DATABASE zthob;
-CREATE USER zthob_user WITH PASSWORD 'your_secure_password_here';
-ALTER ROLE zthob_user SET client_encoding TO 'utf8';
-ALTER ROLE zthob_user SET default_transaction_isolation TO 'read committed';
-ALTER ROLE zthob_user SET timezone TO 'UTC';
-GRANT ALL PRIVILEGES ON DATABASE zthob TO zthob_user;
+CREATE DATABASE mgask;
+CREATE USER mgask_user WITH PASSWORD 'mgaskapp-2025';
+ALTER ROLE mgask_user SET client_encoding TO 'utf8';
+ALTER ROLE mgask_user SET default_transaction_isolation TO 'read committed';
+ALTER ROLE mgask_user SET timezone TO 'UTC';
+GRANT ALL PRIVILEGES ON DATABASE mgask TO mgask_user;
 \q
 
 # Test connection
-sudo -u postgres psql -d zthob -c "SELECT version();"
+sudo -u postgres psql -d mgask -c "SELECT version();"
 ```
 
 **Save the password!** You'll need it for `.env` file.
@@ -93,12 +93,14 @@ sudo apt install build-essential -y
 
 ```bash
 # Create project directory
-sudo mkdir -p /home/zthob-backend
-sudo chown $USER:$USER /home/zthob-backend
-cd /home/zthob-backend
+sudo mkdir -p /home/mgask-backend
+sudo chown $USER:$USER /home/mgask-backend
+cd /home/mgask-backend
 
 # Clone repository
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git .
+git clone https://github.com/aliimranjazib/zthob-backend.git .
+
+git@github.com:aliimranjazib/zthob-backend.git
 # OR if using SSH:
 # git clone git@github.com:YOUR_USERNAME/YOUR_REPO.git .
 
@@ -118,7 +120,7 @@ pip install -r requirements.txt
 ## Step 6: Configure Environment Variables
 
 ```bash
-cd /home/zthob-backend
+cd /home/mgask-backend
 
 # Create .env file
 nano .env
@@ -133,9 +135,9 @@ DEBUG=False
 DJANGO_ENVIRONMENT=production
 
 # Database (PostgreSQL)
-DB_NAME=zthob
-DB_USER=zthob_user
-DB_PASSWORD=your_secure_password_here
+DB_NAME=mgask
+DB_USER=mgask_user
+DB_PASSWORD=mgask-2025
 DB_HOST=localhost
 DB_PORT=5432
 
@@ -147,9 +149,9 @@ FIREBASE_CREDENTIALS_PATH=config/firebase-credentials.json
 FIREBASE_PROJECT_ID=mgask-2025
 
 # Twilio (if using)
-TWILIO_ACCOUNT_SID=your_twilio_sid
-TWILIO_AUTH_TOKEN=your_twilio_token
-TWILIO_PHONE_NUMBER=your_twilio_number
+TWILIO_ACCOUNT_SID=ACde6078fe8c9b33a77a869d85a0c5c60b
+TWILIO_AUTH_TOKEN=2f56032189d44ad930978ae5025b5cb0
+TWILIO_PHONE_NUMBER=+17252553868
 
 # Email (if using)
 EMAIL_HOST=smtp.gmail.com
@@ -169,7 +171,7 @@ python3 -c "from django.core.management.utils import get_random_secret_key; prin
 ## Step 7: Setup Firebase Credentials
 
 ```bash
-cd /home/zthob-backend
+cd /home/mgask-backend
 
 # Create config directory
 mkdir -p config
@@ -188,7 +190,7 @@ nano config/firebase-credentials.json
 ## Step 8: Run Migrations
 
 ```bash
-cd /home/zthob-backend
+cd /home/mgask-backend
 source magsk_venv/bin/activate
 
 # Run migrations
@@ -214,17 +216,17 @@ Add this content:
 
 ```ini
 [Unit]
-Description=Zthob Django Application
+Description=Mgask Django Application
 After=network.target postgresql.service
 
 [Service]
 Type=notify
 User=root
 Group=root
-WorkingDirectory=/home/zthob-backend
-Environment="PATH=/home/zthob-backend/magsk_venv/bin"
-Environment="DJANGO_SETTINGS_MODULE=zthob.settings"
-ExecStart=/home/zthob-backend/magsk_venv/bin/gunicorn --config gunicorn.conf.py zthob.wsgi:application
+WorkingDirectory=/home/mgask-backend
+Environment="PATH=/home/mgask-backend/magsk_venv/bin"
+Environment="DJANGO_SETTINGS_MODULE=mgask.settings"
+ExecStart=/home/mgask-backend/magsk_venv/bin/gunicorn --config gunicorn.conf.py mgask.wsgi:application
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 RestartSec=10
@@ -251,7 +253,7 @@ sudo systemctl status gunicorn
 sudo apt install nginx -y
 
 # Create config
-sudo nano /etc/nginx/sites-available/zthob
+sudo nano /etc/nginx/sites-available/mgask
 ```
 
 Add this:
@@ -272,11 +274,11 @@ server {
     }
 
     location /static/ {
-        alias /home/zthob-backend/staticfiles/;
+        alias /home/mgask-backend/staticfiles/;
     }
 
     location /media/ {
-        alias /home/zthob-backend/media/;
+        alias /home/mgask-backend/media/;
     }
 }
 ```
@@ -284,8 +286,8 @@ server {
 Enable and restart:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/zthob /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
+sudo ln -s /etc/nginx/sites-available/mgask /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/mgask
 sudo nginx -t
 sudo systemctl restart nginx
 sudo systemctl enable nginx
