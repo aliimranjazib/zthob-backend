@@ -5,6 +5,7 @@ from drf_spectacular.utils import extend_schema
 from .services import PhoneVerificationService
 from .serializers import PhoneVerificationSerializer, OTPVerificationSerializer, SystemSettingsSerializer, SliderSerializer
 from .models import SystemSettings, Slider
+from .version import get_version, get_git_info
 from zthob.utils import api_response
 from rest_framework import status
 
@@ -118,5 +119,43 @@ class SliderListView(APIView):
             success=True,
             message="Sliders retrieved successfully",
             data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+class VersionView(APIView):
+    """Get application version and deployment information"""
+    permission_classes = [AllowAny]  # Public endpoint for verification
+    
+    @extend_schema(
+        responses={200: {
+            'type': 'object',
+            'properties': {
+                'version': {'type': 'string'},
+                'commit_hash': {'type': 'string'},
+                'branch': {'type': 'string'},
+                'commit_date': {'type': 'string'},
+            }
+        }},
+        summary="Get application version",
+        description="Get current application version and git commit information. Useful for verifying deployments.",
+        tags=["System Configuration"]
+    )
+    def get(self, request):
+        """Get application version and git info"""
+        version = get_version()
+        git_info = get_git_info()
+        
+        data = {
+            'version': version,
+            'commit_hash': git_info.get('commit_hash', 'unknown'),
+            'branch': git_info.get('branch', 'unknown'),
+            'commit_date': git_info.get('commit_date', 'unknown'),
+        }
+        
+        return api_response(
+            success=True,
+            message="Version information retrieved successfully",
+            data=data,
             status_code=status.HTTP_200_OK
         )

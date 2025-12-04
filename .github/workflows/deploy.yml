@@ -15,6 +15,43 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history for git info
+    
+    - name: Bump version
+      run: |
+        # Read current version
+        CURRENT_VERSION=$(cat VERSION | tr -d '\n')
+        echo "Current version: $CURRENT_VERSION"
+        
+        # Bump patch version (x.y.Z)
+        IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+        MAJOR=${VERSION_PARTS[0]}
+        MINOR=${VERSION_PARTS[1]}
+        PATCH=${VERSION_PARTS[2]}
+        NEW_PATCH=$((PATCH + 1))
+        NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+        
+        echo "New version: $NEW_VERSION"
+        echo "$NEW_VERSION" > VERSION
+        
+        # Get git info
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        COMMIT_DATE=$(git log -1 --format=%ci)
+        
+        echo "Version: $NEW_VERSION" >> $GITHUB_STEP_SUMMARY
+        echo "Commit: $COMMIT_HASH" >> $GITHUB_STEP_SUMMARY
+        echo "Branch: $BRANCH" >> $GITHUB_STEP_SUMMARY
+        echo "Date: $COMMIT_DATE" >> $GITHUB_STEP_SUMMARY
+    
+    - name: Commit version bump
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add VERSION
+        git commit -m "Bump version to $(cat VERSION) [skip ci]" || echo "No changes to commit"
+        git push origin main || echo "Push failed or no changes"
     
     # Google Cloud authentication is optional - only needed if you set up Workload Identity Federation
     # The server uses ADC directly, so this step is not required for deployment
@@ -125,16 +162,34 @@ jobs:
           if systemctl is-active --quiet gunicorn; then
             echo "SUCCESS: Service is running!"
             
-            # Additional verification: Check if new endpoints are available
-            echo "Verifying new endpoints..."
-            sleep 2
-            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/schema/ | grep -q "200"; then
-              echo "SUCCESS: API is responding"
+            # Wait for API to be ready
+            echo "Waiting for API to be ready..."
+            sleep 5
+            
+            # Verify version endpoint
+            echo "Verifying deployment version..."
+            DEPLOYED_VERSION=$(curl -s http://localhost:8000/api/config/version/ | grep -o '"version":"[^"]*' | cut -d'"' -f4 || echo "unknown")
+            EXPECTED_VERSION=$(cat VERSION | tr -d '\n')
+            
+            echo "Expected version: $EXPECTED_VERSION"
+            echo "Deployed version: $DEPLOYED_VERSION"
+            
+            if [ "$DEPLOYED_VERSION" = "$EXPECTED_VERSION" ]; then
+              echo "✓ SUCCESS: Version matches! Deployment verified."
             else
-              echo "WARNING: API might not be fully ready yet"
+              echo "⚠ WARNING: Version mismatch! Expected $EXPECTED_VERSION but got $DEPLOYED_VERSION"
+              echo "This might indicate the code wasn't fully updated."
             fi
             
-            echo "SUCCESS: Deployment successful!"
+            # Additional verification: Check if new endpoints are available
+            echo "Verifying API endpoints..."
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/schema/ | grep -q "200"; then
+              echo "✓ SUCCESS: API is responding"
+            else
+              echo "⚠ WARNING: API might not be fully ready yet"
+            fi
+            
+            echo "SUCCESS: Deployment completed!"
           else
             echo "ERROR: Service failed to start, checking logs..."
             systemctl status gunicorn
