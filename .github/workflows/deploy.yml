@@ -39,25 +39,44 @@ jobs:
           git reset --hard origin/main
           
           echo "🔧 Checking/Installing uv..."
+          # Add common uv locations to PATH first
+          export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+          
           # Check if uv is installed in PATH or in venv
           UV_CMD=""
           if command -v uv &> /dev/null; then
             UV_CMD="uv"
+          elif [ -f "$HOME/.local/bin/uv" ]; then
+            UV_CMD="$HOME/.local/bin/uv"
           elif [ -f ".venv/bin/uv" ]; then
             UV_CMD=".venv/bin/uv"
           else
             echo "Installing uv..."
             # Install uv using the official installer
             curl -LsSf https://astral.sh/uv/install.sh | sh
-            export PATH="$HOME/.cargo/bin:$PATH"
-            # Reload PATH
+            # Add both possible locations to PATH
+            export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+            # Source the env file if it exists (for sh/bash/zsh)
+            if [ -f "$HOME/.local/bin/env" ]; then
+              source "$HOME/.local/bin/env"
+            fi
+            # Also try cargo env
             if [ -f "$HOME/.cargo/env" ]; then
               source "$HOME/.cargo/env"
             fi
-            UV_CMD="uv"
+            # Check which location uv was installed to
+            if [ -f "$HOME/.local/bin/uv" ]; then
+              UV_CMD="$HOME/.local/bin/uv"
+            elif command -v uv &> /dev/null; then
+              UV_CMD="uv"
+            else
+              echo "❌ Error: uv installation failed or not found"
+              exit 1
+            fi
           fi
           
           # Verify uv is available
+          echo "Using uv from: $(which $UV_CMD || echo $UV_CMD)"
           $UV_CMD --version
           
           echo "📦 Installing dependencies with uv..."
