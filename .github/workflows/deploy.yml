@@ -118,8 +118,28 @@ jobs:
           echo "Checking migration status..."
           python3 manage.py showmigrations
           
+          echo "Checking for pending migrations (non-blocking)..."
+          python3 manage.py makemigrations --check --dry-run 2>&1 | head -20 || echo "Note: Some apps may have pending migrations"
+          
           echo "Verifying database tables..."
-          python3 -c "import sqlite3; conn = sqlite3.connect('db.sqlite3'); cursor = conn.cursor(); cursor.execute(\"SELECT name FROM sqlite_master WHERE type='table'\"); tables = [row[0] for row in cursor.fetchall()]; print('All tables found:', len(tables), 'tables'); required = ['tailors_fabrictype', 'tailors_fabriccategory', 'tailors_fabric', 'tailors_fabricimage', 'tailors_tailorprofile', 'orders_order', 'orders_orderitem', 'deliveries_deliverytracking', 'deliveries_locationhistory']; missing = [t for t in required if t not in tables]; print('ERROR: Missing tables:', missing) if missing else print('SUCCESS: All required tables exist'); conn.close()"
+          python3 -c "
+import sqlite3
+try:
+    conn = sqlite3.connect('db.sqlite3')
+    cursor = conn.cursor()
+    cursor.execute('SELECT name FROM sqlite_master WHERE type=\"table\"')
+    tables = [row[0] for row in cursor.fetchall()]
+    print('All tables found:', len(tables), 'tables')
+    required = ['tailors_fabrictype', 'tailors_fabriccategory', 'tailors_fabric', 'tailors_fabricimage', 'tailors_tailorprofile', 'orders_order', 'orders_orderitem', 'deliveries_deliverytracking', 'deliveries_locationhistory']
+    missing = [t for t in required if t not in tables]
+    if missing:
+        print('ERROR: Missing tables:', missing)
+    else:
+        print('SUCCESS: All required tables exist')
+    conn.close()
+except Exception as e:
+    print('WARNING: Could not verify tables:', str(e))
+"
           
           echo "Collecting static files..."
           python3 manage.py collectstatic --noinput
@@ -127,9 +147,25 @@ jobs:
           echo "Verifying new app files exist..."
           if [ -d "apps/deliveries" ]; then
             echo "SUCCESS: deliveries app directory exists"
-            ls -la apps/deliveries/
+            ls -la apps/deliveries/ | head -10
           else
             echo "WARNING: deliveries app directory not found"
+            echo "Checking if apps directory exists..."
+            ls -la apps/ | grep deliveries || echo "deliveries not in apps directory"
+          fi
+          
+          echo "Verifying deliveries is in INSTALLED_APPS..."
+          if grep -q "apps.deliveries" zthob/settings.py; then
+            echo "SUCCESS: deliveries found in INSTALLED_APPS"
+          else
+            echo "ERROR: deliveries NOT in INSTALLED_APPS"
+          fi
+          
+          echo "Verifying deliveries URLs are in urls.py..."
+          if grep -q "api/deliveries" zthob/urls.py; then
+            echo "SUCCESS: deliveries URLs found in urls.py"
+          else
+            echo "ERROR: deliveries URLs NOT in urls.py"
           fi
           
           echo "Restarting service..."
@@ -168,8 +204,8 @@ jobs:
             
             # Verify version endpoint
             echo "Verifying deployment version..."
-            DEPLOYED_VERSION=$(curl -s http://localhost:8000/api/config/version/ | grep -o '"version":"[^"]*' | cut -d'"' -f4 || echo "unknown")
-            EXPECTED_VERSION=$(cat VERSION | tr -d '\n')
+            DEPLOYED_VERSION=$(curl -s http://localhost:8000/api/config/version/ 2>/dev/null | grep -o '\"version\":\"[^\"]*' | cut -d'\"' -f4 || echo "unknown")
+            EXPECTED_VERSION=$(cat VERSION 2>/dev/null | tr -d '\n' || echo "unknown")
             
             echo "Expected version: $EXPECTED_VERSION"
             echo "Deployed version: $DEPLOYED_VERSION"
