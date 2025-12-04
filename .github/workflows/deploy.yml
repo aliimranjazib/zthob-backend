@@ -38,9 +38,31 @@ jobs:
           git fetch origin
           git reset --hard origin/main
           
+          echo "🔧 Checking/Installing uv..."
+          # Check if uv is installed in PATH or in venv
+          UV_CMD=""
+          if command -v uv &> /dev/null; then
+            UV_CMD="uv"
+          elif [ -f ".venv/bin/uv" ]; then
+            UV_CMD=".venv/bin/uv"
+          else
+            echo "Installing uv..."
+            # Install uv using the official installer
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            export PATH="$HOME/.cargo/bin:$PATH"
+            # Reload PATH
+            if [ -f "$HOME/.cargo/env" ]; then
+              source "$HOME/.cargo/env"
+            fi
+            UV_CMD="uv"
+          fi
+          
+          # Verify uv is available
+          $UV_CMD --version
+          
           echo "📦 Installing dependencies with uv..."
           # Use uv pip install with explicit python path to ensure it uses the .venv
-          uv pip install --python .venv/bin/python -r requirements.txt
+          $UV_CMD pip install --python .venv/bin/python -r requirements.txt
           
           # Activate virtual environment
           source .venv/bin/activate
