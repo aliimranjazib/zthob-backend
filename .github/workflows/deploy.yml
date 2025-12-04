@@ -33,15 +33,21 @@ jobs:
           set -e
           
           cd /home/zthob-backend
-          source .venv/bin/activate
           
           echo "📥 Pulling code..."
           git fetch origin
           git reset --hard origin/main
           
-          echo "📦 Installing dependencies..."
-          pip install --upgrade pip -q
-          pip install -r requirements.txt -q
+          echo "📦 Installing dependencies with uv..."
+          # Use uv pip install with explicit python path to ensure it uses the .venv
+          uv pip install --python .venv/bin/python -r requirements.txt
+          
+          # Activate virtual environment
+          source .venv/bin/activate
+          
+          # Verify venv is activated and working
+          which python
+          python --version
           
           echo "🗄️ Running migrations..."
           python manage.py migrate --noinput
