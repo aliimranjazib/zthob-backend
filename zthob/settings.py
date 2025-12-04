@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     "apps.orders",
     "apps.riders",
     "apps.notifications",
+    "apps.deliveries",
 ]
     
 MIDDLEWARE = [
@@ -415,6 +416,10 @@ JAZZMIN_SETTINGS = {
         # Notifications
         "notifications.FCMDeviceToken": "fas fa-mobile-alt",
         "notifications.NotificationLog": "fas fa-bell",
+        
+        # Deliveries
+        "deliveries.DeliveryTracking": "fas fa-truck",
+        "deliveries.LocationHistory": "fas fa-map-marked-alt",
         
         # Core
         "core.SystemSettings": "fas fa-cog",

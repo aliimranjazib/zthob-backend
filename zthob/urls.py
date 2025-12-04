@@ -208,6 +208,7 @@ urlpatterns = [
     path('api/orders/',include('apps.orders.urls')),
     path('api/riders/',include('apps.riders.urls')),
     path('api/notifications/',include('apps.notifications.urls')),
+    path('api/deliveries/',include('apps.deliveries.urls')),
     
     # System Configuration
     path('api/config/', include('apps.core.urls')),
