@@ -187,25 +187,31 @@ jobs:
             
             # Verify version endpoint
             echo "Verifying deployment version..."
-            DEPLOYED_VERSION=$(curl -s http://localhost:8000/api/config/version/ 2>/dev/null | grep -o '\"version\":\"[^\"]*' | cut -d'\"' -f4 || echo "unknown")
+            VERSION_RESPONSE=$(curl -s http://localhost:8000/api/config/version/ 2>/dev/null || echo "")
+            if [ -n "$VERSION_RESPONSE" ]; then
+              DEPLOYED_VERSION=$(echo "$VERSION_RESPONSE" | grep -o '"version":"[^"]*' | cut -d'"' -f4 || echo "unknown")
+            else
+              DEPLOYED_VERSION="unknown"
+            fi
             EXPECTED_VERSION=$(cat VERSION 2>/dev/null | tr -d '\n' || echo "unknown")
             
             echo "Expected version: $EXPECTED_VERSION"
             echo "Deployed version: $DEPLOYED_VERSION"
             
             if [ "$DEPLOYED_VERSION" = "$EXPECTED_VERSION" ]; then
-              echo "✓ SUCCESS: Version matches! Deployment verified."
+              echo "SUCCESS: Version matches! Deployment verified."
             else
-              echo "⚠ WARNING: Version mismatch! Expected $EXPECTED_VERSION but got $DEPLOYED_VERSION"
-              echo "This might indicate the code wasn't fully updated."
+              echo "WARNING: Version mismatch! Expected $EXPECTED_VERSION but got $DEPLOYED_VERSION"
+              echo "This might indicate the code was not fully updated."
             fi
             
             # Additional verification: Check if new endpoints are available
             echo "Verifying API endpoints..."
-            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/schema/ | grep -q "200"; then
-              echo "✓ SUCCESS: API is responding"
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/schema/ || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "SUCCESS: API is responding"
             else
-              echo "⚠ WARNING: API might not be fully ready yet"
+              echo "WARNING: API might not be fully ready yet (HTTP $HTTP_CODE)"
             fi
             
             echo "SUCCESS: Deployment completed!"
