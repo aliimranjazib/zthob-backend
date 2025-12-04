@@ -1,0 +1,78 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -H -p ${{ secrets.SSH_PORT || 22 }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      
+      - name: Create deployment script
+        run: |
+          cat > deploy.sh << 'DEPLOYSCRIPT'
+          #!/bin/bash
+          set -e
+          
+          cd /home/zthob-backend
+          source magsk_venv/bin/activate
+          
+          echo "📥 Pulling code..."
+          git fetch origin
+          git reset --hard origin/main
+          
+          echo "📦 Installing dependencies..."
+          pip install --upgrade pip -q
+          pip install -r requirements.txt -q
+          
+          echo "🗄️ Running migrations..."
+          python manage.py migrate --noinput
+          
+          echo "📁 Collecting static files..."
+          python manage.py collectstatic --noinput
+          
+          echo "🔄 Restarting services..."
+          sudo systemctl restart gunicorn
+          
+          echo "⏳ Waiting for service..."
+          sleep 3
+          
+          echo "✅ Deployment complete!"
+          DEPLOYSCRIPT
+      
+      - name: Deploy to server
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || 22 }}
+        run: |
+          scp -P $SSH_PORT deploy.sh $SSH_USER@$SSH_HOST:/tmp/deploy.sh
+          ssh -p $SSH_PORT $SSH_USER@$SSH_HOST "chmod +x /tmp/deploy.sh && /tmp/deploy.sh"
+      
+      - name: Health check
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || 22 }}
+        run: |
+          echo "🏥 Running health check..."
+          ssh -p $SSH_PORT $SSH_USER@$SSH_HOST "curl -f http://localhost:8000/api/config/version/ || (echo 'Health check failed!' && exit 1)"
+          echo "✅ Health check passed!"
