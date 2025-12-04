@@ -328,7 +328,15 @@ SPECTACULAR_SETTINGS = {
 # Firebase Configuration
 # Service Account JSON file path (required for Firebase Admin SDK)
 # Set FIREBASE_CREDENTIALS_PATH in .env to point to your service account JSON file
-FIREBASE_CREDENTIALS_PATH = os.getenv('FIREBASE_CREDENTIALS_PATH', None)
+# Supports both absolute paths and relative paths (relative to BASE_DIR)
+_firebase_cred_path = os.getenv('FIREBASE_CREDENTIALS_PATH', None)
+if _firebase_cred_path:
+    # If path is relative, make it absolute relative to BASE_DIR
+    if not os.path.isabs(_firebase_cred_path):
+        _firebase_cred_path = str(BASE_DIR / _firebase_cred_path)
+    # Convert to absolute path to ensure it works regardless of working directory
+    _firebase_cred_path = os.path.abspath(_firebase_cred_path)
+FIREBASE_CREDENTIALS_PATH = _firebase_cred_path
 
 # Firebase Project ID
 FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID', 'mgask-2025')
