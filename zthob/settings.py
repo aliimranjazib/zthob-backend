@@ -23,6 +23,7 @@ try:
     from dotenv import load_dotenv
     load_dotenv(BASE_DIR / '.env')
 except ImportError:
+    print("file not found")
     # python-dotenv not installed, skip .env loading
     pass
 
@@ -208,6 +209,13 @@ if ENVIRONMENT == 'production':
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     CSRF_COOKIE_HTTPONLY = True
+    
+    # CSRF trusted origins for HTTPS
+    CSRF_TRUSTED_ORIGINS = [
+        'https://69.62.126.95',
+        'https://mgask.net',
+        'https://www.mgask.net',
+    ]
 
 # Logging Configuration
 LOGGING = {
@@ -294,6 +302,9 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS=[
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "https://69.62.126.95",
+    "https://mgask.net",
+    "https://www.mgask.net",
 ]
 
 CORS_ALLOW_CREDENTIALS=True

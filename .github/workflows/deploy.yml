@@ -33,7 +33,7 @@ jobs:
           set -e
           
           cd /home/zthob-backend
-          source magsk_venv/bin/activate
+          source .venv/bin/activate
           
           echo "📥 Pulling code..."
           git fetch origin
