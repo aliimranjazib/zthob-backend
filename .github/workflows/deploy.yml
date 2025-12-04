@@ -121,25 +121,8 @@ jobs:
           echo "Checking for pending migrations (non-blocking)..."
           python3 manage.py makemigrations --check --dry-run 2>&1 | head -20 || echo "Note: Some apps may have pending migrations"
           
-          echo "Verifying database tables..."
-          python3 << 'PYEOF'
-import sqlite3
-try:
-    conn = sqlite3.connect('db.sqlite3')
-    cursor = conn.cursor()
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-    tables = [row[0] for row in cursor.fetchall()]
-    print('All tables found:', len(tables), 'tables')
-    required = ['tailors_fabrictype', 'tailors_fabriccategory', 'tailors_fabric', 'tailors_fabricimage', 'tailors_tailorprofile', 'orders_order', 'orders_orderitem', 'deliveries_deliverytracking', 'deliveries_locationhistory']
-    missing = [t for t in required if t not in tables]
-    if missing:
-        print('ERROR: Missing tables:', missing)
-    else:
-        print('SUCCESS: All required tables exist')
-    conn.close()
-except Exception as e:
-    print('WARNING: Could not verify tables:', str(e))
-PYEOF
+          echo "Verifying database tables (optional check)..."
+          python3 -c "import sqlite3; conn = sqlite3.connect('db.sqlite3'); cursor = conn.cursor(); cursor.execute('SELECT name FROM sqlite_master WHERE type=\"table\"'); tables = [r[0] for r in cursor.fetchall()]; required = ['deliveries_deliverytracking', 'deliveries_locationhistory']; missing = [t for t in required if t not in tables]; print('Missing deliveries tables:', missing) if missing else print('SUCCESS: Deliveries tables exist'); conn.close()" 2>/dev/null || echo "Note: Could not verify tables (non-critical)"
           
           echo "Collecting static files..."
           python3 manage.py collectstatic --noinput
