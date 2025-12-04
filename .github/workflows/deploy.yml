@@ -53,11 +53,21 @@ jobs:
           git fetch origin
           git reset --hard origin/main
           
+          # Verify new code is pulled
+          echo "Verifying latest commit..."
+          git log -1 --oneline
+          
+          # Clear Python cache to ensure new code is loaded
+          echo "Clearing Python cache..."
+          find . -type d -name "__pycache__" -exec rm -r {} + 2>/dev/null || true
+          find . -type f -name "*.pyc" -delete 2>/dev/null || true
+          find . -type f -name "*.pyo" -delete 2>/dev/null || true
+          
           echo "Activating virtual environment..."
           source magsk_venv/bin/activate
           
           echo "Installing dependencies..."
-          pip3 install -r requirements.txt
+          pip3 install -r requirements.txt --upgrade
           
           echo "Running migrations..."
           python3 manage.py migrate --verbosity=2 || {
@@ -72,10 +82,18 @@ jobs:
           python3 manage.py showmigrations
           
           echo "Verifying database tables..."
-          python3 -c "import sqlite3; conn = sqlite3.connect('db.sqlite3'); cursor = conn.cursor(); cursor.execute(\"SELECT name FROM sqlite_master WHERE type='table'\"); tables = [row[0] for row in cursor.fetchall()]; print('All tables found:', len(tables), 'tables'); required = ['tailors_fabrictype', 'tailors_fabriccategory', 'tailors_fabric', 'tailors_fabricimage', 'tailors_tailorprofile', 'orders_order', 'orders_orderitem']; missing = [t for t in required if t not in tables]; print('ERROR: Missing tables:', missing) if missing else print('SUCCESS: All required tables exist'); conn.close()"
+          python3 -c "import sqlite3; conn = sqlite3.connect('db.sqlite3'); cursor = conn.cursor(); cursor.execute(\"SELECT name FROM sqlite_master WHERE type='table'\"); tables = [row[0] for row in cursor.fetchall()]; print('All tables found:', len(tables), 'tables'); required = ['tailors_fabrictype', 'tailors_fabriccategory', 'tailors_fabric', 'tailors_fabricimage', 'tailors_tailorprofile', 'orders_order', 'orders_orderitem', 'deliveries_deliverytracking', 'deliveries_locationhistory']; missing = [t for t in required if t not in tables]; print('ERROR: Missing tables:', missing) if missing else print('SUCCESS: All required tables exist'); conn.close()"
           
           echo "Collecting static files..."
           python3 manage.py collectstatic --noinput
+          
+          echo "Verifying new app files exist..."
+          if [ -d "apps/deliveries" ]; then
+            echo "SUCCESS: deliveries app directory exists"
+            ls -la apps/deliveries/
+          else
+            echo "WARNING: deliveries app directory not found"
+          fi
           
           echo "Restarting service..."
           # Ensure gunicorn directories exist
@@ -86,19 +104,36 @@ jobs:
           sudo chown root:root /home/zthob-backend/logs
           sudo chmod 755 /home/zthob-backend/logs
           
-          # Stop service first to avoid stale PID file issues
+          # CRITICAL: Stop service completely and kill all workers
+          echo "Stopping gunicorn service completely..."
           sudo systemctl stop gunicorn || true
+          # Kill any remaining gunicorn processes
+          sudo pkill -9 gunicorn || true
           # Remove stale PID file if it exists
           sudo rm -f /var/run/gunicorn/zthob.pid || true
-          # Wait a moment
-          sleep 2
-          # Now restart
+          # Wait to ensure all processes are killed
+          sleep 3
+          
+          # Now start fresh
+          echo "Starting gunicorn service..."
           sudo systemctl start gunicorn
           
           # Wait a moment for service to start
-          sleep 3
+          sleep 5
           
+          # Verify service is running and check if new code is loaded
           if systemctl is-active --quiet gunicorn; then
+            echo "SUCCESS: Service is running!"
+            
+            # Additional verification: Check if new endpoints are available
+            echo "Verifying new endpoints..."
+            sleep 2
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/schema/ | grep -q "200"; then
+              echo "SUCCESS: API is responding"
+            else
+              echo "WARNING: API might not be fully ready yet"
+            fi
+            
             echo "SUCCESS: Deployment successful!"
           else
             echo "ERROR: Service failed to start, checking logs..."
@@ -113,11 +148,15 @@ jobs:
             # Remove stale PID file
             sudo rm -f /var/run/gunicorn/zthob.pid || true
             
+            # Kill all gunicorn processes to ensure clean restart
+            sudo pkill -9 gunicorn || true
+            sleep 3
+            
             # Stop and start again (instead of restart)
             sudo systemctl stop gunicorn || true
             sleep 2
             sudo systemctl start gunicorn
-            sleep 3
+            sleep 5
             
             if systemctl is-active --quiet gunicorn; then
               echo "SUCCESS: Service fixed and running!"

@@ -37,7 +37,9 @@ group = "root"         # Run as admin group
 tmp_upload_dir = None   # Use system default
 
 # Preload application for better performance
-preload_app = True
+# NOTE: Set to False to ensure code updates are picked up immediately
+# If True, old code may remain in memory after deployment
+preload_app = False
 
 # Worker lifecycle
 def when_ready(server):
