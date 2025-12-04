@@ -26,6 +26,29 @@ jobs:
           ssh-keyscan -H -p ${{ secrets.SSH_PORT || 22 }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
       
+      - name: Setup secrets on server
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || 22 }}
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+        run: |
+          # Create config directory on server
+          ssh -p $SSH_PORT $SSH_USER@$SSH_HOST "mkdir -p /home/zthob-backend/config"
+          
+          # Write Firebase credentials to temp file locally
+          echo "$FIREBASE_CREDENTIALS_JSON" > /tmp/firebase-creds.json
+          
+          # Copy to server
+          scp -P $SSH_PORT /tmp/firebase-creds.json $SSH_USER@$SSH_HOST:/home/zthob-backend/config/firebase-credentials.json
+          
+          # Set proper permissions on server
+          ssh -p $SSH_PORT $SSH_USER@$SSH_HOST "chmod 600 /home/zthob-backend/config/firebase-credentials.json"
+          
+          # Clean up local temp file
+          rm /tmp/firebase-creds.json
+          
+          echo "✅ Firebase credentials configured on server"
       - name: Create deployment script
         run: |
           cat > deploy.sh << 'DEPLOYSCRIPT'
