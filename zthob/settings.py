@@ -39,7 +39,7 @@ if ENVIRONMENT == 'production':
     DEBUG = False
 
 # ALLOWED_HOSTS configuration - ensure production IP is always included
-default_hosts = ['localhost', '127.0.0.1', '0.0.0.0', '69.62.126.95', 'mgask.net', 'www.mgask.net']
+default_hosts = ['localhost', '127.0.0.1', '0.0.0.0', '69.62.126.95', 'mgask.net', 'www.mgask.net','https://app.mgask.net']
 env_hosts = os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',')
 # Filter out empty strings from split
 env_hosts = [h.strip() for h in env_hosts if h.strip()]
