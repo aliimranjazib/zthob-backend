@@ -69,3 +69,34 @@ class FamilyMember(models.Model):
     
     def __str__(self):
         return f"{self.name} ({self.relationship}) for {self.user.username}"
+
+
+class FabricFavorite(models.Model):
+    """Model representing a user's favorite fabric."""
+    
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="fabric_favorites",
+        help_text="User who favorited this fabric"
+    )
+    fabric = models.ForeignKey(
+        'tailors.Fabric',
+        on_delete=models.CASCADE,
+        related_name="favorites",
+        help_text="Fabric that was favorited"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, help_text="When the fabric was favorited")
+    
+    class Meta:
+        verbose_name = "Fabric Favorite"
+        verbose_name_plural = "Fabric Favorites"
+        ordering = ['-created_at']
+        unique_together = [('user', 'fabric')]
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['fabric', 'created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} favorited {self.fabric.name}"

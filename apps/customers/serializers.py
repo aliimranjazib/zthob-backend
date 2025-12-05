@@ -5,7 +5,7 @@ from apps.accounts.serializers import UserProfileSerializer
 from apps.tailors.models import Fabric
 from apps.tailors.serializers import FabricCategorySerializer, FabricImageSerializer, TailorProfileSerializer
 from apps.tailors.serializers.catalog import FabricTypeBasicSerializer,FabricTagBasicSerializer
-from apps.customers.models import Address, CustomerProfile, FamilyMember
+from apps.customers.models import Address, CustomerProfile, FamilyMember, FabricFavorite
 
 
 class FabricCatalogSerializer(serializers.ModelSerializer):
@@ -15,6 +15,9 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
     fabric_type=FabricTypeBasicSerializer(read_only=True)
     tags=FabricTagBasicSerializer(many=True, read_only=True)
     tailor = TailorProfileSerializer(read_only=True)
+    is_favorited = serializers.SerializerMethodField()
+    favorite_count = serializers.SerializerMethodField()
+    
     class Meta:
         model=Fabric
         fields = [
@@ -33,6 +36,8 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
             "gallery",
             "category",
             "tailor",
+            "is_favorited",
+            "favorite_count",
         ]
     
 
@@ -41,6 +46,17 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
         if request:
             return request.build_absolute_uri(obj.fabric_image.url) if obj.fabric_image else None
         return obj.fabric_image.url if obj.fabric_image else None
+    
+    def get_is_favorited(self, obj) -> bool:
+        """Check if the current user has favorited this fabric."""
+        request = self.context.get("request", None)
+        if request and request.user.is_authenticated:
+            return FabricFavorite.objects.filter(user=request.user, fabric=obj).exists()
+        return False
+    
+    def get_favorite_count(self, obj) -> int:
+        """Get the total number of users who favorited this fabric."""
+        return obj.favorites.count()
     
 
 class AddressSerializer(serializers.ModelSerializer):
@@ -241,3 +257,14 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
     def get_phone_verified(self, obj):
         """Get phone verification status from user"""
         return obj.user.phone_verified
+
+
+class FabricFavoriteSerializer(serializers.ModelSerializer):
+    """Serializer for FabricFavorite model."""
+    fabric = FabricCatalogSerializer(read_only=True)
+    fabric_id = serializers.IntegerField(write_only=True, required=False)
+    
+    class Meta:
+        model = FabricFavorite
+        fields = ['id', 'fabric', 'fabric_id', 'created_at']
+        read_only_fields = ['id', 'created_at']
