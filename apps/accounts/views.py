@@ -17,6 +17,7 @@ from .serializers import (
     PhoneVerifySerializer,
     )
 from apps.core.services import PhoneVerificationService
+from apps.core.models import PhoneVerification
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from zthob.utils import api_response
@@ -268,6 +269,29 @@ class PhoneVerifyView(APIView):
             name = serializer.validated_data.get('name', '')
             role = serializer.validated_data.get('role', 'USER')
             
+            # Check if user exists and was already verified (before verification)
+            # This determines if they're a new or returning user
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            
+            local_phone = PhoneVerificationService.normalize_phone_to_local(phone)
+            user_before_verify = User.objects.filter(phone=local_phone).first()
+            
+            # Check if user was already verified before this verification
+            # If phone_verified is True, they've logged in before
+            was_already_verified = user_before_verify and user_before_verify.phone_verified
+            
+            # Also check if there are any previous verified verifications
+            has_previous_verification = False
+            if user_before_verify:
+                has_previous_verification = PhoneVerification.objects.filter(
+                    user=user_before_verify,
+                    is_verified=True
+                ).exclude(otp_code=otp_code).exists()
+            
+            # User is new if they were never verified before
+            is_new_user = not was_already_verified and not has_previous_verification
+            
             # Verify OTP
             is_valid, message, user = PhoneVerificationService.verify_otp_for_phone(
                 phone_number=phone,
@@ -282,16 +306,14 @@ class PhoneVerifyView(APIView):
                     request=request
                 )
             
-            # Check if this is a new user (minimal user created during OTP send)
-            is_new_user = False
-            if not user.first_name and not user.last_name and not user.email:
-                is_new_user = True
-                # Update user with provided information
+            # Update user with provided information if this is a new user
+            if is_new_user:
                 if name:
                     name_parts = name.strip().split(' ', 1)
                     user.first_name = name_parts[0]
                     user.last_name = name_parts[1] if len(name_parts) > 1 else ''
-                user.role = role
+                if role:
+                    user.role = role
                 user.save()
             
             # Generate JWT tokens
