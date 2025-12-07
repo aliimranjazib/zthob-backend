@@ -118,6 +118,7 @@ class PhoneVerifySerializer(serializers.Serializer):
     otp_code = serializers.CharField(max_length=6, required=True)
     name = serializers.CharField(max_length=200, required=False, allow_blank=True)
     role = serializers.ChoiceField(choices=CustomUser.USER_ROLES, required=False, default='USER')
+    date_of_birth = serializers.DateField(required=False, allow_null=True)
     
     def validate_otp_code(self, value):
         """Validate OTP format"""
