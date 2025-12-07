@@ -10,13 +10,13 @@ class CustomUser(AbstractUser):
       ("ADMIN", "Admin"),
     )
     role=models.CharField(max_length=10,choices=USER_ROLES, default="USER")
-    email=models.EmailField(unique=True,max_length=100)
-    phone=models.CharField(max_length=15,blank=True,null=True)
+    email=models.EmailField(unique=True,blank=True,null=True,max_length=100)
+    phone=models.CharField(max_length=15,blank=True,null=True,unique=True,db_index=True)
     is_active=models.BooleanField(default=True)
     is_deleted = models.BooleanField(default=False)
     phone_verified=models.BooleanField(default=False,help_text="Is phone number verified?")
     USERNAME_FIELD='username'
-    REQUIRED_FIELDS=['email']
+    REQUIRED_FIELDS=[]
     
     def soft_delete(self):
       """Mark user as deleted instead of hard deleting"""
