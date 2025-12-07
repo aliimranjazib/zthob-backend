@@ -15,6 +15,7 @@ class CustomUser(AbstractUser):
     is_active=models.BooleanField(default=True)
     is_deleted = models.BooleanField(default=False)
     phone_verified=models.BooleanField(default=False,help_text="Is phone number verified?")
+    date_of_birth=models.DateField(blank=True,null=True,help_text="User's date of birth")
     USERNAME_FIELD='username'
     REQUIRED_FIELDS=[]
     

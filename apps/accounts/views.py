@@ -268,6 +268,7 @@ class PhoneVerifyView(APIView):
             otp_code = serializer.validated_data['otp_code']
             name = serializer.validated_data.get('name', '')
             role = serializer.validated_data.get('role', 'USER')
+            date_of_birth = serializer.validated_data.get('date_of_birth', None)
             
             # Check if user exists and was already verified (before verification)
             # This determines if they're a new or returning user
@@ -314,6 +315,8 @@ class PhoneVerifyView(APIView):
                     user.last_name = name_parts[1] if len(name_parts) > 1 else ''
                 if role:
                     user.role = role
+                if date_of_birth:
+                    user.date_of_birth = date_of_birth
                 user.save()
             
             # Generate JWT tokens
@@ -327,7 +330,8 @@ class PhoneVerifyView(APIView):
                 'last_name': user.last_name,
                 'email': user.email,
                 'role': user.role,
-                'phone_verified': user.phone_verified
+                'phone_verified': user.phone_verified,
+                'date_of_birth': user.date_of_birth.isoformat() if user.date_of_birth else None
             }
             
             response_data = {
