@@ -250,9 +250,10 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
     default_address = AddressResponseSerializer(read_only=True)
     addresses = AddressResponseSerializer(source='user.addresses', many=True, read_only=True)
     phone_verified = serializers.SerializerMethodField()
+    dob = serializers.DateField(source='date_of_birth', required=False, allow_null=True)
     class Meta:
         model=CustomerProfile
-        fields = ['user', 'default_address','addresses','phone_verified',]
+        fields = ['user', 'default_address','addresses','phone_verified', 'dob', 'gender']
 
     def get_phone_verified(self, obj):
         """Get phone verification status from user"""
