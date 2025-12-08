@@ -89,10 +89,16 @@ class TwilioSMSService:
         """
         Format phone number to E.164 format
         
-        Handles Saudi numbers:
+        Handles Saudi Arabia and Pakistan numbers:
+        Saudi:
         - 0501234567 → +966501234567
         - 501234567 → +966501234567
         - 966501234567 → +966501234567
+        
+        Pakistan:
+        - 03076900096 → +923076900096
+        - 3076900096 → +923076900096
+        - 923076900096 → +923076900096
         
         Args:
             phone_number: Phone number in various formats
@@ -103,7 +109,11 @@ class TwilioSMSService:
         # Remove all non-digit characters
         digits = ''.join(filter(str.isdigit, phone_number))
         
-        # Handle Saudi numbers
+        # If already in E.164 format, return as is
+        if phone_number.startswith('+'):
+            return phone_number
+        
+        # Handle Saudi Arabia numbers
         if digits.startswith('05') and len(digits) == 10:
             # Saudi mobile: 05xxxxxxxx -> +9665xxxxxxxx
             return '+966' + digits[1:]
@@ -111,14 +121,148 @@ class TwilioSMSService:
             # Saudi mobile without leading 0: 5xxxxxxxx -> +9665xxxxxxxx
             return '+966' + digits
         elif digits.startswith('966') and len(digits) >= 12:
-            # Already has country code: 9665xxxxxxxx -> +9665xxxxxxxx
+            # Already has Saudi country code: 9665xxxxxxxx -> +9665xxxxxxxx
             return '+' + digits
-        elif phone_number.startswith('+'):
-            # Already in E.164 format
-            return phone_number
+        # Handle Pakistan numbers
+        elif digits.startswith('03') and len(digits) == 11:
+            # Pakistan mobile: 03xxxxxxxxx -> +923xxxxxxxxx
+            return '+92' + digits[1:]
+        elif digits.startswith('3') and len(digits) == 10:
+            # Pakistan mobile without leading 0: 3xxxxxxxxx -> +923xxxxxxxxx
+            return '+92' + digits
+        elif digits.startswith('923') and len(digits) >= 12:
+            # Already has Pakistan country code: 923xxxxxxxxx -> +923xxxxxxxxx
+            return '+' + digits
         else:
-            # Default: assume Saudi number
+            # Default: try to detect based on length and prefix
             if len(digits) == 10 and digits.startswith('05'):
+                # Saudi format
                 return '+966' + digits[1:]
-            return '+' + digits
+            elif len(digits) == 11 and digits.startswith('03'):
+                # Pakistan format
+                return '+92' + digits[1:]
+            # Fallback: assume it's already in correct format or add +
+            return '+' + digits if not phone_number.startswith('+') else phone_number
+    
+    @staticmethod
+    def send_verification_code(phone_number: str, locale: str = 'en') -> tuple[bool, str, str]:
+        """
+        Send verification code using Twilio Verify API
+        
+        Args:
+            phone_number: Phone number in E.164 format (e.g., +966501234567)
+            locale: Language locale (e.g., 'en', 'ar')
+            
+        Returns:
+            tuple: (success: bool, message: str, verification_sid: str)
+        """
+        # Check if Twilio SDK is available
+        if not TWILIO_AVAILABLE:
+            logger.error("Twilio SDK not installed. Please install twilio package.")
+            return False, "SMS service not available - Twilio SDK not installed", ""
+        
+        # Check if Twilio Verify is configured
+        if not settings.TWILIO_ACCOUNT_SID:
+            return False, "Twilio not configured. Missing TWILIO_ACCOUNT_SID", ""
+        if not settings.TWILIO_AUTH_TOKEN:
+            return False, "Twilio not configured. Missing TWILIO_AUTH_TOKEN", ""
+        if not settings.TWILIO_VERIFY_SERVICE_SID:
+            return False, "Twilio Verify not configured. Missing TWILIO_VERIFY_SERVICE_SID", ""
+        
+        try:
+            # Initialize Twilio client
+            client = Client(
+                settings.TWILIO_ACCOUNT_SID,
+                settings.TWILIO_AUTH_TOKEN
+            )
+            
+            # Format phone number (ensure it starts with +)
+            formatted_phone = TwilioSMSService.format_phone_number(phone_number)
+            
+            # Send verification code using Twilio Verify API
+            verification = client.verify.v2.services(
+                settings.TWILIO_VERIFY_SERVICE_SID
+            ).verifications.create(
+                to=formatted_phone,
+                channel='sms',
+                locale=locale
+            )
+            
+            logger.info(f"Twilio Verify code sent. SID: {verification.sid}, To: {formatted_phone}")
+            return True, f"Verification code sent successfully", verification.sid
+            
+        except TwilioRestException as e:
+            error_msg = str(e)
+            logger.error(f"Twilio Verify error: {error_msg}")
+            
+            # Provide more specific error messages
+            if "401" in error_msg or "Authenticate" in error_msg:
+                return False, f"Failed to send verification code: HTTP 401 error. Please check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are correct.", ""
+            elif "403" in error_msg:
+                return False, f"Failed to send verification code: HTTP 403 error. Please check Twilio account permissions.", ""
+            else:
+                return False, f"Failed to send verification code: {error_msg}", ""
+        except Exception as e:
+            logger.error(f"Unexpected error sending verification code: {str(e)}")
+            return False, f"Failed to send verification code: {str(e)}", ""
+    
+    @staticmethod
+    def verify_code(phone_number: str, code: str) -> tuple[bool, str]:
+        """
+        Verify code using Twilio Verify API
+        
+        Args:
+            phone_number: Phone number in E.164 format (e.g., +966501234567)
+            code: Verification code to check
+            
+        Returns:
+            tuple: (is_valid: bool, message: str)
+        """
+        # Check if Twilio SDK is available
+        if not TWILIO_AVAILABLE:
+            logger.error("Twilio SDK not installed.")
+            return False, "SMS service not available - Twilio SDK not installed"
+        
+        # Check if Twilio Verify is configured
+        if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN:
+            return False, "Twilio not configured"
+        if not settings.TWILIO_VERIFY_SERVICE_SID:
+            return False, "Twilio Verify not configured. Missing TWILIO_VERIFY_SERVICE_SID"
+        
+        try:
+            # Initialize Twilio client
+            client = Client(
+                settings.TWILIO_ACCOUNT_SID,
+                settings.TWILIO_AUTH_TOKEN
+            )
+            
+            # Format phone number
+            formatted_phone = TwilioSMSService.format_phone_number(phone_number)
+            
+            # Verify the code using Twilio Verify API
+            verification_check = client.verify.v2.services(
+                settings.TWILIO_VERIFY_SERVICE_SID
+            ).verification_checks.create(
+                to=formatted_phone,
+                code=code
+            )
+            
+            if verification_check.status == 'approved':
+                logger.info(f"Twilio Verify code verified successfully. To: {formatted_phone}")
+                return True, "Phone verified successfully!"
+            else:
+                logger.warning(f"Twilio Verify code verification failed. Status: {verification_check.status}, To: {formatted_phone}")
+                return False, "Invalid or expired verification code"
+                
+        except TwilioRestException as e:
+            error_msg = str(e)
+            logger.error(f"Twilio Verify error: {error_msg}")
+            
+            if "404" in error_msg or "not found" in error_msg.lower():
+                return False, "Verification code not found or expired"
+            else:
+                return False, f"Failed to verify code: {error_msg}"
+        except Exception as e:
+            logger.error(f"Unexpected error verifying code: {str(e)}")
+            return False, f"Failed to verify code: {str(e)}"
 

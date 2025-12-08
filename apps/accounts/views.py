@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from django.contrib.auth import authenticate
 from django.db.models import Q
 from rest_framework import status
+import logging
 
 from apps.accounts.models import CustomUser
 from .serializers import (
@@ -183,6 +184,77 @@ class UserLogoutView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
+class DeleteAccountView(APIView):
+    """Delete user account - soft delete (default) or hard delete"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        tags=["Profile"],
+        summary="Delete user account",
+        description="Delete the authenticated user's account. By default performs soft delete (can be restored). Use hard_delete=true for complete removal. No password required since phone authentication is used.",
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'hard_delete': {
+                        'type': 'boolean',
+                        'description': 'If true, permanently delete account. If false (default), soft delete (can be restored).',
+                        'default': False
+                    }
+                }
+            }
+        }
+    )
+    def delete(self, request):
+        """
+        Delete user account
+        
+        - Soft delete (default): Marks account as deleted, keeps data
+        - Hard delete: Permanently removes account and related data
+        
+        Note: Since phone authentication doesn't use passwords, 
+        hard delete only requires authentication (no password confirmation needed).
+        """
+        user = request.user
+        hard_delete = request.data.get('hard_delete', False)
+        
+        try:
+            if hard_delete:
+                # Hard delete - permanently remove account
+                # Note: Related data will be handled by CASCADE or SET_NULL based on model definitions
+                user_id = user.id
+                username = user.username
+                
+                # Delete the user (this will cascade to related models)
+                user.delete()
+                
+                return api_response(
+                    success=True,
+                    message="Account permanently deleted. All your data has been removed.",
+                    status_code=status.HTTP_200_OK,
+                    request=request
+                )
+            else:
+                # Soft delete - mark as deleted but keep data
+                user.soft_delete()
+                
+                return api_response(
+                    success=True,
+                    message="Account deleted successfully. Your data has been preserved and can be restored by contacting support.",
+                    status_code=status.HTTP_200_OK,
+                    request=request
+                )
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error deleting account for user {user.id}: {str(e)}")
+            return api_response(
+                success=False,
+                message="Failed to delete account",
+                errors=str(e),
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                request=request
+            )
+
 @api_view(['GET'])
 def test_deployment(request):
     return api_response(success=True, message="Deployment test successful")
@@ -224,13 +296,15 @@ class PhoneLoginView(APIView):
                         request=request
                     )
                 else:
-                    # Still return success but warn about SMS failure
-                    # OTP is still generated and can be used for testing
+                    # SMS failed - return error with details
+                    # Include the error message from Twilio for debugging
+                    error_details = sms_message if sms_message else "Unknown error"
                     return api_response(
-                        success=True,
-                        message=f"OTP generated for {phone}, but SMS sending failed. Please check server logs.",
+                        success=False,
+                        message=f"Failed to send OTP to {phone}",
+                        errors=error_details,
                         data=response_data,
-                        status_code=status.HTTP_200_OK,
+                        status_code=status.HTTP_400_BAD_REQUEST,
                         request=request
                     )
             except Exception as e:

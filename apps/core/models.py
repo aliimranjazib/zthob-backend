@@ -19,7 +19,8 @@ class PhoneVerification(models.Model):
         related_name='phone_verifications'
     )
     phone_number = models.CharField(max_length=20)
-    otp_code = models.CharField(max_length=6)
+    otp_code = models.CharField(max_length=6, blank=True, null=True, help_text="OTP code (for manual OTP) or empty if using Twilio Verify")
+    verification_sid = models.CharField(max_length=100, blank=True, null=True, help_text="Twilio Verify verification SID")
     is_verified = models.BooleanField(default=False)
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)

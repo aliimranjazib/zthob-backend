@@ -86,18 +86,17 @@ class PhoneLoginSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=15, required=True)
     
     def validate_phone(self, value):
-        """Validate and normalize phone number"""
+        """Validate and normalize phone number - accepts Saudi Arabia and Pakistan formats"""
         # Remove any spaces or special characters except +
         phone = value.strip().replace(' ', '').replace('-', '')
         
-        # Validate Saudi phone format
+        # Extract digits for validation
         digits = ''.join(filter(str.isdigit, phone))
         
-        # Accept formats: 05xxxxxxxx, 5xxxxxxxx, +9665xxxxxxxx, 9665xxxxxxxx
-        if phone.startswith('+'):
-            # E.164 format
-            if not phone.startswith('+9665') or len(digits) < 12:
-                raise serializers.ValidationError('Invalid Saudi phone number format')
+        # Validate Saudi Arabia formats: +9665xxxxxxxx, 05xxxxxxxx, 5xxxxxxxx, 9665xxxxxxxx
+        if phone.startswith('+9665') and len(digits) >= 12:
+            # Saudi E.164 format: +9665xxxxxxxx
+            pass
         elif digits.startswith('05') and len(digits) == 10:
             # Saudi format: 05xxxxxxxx
             pass
@@ -105,10 +104,23 @@ class PhoneLoginSerializer(serializers.Serializer):
             # Saudi format without leading 0: 5xxxxxxxx
             pass
         elif digits.startswith('9665') and len(digits) >= 12:
-            # With country code: 9665xxxxxxxx
+            # Saudi with country code: 9665xxxxxxxx
+            pass
+        # Validate Pakistan formats: +923xxxxxxxxx, 03xxxxxxxxx, 3xxxxxxxxx
+        elif phone.startswith('+92') and len(digits) >= 12:
+            # Pakistan E.164 format: +923xxxxxxxxx
+            pass
+        elif digits.startswith('03') and len(digits) == 11:
+            # Pakistan format: 03xxxxxxxxx
+            pass
+        elif digits.startswith('3') and len(digits) == 10:
+            # Pakistan format without leading 0: 3xxxxxxxxx
+            pass
+        elif digits.startswith('923') and len(digits) >= 12:
+            # Pakistan with country code: 923xxxxxxxxx
             pass
         else:
-            raise serializers.ValidationError('Phone number must be in Saudi format (05xxxxxxxx)')
+            raise serializers.ValidationError('Phone number must be in Saudi Arabia format (05xxxxxxxx) or Pakistan format (03xxxxxxxxx)')
         
         return phone
 
@@ -127,18 +139,17 @@ class PhoneVerifySerializer(serializers.Serializer):
         return value
     
     def validate_phone(self, value):
-        """Validate and normalize phone number"""
+        """Validate and normalize phone number - accepts Saudi Arabia and Pakistan formats"""
         # Remove any spaces or special characters except +
         phone = value.strip().replace(' ', '').replace('-', '')
         
-        # Validate Saudi phone format
+        # Extract digits for validation
         digits = ''.join(filter(str.isdigit, phone))
         
-        # Accept formats: 05xxxxxxxx, 5xxxxxxxx, +9665xxxxxxxx, 9665xxxxxxxx
-        if phone.startswith('+'):
-            # E.164 format
-            if not phone.startswith('+9665') or len(digits) < 12:
-                raise serializers.ValidationError('Invalid Saudi phone number format')
+        # Validate Saudi Arabia formats: +9665xxxxxxxx, 05xxxxxxxx, 5xxxxxxxx, 9665xxxxxxxx
+        if phone.startswith('+9665') and len(digits) >= 12:
+            # Saudi E.164 format: +9665xxxxxxxx
+            pass
         elif digits.startswith('05') and len(digits) == 10:
             # Saudi format: 05xxxxxxxx
             pass
@@ -146,10 +157,23 @@ class PhoneVerifySerializer(serializers.Serializer):
             # Saudi format without leading 0: 5xxxxxxxx
             pass
         elif digits.startswith('9665') and len(digits) >= 12:
-            # With country code: 9665xxxxxxxx
+            # Saudi with country code: 9665xxxxxxxx
+            pass
+        # Validate Pakistan formats: +923xxxxxxxxx, 03xxxxxxxxx, 3xxxxxxxxx
+        elif phone.startswith('+92') and len(digits) >= 12:
+            # Pakistan E.164 format: +923xxxxxxxxx
+            pass
+        elif digits.startswith('03') and len(digits) == 11:
+            # Pakistan format: 03xxxxxxxxx
+            pass
+        elif digits.startswith('3') and len(digits) == 10:
+            # Pakistan format without leading 0: 3xxxxxxxxx
+            pass
+        elif digits.startswith('923') and len(digits) >= 12:
+            # Pakistan with country code: 923xxxxxxxxx
             pass
         else:
-            raise serializers.ValidationError('Phone number must be in Saudi format (05xxxxxxxx)')
+            raise serializers.ValidationError('Phone number must be in Saudi Arabia format (05xxxxxxxx) or Pakistan format (03xxxxxxxxx)')
         
         return phone
 

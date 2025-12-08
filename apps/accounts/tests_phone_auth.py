@@ -106,6 +106,38 @@ class PhoneAuthenticationTestCase(TestCase):
         self.assertEqual(user.role, 'USER')
         self.assertTrue(user.phone_verified)
     
+    def test_phone_verify_with_date_of_birth(self):
+        """Test OTP verification with date_of_birth field"""
+        # Send OTP
+        self.client.post(self.phone_login_url, {
+            'phone': self.test_phone
+        })
+        
+        # Get OTP
+        user = CustomUser.objects.filter(phone=self.test_phone).first()
+        verification = PhoneVerification.objects.filter(user=user).latest('created_at')
+        
+        # Verify with date_of_birth
+        response = self.client.post(self.phone_verify_url, {
+            'phone': self.test_phone,
+            'otp_code': verification.otp_code,
+            'name': 'Ahmed Ali',
+            'date_of_birth': '1990-01-15',
+            'role': 'USER'
+        })
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data['success'])
+        
+        # Verify date_of_birth was saved
+        user.refresh_from_db()
+        self.assertIsNotNone(user.date_of_birth)
+        self.assertEqual(str(user.date_of_birth), '1990-01-15')
+        
+        # Verify date_of_birth in response
+        self.assertIn('date_of_birth', response.data['data']['user'])
+        self.assertEqual(response.data['data']['user']['date_of_birth'], '1990-01-15')
+    
     def test_phone_verify_existing_user_login(self):
         """Test OTP verification for existing user (login)"""
         # Create existing user
