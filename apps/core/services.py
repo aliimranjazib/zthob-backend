@@ -155,12 +155,32 @@ class PhoneVerificationService:
                         username = f"user_{local_phone}_{counter}"
                         counter += 1
                     
-                    user = User.objects.create_user(
-                        username=username,
-                        phone=local_phone,
-                        email=None,  # Explicitly set to None to avoid unique constraint issues
-                        is_active=True
-                    )
+                    try:
+                        user = User.objects.create_user(
+                            username=username,
+                            phone=local_phone,
+                            email=None,  # Explicitly set to None to avoid unique constraint issues
+                            is_active=True
+                        )
+                    except Exception as e:
+                        # If unique constraint fails, clean up empty emails and retry
+                        if 'UNIQUE constraint' in str(e) and 'email' in str(e):
+                            logger.warning(f"Email constraint issue detected. Cleaning up empty emails...")
+                            # Fix any existing users with empty email strings
+                            User.objects.filter(email='').update(email=None)
+                            # Retry creating user
+                            try:
+                                user = User.objects.create_user(
+                                    username=username,
+                                    phone=local_phone,
+                                    email=None,
+                                    is_active=True
+                                )
+                            except Exception as retry_error:
+                                logger.error(f"Failed to create user after cleanup: {retry_error}")
+                                raise Exception(f"Failed to create user: {retry_error}")
+                        else:
+                            raise
             
             # Create verification with test OTP (no SMS sent)
             otp_code = TEST_OTP
@@ -192,12 +212,32 @@ class PhoneVerificationService:
                     username = f"user_{local_phone}_{counter}"
                     counter += 1
                 
-                user = User.objects.create_user(
-                    username=username,
-                    phone=local_phone,
-                    email=None,  # Explicitly set to None to avoid unique constraint issues
-                    is_active=True
-                )
+                try:
+                    user = User.objects.create_user(
+                        username=username,
+                        phone=local_phone,
+                        email=None,  # Explicitly set to None to avoid unique constraint issues
+                        is_active=True
+                    )
+                except Exception as e:
+                    # If unique constraint fails, clean up empty emails and retry
+                    if 'UNIQUE constraint' in str(e) and 'email' in str(e):
+                        logger.warning(f"Email constraint issue detected. Cleaning up empty emails...")
+                        # Fix any existing users with empty email strings
+                        User.objects.filter(email='').update(email=None)
+                        # Retry creating user
+                        try:
+                            user = User.objects.create_user(
+                                username=username,
+                                phone=local_phone,
+                                email=None,
+                                is_active=True
+                            )
+                        except Exception as retry_error:
+                            logger.error(f"Failed to create user after cleanup: {retry_error}")
+                            raise Exception(f"Failed to create user: {retry_error}")
+                    else:
+                        raise
         
         # Create verification using existing method (sends real SMS)
         verification, otp_code, sms_success, sms_message = PhoneVerificationService.create_verification(
