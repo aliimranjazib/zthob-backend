@@ -484,3 +484,450 @@ class RiderTestNotificationView(APIView):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
+class BulkNotificationView(APIView):
+    """Send bulk notifications to all users of a specific role"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Send Bulk Notification",
+        description="Send notification to all users of a specific role (USER, TAILOR, or RIDER). Only admins can use this endpoint.",
+        tags=["Notifications"],
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'role': {
+                        'type': 'string',
+                        'enum': ['USER', 'TAILOR', 'RIDER'],
+                        'description': 'User role to send notifications to'
+                    },
+                    'title': {
+                        'type': 'string',
+                        'description': 'Notification title'
+                    },
+                    'body': {
+                        'type': 'string',
+                        'description': 'Notification body/message'
+                    },
+                    'category': {
+                        'type': 'string',
+                        'default': 'bulk_announcement',
+                        'description': 'Notification category'
+                    },
+                    'notification_type': {
+                        'type': 'string',
+                        'default': 'SYSTEM',
+                        'description': 'Type of notification'
+                    },
+                    'priority': {
+                        'type': 'string',
+                        'enum': ['high', 'normal'],
+                        'default': 'high',
+                        'description': 'Notification priority'
+                    }
+                },
+                'required': ['role', 'title', 'body']
+            }
+        },
+        responses={
+            200: {
+                'description': 'Notifications sent successfully',
+                'type': 'object',
+                'properties': {
+                    'success': {'type': 'boolean'},
+                    'message': {'type': 'string'},
+                    'data': {
+                        'type': 'object',
+                        'properties': {
+                            'role': {'type': 'string'},
+                            'total_users': {'type': 'integer'},
+                            'success_count': {'type': 'integer'},
+                            'failed_count': {'type': 'integer'}
+                        }
+                    }
+                }
+            },
+            400: {'description': 'Bad request - missing required fields'},
+            403: {'description': 'Forbidden - only admins can send bulk notifications'}
+        }
+    )
+    def post(self, request):
+        """
+        Send bulk notification to all users of a specific role
+        
+        Only admins (is_staff, is_superuser, or role=ADMIN) can use this endpoint.
+        """
+        # Check if user is admin
+        is_admin = (
+            request.user.is_staff or 
+            request.user.is_superuser or 
+            getattr(request.user, 'role', None) == 'ADMIN'
+        )
+        
+        if not is_admin:
+            return api_response(
+                success=False,
+                message="Only admins can send bulk notifications",
+                status_code=status.HTTP_403_FORBIDDEN,
+                request=request
+            )
+        
+        # Get request data
+        role = request.data.get('role')
+        title = request.data.get('title')
+        body = request.data.get('body')
+        category = request.data.get('category', 'bulk_announcement')
+        notification_type = request.data.get('notification_type', 'SYSTEM')
+        priority = request.data.get('priority', 'high')
+        
+        # Validate required fields
+        if not role:
+            return api_response(
+                success=False,
+                message="Missing required field: role",
+                errors="role is required and must be one of: USER, TAILOR, RIDER",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request
+            )
+        
+        if role not in ['USER', 'TAILOR', 'RIDER']:
+            return api_response(
+                success=False,
+                message="Invalid role",
+                errors="role must be one of: USER, TAILOR, RIDER",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request
+            )
+        
+        if not title:
+            return api_response(
+                success=False,
+                message="Missing required field: title",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request
+            )
+        
+        if not body:
+            return api_response(
+                success=False,
+                message="Missing required field: body",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request
+            )
+        
+        # Get users by role (only active, non-deleted users)
+        from apps.accounts.models import CustomUser
+        users = CustomUser.objects.filter(
+            role=role,
+            is_active=True,
+            is_deleted=False
+        )
+        
+        total_users = users.count()
+        
+        if total_users == 0:
+            return api_response(
+                success=False,
+                message=f"No active {role}(s) found to send notifications to",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request
+            )
+        
+        # Send notifications
+        try:
+            results = NotificationService.send_bulk_notifications(
+                users=users,
+                title=title,
+                body=body,
+                notification_type=notification_type,
+                category=category,
+                priority=priority
+            )
+            
+            return api_response(
+                success=True,
+                message=f"Bulk notification sent to {results['success_count']} out of {total_users} {role}(s)",
+                data={
+                    'role': role,
+                    'total_users': total_users,
+                    'success_count': results['success_count'],
+                    'failed_count': results['failed_count'],
+                    'title': title,
+                    'body': body,
+                    'category': category
+                },
+                status_code=status.HTTP_200_OK,
+                request=request
+            )
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error sending bulk notification: {str(e)}")
+            return api_response(
+                success=False,
+                message=f"Error sending bulk notification: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                request=request
+            )
+
+
+class CustomerTestNotificationView(APIView):
+    """Send a test notification to the authenticated customer"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Send Test Notification (Customer)",
+        description="Send a test push notification to the authenticated customer. Requires FCM token to be registered first.",
+        tags=["Notifications"]
+    )
+    def post(self, request):
+        # Check if user is a customer (USER role)
+        if getattr(request.user, 'role', None) != 'USER':
+            return api_response(
+                success=False,
+                message="This endpoint is only available for customers",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if user has registered FCM token
+        fcm_tokens = FCMDeviceToken.objects.filter(
+            user=request.user,
+            is_active=True
+        )
+        
+        if not fcm_tokens.exists():
+            return api_response(
+                success=False,
+                message="No active FCM token found. Please register your FCM token first using /api/notifications/fcm-token/register/",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Send test notification
+        try:
+            success = NotificationService.send_notification(
+                user=request.user,
+                title="Test Notification",
+                body=f"Hello {request.user.username}! This is a test notification from Zthob.",
+                notification_type='SYSTEM',
+                category='test_notification',
+                data={
+                    'test': 'true',
+                    'timestamp': str(request.user.id)
+                },
+                priority='high'
+            )
+            
+            if success:
+                return api_response(
+                    success=True,
+                    message="Test notification sent successfully! Check your device.",
+                    data={
+                        'user': request.user.username,
+                        'fcm_tokens_count': fcm_tokens.count()
+                    },
+                    status_code=status.HTTP_200_OK
+                )
+            else:
+                return api_response(
+                    success=False,
+                    message="Failed to send test notification. Check notification logs for details.",
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error sending test notification: {str(e)}")
+            return api_response(
+                success=False,
+                message=f"Error sending test notification: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    """Send bulk notifications to all users of a specific role"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Send Bulk Notification",
+        description="Send notification to all users of a specific role (USER, TAILOR, or RIDER). Only admins can use this endpoint.",
+        tags=["Notifications"],
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'role': {
+                        'type': 'string',
+                        'enum': ['USER', 'TAILOR', 'RIDER'],
+                        'description': 'User role to send notifications to'
+                    },
+                    'title': {
+                        'type': 'string',
+                        'description': 'Notification title'
+                    },
+                    'body': {
+                        'type': 'string',
+                        'description': 'Notification body/message'
+                    },
+                    'category': {
+                        'type': 'string',
+                        'default': 'bulk_announcement',
+                        'description': 'Notification category'
+                    },
+                    'notification_type': {
+                        'type': 'string',
+                        'default': 'SYSTEM',
+                        'description': 'Type of notification'
+                    },
+                    'priority': {
+                        'type': 'string',
+                        'enum': ['high', 'normal'],
+                        'default': 'high',
+                        'description': 'Notification priority'
+                    }
+                },
+                'required': ['role', 'title', 'body']
+            }
+        },
+        responses={
+            200: {
+                'description': 'Notifications sent successfully',
+                'type': 'object',
+                'properties': {
+                    'success': {'type': 'boolean'},
+                    'message': {'type': 'string'},
+                    'data': {
+                        'type': 'object',
+                        'properties': {
+                            'role': {'type': 'string'},
+                            'total_users': {'type': 'integer'},
+                            'success_count': {'type': 'integer'},
+                            'failed_count': {'type': 'integer'}
+                        }
+                    }
+                }
+            },
+            400: {'description': 'Bad request - missing required fields'},
+            403: {'description': 'Forbidden - only admins can send bulk notifications'}
+        }
+    )
+    def post(self, request):
+        """
+        Send bulk notification to all users of a specific role
+        
+        Only admins (is_staff, is_superuser, or role=ADMIN) can use this endpoint.
+        """
+        # Check if user is admin
+        is_admin = (
+            request.user.is_staff or 
+            request.user.is_superuser or 
+            getattr(request.user, 'role', None) == 'ADMIN'
+        )
+        
+        if not is_admin:
+            return api_response(
+                success=False,
+                message="Only admins can send bulk notifications",
+                status_code=status.HTTP_403_FORBIDDEN,
+                request=request
+            )
+        
+        # Get request data
+        role = request.data.get('role')
+        title = request.data.get('title')
+        body = request.data.get('body')
+        category = request.data.get('category', 'bulk_announcement')
+        notification_type = request.data.get('notification_type', 'SYSTEM')
+        priority = request.data.get('priority', 'high')
+        
+        # Validate required fields
+        if not role:
+            return api_response(
+                success=False,
+                message="Missing required field: role",
+                errors="role is required and must be one of: USER, TAILOR, RIDER",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request
+            )
+        
+        if role not in ['USER', 'TAILOR', 'RIDER']:
+            return api_response(
+                success=False,
+                message="Invalid role",
+                errors="role must be one of: USER, TAILOR, RIDER",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request
+            )
+        
+        if not title:
+            return api_response(
+                success=False,
+                message="Missing required field: title",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request
+            )
+        
+        if not body:
+            return api_response(
+                success=False,
+                message="Missing required field: body",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request
+            )
+        
+        # Get users by role (only active, non-deleted users)
+        from apps.accounts.models import CustomUser
+        users = CustomUser.objects.filter(
+            role=role,
+            is_active=True,
+            is_deleted=False
+        )
+        
+        total_users = users.count()
+        
+        if total_users == 0:
+            return api_response(
+                success=False,
+                message=f"No active {role}(s) found to send notifications to",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request
+            )
+        
+        # Send notifications
+        try:
+            results = NotificationService.send_bulk_notifications(
+                users=users,
+                title=title,
+                body=body,
+                notification_type=notification_type,
+                category=category,
+                priority=priority
+            )
+            
+            return api_response(
+                success=True,
+                message=f"Bulk notification sent to {results['success_count']} out of {total_users} {role}(s)",
+                data={
+                    'role': role,
+                    'total_users': total_users,
+                    'success_count': results['success_count'],
+                    'failed_count': results['failed_count'],
+                    'title': title,
+                    'body': body,
+                    'category': category
+                },
+                status_code=status.HTTP_200_OK,
+                request=request
+            )
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error sending bulk notification: {str(e)}")
+            return api_response(
+                success=False,
+                message=f"Error sending bulk notification: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                request=request
+            )
+

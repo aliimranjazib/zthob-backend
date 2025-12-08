@@ -8,6 +8,8 @@ from .views import (
     UnreadCountView,
     TestNotificationView,
     RiderTestNotificationView,
+    CustomerTestNotificationView,
+    BulkNotificationView,
 )
 
 app_name = 'notifications'
@@ -22,5 +24,7 @@ urlpatterns = [
     path('unread-count/', UnreadCountView.as_view(), name='unread-count'),
     path('test/', TestNotificationView.as_view(), name='test-notification'),
     path('test-rider/', RiderTestNotificationView.as_view(), name='test-notification-rider'),
+    path('test-customer/', CustomerTestNotificationView.as_view(), name='test-notification-customer'),
+    path('bulk/', BulkNotificationView.as_view(), name='bulk-notification'),
 ]
 
