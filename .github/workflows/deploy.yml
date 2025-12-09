@@ -82,13 +82,13 @@ jobs:
           
           if [ ! -f "/home/zthob-backend/config/firebase-credentials.json" ]; then
             echo "Firebase credentials file not found. Creating from GitHub Secrets (one-time setup)..."
-            if [ -n "${{ secrets.FIREBASE_CREDENTIALS }}" ]; then
-              echo "${{ secrets.FIREBASE_CREDENTIALS }}" | sudo tee /home/zthob-backend/config/firebase-credentials.json > /dev/null
+            if [ -n "${{ secrets.FIREBASE_CREDENTIALS_JSON }}" ]; then
+              echo "${{ secrets.FIREBASE_CREDENTIALS_JSON }}" | sudo tee /home/zthob-backend/config/firebase-credentials.json > /dev/null
               sudo chmod 600 /home/zthob-backend/config/firebase-credentials.json
               sudo chown root:root /home/zthob-backend/config/firebase-credentials.json
               echo "Firebase credentials file created successfully."
             else
-              echo "WARNING: FIREBASE_CREDENTIALS secret not found in GitHub. Please upload credentials manually to /home/zthob-backend/config/firebase-credentials.json"
+              echo "WARNING: FIREBASE_CREDENTIALS_JSON secret not found in GitHub. Please upload credentials manually to /home/zthob-backend/config/firebase-credentials.json"
             fi
           else
             echo "Firebase credentials file already exists. Skipping creation (protected from overwrite)."
