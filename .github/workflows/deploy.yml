@@ -72,23 +72,10 @@ jobs:
           python3 manage.py showmigrations
           
           echo "Verifying database tables..."
-          python3 -c "import sqlite3; conn = sqlite3.connect('db.sqlite3'); cursor = conn.cursor(); cursor.execute('SELECT name FROM sqlite_master WHERE type=\"table\"'); tables = [row[0] for row in cursor.fetchall()]; print(f\"All tables found: {len(tables)} tables\"); required = ['tailors_fabrictype', 'tailors_fabriccategory', 'tailors_fabric', 'tailors_fabricimage', 'tailors_tailorprofile', 'orders_order', 'orders_orderitem']; missing = [t for t in required if t not in tables]; print(f\"ERROR: Missing tables: {missing}\") if missing else print('SUCCESS: All required tables exist'); conn.close()"
+          python3 -c "import sqlite3; conn = sqlite3.connect('db.sqlite3'); cursor = conn.cursor(); cursor.execute(\"SELECT name FROM sqlite_master WHERE type='table'\"); tables = [row[0] for row in cursor.fetchall()]; print('All tables found:', len(tables), 'tables'); required = ['tailors_fabrictype', 'tailors_fabriccategory', 'tailors_fabric', 'tailors_fabricimage', 'tailors_tailorprofile', 'orders_order', 'orders_orderitem']; missing = [t for t in required if t not in tables]; print('ERROR: Missing tables:', missing) if missing else print('SUCCESS: All required tables exist'); conn.close()"
           
           echo "Collecting static files..."
           python3 manage.py collectstatic --noinput
-          
-          echo "Updating Firebase credentials from GitHub Secrets..."
-          sudo mkdir -p /home/zthob-backend/config
-          if [ -n "${{ secrets.FIREBASE_CREDENTIALS_JSON }}" ]; then
-            echo "${{ secrets.FIREBASE_CREDENTIALS_JSON }}" | python3 -c "import sys, json; data=sys.stdin.read(); f=open('/home/zthob-backend/config/firebase-credentials.json','w'); f.write(data); f.close(); import os; os.chmod('/home/zthob-backend/config/firebase-credentials.json',0o600); print('Firebase credentials updated from GitHub Secrets.')"
-            sudo chown root:root /home/zthob-backend/config/firebase-credentials.json
-          else
-            if [ -f "/home/zthob-backend/config/firebase-credentials.json" ]; then
-              echo "WARNING: FIREBASE_CREDENTIALS_JSON secret not found. Using existing file."
-            else
-              echo "ERROR: No credentials file and no secret available."
-            fi
-          fi
           
           echo "Restarting service..."
           # Ensure gunicorn directories exist
@@ -140,3 +127,4 @@ jobs:
             fi
           fi
         '
+
