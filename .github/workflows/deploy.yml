@@ -33,129 +33,97 @@ jobs:
     - name: Deploy to server
       run: |
         mkdir -p ~/.ssh
-        chmod 700 ~/.ssh
-        
-        # Write SSH key with proper formatting (preserve newlines)
-        printf '%s\n' "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+        echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
         
-        # Verify key format
-        if ! ssh-keygen -l -f ~/.ssh/id_rsa > /dev/null 2>&1; then
-          echo "ERROR: Invalid SSH key format"
-          exit 1
-        fi
-        
-        # Add to ssh-agent
-        eval "$(ssh-agent -s)"
-        ssh-add ~/.ssh/id_rsa 2>/dev/null || true
-        
-        # Add server to known_hosts
-        ssh-keyscan -H 69.62.126.95 >> ~/.ssh/known_hosts 2>/dev/null || true
-        chmod 600 ~/.ssh/known_hosts
-        
-        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=~/.ssh/known_hosts -o IdentitiesOnly=yes root@69.62.126.95 << 'REMOTE_SCRIPT'
-        set -e
-        cd /home/zthob-backend
-        sudo mkdir -p /var/backups/zthob
-        sudo chown $USER:$USER /var/backups/zthob
-        
-        if [ -f "db.sqlite3" ]; then
-          echo "Creating database backup..."
-          DB_BACKUP="/var/backups/zthob/db_backup_$(date +%Y%m%d_%H%M%S).sqlite3"
-          cp db.sqlite3 "$DB_BACKUP"
-        fi
-        
-        echo "Creating code backup..."
-        BACKUP_FILE="/var/backups/zthob/code_backup_$(date +%Y%m%d_%H%M%S).tar.gz"
-        tar -czf "$BACKUP_FILE" --exclude=".git" --exclude="__pycache__" --exclude="*.pyc" .
-        
-        echo "Pulling latest changes..."
-        git fetch origin
-        git reset --hard origin/main
-        
-        echo "Activating virtual environment..."
-        source magsk_venv/bin/activate
-        
-        echo "Installing dependencies..."
-        pip3 install -r requirements.txt
-        
-        echo "Running migrations..."
-        python3 manage.py migrate --verbosity=2 || {
-          echo "ERROR: Migration failed!"
-          echo "WARNING: CRITICAL: Database reset is DISABLED for production safety"
-          echo "Please manually investigate and fix migration issues"
-          echo "DO NOT run reset_database.py in production - it will DELETE all data!"
-          exit 1
-        }
-        
-        echo "Checking migration status..."
-        python3 manage.py showmigrations
-        
-        echo "Verifying database tables..."
-        python3 -c "import sqlite3; conn = sqlite3.connect('db.sqlite3'); cursor = conn.cursor(); cursor.execute(\"SELECT name FROM sqlite_master WHERE type='table'\"); tables = [row[0] for row in cursor.fetchall()]; print('All tables found:', len(tables), 'tables'); required = ['tailors_fabrictype', 'tailors_fabriccategory', 'tailors_fabric', 'tailors_fabricimage', 'tailors_tailorprofile', 'orders_order', 'orders_orderitem']; missing = [t for t in required if t not in tables]; print('ERROR: Missing tables:', missing) if missing else print('SUCCESS: All required tables exist'); conn.close()"
-        
-        echo "Collecting static files..."
-        python3 manage.py collectstatic --noinput
-        
-        echo "Checking Firebase credentials..."
-        sudo mkdir -p /home/zthob-backend/config
-        
-        if [ ! -f "/home/zthob-backend/config/firebase-credentials.json" ]; then
-          echo "Firebase credentials file not found. Creating from GitHub Secrets (one-time setup)..."
-          if [ -n "${{ secrets.FIREBASE_CREDENTIALS }}" ]; then
-            echo "${{ secrets.FIREBASE_CREDENTIALS }}" | sudo tee /home/zthob-backend/config/firebase-credentials.json > /dev/null
-            sudo chmod 600 /home/zthob-backend/config/firebase-credentials.json
-            sudo chown root:root /home/zthob-backend/config/firebase-credentials.json
-            echo "Firebase credentials file created successfully."
-          else
-            echo "WARNING: FIREBASE_CREDENTIALS secret not found in GitHub. Please upload credentials manually."
-          fi
-        else
-          echo "Firebase credentials file already exists. Skipping creation (protected from overwrite)."
-          if [ ! -r "/home/zthob-backend/config/firebase-credentials.json" ]; then
-            echo "WARNING: Credentials file exists but is not readable. Fixing permissions..."
-            sudo chmod 600 /home/zthob-backend/config/firebase-credentials.json
-            sudo chown root:root /home/zthob-backend/config/firebase-credentials.json
-          fi
-        fi
-        
-        echo "Restarting service..."
-        sudo mkdir -p /var/run/gunicorn
-        sudo chown root:root /var/run/gunicorn
-        sudo chmod 755 /var/run/gunicorn
-        sudo mkdir -p /home/zthob-backend/logs
-        sudo chown root:root /home/zthob-backend/logs
-        sudo chmod 755 /home/zthob-backend/logs
-        
-        sudo systemctl stop gunicorn || true
-        sudo rm -f /var/run/gunicorn/zthob.pid || true
-        sleep 2
-        sudo systemctl start gunicorn
-        sleep 3
-        
-        if systemctl is-active --quiet gunicorn; then
-          echo "SUCCESS: Deployment successful!"
-        else
-          echo "ERROR: Service failed to start, checking logs..."
-          systemctl status gunicorn
-          journalctl -u gunicorn --since "1 minute ago"
-          echo "Attempting to fix and restart..."
+        ssh -o StrictHostKeyChecking=no root@69.62.126.95 '
+          cd /home/zthob-backend
+          sudo mkdir -p /var/backups/zthob
+          sudo chown $USER:$USER /var/backups/zthob
           
+          if [ -f "db.sqlite3" ]; then
+            echo "Creating database backup..."
+            cp db.sqlite3 /var/backups/zthob/db_backup_$(date +%Y%m%d_%H%M%S).sqlite3
+          fi
+          
+          echo "Creating code backup..."
+          tar -czf /var/backups/zthob/code_backup_$(date +%Y%m%d_%H%M%S).tar.gz --exclude=".git" --exclude="__pycache__" --exclude="*.pyc" .
+          
+          echo "Pulling latest changes..."
+          git fetch origin
+          git reset --hard origin/main
+          
+          echo "Activating virtual environment..."
+          source magsk_venv/bin/activate
+          
+          echo "Installing dependencies..."
+          pip3 install -r requirements.txt
+          
+          echo "Running migrations..."
+          python3 manage.py migrate --verbosity=2 || {
+            echo "ERROR: Migration failed!"
+            echo "WARNING: CRITICAL: Database reset is DISABLED for production safety"
+            echo "Please manually investigate and fix migration issues"
+            echo "DO NOT run reset_database.py in production - it will DELETE all data!"
+            exit 1
+          }
+          
+          echo "Checking migration status..."
+          python3 manage.py showmigrations
+          
+          echo "Verifying database tables..."
+          python3 -c "import sqlite3; conn = sqlite3.connect('db.sqlite3'); cursor = conn.cursor(); cursor.execute(\"SELECT name FROM sqlite_master WHERE type='table'\"); tables = [row[0] for row in cursor.fetchall()]; print('All tables found:', len(tables), 'tables'); required = ['tailors_fabrictype', 'tailors_fabriccategory', 'tailors_fabric', 'tailors_fabricimage', 'tailors_tailorprofile', 'orders_order', 'orders_orderitem']; missing = [t for t in required if t not in tables]; print('ERROR: Missing tables:', missing) if missing else print('SUCCESS: All required tables exist'); conn.close()"
+          
+          echo "Collecting static files..."
+          python3 manage.py collectstatic --noinput
+          
+          echo "Restarting service..."
+          # Ensure gunicorn directories exist
           sudo mkdir -p /var/run/gunicorn
           sudo chown root:root /var/run/gunicorn
           sudo chmod 755 /var/run/gunicorn
-          sudo rm -f /var/run/gunicorn/zthob.pid || true
+          sudo mkdir -p /home/zthob-backend/logs
+          sudo chown root:root /home/zthob-backend/logs
+          sudo chmod 755 /home/zthob-backend/logs
           
+          # Stop service first to avoid stale PID file issues
           sudo systemctl stop gunicorn || true
+          # Remove stale PID file if it exists
+          sudo rm -f /var/run/gunicorn/zthob.pid || true
+          # Wait a moment
           sleep 2
+          # Now restart
           sudo systemctl start gunicorn
+          
+          # Wait a moment for service to start
           sleep 3
           
           if systemctl is-active --quiet gunicorn; then
-            echo "SUCCESS: Service fixed and running!"
+            echo "SUCCESS: Deployment successful!"
           else
-            echo "ERROR: Service still failed after fix attempt"
-            exit 1
+            echo "ERROR: Service failed to start, checking logs..."
+            systemctl status gunicorn
+            journalctl -u gunicorn --since "1 minute ago"
+            echo "Attempting to fix and restart..."
+            
+            # Fix common issues
+            sudo mkdir -p /var/run/gunicorn
+            sudo chown root:root /var/run/gunicorn
+            sudo chmod 755 /var/run/gunicorn
+            # Remove stale PID file
+            sudo rm -f /var/run/gunicorn/zthob.pid || true
+            
+            # Stop and start again (instead of restart)
+            sudo systemctl stop gunicorn || true
+            sleep 2
+            sudo systemctl start gunicorn
+            sleep 3
+            
+            if systemctl is-active --quiet gunicorn; then
+              echo "SUCCESS: Service fixed and running!"
+            else
+              echo "ERROR: Service still failed after fix attempt"
+              exit 1
+            fi
           fi
-        fi
-        REMOTE_SCRIPT
+        '
