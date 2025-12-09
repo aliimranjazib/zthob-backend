@@ -36,18 +36,20 @@ jobs:
         echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
         
-        ssh -o StrictHostKeyChecking=no root@69.62.126.95 '
+        ssh -o StrictHostKeyChecking=no root@69.62.126.95 bash << 'ENDSSH'
           cd /home/zthob-backend
           sudo mkdir -p /var/backups/zthob
           sudo chown $USER:$USER /var/backups/zthob
           
           if [ -f "db.sqlite3" ]; then
             echo "Creating database backup..."
-            cp db.sqlite3 /var/backups/zthob/db_backup_$(date +%Y%m%d_%H%M%S).sqlite3
+            DB_BACKUP="/var/backups/zthob/db_backup_$(date +%Y%m%d_%H%M%S).sqlite3"
+            cp db.sqlite3 "$DB_BACKUP"
           fi
           
           echo "Creating code backup..."
-          tar -czf /var/backups/zthob/code_backup_$(date +%Y%m%d_%H%M%S).tar.gz --exclude=".git" --exclude="__pycache__" --exclude="*.pyc" .
+          BACKUP_FILE="/var/backups/zthob/code_backup_$(date +%Y%m%d_%H%M%S).tar.gz"
+          tar -czf "$BACKUP_FILE" --exclude=".git" --exclude="__pycache__" --exclude="*.pyc" .
           
           echo "Pulling latest changes..."
           git fetch origin
@@ -151,4 +153,4 @@ jobs:
               exit 1
             fi
           fi
-        '
+ENDSSH
