@@ -1,10 +1,11 @@
 from django.shortcuts import render
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.template.context_processors import request
 from django.contrib.auth.models import User
 from rest_framework import serializers, status
-from apps.customers.models import Address, CustomerProfile, FamilyMember
-from apps.customers.serializers import AddressSerializer, AddressCreateSerializer, AddressResponseSerializer, CustomerProfileSerializer, FabricCatalogSerializer, FamilyMemberSerializer, FamilyMemberCreateSerializer, FamilyMemberSimpleResponseSerializer
+from apps.customers.models import Address, CustomerProfile, FamilyMember, FabricFavorite
+from apps.customers.serializers import AddressSerializer, AddressCreateSerializer, AddressResponseSerializer, CustomerProfileSerializer, FabricCatalogSerializer, FamilyMemberSerializer, FamilyMemberCreateSerializer, FamilyMemberSimpleResponseSerializer, FabricFavoriteSerializer
 from apps.tailors.models import Fabric
 from zthob.utils import api_response
 from drf_spectacular.utils import extend_schema, OpenApiExample
@@ -16,6 +17,8 @@ from apps.tailors.serializers import TailorProfileSerializer
 # Create your views here.
 class FabricCatalogAPIView(APIView):
     serializer_class = FabricCatalogSerializer
+    permission_classes = [AllowAny]  # Allow unauthenticated users to browse fabrics
+    
     def get(self,request):
         fabrics=Fabric.objects.select_related('category','fabric_type','tailor'
         ).prefetch_related('tags','gallery').all()
@@ -347,3 +350,115 @@ class TailorFabricsAPIView(APIView):
                 data=None,
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class FabricFavoriteToggleView(APIView):
+    """API view to toggle favorite status for a fabric."""
+    permission_classes = [IsAuthenticated]
+    serializer_class = FabricFavoriteSerializer
+    
+    @extend_schema(
+        operation_id="customers_fabric_favorite_toggle",
+        description="Toggle favorite status for a fabric. If fabric is not favorited, it will be added to favorites. If already favorited, it will be removed.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "message": {"type": "string"},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "fabric_id": {"type": "integer"},
+                            "is_favorited": {"type": "boolean"},
+                            "favorited_at": {"type": "string", "format": "date-time"}
+                        }
+                    }
+                }
+            },
+            404: {"description": "Fabric not found"},
+        },
+        tags=["Fabric Favorites"]
+    )
+    def post(self, request, fabric_id):
+        """
+        Toggle favorite status for a fabric.
+        URL: /api/customers/fabrics/{fabric_id}/favorite/
+        """
+        try:
+            fabric = Fabric.objects.get(pk=fabric_id, is_active=True)
+        except Fabric.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Fabric not found or not available",
+                data=None,
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if already favorited
+        favorite, created = FabricFavorite.objects.get_or_create(
+            user=request.user,
+            fabric=fabric
+        )
+        
+        if not created:
+            # Already favorited, remove it
+            favorite.delete()
+            is_favorited = False
+            message = "Fabric removed from favorites"
+            favorited_at = None
+        else:
+            # Newly favorited
+            is_favorited = True
+            message = "Fabric added to favorites"
+            favorited_at = favorite.created_at
+        
+        return api_response(
+            success=True,
+            message=message,
+            data={
+                "fabric_id": fabric.id,
+                "is_favorited": is_favorited,
+                "favorited_at": favorited_at.isoformat() if favorited_at else None
+            },
+            status_code=status.HTTP_200_OK
+        )
+
+
+class FabricFavoriteListView(APIView):
+    """API view to list all favorite fabrics for the authenticated user."""
+    permission_classes = [IsAuthenticated]
+    serializer_class = FabricFavoriteSerializer
+    
+    @extend_schema(
+        operation_id="customers_favorites_list",
+        description="Get all favorite fabrics for the authenticated user",
+        responses={200: FabricFavoriteSerializer(many=True)},
+        tags=["Fabric Favorites"]
+    )
+    def get(self, request):
+        """
+        Get all favorite fabrics for the authenticated user.
+        URL: /api/customers/favorites/
+        """
+        favorites = FabricFavorite.objects.filter(
+            user=request.user
+        ).select_related(
+            'fabric',
+            'fabric__category',
+            'fabric__fabric_type',
+            'fabric__tailor',
+            'fabric__tailor__user'
+        ).prefetch_related(
+            'fabric__tags',
+            'fabric__gallery'
+        ).order_by('-created_at')
+        
+        serializer = FabricFavoriteSerializer(favorites, many=True, context={'request': request})
+        
+        return api_response(
+            success=True,
+            message="Favorite fabrics fetched successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )

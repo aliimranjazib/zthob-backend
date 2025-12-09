@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.contrib import messages
-from .models import CustomerProfile, Address, FamilyMember
+from .models import CustomerProfile, Address, FamilyMember, FabricFavorite
 
 
 # ============================================================================
@@ -635,3 +635,146 @@ class FamilyMemberAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """Optimize queryset"""
         return super().get_queryset(request).select_related('user', 'address')
+
+
+# ============================================================================
+# FABRIC FAVORITE ADMIN
+# ============================================================================
+
+@admin.register(FabricFavorite)
+class FabricFavoriteAdmin(admin.ModelAdmin):
+    """
+    Professional Fabric Favorite Admin Interface
+    """
+    
+    list_display = [
+        'user_link',
+        'fabric_link',
+        'fabric_name',
+        'fabric_tailor',
+        'created_at_display',
+    ]
+    
+    list_display_links = ['fabric_link']
+    
+    list_filter = [
+        'created_at',
+    ]
+    
+    search_fields = [
+        'user__username',
+        'user__email',
+        'fabric__name',
+        'fabric__sku',
+        'fabric__tailor__shop_name',
+    ]
+    
+    raw_id_fields = ['user', 'fabric']
+    
+    readonly_fields = ['created_at']
+    
+    fieldsets = (
+        ('User Information', {
+            'fields': ('user',)
+        }),
+        ('Fabric Information', {
+            'fields': ('fabric',)
+        }),
+        ('Metadata', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    list_per_page = 50
+    
+    def user_link(self, obj):
+        """Clickable user link"""
+        if obj.user and obj.user.pk:
+            try:
+                url = reverse('admin:accounts_customuser_change', args=[obj.user.pk])
+                return format_html('<a href="{}">{}</a>', url, obj.user.username or 'No username')
+            except Exception:
+                return obj.user.username or '-'
+        return '-'
+    user_link.short_description = 'User'
+    user_link.admin_order_field = 'user__username'
+    
+    def fabric_link(self, obj):
+        """Clickable fabric link"""
+        if obj.fabric and obj.fabric.pk:
+            try:
+                url = reverse('admin:tailors_fabric_change', args=[obj.fabric.pk])
+                return format_html('<a href="{}">{}</a>', url, obj.fabric.name or 'No name')
+            except Exception:
+                return obj.fabric.name or '-'
+        return '-'
+    fabric_link.short_description = 'Fabric'
+    fabric_link.admin_order_field = 'fabric__name'
+    
+    def fabric_name(self, obj):
+        """Display fabric name"""
+        if obj.fabric:
+            return format_html('<strong>{}</strong>', obj.fabric.name)
+        return '-'
+    fabric_name.short_description = 'Fabric Name'
+    
+    def fabric_tailor(self, obj):
+        """Display fabric tailor"""
+        if obj.fabric and obj.fabric.tailor:
+            try:
+                url = reverse('admin:tailors_tailorprofile_change', args=[obj.fabric.tailor.pk])
+                shop_name = obj.fabric.tailor.shop_name or obj.fabric.tailor.user.get_full_name()
+                return format_html('<a href="{}">{}</a>', url, shop_name)
+            except Exception:
+                return obj.fabric.tailor.shop_name or '-'
+        return '-'
+    fabric_tailor.short_description = 'Tailor'
+    
+    def created_at_display(self, obj):
+        """Format created_at"""
+        if obj.created_at:
+            return obj.created_at.strftime('%Y-%m-%d %H:%M:%S')
+        return '-'
+    created_at_display.short_description = 'Favorited At'
+    created_at_display.admin_order_field = 'created_at'
+    
+    actions = ['export_favorites_csv']
+    
+    def export_favorites_csv(self, request, queryset):
+        """Export favorites to CSV"""
+        import csv
+        from django.http import HttpResponse
+        from datetime import datetime
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="fabric_favorites_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow([
+            'User',
+            'User Email',
+            'Fabric Name',
+            'Fabric SKU',
+            'Fabric Price',
+            'Tailor',
+            'Favorited At',
+        ])
+        
+        for favorite in queryset:
+            writer.writerow([
+                favorite.user.username if favorite.user else '',
+                favorite.user.email if favorite.user else '',
+                favorite.fabric.name if favorite.fabric else '',
+                favorite.fabric.sku if favorite.fabric else '',
+                str(favorite.fabric.price) if favorite.fabric else '',
+                favorite.fabric.tailor.shop_name if favorite.fabric and favorite.fabric.tailor else '',
+                favorite.created_at.strftime('%Y-%m-%d %H:%M:%S') if favorite.created_at else '',
+            ])
+        
+        return response
+    export_favorites_csv.short_description = 'Export selected favorites to CSV'
+    
+    def get_queryset(self, request):
+        """Optimize queryset"""
+        return super().get_queryset(request).select_related('user', 'fabric', 'fabric__tailor', 'fabric__tailor__user')

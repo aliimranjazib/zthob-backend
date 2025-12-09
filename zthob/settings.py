@@ -23,6 +23,7 @@ try:
     from dotenv import load_dotenv
     load_dotenv(BASE_DIR / '.env')
 except ImportError:
+    print("file not found")
     # python-dotenv not installed, skip .env loading
     pass
 
@@ -38,7 +39,7 @@ if ENVIRONMENT == 'production':
     DEBUG = False
 
 # ALLOWED_HOSTS configuration - ensure production IP is always included
-default_hosts = ['localhost', '127.0.0.1', '0.0.0.0', '69.62.126.95', 'mgask.net', 'www.mgask.net']
+default_hosts = ['localhost', '127.0.0.1', '0.0.0.0', '69.62.126.95', 'mgask.net', 'www.mgask.net', 'app.mgask.net']
 env_hosts = os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',')
 # Filter out empty strings from split
 env_hosts = [h.strip() for h in env_hosts if h.strip()]
@@ -109,6 +110,7 @@ WSGI_APPLICATION = "zthob.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 if ENVIRONMENT == 'production':
+    # Use PostgreSQL in production
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -120,25 +122,11 @@ if ENVIRONMENT == 'production':
         }
     }
 else:
+    # Use SQLite for local development
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / "db.sqlite3",
-        }
-    }
-
-
-
-# Use PostgreSQL in production
-if ENVIRONMENT == 'production':
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('DB_NAME', 'zthob'),
-            'USER': os.getenv('DB_USER', 'postgres'),
-            'PASSWORD': os.getenv('DB_PASSWORD', ''),
-            'HOST': os.getenv('DB_HOST', 'localhost'),
-            'PORT': os.getenv('DB_PORT', '5432'),
         }
     }
 
@@ -221,6 +209,14 @@ if ENVIRONMENT == 'production':
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     CSRF_COOKIE_HTTPONLY = True
+    
+    # CSRF trusted origins for HTTPS
+    CSRF_TRUSTED_ORIGINS = [
+        'https://69.62.126.95',
+        'https://mgask.net',
+        'https://www.mgask.net',
+        'https://app.mgask.net',
+    ]
 
 # Logging Configuration
 LOGGING = {
@@ -307,6 +303,10 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS=[
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "https://69.62.126.95",
+    "https://mgask.net",
+    "https://www.mgask.net",
+    "https://app.mgask.net",
 ]
 
 CORS_ALLOW_CREDENTIALS=True
