@@ -85,9 +85,7 @@ jobs:
           if [ ! -f "/home/zthob-backend/config/firebase-credentials.json" ]; then
             echo "Firebase credentials file not found. Creating from GitHub Secrets (one-time setup)..."
             if [ -n "${{ secrets.FIREBASE_CREDENTIALS }}" ]; then
-              sudo bash -c 'cat > /home/zthob-backend/config/firebase-credentials.json << EOF
-${{ secrets.FIREBASE_CREDENTIALS }}
-EOF'
+              echo "${{ secrets.FIREBASE_CREDENTIALS }}" | sudo tee /home/zthob-backend/config/firebase-credentials.json > /dev/null
               sudo chmod 600 /home/zthob-backend/config/firebase-credentials.json
               sudo chown root:root /home/zthob-backend/config/firebase-credentials.json
               echo "Firebase credentials file created successfully."
