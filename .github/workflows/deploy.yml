@@ -77,25 +77,20 @@ jobs:
           echo "Collecting static files..."
           python3 manage.py collectstatic --noinput
           
-          echo "Checking Firebase credentials..."
+          echo "Updating Firebase credentials from GitHub Secrets..."
           sudo mkdir -p /home/zthob-backend/config
           
-          if [ ! -f "/home/zthob-backend/config/firebase-credentials.json" ]; then
-            echo "Firebase credentials file not found. Creating from GitHub Secrets (one-time setup)..."
-            if [ -n "${{ secrets.FIREBASE_CREDENTIALS_JSON }}" ]; then
-              echo "${{ secrets.FIREBASE_CREDENTIALS_JSON }}" | sudo tee /home/zthob-backend/config/firebase-credentials.json > /dev/null
-              sudo chmod 600 /home/zthob-backend/config/firebase-credentials.json
-              sudo chown root:root /home/zthob-backend/config/firebase-credentials.json
-              echo "Firebase credentials file created successfully."
-            else
-              echo "WARNING: FIREBASE_CREDENTIALS_JSON secret not found in GitHub. Please upload credentials manually to /home/zthob-backend/config/firebase-credentials.json"
-            fi
+          if [ -n "${{ secrets.FIREBASE_CREDENTIALS_JSON }}" ]; then
+            echo "${{ secrets.FIREBASE_CREDENTIALS_JSON }}" | sudo tee /home/zthob-backend/config/firebase-credentials.json > /dev/null
+            sudo chmod 600 /home/zthob-backend/config/firebase-credentials.json
+            sudo chown root:root /home/zthob-backend/config/firebase-credentials.json
+            echo "Firebase credentials file updated successfully from GitHub Secrets."
           else
-            echo "Firebase credentials file already exists. Skipping creation (protected from overwrite)."
-            if [ ! -r "/home/zthob-backend/config/firebase-credentials.json" ]; then
-              echo "WARNING: Credentials file exists but is not readable. Fixing permissions..."
-              sudo chmod 600 /home/zthob-backend/config/firebase-credentials.json
-              sudo chown root:root /home/zthob-backend/config/firebase-credentials.json
+            echo "WARNING: FIREBASE_CREDENTIALS_JSON secret not found in GitHub."
+            if [ ! -f "/home/zthob-backend/config/firebase-credentials.json" ]; then
+              echo "ERROR: No credentials file found and no GitHub Secret available. Firebase will not work."
+            else
+              echo "Using existing credentials file on server."
             fi
           fi
           
