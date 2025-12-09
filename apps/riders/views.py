@@ -224,21 +224,28 @@ class RiderProfileView(APIView):
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
-        try:
-            rider_profile = request.user.rider_profile
-            serializer = RiderProfileSerializer(rider_profile, context={'request': request})
-            return api_response(
-                success=True,
-                message="Profile retrieved successfully",
-                data=serializer.data,
-                status_code=status.HTTP_200_OK
+        rider_profile, created = RiderProfile.objects.get_or_create(
+            user=request.user,
+            defaults={
+                'is_active': True,
+                'is_available': True,
+            }
+        )
+        
+        # Create review record if it doesn't exist
+        if created:
+            RiderProfileReview.objects.get_or_create(
+                profile=rider_profile,
+                defaults={'review_status': 'draft'}
             )
-        except RiderProfile.DoesNotExist:
-            return api_response(
-                success=False,
-                message="Rider profile not found. Please contact support.",
-                status_code=status.HTTP_404_NOT_FOUND
-            )
+        
+        serializer = RiderProfileSerializer(rider_profile, context={'request': request})
+        return api_response(
+            success=True,
+            message="Profile retrieved successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
     
     @extend_schema(
         request=RiderProfileUpdateSerializer,
@@ -255,30 +262,37 @@ class RiderProfileView(APIView):
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
-        try:
-            rider_profile = request.user.rider_profile
-            serializer = RiderProfileUpdateSerializer(rider_profile, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                response_serializer = RiderProfileSerializer(rider_profile, context={'request': request})
-                return api_response(
-                    success=True,
-                    message="Profile updated successfully",
-                    data=response_serializer.data,
-                    status_code=status.HTTP_200_OK
-                )
-            return api_response(
-                success=False,
-                message="Profile update failed",
-                errors=serializer.errors,
-                status_code=status.HTTP_400_BAD_REQUEST
+        rider_profile, created = RiderProfile.objects.get_or_create(
+            user=request.user,
+            defaults={
+                'is_active': True,
+                'is_available': True,
+            }
+        )
+        
+        # Create review record if it doesn't exist
+        if created:
+            RiderProfileReview.objects.get_or_create(
+                profile=rider_profile,
+                defaults={'review_status': 'draft'}
             )
-        except RiderProfile.DoesNotExist:
+        
+        serializer = RiderProfileUpdateSerializer(rider_profile, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            response_serializer = RiderProfileSerializer(rider_profile, context={'request': request})
             return api_response(
-                success=False,
-                message="Rider profile not found. Please contact support.",
-                status_code=status.HTTP_404_NOT_FOUND
+                success=True,
+                message="Profile updated successfully",
+                data=response_serializer.data,
+                status_code=status.HTTP_200_OK
             )
+        return api_response(
+            success=False,
+            message="Profile update failed",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
 
 
 class RiderProfileSubmissionView(APIView):
