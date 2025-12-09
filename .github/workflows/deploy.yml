@@ -80,8 +80,9 @@ jobs:
           echo "Updating Firebase credentials from GitHub Secrets..."
           sudo mkdir -p /home/zthob-backend/config
           
-          if [ -n "${{ secrets.FIREBASE_CREDENTIALS_JSON }}" ]; then
-            echo "${{ secrets.FIREBASE_CREDENTIALS_JSON }}" | sudo tee /home/zthob-backend/config/firebase-credentials.json > /dev/null
+          FIREBASE_SECRET="${{ secrets.FIREBASE_CREDENTIALS_JSON }}"
+          if [ -n "${FIREBASE_SECRET}" ] && [ "${FIREBASE_SECRET}" != "" ]; then
+            echo "${FIREBASE_SECRET}" | sudo tee /home/zthob-backend/config/firebase-credentials.json > /dev/null
             sudo chmod 600 /home/zthob-backend/config/firebase-credentials.json
             sudo chown root:root /home/zthob-backend/config/firebase-credentials.json
             echo "Firebase credentials file updated successfully from GitHub Secrets."
