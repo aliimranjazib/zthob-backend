@@ -40,6 +40,7 @@ def get_firebase_app():
                 
                 # Get credentials file path from settings
                 cred_path = getattr(settings, 'FIREBASE_CREDENTIALS_PATH', None)
+                logger.info(f"checking firebase path {cred_path}")
                 if not cred_path:
                     raise ValueError("FIREBASE_CREDENTIALS_PATH must be set in .env file pointing to your service account JSON file")
                 
