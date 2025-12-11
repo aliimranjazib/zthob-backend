@@ -664,7 +664,8 @@ class RiderOrderDetailView(APIView):
                 'rider'
             ).prefetch_related(
                 'order_items__fabric',
-                'order_items__fabric__gallery'  # Prefetch gallery images for fabric images
+                'order_items__fabric__gallery',  # Prefetch gallery images for fabric images
+                'tailor__addresses'  # Prefetch tailor addresses for structured address
             ),
             id=order_id
         )

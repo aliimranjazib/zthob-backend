@@ -55,7 +55,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
                     'id': address.id,
                     'latitude': address.latitude,
                     'longitude': address.longitude,
-                    'address': address.street,  # Map street to address for consistency
+                    'address': address.address or '',
                     'extra_info': address.extra_info,
                     'is_default': address.is_default,
                     'address_tag': address.address_tag

@@ -23,7 +23,7 @@ class Address(models.Model):
     latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     is_default = models.BooleanField(default=False)
-    formatted_address = models.TextField(blank=True, null=True, help_text="Full formatted address from Google Maps API")
+    address = models.TextField(blank=True, null=True, help_text="Full address text")
     address_tag = models.CharField(max_length=20, choices=ADDRESS_TAG_CHOICES, default='home', help_text="Address type: home, office, work, other")
     extra_info = models.TextField(blank=True, null=True, help_text="Additional address information")
     class Meta:

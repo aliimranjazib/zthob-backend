@@ -64,6 +64,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'username',
             'email',
             'role',
+            'phone',  # Phone can only be updated through phone-verify endpoint
             'date_joined',
         ]
 
