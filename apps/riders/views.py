@@ -661,7 +661,8 @@ class RiderOrderDetailView(APIView):
                 'customer',
                 'tailor',
                 'delivery_address',
-                'rider'
+                'rider',
+                'family_member'  # Prefetch family_member for order_recipient
             ).prefetch_related(
                 'order_items__fabric',
                 'order_items__fabric__gallery',  # Prefetch gallery images for fabric images
@@ -854,7 +855,10 @@ class RiderAddMeasurementsView(APIView):
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
-        order = get_object_or_404(Order, id=order_id)
+        order = get_object_or_404(
+            Order.objects.select_related('family_member', 'customer'),
+            id=order_id
+        )
         
         # Verify rider has access
         if order.rider != request.user:
@@ -874,14 +878,25 @@ class RiderAddMeasurementsView(APIView):
         
         serializer = RiderAddMeasurementsSerializer(data=request.data)
         if serializer.is_valid():
+            measurements_data = serializer.validated_data['measurements']
+            
             # Add measurements to order
-            order.rider_measurements = serializer.validated_data['measurements']
+            order.rider_measurements = measurements_data
             order.measurement_taken_at = timezone.now()
+            
+            # If order is for a family member, also save measurements to family member profile
+            recipient_name = None
+            if order.family_member:
+                order.family_member.measurements = measurements_data
+                order.family_member.save()
+                recipient_name = order.family_member.name
+            else:
+                recipient_name = order.customer.get_full_name() or order.customer.username if order.customer else 'Customer'
             
             # Use transition service to update rider status to 'measurement_taken'
             from apps.orders.services import OrderStatusTransitionService
             
-            notes_text = f"Measurements taken by rider. {serializer.validated_data.get('notes', '')}"
+            notes_text = f"Measurements taken by rider for {recipient_name}. {serializer.validated_data.get('notes', '')}"
             
             success, error_msg, updated_order = OrderStatusTransitionService.transition(
                 order=order,
@@ -913,10 +928,10 @@ class RiderAddMeasurementsView(APIView):
             
             order.save()
             
-            response_serializer = RiderOrderDetailSerializer(order)
+            response_serializer = RiderOrderDetailSerializer(order, context={'request': request})
             return api_response(
                 success=True,
-                message="Measurements added successfully. Tailor can now proceed with cutting.",
+                message=f"Measurements added successfully for {recipient_name}. Tailor can now proceed with cutting.",
                 data=response_serializer.data,
                 status_code=status.HTTP_200_OK
             )
