@@ -116,7 +116,7 @@ class AddressAdmin(admin.ModelAdmin):
         'city',
         'state_province',
         'zip_code',
-        'formatted_address',
+        'address',
     ]
     
     raw_id_fields = ['user']
@@ -140,7 +140,7 @@ class AddressAdmin(admin.ModelAdmin):
             'fields': (
                 'latitude',
                 'longitude',
-                'formatted_address',
+                'address',
             ),
             'classes': ('collapse',)
         }),

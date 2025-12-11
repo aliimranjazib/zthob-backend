@@ -34,14 +34,15 @@ class TailorAddressCreateSerializer(serializers.ModelSerializer):
         # Delete any existing address for this tailor
         Address.objects.filter(user=user).delete()
         
-        # Map the 'address' field to 'street' field in the model
-        address_text = validated_data.pop('address')
+        # Get address text and save it to address field
+        address_text = validated_data.get('address', '')
         is_default = validated_data.pop('is_default', True)
         
         # Set default values for required fields
         validated_data.update({
             'user': user,
-            'street': address_text,
+            'address': address_text,  # Save to address field
+            'street': address_text,  # Also save to street for backward compatibility
             'city': 'Riyadh',  # Default city, can be updated later
             'country': 'Saudi Arabia',
             'is_default': is_default,
@@ -68,10 +69,11 @@ class TailorAddressUpdateSerializer(serializers.ModelSerializer):
     
     def update(self, instance, validated_data):
         """Update the existing address."""
-        # Map the 'address' field to 'street' field in the model
-        address_text = validated_data.pop('address')
+        # Get address text and save it to address field
+        address_text = validated_data.pop('address', instance.address)
         
-        instance.street = address_text
+        instance.address = address_text
+        instance.street = address_text  # Also update street for backward compatibility
         instance.latitude = validated_data.get('latitude', instance.latitude)
         instance.longitude = validated_data.get('longitude', instance.longitude)
         instance.extra_info = validated_data.get('extra_info', instance.extra_info)
@@ -83,29 +85,7 @@ class TailorAddressUpdateSerializer(serializers.ModelSerializer):
 
 class TailorAddressResponseSerializer(serializers.ModelSerializer):
     """Simplified response serializer for tailor addresses."""
-    address = serializers.SerializerMethodField()
     
     class Meta:
         model = Address
         fields = ['id', 'latitude', 'longitude', 'address', 'extra_info', 'is_default', 'address_tag']
-    
-    def get_address(self, obj):
-        """Return the street field as 'address' for consistency."""
-        # If street is empty, try to construct from other fields
-        if obj.street:
-            return obj.street
-        
-        # Fallback: construct address from available fields
-        address_parts = []
-        if obj.city:
-            address_parts.append(obj.city)
-        if obj.state_province:
-            address_parts.append(obj.state_province)
-        if obj.country:
-            address_parts.append(obj.country)
-        
-        if address_parts:
-            return ', '.join(address_parts)
-        
-        # If no address components available, return a default message
-        return 'Address not specified'

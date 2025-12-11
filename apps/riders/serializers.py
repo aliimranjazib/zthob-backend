@@ -100,6 +100,7 @@ class RiderProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
     is_phone_verified = serializers.BooleanField(source='user.phone_verified', read_only=True)
+    phone_number = serializers.SerializerMethodField()  # Get from user.phone (verified phone)
     is_approved = serializers.BooleanField(read_only=True)
     review_status = serializers.CharField(read_only=True)
     documents = RiderDocumentSerializer(many=True, read_only=True)
@@ -162,8 +163,12 @@ class RiderProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id', 'total_deliveries', 'rating', 'created_at', 'updated_at',
-            'is_approved', 'review_status', 'is_phone_verified', 'documents'
+            'is_approved', 'review_status', 'is_phone_verified', 'documents', 'phone_number'
         ]
+    
+    def get_phone_number(self, obj):
+        """Get verified phone number from user.phone"""
+        return obj.user.phone if obj.user else None
     
     def to_representation(self, instance):
         """Add request context to nested serializers"""
@@ -180,13 +185,15 @@ class RiderProfileSerializer(serializers.ModelSerializer):
 
 class RiderProfileUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating rider profile"""
+    # phone_number is read-only - it comes from verified user.phone
+    phone_number = serializers.SerializerMethodField()
     
     class Meta:
         model = RiderProfile
         fields = [
             # Basic Info
             'full_name',
-            'phone_number',
+            'phone_number',  # Read-only - cannot be updated via profile API (only through phone-verify)
             'emergency_contact',
             
             # National Identity / Iqama
@@ -219,6 +226,10 @@ class RiderProfileUpdateSerializer(serializers.ModelSerializer):
             'current_latitude',
             'current_longitude',
         ]
+    
+    def get_phone_number(self, obj):
+        """Get verified phone number from user.phone"""
+        return obj.user.phone if obj.user else None
 
 
 class RiderProfileSubmissionSerializer(serializers.ModelSerializer):
@@ -430,17 +441,17 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
         return None
     
     def get_delivery_address(self, obj):
+        """Return delivery address matching customer address structure."""
         if obj.delivery_address:
-            parts = []
-            if obj.delivery_address.street:
-                parts.append(obj.delivery_address.street)
-            if obj.delivery_address.city:
-                parts.append(obj.delivery_address.city)
-            if obj.delivery_address.state_province:
-                parts.append(obj.delivery_address.state_province)
-            if obj.delivery_address.country:
-                parts.append(obj.delivery_address.country)
-            return ', '.join(parts) if parts else None
+            return {
+                'id': obj.delivery_address.id,
+                'latitude': obj.delivery_address.latitude,
+                'longitude': obj.delivery_address.longitude,
+                'address': obj.delivery_address.address or '',
+                'extra_info': obj.delivery_address.extra_info or '',
+                'is_default': obj.delivery_address.is_default,
+                'address_tag': obj.delivery_address.address_tag,
+            }
         return None
     
     def get_items_count(self, obj):
@@ -577,15 +588,38 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
         return None
     
     def get_tailor_info(self, obj):
+        """Return tailor info with structured address from Address model."""
         if obj.tailor:
             try:
                 tailor_profile = obj.tailor.tailor_profile
+                
+                # Get structured address from Address model (same format as delivery_address)
+                from apps.customers.models import Address
+                tailor_address = None
+                # Get address from user's addresses (will use prefetched data if available)
+                # First try to get the default address
+                address = next((addr for addr in obj.tailor.addresses.all() if addr.is_default), None)
+                # If no default address, get the first address
+                if not address:
+                    address = next(iter(obj.tailor.addresses.all()), None)
+                
+                if address:
+                    tailor_address = {
+                        'id': address.id,
+                        'latitude': address.latitude,
+                        'longitude': address.longitude,
+                        'address': address.address or '',
+                        'extra_info': address.extra_info or '',
+                        'is_default': address.is_default,
+                        'address_tag': address.address_tag,
+                    }
+                
                 return {
                     'id': obj.tailor.id,
                     'username': obj.tailor.username,
                     'shop_name': tailor_profile.shop_name if tailor_profile else None,
                     'contact_number': tailor_profile.contact_number if tailor_profile else None,
-                    'address': tailor_profile.address if tailor_profile else None,
+                    'address': tailor_address,  # Structured address matching delivery_address format
                 }
             except:
                 return {
@@ -595,17 +629,16 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
         return None
     
     def get_delivery_address(self, obj):
+        """Return delivery address matching customer address structure."""
         if obj.delivery_address:
             return {
                 'id': obj.delivery_address.id,
-                'street': obj.delivery_address.street,
-                'city': obj.delivery_address.city,
-                'state_province': obj.delivery_address.state_province,
-                'zip_code': obj.delivery_address.zip_code,
-                'country': obj.delivery_address.country,
-                'formatted_address': obj.delivery_address.formatted_address,
-                'latitude': float(obj.delivery_address.latitude) if obj.delivery_address.latitude else None,
-                'longitude': float(obj.delivery_address.longitude) if obj.delivery_address.longitude else None,
+                'latitude': obj.delivery_address.latitude,
+                'longitude': obj.delivery_address.longitude,
+                'address': obj.delivery_address.address or '',
+                'extra_info': obj.delivery_address.extra_info or '',
+                'is_default': obj.delivery_address.is_default,
+                'address_tag': obj.delivery_address.address_tag,
             }
         return None
     
