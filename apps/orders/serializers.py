@@ -62,6 +62,7 @@ class OrderSerializer(serializers.ModelSerializer):
     rider_name=serializers.SerializerMethodField()
     rider_phone=serializers.SerializerMethodField()
     family_member_name=serializers.SerializerMethodField()
+    order_recipient=serializers.SerializerMethodField()
     delivery_address_text=serializers.SerializerMethodField()
     items=OrderItemSerializer(source='order_items',many=True,read_only=True)
     items_count=serializers.IntegerField(read_only=True)
@@ -97,6 +98,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'payment_method',
             'family_member',
             'family_member_name',
+            'order_recipient',
             'delivery_address',
             'delivery_address_text',
             'estimated_delivery_date',
@@ -155,6 +157,33 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_family_member_name(self, obj):
         if obj.family_member:
             return f"{obj.family_member.name} ({obj.family_member.relationship})"
+        return None
+    
+    def get_order_recipient(self, obj):
+        """Get order recipient - either family member or customer with measurements"""
+        # If order is for a family member
+        if obj.family_member:
+            # Get measurements from order.rider_measurements (most recent) or family_member.measurements (stored)
+            measurements = obj.rider_measurements if obj.rider_measurements else obj.family_member.measurements
+            
+            return {
+                'type': 'family_member',
+                'id': obj.family_member.id,
+                'name': obj.family_member.name,
+                'relationship': obj.family_member.relationship,
+                'gender': obj.family_member.gender,
+                'measurements': measurements if measurements else None,
+            }
+        # If order is for the customer themselves
+        elif obj.customer:
+            return {
+                'type': 'customer',
+                'id': obj.customer.id,
+                'name': obj.customer.get_full_name() or obj.customer.username,
+                'phone': obj.customer.phone,
+                'email': obj.customer.email,
+                'measurements': obj.rider_measurements if obj.rider_measurements else None,
+            }
         return None
 
     def get_delivery_address_text(self,obj):

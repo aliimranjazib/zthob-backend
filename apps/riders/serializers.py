@@ -535,6 +535,7 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
 class RiderOrderDetailSerializer(serializers.ModelSerializer):
     """Serializer for order details for riders"""
     customer_info = serializers.SerializerMethodField()
+    order_recipient = serializers.SerializerMethodField()
     tailor_info = serializers.SerializerMethodField()
     delivery_address = serializers.SerializerMethodField()
     items = serializers.SerializerMethodField()
@@ -560,6 +561,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'tax_amount',
             'delivery_fee',
             'customer_info',
+            'order_recipient',
             'tailor_info',
             'delivery_address',
             'items',
@@ -584,6 +586,29 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
                 'full_name': obj.customer.get_full_name(),
                 'email': obj.customer.email,
                 'phone': obj.customer.phone,
+            }
+        return None
+    
+    def get_order_recipient(self, obj):
+        """Get order recipient - either family member or customer"""
+        # If order is for a family member
+        if obj.family_member:
+            return {
+                'type': 'family_member',
+                'id': obj.family_member.id,
+                'name': obj.family_member.name,
+                'relationship': obj.family_member.relationship,
+                'gender': obj.family_member.gender,
+                'measurements': obj.family_member.measurements if obj.family_member.measurements else None,
+            }
+        # If order is for the customer themselves
+        elif obj.customer:
+            return {
+                'type': 'customer',
+                'id': obj.customer.id,
+                'name': obj.customer.get_full_name() or obj.customer.username,
+                'phone': obj.customer.phone,
+                'email': obj.customer.email,
             }
         return None
     
