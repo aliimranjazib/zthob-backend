@@ -351,11 +351,6 @@ class OrderStatusTransitionService:
         old_rider_status = order.rider_status
         old_tailor_status = order.tailor_status
         
-        # Determine what actually changed
-        status_changed = new_status and new_status != order.status
-        rider_status_changed = new_rider_status and new_rider_status != order.rider_status
-        tailor_status_changed = new_tailor_status and new_tailor_status != order.tailor_status
-        
         # Update statuses
         if new_status:
             order.status = new_status
@@ -366,6 +361,11 @@ class OrderStatusTransitionService:
         
         # Auto-sync main status based on activity statuses
         OrderStatusTransitionService._sync_main_status(order)
+        
+        # Determine what actually changed (after sync, to capture auto-sync changes)
+        status_changed = order.status != old_status
+        rider_status_changed = new_rider_status and new_rider_status != old_rider_status
+        tailor_status_changed = new_tailor_status and new_tailor_status != old_tailor_status
         
         # Save order
         order.save()
