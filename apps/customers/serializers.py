@@ -249,3 +249,93 @@ class FabricFavoriteSerializer(serializers.ModelSerializer):
         model = FabricFavorite
         fields = ['id', 'fabric', 'fabric_id', 'created_at']
         read_only_fields = ['id', 'created_at']
+
+
+# ============================================================================
+# MEASUREMENT SERIALIZERS
+# ============================================================================
+
+class OrderMeasurementItemSerializer(serializers.Serializer):
+    """Serializer for a single order measurement entry"""
+    order_id = serializers.IntegerField()
+    order_number = serializers.CharField()
+    order_type = serializers.CharField()
+    measurements = serializers.DictField()
+    measurement_taken_at = serializers.DateTimeField()
+    order_status = serializers.CharField()
+    rider_status = serializers.CharField()
+    order_created_at = serializers.DateTimeField()
+    tailor_name = serializers.CharField(required=False, allow_null=True)
+    appointment_date = serializers.DateField(required=False, allow_null=True)
+    appointment_time = serializers.TimeField(required=False, allow_null=True)
+
+
+class CustomerMeasurementSerializer(serializers.Serializer):
+    """Serializer for customer's own measurements"""
+    order_id = serializers.IntegerField()
+    order_number = serializers.CharField()
+    order_type = serializers.CharField()
+    recipient_type = serializers.CharField()
+    recipient_id = serializers.IntegerField()
+    recipient_name = serializers.CharField()
+    measurements = serializers.DictField()
+    measurement_taken_at = serializers.DateTimeField()
+    order_status = serializers.CharField()
+    rider_status = serializers.CharField()
+    order_created_at = serializers.DateTimeField()
+
+
+class FamilyMemberMeasurementSerializer(serializers.Serializer):
+    """Serializer for family member measurements"""
+    order_id = serializers.IntegerField()
+    order_number = serializers.CharField()
+    order_type = serializers.CharField()
+    recipient_type = serializers.CharField()
+    recipient_id = serializers.IntegerField()
+    recipient_name = serializers.CharField()
+    recipient_relationship = serializers.CharField(required=False, allow_null=True)
+    recipient_gender = serializers.CharField(required=False, allow_null=True)
+    measurements = serializers.DictField()
+    measurement_taken_at = serializers.DateTimeField()
+    order_status = serializers.CharField()
+    rider_status = serializers.CharField()
+    order_created_at = serializers.DateTimeField()
+
+
+class FamilyMemberSummarySerializer(serializers.Serializer):
+    """Serializer for family member summary in list view"""
+    family_member_id = serializers.IntegerField()
+    family_member_name = serializers.CharField()
+    relationship = serializers.CharField(required=False, allow_null=True)
+    total_measurements = serializers.IntegerField()
+    latest_measurement_date = serializers.DateTimeField(required=False, allow_null=True)
+    has_stored_measurements = serializers.BooleanField()
+
+
+class StoredProfileMeasurementSerializer(serializers.Serializer):
+    """Serializer for stored profile measurements"""
+    recipient_type = serializers.CharField()
+    recipient_id = serializers.IntegerField()
+    recipient_name = serializers.CharField()
+    recipient_relationship = serializers.CharField(required=False, allow_null=True)
+    recipient_gender = serializers.CharField(required=False, allow_null=True)
+    measurements = serializers.DictField()
+    last_updated = serializers.DateTimeField(required=False, allow_null=True)
+    note = serializers.CharField()
+
+
+class CustomerMeasurementsListSerializer(serializers.Serializer):
+    """Serializer for the complete measurements list response"""
+    customer_measurements = CustomerMeasurementSerializer(many=True, required=False)
+    family_member_measurements = FamilyMemberMeasurementSerializer(many=True, required=False)
+    family_members_summary = FamilyMemberSummarySerializer(many=True, required=False)
+    stored_profile_measurements = StoredProfileMeasurementSerializer(many=True, required=False)
+    summary = serializers.DictField()
+
+
+class FamilyMemberMeasurementsDetailSerializer(serializers.Serializer):
+    """Serializer for family member specific measurements detail"""
+    family_member = serializers.DictField()
+    order_measurements = OrderMeasurementItemSerializer(many=True)
+    stored_profile_measurements = serializers.DictField(required=False, allow_null=True)
+    summary = serializers.DictField()

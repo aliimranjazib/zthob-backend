@@ -108,7 +108,6 @@ class OrderSerializer(serializers.ModelSerializer):
             'appointment_time',
             'custom_styles',
             'notes',
-            'rider_measurements',
             'measurement_taken_at',
             'items',
             'items_count',
@@ -160,30 +159,36 @@ class OrderSerializer(serializers.ModelSerializer):
         return None
     
     def get_order_recipient(self, obj):
-        """Get order recipient - either family member or customer with measurements"""
+        """Get order recipient - either family member or customer. Include measurements when rider_status is 'measurement_taken'."""
+        # Check if measurements should be included (when rider_status is 'measurement_taken')
+        include_measurements = obj.rider_status == 'measurement_taken' and obj.rider_measurements
+        
         # If order is for a family member
         if obj.family_member:
-            # Get measurements from order.rider_measurements (most recent) or family_member.measurements (stored)
-            measurements = obj.rider_measurements if obj.rider_measurements else obj.family_member.measurements
-            
-            return {
+            recipient_data = {
                 'type': 'family_member',
                 'id': obj.family_member.id,
                 'name': obj.family_member.name,
                 'relationship': obj.family_member.relationship,
                 'gender': obj.family_member.gender,
-                'measurements': measurements if measurements else None,
             }
+            # Include measurements if rider_status is 'measurement_taken'
+            if include_measurements:
+                recipient_data['measurements'] = obj.rider_measurements
+            return recipient_data
         # If order is for the customer themselves
         elif obj.customer:
-            return {
+            recipient_data = {
                 'type': 'customer',
                 'id': obj.customer.id,
                 'name': obj.customer.get_full_name() or obj.customer.username,
                 'phone': obj.customer.phone,
                 'email': obj.customer.email,
-                'measurements': obj.rider_measurements if obj.rider_measurements else None,
             }
+            # Include measurements if rider_status is 'measurement_taken'
+            if include_measurements:
+                recipient_data['measurements'] = obj.rider_measurements
+            return recipient_data
         return None
 
     def get_delivery_address_text(self,obj):

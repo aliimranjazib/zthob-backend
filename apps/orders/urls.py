@@ -11,6 +11,7 @@ from .views import (
     TailorPaidOrdersView,
     TailorOrderDetailView,
     OrderPaymentStatusUpdateView,
+    OrderMeasurementsDetailView,
 )
 
 app_name = 'orders'
@@ -23,6 +24,7 @@ urlpatterns = [
     path('<int:order_id>/status/', OrderStatusUpdateView.as_view(), name='order-status-update'),
     path('<int:order_id>/history/', OrderHistoryView.as_view(), name='order-history'),
     path('<int:order_id>/payment-status/', OrderPaymentStatusUpdateView.as_view(), name='order-payment-status-update'),
+    path('<int:order_id>/measurements/', OrderMeasurementsDetailView.as_view(), name='order-measurements'),
     
     # Customer endpoints
     path('customer/my-orders/', CustomerOrderListView.as_view(), name='customer-orders'),

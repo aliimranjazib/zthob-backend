@@ -550,16 +550,10 @@ class TailorOrderDetailView(APIView):
             
             serializer = OrderSerializer(order, context={'request': request})
             
-            # Add rider measurements info if available
-            data = serializer.data
-            if order.rider_measurements:
-                data['rider_measurements'] = order.rider_measurements
-                data['measurement_taken_at'] = order.measurement_taken_at.isoformat() if order.measurement_taken_at else None
-            
             return api_response(
                 success=True,
                 message="Order details retrieved successfully",
-                data=data,
+                data=serializer.data,
                 status_code=status.HTTP_200_OK
             )
         except TailorProfile.DoesNotExist:
@@ -671,6 +665,107 @@ class OrderPaymentStatusUpdateView(APIView):
                 message="An error occurred while updating payment status",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class OrderMeasurementsDetailView(APIView):
+    """Get measurements for a specific order"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Get order measurements",
+        description="Retrieve measurements for a specific order. Only available when rider_status is 'measurement_taken'.",
+        tags=["Customer Measurements"]
+    )
+    def get(self, request, order_id):
+        if request.user.role != 'USER':
+            return api_response(
+                success=False,
+                message="Only customers can access this endpoint",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get order and verify it belongs to customer
+        order = get_object_or_404(Order, id=order_id)
+        
+        if order.customer != request.user:
+            return api_response(
+                success=False,
+                message="You can only view measurements for your own orders",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if measurements are available
+        if order.rider_status != 'measurement_taken' or not order.rider_measurements:
+            return api_response(
+                success=False,
+                message="No measurements available for this order. Measurements are only available when rider_status is 'measurement_taken'.",
+                data={
+                    'order_id': order.id,
+                    'order_number': order.order_number,
+                    'rider_status': order.rider_status,
+                    'has_measurements': False
+                },
+                status_code=status.HTTP_200_OK
+            )
+        
+        # Build recipient data (consistent with order detail API)
+        if order.family_member:
+            recipient = {
+                'type': 'family_member',
+                'id': order.family_member.id,
+                'name': order.family_member.name,
+                'relationship': order.family_member.relationship,
+                'gender': order.family_member.gender,
+                'measurements': order.rider_measurements,
+            }
+        else:
+            recipient = {
+                'type': 'customer',
+                'id': request.user.id,
+                'name': request.user.get_full_name() or request.user.username,
+                'phone': request.user.phone,
+                'email': request.user.email,
+                'measurements': order.rider_measurements,
+            }
+        
+        # Get rider info
+        measurement_taken_by = None
+        if order.rider:
+            try:
+                if hasattr(order.rider, 'rider_profile') and order.rider.rider_profile:
+                    measurement_taken_by = {
+                        'rider_id': order.rider.id,
+                        'rider_name': order.rider.rider_profile.full_name or order.rider.username,
+                    }
+                else:
+                    measurement_taken_by = {
+                        'rider_id': order.rider.id,
+                        'rider_name': order.rider.username,
+                    }
+            except:
+                measurement_taken_by = {
+                    'rider_id': order.rider.id,
+                    'rider_name': order.rider.username if order.rider else None,
+                }
+        
+        response_data = {
+            'order_id': order.id,
+            'order_number': order.order_number,
+            'order_type': order.order_type,
+            'order_status': order.status,
+            'rider_status': order.rider_status,
+            'recipient': recipient,
+            'measurement_taken_at': order.measurement_taken_at.isoformat() if order.measurement_taken_at else None,
+            'measurement_taken_by': measurement_taken_by,
+            'has_measurements': True,
+        }
+        
+        return api_response(
+            success=True,
+            message="Order measurements retrieved successfully",
+            data=response_data,
+            status_code=status.HTTP_200_OK
+        )
 
 
 

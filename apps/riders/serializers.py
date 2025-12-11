@@ -572,7 +572,6 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'appointment_time',
             'custom_styles',
             'special_instructions',
-            'rider_measurements',
             'measurement_taken_at',
             'status_info',
             'created_at',
@@ -590,26 +589,36 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
         return None
     
     def get_order_recipient(self, obj):
-        """Get order recipient - either family member or customer"""
+        """Get order recipient - either family member or customer. Include measurements when rider_status is 'measurement_taken'."""
+        # Check if measurements should be included (when rider_status is 'measurement_taken')
+        include_measurements = obj.rider_status == 'measurement_taken' and obj.rider_measurements
+        
         # If order is for a family member
         if obj.family_member:
-            return {
+            recipient_data = {
                 'type': 'family_member',
                 'id': obj.family_member.id,
                 'name': obj.family_member.name,
                 'relationship': obj.family_member.relationship,
                 'gender': obj.family_member.gender,
-                'measurements': obj.family_member.measurements if obj.family_member.measurements else None,
             }
+            # Include measurements if rider_status is 'measurement_taken'
+            if include_measurements:
+                recipient_data['measurements'] = obj.rider_measurements
+            return recipient_data
         # If order is for the customer themselves
         elif obj.customer:
-            return {
+            recipient_data = {
                 'type': 'customer',
                 'id': obj.customer.id,
                 'name': obj.customer.get_full_name() or obj.customer.username,
                 'phone': obj.customer.phone,
                 'email': obj.customer.email,
             }
+            # Include measurements if rider_status is 'measurement_taken'
+            if include_measurements:
+                recipient_data['measurements'] = obj.rider_measurements
+            return recipient_data
         return None
     
     def get_tailor_info(self, obj):
