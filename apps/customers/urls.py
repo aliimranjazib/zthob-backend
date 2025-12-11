@@ -1,7 +1,7 @@
 from django.urls import path
 
 from apps.core.views import SendOTPView, VerifyOTPView
-from apps.customers.views import AddressListView, AddressCreateView, AddressDetailView, CustomerProfileAPIView, FabricCatalogAPIView, FamilyMemberListView, FamilyMemberDetailView, TailorFabricsAPIView, TailorListAPIView, FabricFavoriteToggleView, FabricFavoriteListView
+from apps.customers.views import AddressListView, AddressCreateView, AddressDetailView, CustomerProfileAPIView, FabricCatalogAPIView, FamilyMemberListView, FamilyMemberDetailView, TailorFabricsAPIView, TailorListAPIView, FabricFavoriteToggleView, FabricFavoriteListView, CustomerMeasurementsListView, FamilyMemberMeasurementsView
 
 
 urlpatterns = [
@@ -19,4 +19,7 @@ urlpatterns = [
     # Fabric Favorites
     path('fabrics/<int:fabric_id>/favorite/', FabricFavoriteToggleView.as_view(), name='fabric-favorite-toggle'),
     path('favorites/', FabricFavoriteListView.as_view(), name='favorites-list'),
+    # Measurements
+    path('measurements/', CustomerMeasurementsListView.as_view(), name='customer-measurements'),
+    path('family/<int:family_member_id>/measurements/', FamilyMemberMeasurementsView.as_view(), name='family-member-measurements'),
 ]

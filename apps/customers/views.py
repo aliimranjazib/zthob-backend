@@ -5,7 +5,8 @@ from django.template.context_processors import request
 from django.contrib.auth.models import User
 from rest_framework import serializers, status
 from apps.customers.models import Address, CustomerProfile, FamilyMember, FabricFavorite
-from apps.customers.serializers import AddressSerializer, AddressCreateSerializer, AddressResponseSerializer, CustomerProfileSerializer, FabricCatalogSerializer, FamilyMemberSerializer, FamilyMemberCreateSerializer, FamilyMemberSimpleResponseSerializer, FabricFavoriteSerializer
+from apps.customers.serializers import AddressSerializer, AddressCreateSerializer, AddressResponseSerializer, CustomerProfileSerializer, FabricCatalogSerializer, FamilyMemberSerializer, FamilyMemberCreateSerializer, FamilyMemberSimpleResponseSerializer, FabricFavoriteSerializer, CustomerMeasurementsListSerializer, FamilyMemberMeasurementsDetailSerializer
+from apps.orders.models import Order
 from apps.tailors.models import Fabric
 from zthob.utils import api_response
 from drf_spectacular.utils import extend_schema, OpenApiExample
@@ -460,5 +461,348 @@ class FabricFavoriteListView(APIView):
             success=True,
             message="Favorite fabrics fetched successfully",
             data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+# ============================================================================
+# MEASUREMENT VIEWS
+# ============================================================================
+
+class CustomerMeasurementsListView(APIView):
+    """List all measurements for customer and their family members"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Get all measurements",
+        description="Retrieve all measurements for the authenticated customer and their family members. Supports filtering by family_member_id, recipient_type, and order_id.",
+        tags=["Customer Measurements"],
+        parameters=[
+            {
+                'name': 'family_member_id',
+                'in': 'query',
+                'description': 'Filter by specific family member ID',
+                'required': False,
+                'schema': {'type': 'integer'}
+            },
+            {
+                'name': 'recipient_type',
+                'in': 'query',
+                'description': 'Filter by recipient type: customer or family_member',
+                'required': False,
+                'schema': {'type': 'string', 'enum': ['customer', 'family_member']}
+            },
+            {
+                'name': 'order_id',
+                'in': 'query',
+                'description': 'Filter by specific order ID',
+                'required': False,
+                'schema': {'type': 'integer'}
+            },
+            {
+                'name': 'include_stored',
+                'in': 'query',
+                'description': 'Include stored profile measurements (default: true)',
+                'required': False,
+                'schema': {'type': 'boolean', 'default': True}
+            }
+        ]
+    )
+    def get(self, request):
+        if request.user.role != 'USER':
+            return api_response(
+                success=False,
+                message="Only customers can access this endpoint",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get query parameters
+        family_member_id = request.query_params.get('family_member_id')
+        recipient_type = request.query_params.get('recipient_type')
+        order_id = request.query_params.get('order_id')
+        include_stored = request.query_params.get('include_stored', 'true').lower() == 'true'
+        
+        # Get all orders with measurements for this customer
+        orders_query = Order.objects.filter(
+            customer=request.user,
+            rider_status='measurement_taken',
+            rider_measurements__isnull=False
+        ).select_related(
+            'customer',
+            'family_member',
+            'tailor',
+            'rider'
+        ).prefetch_related('tailor__tailor_profile')
+        
+        # Apply filters
+        if order_id:
+            orders_query = orders_query.filter(id=order_id)
+        
+        if family_member_id:
+            orders_query = orders_query.filter(family_member_id=family_member_id)
+        
+        orders = orders_query.order_by('-measurement_taken_at', '-created_at')
+        
+        # Separate customer and family member measurements
+        customer_measurements = []
+        family_member_measurements = []
+        family_members_data = {}  # Track family members for summary
+        
+        for order in orders:
+            if order.rider_measurements:
+                measurement_data = {
+                    'order_id': order.id,
+                    'order_number': order.order_number,
+                    'order_type': order.order_type,
+                    'measurements': order.rider_measurements,
+                    'measurement_taken_at': order.measurement_taken_at.isoformat() if order.measurement_taken_at else None,
+                    'order_status': order.status,
+                    'rider_status': order.rider_status,
+                    'order_created_at': order.created_at.isoformat() if order.created_at else None,
+                }
+                
+                # Get tailor name if available
+                try:
+                    if order.tailor and hasattr(order.tailor, 'tailor_profile'):
+                        measurement_data['tailor_name'] = order.tailor.tailor_profile.shop_name
+                    else:
+                        measurement_data['tailor_name'] = order.tailor.username if order.tailor else None
+                except:
+                    measurement_data['tailor_name'] = None
+                
+                if order.family_member:
+                    # Family member order
+                    if not recipient_type or recipient_type == 'family_member':
+                        if not family_member_id or order.family_member.id == int(family_member_id):
+                            measurement_data.update({
+                                'recipient_type': 'family_member',
+                                'recipient_id': order.family_member.id,
+                                'recipient_name': order.family_member.name,
+                                'recipient_relationship': order.family_member.relationship,
+                                'recipient_gender': order.family_member.gender,
+                            })
+                            family_member_measurements.append(measurement_data)
+                            
+                            # Track for summary
+                            if order.family_member.id not in family_members_data:
+                                family_members_data[order.family_member.id] = {
+                                    'family_member_id': order.family_member.id,
+                                    'family_member_name': order.family_member.name,
+                                    'relationship': order.family_member.relationship,
+                                    'total_measurements': 0,
+                                    'latest_measurement_date': None,
+                                }
+                            family_members_data[order.family_member.id]['total_measurements'] += 1
+                            if not family_members_data[order.family_member.id]['latest_measurement_date'] or \
+                               order.measurement_taken_at > family_members_data[order.family_member.id]['latest_measurement_date']:
+                                family_members_data[order.family_member.id]['latest_measurement_date'] = order.measurement_taken_at
+                else:
+                    # Customer's own order
+                    if not recipient_type or recipient_type == 'customer':
+                        measurement_data.update({
+                            'recipient_type': 'customer',
+                            'recipient_id': request.user.id,
+                            'recipient_name': request.user.get_full_name() or request.user.username,
+                        })
+                        customer_measurements.append(measurement_data)
+        
+        # Get stored profile measurements
+        stored_profile_measurements = []
+        if include_stored:
+            family_members = FamilyMember.objects.filter(user=request.user)
+            if family_member_id:
+                family_members = family_members.filter(id=family_member_id)
+            
+            for fm in family_members:
+                if fm.measurements:
+                    stored_profile_measurements.append({
+                        'recipient_type': 'family_member',
+                        'recipient_id': fm.id,
+                        'recipient_name': fm.name,
+                        'recipient_relationship': fm.relationship,
+                        'recipient_gender': fm.gender,
+                        'measurements': fm.measurements,
+                        'last_updated': None,  # FamilyMember doesn't have last_updated field
+                        'note': 'Stored profile measurements (not tied to a specific order)'
+                    })
+                    
+                    # Update summary
+                    if fm.id not in family_members_data:
+                        family_members_data[fm.id] = {
+                            'family_member_id': fm.id,
+                            'family_member_name': fm.name,
+                            'relationship': fm.relationship,
+                            'total_measurements': 0,
+                            'latest_measurement_date': None,
+                            'has_stored_measurements': True,
+                        }
+                    else:
+                        family_members_data[fm.id]['has_stored_measurements'] = True
+        
+        # Build summary
+        summary = {
+            'total_customer_measurements': len(customer_measurements),
+            'total_family_member_measurements': len(family_member_measurements),
+            'total_family_members_with_measurements': len(family_members_data),
+            'total_unique_recipients': len(customer_measurements) + len(family_members_data),
+        }
+        
+        # Build response data
+        response_data = {
+            'customer_measurements': customer_measurements,
+            'family_member_measurements': family_member_measurements,
+            'family_members_summary': list(family_members_data.values()),
+            'stored_profile_measurements': stored_profile_measurements,
+            'summary': summary,
+        }
+        
+        # If filtering by family_member_id, return simplified structure
+        if family_member_id:
+            try:
+                fm = FamilyMember.objects.get(id=family_member_id, user=request.user)
+                response_data = {
+                    'family_member_info': {
+                        'id': fm.id,
+                        'name': fm.name,
+                        'relationship': fm.relationship,
+                        'gender': fm.gender,
+                    },
+                    'order_measurements': family_member_measurements,
+                    'stored_profile_measurements': {
+                        'measurements': fm.measurements if fm.measurements else None,
+                        'last_updated': None,
+                        'note': 'Stored profile measurements'
+                    } if fm.measurements else None,
+                    'summary': {
+                        'total_order_measurements': len(family_member_measurements),
+                        'has_stored_measurements': bool(fm.measurements),
+                        'latest_measurement_date': family_members_data.get(fm.id, {}).get('latest_measurement_date').isoformat() if family_members_data.get(fm.id, {}).get('latest_measurement_date') else None,
+                    }
+                }
+            except FamilyMember.DoesNotExist:
+                return api_response(
+                    success=False,
+                    message="Family member not found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+        
+        return api_response(
+            success=True,
+            message="Measurements retrieved successfully",
+            data=response_data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+class FamilyMemberMeasurementsView(APIView):
+    """Get all measurements for a specific family member"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Get family member measurements",
+        description="Retrieve all measurements for a specific family member across all orders",
+        tags=["Customer Measurements"]
+    )
+    def get(self, request, family_member_id):
+        if request.user.role != 'USER':
+            return api_response(
+                success=False,
+                message="Only customers can access this endpoint",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Verify family member belongs to customer
+        try:
+            family_member = FamilyMember.objects.get(id=family_member_id, user=request.user)
+        except FamilyMember.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Family member not found or you don't have access to this family member",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get all orders with measurements for this family member
+        orders = Order.objects.filter(
+            customer=request.user,
+            family_member=family_member,
+            rider_status='measurement_taken',
+            rider_measurements__isnull=False
+        ).select_related(
+            'customer',
+            'family_member',
+            'tailor',
+            'rider'
+        ).prefetch_related('tailor__tailor_profile').order_by('-measurement_taken_at', '-created_at')
+        
+        # Build order measurements list
+        order_measurements = []
+        for order in orders:
+            if order.rider_measurements:
+                measurement_data = {
+                    'order_id': order.id,
+                    'order_number': order.order_number,
+                    'order_type': order.order_type,
+                    'measurements': order.rider_measurements,
+                    'measurement_taken_at': order.measurement_taken_at.isoformat() if order.measurement_taken_at else None,
+                    'order_status': order.status,
+                    'rider_status': order.rider_status,
+                    'order_created_at': order.created_at.isoformat() if order.created_at else None,
+                    'appointment_date': order.appointment_date.isoformat() if order.appointment_date else None,
+                    'appointment_time': order.appointment_time.isoformat() if order.appointment_time else None,
+                }
+                
+                # Get tailor name
+                try:
+                    if order.tailor and hasattr(order.tailor, 'tailor_profile'):
+                        measurement_data['tailor_name'] = order.tailor.tailor_profile.shop_name
+                    else:
+                        measurement_data['tailor_name'] = order.tailor.username if order.tailor else None
+                except:
+                    measurement_data['tailor_name'] = None
+                
+                order_measurements.append(measurement_data)
+        
+        # Get stored profile measurements
+        stored_profile_measurements = None
+        if family_member.measurements:
+            stored_profile_measurements = {
+                'measurements': family_member.measurements,
+                'last_updated': None,
+                'note': 'Stored profile measurements (most recent from orders)'
+            }
+        
+        # Build summary
+        latest_date = None
+        oldest_date = None
+        if order_measurements:
+            dates = [m['measurement_taken_at'] for m in order_measurements if m['measurement_taken_at']]
+            if dates:
+                latest_date = max(dates)
+                oldest_date = min(dates)
+        
+        summary = {
+            'total_order_measurements': len(order_measurements),
+            'has_stored_measurements': bool(family_member.measurements),
+            'latest_measurement_date': latest_date,
+            'oldest_measurement_date': oldest_date,
+            'measurement_history_count': len(order_measurements),
+        }
+        
+        response_data = {
+            'family_member': {
+                'id': family_member.id,
+                'name': family_member.name,
+                'relationship': family_member.relationship,
+                'gender': family_member.gender,
+            },
+            'order_measurements': order_measurements,
+            'stored_profile_measurements': stored_profile_measurements,
+            'summary': summary,
+        }
+        
+        return api_response(
+            success=True,
+            message="Family member measurements retrieved successfully",
+            data=response_data,
             status_code=status.HTTP_200_OK
         )
