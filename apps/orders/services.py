@@ -183,8 +183,14 @@ class OrderStatusTransitionService:
                 transitions['status'] = ['confirmed']
                 transitions['tailor_status'] = ['accepted']
             elif order.status == 'confirmed':
+                # Allow tailor to accept if not yet accepted
+                if order.tailor_status == 'none':
+                    transitions['tailor_status'] = ['accepted']
                 transitions['status'] = ['in_progress']
             elif order.status == 'in_progress':
+                # Allow tailor to accept if not yet accepted (for orders created before fix)
+                if order.tailor_status == 'none':
+                    transitions['tailor_status'] = ['accepted']
                 transitions['status'] = ['ready_for_delivery']
             elif order.status == 'ready_for_delivery':
                 # Tailor can't change status once ready for delivery
@@ -224,12 +230,21 @@ class OrderStatusTransitionService:
                 transitions['status'] = ['confirmed']
                 transitions['tailor_status'] = ['accepted']
             elif order.status == 'confirmed':
+                # Allow tailor to accept if not yet accepted (for orders that progressed without explicit acceptance)
+                if order.tailor_status == 'none' and order.rider_status != 'measurement_taken':
+                    transitions['tailor_status'] = ['accepted']
                 transitions['status'] = ['in_progress']
-                # Also allow tailor to start stitching if measurements are taken (even if status not yet synced to in_progress)
-                if order.rider_status == 'measurement_taken' and order.tailor_status == 'accepted':
+                # Allow tailor to start stitching if measurements are taken (skip accept step)
+                if order.rider_status == 'measurement_taken':
+                    # If measurements are taken, tailor can directly start stitching (accept is implied)
                     transitions['tailor_status'] = ['stitching_started']
             elif order.status == 'in_progress':
-                if order.rider_status == 'measurement_taken' and order.tailor_status == 'accepted':
+                # Allow tailor to accept if not yet accepted and measurements not taken yet
+                if order.tailor_status == 'none' and order.rider_status != 'measurement_taken':
+                    transitions['tailor_status'] = ['accepted']
+                # Handle stitching workflow
+                if order.rider_status == 'measurement_taken':
+                    # If measurements are taken, tailor can directly start stitching (accept is implied)
                     transitions['tailor_status'] = ['stitching_started']
                 elif order.tailor_status == 'stitching_started':
                     transitions['tailor_status'] = ['stitched']
