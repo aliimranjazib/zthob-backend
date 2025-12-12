@@ -1,0 +1,200 @@
+{
+	"info": {
+		"_postman_id": "tailor-status-update-collection",
+		"name": "Tailor Order Status Update",
+		"description": "Collection for Tailor Order Status Update API - Update tailor_status (accepted, stitching_started, stitched)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Accept Order",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"tailor_status\": \"accepted\",\n    \"notes\": \"Order accepted by tailor\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/tailors/orders/{{order_id}}/update-status/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"tailors",
+						"orders",
+						"{{order_id}}",
+						"update-status",
+						""
+					]
+				},
+				"description": "Tailor accepts an order. Sets tailor_status to 'accepted' and typically updates main status to 'confirmed'."
+			},
+			"response": []
+		},
+		{
+			"name": "Start Stitching",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"tailor_status\": \"stitching_started\",\n    \"notes\": \"Started stitching the garment\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/tailors/orders/{{order_id}}/update-status/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"tailors",
+						"orders",
+						"{{order_id}}",
+						"update-status",
+						""
+					]
+				},
+				"description": "Tailor starts stitching. Only available for fabric_with_stitching orders when measurements are taken (rider_status == 'measurement_taken')."
+			},
+			"response": []
+		},
+		{
+			"name": "Finish Stitching",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"tailor_status\": \"stitched\",\n    \"notes\": \"Stitching completed successfully\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/tailors/orders/{{order_id}}/update-status/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"tailors",
+						"orders",
+						"{{order_id}}",
+						"update-status",
+						""
+					]
+				},
+				"description": "Tailor finishes stitching. Sets tailor_status to 'stitched'. Order becomes ready for rider pickup."
+			},
+			"response": []
+		},
+		{
+			"name": "Update Status (Without Notes)",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"tailor_status\": \"stitching_started\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/tailors/orders/{{order_id}}/update-status/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"tailors",
+						"orders",
+						"{{order_id}}",
+						"update-status",
+						""
+					]
+				},
+				"description": "Update tailor status without notes. Notes field is optional."
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://app.mgask.net",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "YOUR_ACCESS_TOKEN_HERE",
+			"type": "string"
+		},
+		{
+			"key": "order_id",
+			"value": "92",
+			"type": "string"
+		}
+	]
+}
+
