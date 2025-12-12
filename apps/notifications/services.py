@@ -392,6 +392,109 @@ class NotificationService:
                 )
     
     @staticmethod
+    def send_tailor_status_notification(order, old_tailor_status: str, new_tailor_status: str, changed_by):
+        """Send notification when tailor_status changes"""
+        order_number = order.order_number
+        customer_name = order.customer.username if order.customer else 'Customer'
+        
+        # Map tailor_status to notification messages
+        tailor_status_messages = {
+            'accepted': {
+                'customer': 'Tailor has accepted your order #{order_number}',
+                'tailor': 'You have accepted order #{order_number}',
+                'rider': 'Order #{order_number} has been accepted by tailor and is ready for pickup',
+            },
+            'stitching_started': {
+                'customer': 'Tailor has started stitching your garment for order #{order_number}',
+                'tailor': 'You have started stitching order #{order_number}',
+                'rider': 'Stitching has started for order #{order_number}',
+            },
+            'stitched': {
+                'customer': 'Your garment stitching is complete for order #{order_number}',
+                'tailor': 'Stitching completed for order #{order_number}',
+                'rider': 'Order #{order_number} stitching is complete and ready for pickup',
+            },
+        }
+        
+        # Notify customer
+        if order.customer and new_tailor_status in tailor_status_messages:
+            message_template = tailor_status_messages[new_tailor_status].get('customer', '')
+            if message_template:
+                title = f"Order #{order_number} Update"
+                body = message_template.format(
+                    order_number=order_number,
+                    customer_name=customer_name
+                )
+                
+                NotificationService.send_notification(
+                    user=order.customer,
+                    title=title,
+                    body=body,
+                    notification_type='ORDER_STATUS',
+                    category=f'tailor_{new_tailor_status}',
+                    data={
+                        'order_id': order.id,
+                        'order_number': order_number,
+                        'tailor_status': new_tailor_status,
+                        'old_tailor_status': old_tailor_status,
+                        'status': order.status,
+                    },
+                    priority='high'
+                )
+        
+        # Notify tailor
+        if order.tailor and new_tailor_status in tailor_status_messages:
+            message_template = tailor_status_messages[new_tailor_status].get('tailor', '')
+            if message_template:
+                title = f"Order #{order_number} Update"
+                body = message_template.format(
+                    order_number=order_number,
+                    customer_name=customer_name
+                )
+                
+                NotificationService.send_notification(
+                    user=order.tailor,
+                    title=title,
+                    body=body,
+                    notification_type='ORDER_STATUS',
+                    category=f'tailor_{new_tailor_status}',
+                    data={
+                        'order_id': order.id,
+                        'order_number': order_number,
+                        'tailor_status': new_tailor_status,
+                        'old_tailor_status': old_tailor_status,
+                        'status': order.status,
+                    },
+                    priority='high'
+                )
+        
+        # Notify rider
+        if order.rider and new_tailor_status in tailor_status_messages:
+            message_template = tailor_status_messages[new_tailor_status].get('rider', '')
+            if message_template:
+                title = f"Order #{order_number} Update"
+                body = message_template.format(
+                    order_number=order_number,
+                    customer_name=customer_name
+                )
+                
+                NotificationService.send_notification(
+                    user=order.rider,
+                    title=title,
+                    body=body,
+                    notification_type='ORDER_STATUS',
+                    category=f'tailor_{new_tailor_status}',
+                    data={
+                        'order_id': order.id,
+                        'order_number': order_number,
+                        'tailor_status': new_tailor_status,
+                        'old_tailor_status': old_tailor_status,
+                        'status': order.status,
+                    },
+                    priority='high'
+                )
+    
+    @staticmethod
     def send_payment_status_notification(order, old_status: str, new_status: str):
         """Send notification when payment status changes"""
         order_number = order.order_number

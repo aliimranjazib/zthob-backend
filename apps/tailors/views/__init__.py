@@ -37,6 +37,7 @@ from .analytics import (
     TailorAnalyticsView
 )
 from .orders import (
+    TailorAcceptOrderView,
     TailorUpdateOrderStatusView
 )
 
@@ -80,5 +81,6 @@ __all__ = [
     'TailorAnalyticsView',
     
     # Order views
+    'TailorAcceptOrderView',
     'TailorUpdateOrderStatusView',
 ]

@@ -1,0 +1,483 @@
+{
+	"info": {
+		"_postman_id": "tailor-order-management-collection",
+		"name": "Tailor Order Management - Complete Flow",
+		"description": "Complete Postman collection for Tailor Order Management including both fabric_only and fabric_with_stitching flows",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Fabric Only Flow",
+			"item": [
+				{
+					"name": "1. Accept Order",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tailors/orders/{{order_id}}/accept/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tailors",
+								"orders",
+								"{{order_id}}",
+								"accept",
+								""
+							]
+						},
+						"description": "Step 1: Tailor accepts the order. Sets tailor_status to 'accepted' and status to 'confirmed'. No request body needed."
+					},
+					"response": []
+				},
+				{
+					"name": "2. Mark In Progress",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"in_progress\",\n    \"notes\": \"Order is now in progress\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"orders",
+								"{{order_id}}",
+								"status",
+								""
+							]
+						},
+						"description": "Step 2: Tailor marks order as in_progress. Updates main status to 'in_progress'."
+					},
+					"response": []
+				},
+				{
+					"name": "3. Mark Ready for Delivery",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"ready_for_delivery\",\n    \"notes\": \"Order is ready for pickup\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"orders",
+								"{{order_id}}",
+								"status",
+								""
+							]
+						},
+						"description": "Step 3: Tailor marks order as ready_for_delivery. Order is now ready for rider pickup."
+					},
+					"response": []
+				}
+			],
+			"description": "Complete flow for fabric_only orders:\n1. Accept order\n2. Mark in progress\n3. Mark ready for delivery\n\nAfter step 3, rider will handle pickup and delivery."
+		},
+		{
+			"name": "Fabric With Stitching Flow",
+			"item": [
+				{
+					"name": "1. Accept Order",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tailors/orders/{{order_id}}/accept/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tailors",
+								"orders",
+								"{{order_id}}",
+								"accept",
+								""
+							]
+						},
+						"description": "Step 1: Tailor accepts the order. Sets tailor_status to 'accepted' and status to 'confirmed'. No request body needed."
+					},
+					"response": []
+				},
+				{
+					"name": "2. Mark In Progress (Optional)",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"in_progress\",\n    \"notes\": \"Order is now in progress\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"orders",
+								"{{order_id}}",
+								"status",
+								""
+							]
+						},
+						"description": "Step 2 (Optional): Tailor can mark order as in_progress. This happens automatically when rider takes measurements, but can be done manually too."
+					},
+					"response": []
+				},
+				{
+					"name": "3. Start Stitching (After Measurements)",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tailor_status\": \"stitching_started\",\n    \"notes\": \"Started stitching the garment\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tailors/orders/{{order_id}}/update-status/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tailors",
+								"orders",
+								"{{order_id}}",
+								"update-status",
+								""
+							]
+						},
+						"description": "Step 3: Tailor starts stitching. Only available after rider has taken measurements (rider_status == 'measurement_taken')."
+					},
+					"response": []
+				},
+				{
+					"name": "4. Finish Stitching",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tailor_status\": \"stitched\",\n    \"notes\": \"Stitching completed successfully\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tailors/orders/{{order_id}}/update-status/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tailors",
+								"orders",
+								"{{order_id}}",
+								"update-status",
+								""
+							]
+						},
+						"description": "Step 4: Tailor finishes stitching. Sets tailor_status to 'stitched' and automatically updates status to 'ready_for_delivery'. Order is now ready for rider pickup."
+					},
+					"response": []
+				}
+			],
+			"description": "Complete flow for fabric_with_stitching orders:\n1. Accept order\n2. (Optional) Mark in progress\n3. Wait for rider to take measurements\n4. Start stitching (after measurements)\n5. Finish stitching (auto-sets ready_for_delivery)\n\nAfter step 5, rider will handle pickup and delivery."
+		},
+		{
+			"name": "Individual Actions",
+			"item": [
+				{
+					"name": "Accept Order",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tailors/orders/{{order_id}}/accept/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tailors",
+								"orders",
+								"{{order_id}}",
+								"accept",
+								""
+							]
+						},
+						"description": "Tailor accepts an order. Sets tailor_status to 'accepted' and status to 'confirmed'. No request body needed."
+					},
+					"response": []
+				},
+				{
+					"name": "Start Stitching",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tailor_status\": \"stitching_started\",\n    \"notes\": \"Started stitching the garment\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tailors/orders/{{order_id}}/update-status/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tailors",
+								"orders",
+								"{{order_id}}",
+								"update-status",
+								""
+							]
+						},
+						"description": "Tailor starts stitching. Only available for fabric_with_stitching orders when measurements are taken (rider_status == 'measurement_taken')."
+					},
+					"response": []
+				},
+				{
+					"name": "Finish Stitching",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tailor_status\": \"stitched\",\n    \"notes\": \"Stitching completed successfully\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tailors/orders/{{order_id}}/update-status/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tailors",
+								"orders",
+								"{{order_id}}",
+								"update-status",
+								""
+							]
+						},
+						"description": "Tailor finishes stitching. Sets tailor_status to 'stitched' and automatically updates status to 'ready_for_delivery'."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Status (General)",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"in_progress\",\n    \"notes\": \"Order is now in progress\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/orders/{{order_id}}/status/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"orders",
+								"{{order_id}}",
+								"status",
+								""
+							]
+						},
+						"description": "General status update endpoint. Can be used to update main status (in_progress, ready_for_delivery, etc.)."
+					},
+					"response": []
+				}
+			],
+			"description": "Individual tailor actions that can be performed on orders"
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://app.mgask.net",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "YOUR_ACCESS_TOKEN_HERE",
+			"type": "string"
+		},
+		{
+			"key": "order_id",
+			"value": "92",
+			"type": "string"
+		}
+	]
+}
+
