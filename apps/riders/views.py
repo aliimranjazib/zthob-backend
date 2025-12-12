@@ -965,7 +965,7 @@ class RiderUpdateOrderStatusView(APIView):
         request=RiderUpdateOrderStatusSerializer,
         responses=RiderOrderDetailSerializer,
         summary="Update order status",
-        description="Rider updates order status (ready_for_delivery, delivered)",
+        description="Unified endpoint for rider to update order status. Only requires 'rider_status' (accepted, on_way_to_measurement, measurement_taken, on_way_to_pickup, picked_up, on_way_to_delivery, delivered). Sequential transitions are enforced.",
         tags=["Rider Orders"]
     )
     def patch(self, request, order_id):

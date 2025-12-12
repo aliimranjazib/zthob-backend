@@ -76,8 +76,10 @@ class Order(BaseModel):
     TAILOR_STATUS_CHOICES = (
         ("none", "None"),                          # No tailor activity
         ("accepted", "Accepted Order"),           # Tailor accepted the order
-        ("stitching_started", "Started Stitching"), # Tailor started stitching (stitching only)
-        ("stitched", "Finished Stitching"),       # Tailor finished stitching (stitching only)
+        ("in_progress", "In Progress"),           # Tailor working on order (fabric_only)
+        ("ready_for_delivery", "Ready for Delivery"), # Order ready for pickup (fabric_only)
+        ("stitching_started", "Started Stitching"), # Tailor started stitching (fabric_with_stitching only)
+        ("stitched", "Finished Stitching"),       # Tailor finished stitching (fabric_with_stitching only)
     )
     PAYMENT_STATUS_CHOICES = (
         ("pending", "Pending"),

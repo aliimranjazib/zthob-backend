@@ -819,17 +819,9 @@ class RiderAddMeasurementsSerializer(serializers.Serializer):
 
 
 class RiderUpdateOrderStatusSerializer(serializers.Serializer):
-    """Serializer for rider updating order status"""
+    """Serializer for rider updating order status - only rider_status, no auto-sync"""
     rider_status = serializers.ChoiceField(
-        choices=[
-            'accepted',  # Rider accepts order
-            'on_way_to_pickup',  # Rider on way to pickup
-            'picked_up',  # Rider picked up
-            'on_way_to_delivery',  # Rider on way to delivery
-            'on_way_to_measurement',  # Rider on way to take measurements (stitching only)
-            'measurement_taken',  # Rider took measurements (stitching only)
-            'delivered',  # Rider delivered
-        ],
+        choices=[choice for choice in Order.RIDER_STATUS_CHOICES if choice[0] != 'none'],
         required=True
     )
     notes = serializers.CharField(required=False, allow_blank=True)

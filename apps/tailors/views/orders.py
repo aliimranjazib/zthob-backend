@@ -107,14 +107,14 @@ class TailorAcceptOrderView(APIView):
 
 
 class TailorUpdateOrderStatusView(APIView):
-    """Tailor updates order status"""
+    """Tailor updates order status - unified endpoint for all status updates"""
     permission_classes = [IsAuthenticated]
     
     @extend_schema(
         request=TailorUpdateOrderStatusSerializer,
         responses=OrderStatusUpdateResponseSerializer,
         summary="Update order status",
-        description="Tailor updates order tailor_status (stitching_started, stitched). Use /accept/ endpoint to accept orders.",
+        description="Unified endpoint for tailor to update order status. Only requires 'tailor_status' (accepted, stitching_started, stitched). Main 'status' will auto-sync based on tailor_status changes (e.g., stitched → ready_for_delivery).",
         tags=["Tailor Orders"]
     )
     def patch(self, request, order_id):
@@ -140,18 +140,11 @@ class TailorUpdateOrderStatusView(APIView):
             new_tailor_status = serializer.validated_data['tailor_status']
             notes = serializer.validated_data.get('notes', '')
             
-            # Don't allow accepting via this endpoint - use /accept/ instead
-            if new_tailor_status == 'accepted':
-                return api_response(
-                    success=False,
-                    message="Please use /api/tailors/orders/{order_id}/accept/ endpoint to accept orders",
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Store old tailor_status for notification
+            # Store old values for notifications
             old_tailor_status = order.tailor_status
+            old_status = order.status
             
-            # Use transition service
+            # Use transition service (only tailor_status, status will auto-sync)
             from apps.orders.services import OrderStatusTransitionService
             
             success, error_msg, updated_order = OrderStatusTransitionService.transition(
@@ -171,26 +164,44 @@ class TailorUpdateOrderStatusView(APIView):
             
             order = updated_order
             
-            # Send push notification for tailor_status change
+            # Send notifications for changes
             try:
                 from apps.notifications.services import NotificationService
-                NotificationService.send_tailor_status_notification(
-                    order=order,
-                    old_tailor_status=old_tailor_status,
-                    new_tailor_status=new_tailor_status,
-                    changed_by=request.user
-                )
+                
+                # Send tailor_status notification if tailor_status changed
+                if new_tailor_status != old_tailor_status:
+                    NotificationService.send_tailor_status_notification(
+                        order=order,
+                        old_tailor_status=old_tailor_status,
+                        new_tailor_status=new_tailor_status,
+                        changed_by=request.user
+                    )
+                
+                # Send main status notification if main status changed (auto-synced)
+                if order.status != old_status:
+                    NotificationService.send_order_status_notification(
+                        order=order,
+                        old_status=old_status,
+                        new_status=order.status,
+                        changed_by=request.user
+                    )
             except Exception as e:
                 # Log error but don't fail the update
                 import logging
                 logger = logging.getLogger(__name__)
-                logger.error(f"Failed to send tailor status notification: {str(e)}")
+                logger.error(f"Failed to send notification: {str(e)}")
             
             # Use lightweight response serializer for status updates
             response_serializer = OrderStatusUpdateResponseSerializer(order, context={'request': request})
+            
+            # Build success message
+            message = f"Order tailor status updated to {order.get_tailor_status_display()}"
+            if order.status != old_status:
+                message += f" (status auto-updated to {order.get_status_display()})"
+            
             return api_response(
                 success=True,
-                message=f"Order tailor status updated to {order.get_tailor_status_display()}",
+                message=message,
                 data=response_serializer.data,
                 status_code=status.HTTP_200_OK
             )
