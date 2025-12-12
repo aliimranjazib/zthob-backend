@@ -38,6 +38,9 @@ from apps.tailors.views import (
     
     # Analytics views
     TailorAnalyticsView,
+    
+    # Order views
+    TailorUpdateOrderStatusView,
 )
 
 urlpatterns = [
@@ -87,6 +90,9 @@ urlpatterns = [
 
     # Analytics URLs
     path('analytics/', TailorAnalyticsView.as_view(), name='tailor-analytics'),
+    
+    # Order URLs
+    path('orders/<int:order_id>/update-status/', TailorUpdateOrderStatusView.as_view(), name='tailor-update-order-status'),
 
     path('phone/send-otp/', SendOTPView.as_view(), name='customer-send-otp'),
     path('phone/verify-otp/', VerifyOTPView.as_view(), name='customer-verify-otp'),

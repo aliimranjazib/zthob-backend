@@ -36,6 +36,9 @@ from .address import (
 from .analytics import (
     TailorAnalyticsView
 )
+from .orders import (
+    TailorUpdateOrderStatusView
+)
 
 # Export all views
 __all__ = [
@@ -75,4 +78,7 @@ __all__ = [
     
     # Analytics views
     'TailorAnalyticsView',
+    
+    # Order views
+    'TailorUpdateOrderStatusView',
 ]

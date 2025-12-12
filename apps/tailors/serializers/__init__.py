@@ -37,6 +37,9 @@ from .analytics import (
     WeeklyTrendSerializer,
     AnalyticsPeriodSerializer
 )
+from .orders import (
+    TailorUpdateOrderStatusSerializer
+)
 
 # Export all serializers
 __all__ = [
@@ -79,4 +82,7 @@ __all__ = [
     'DailyEarningsSerializer',
     'WeeklyTrendSerializer',
     'AnalyticsPeriodSerializer',
+    
+    # Order serializers
+    'TailorUpdateOrderStatusSerializer',
 ]
