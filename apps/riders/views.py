@@ -928,6 +928,19 @@ class RiderAddMeasurementsView(APIView):
             
             order.save()
             
+            # Send notification that measurements are taken
+            try:
+                from apps.notifications.services import NotificationService
+                NotificationService.send_measurement_taken_notification(
+                    order=order,
+                    rider=request.user
+                )
+            except Exception as e:
+                # Log error but don't fail the measurement addition
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to send measurement taken notification: {str(e)}")
+            
             response_serializer = RiderOrderDetailSerializer(order, context={'request': request})
             return api_response(
                 success=True,

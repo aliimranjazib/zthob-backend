@@ -503,4 +503,60 @@ class NotificationService:
             },
             priority='high'
         )
+    
+    @staticmethod
+    def send_measurement_taken_notification(order, rider):
+        """Send notification when rider takes measurements for fabric_with_stitching orders"""
+        order_number = order.order_number
+        rider_name = rider.rider_profile.full_name if hasattr(rider, 'rider_profile') and rider.rider_profile else rider.username
+        customer_name = order.customer.get_full_name() if order.customer else order.customer.username if order.customer else 'Customer'
+        
+        # Notify customer
+        if order.customer:
+            NotificationService.send_notification(
+                user=order.customer,
+                title='Measurements Taken',
+                body=f'Measurements have been taken for your order #{order_number}. Tailor will now start stitching.',
+                notification_type='ORDER_STATUS',
+                category='measurement_taken',
+                data={
+                    'order_id': order.id,
+                    'order_number': order_number,
+                    'rider_id': rider.id,
+                    'rider_name': rider_name,
+                },
+                priority='high'
+            )
+        
+        # Notify tailor - IMPORTANT: This tells tailor they can now start stitching
+        if order.tailor:
+            NotificationService.send_notification(
+                user=order.tailor,
+                title='Measurements Ready',
+                body=f'Measurements have been taken for order #{order_number}. You can now start stitching.',
+                notification_type='ORDER_STATUS',
+                category='measurement_taken',
+                data={
+                    'order_id': order.id,
+                    'order_number': order_number,
+                    'customer_name': customer_name,
+                    'rider_id': rider.id,
+                    'rider_name': rider_name,
+                },
+                priority='high'
+            )
+        
+        # Notify rider (confirmation)
+        NotificationService.send_notification(
+            user=rider,
+            title='Measurements Recorded',
+            body=f'Measurements successfully recorded for order #{order_number}. Waiting for tailor to complete stitching.',
+            notification_type='ORDER_STATUS',
+            category='measurement_taken',
+            data={
+                'order_id': order.id,
+                'order_number': order_number,
+            },
+            priority='normal'
+        )
 

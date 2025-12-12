@@ -225,6 +225,9 @@ class OrderStatusTransitionService:
                 transitions['tailor_status'] = ['accepted']
             elif order.status == 'confirmed':
                 transitions['status'] = ['in_progress']
+                # Also allow tailor to start stitching if measurements are taken (even if status not yet synced to in_progress)
+                if order.rider_status == 'measurement_taken' and order.tailor_status == 'accepted':
+                    transitions['tailor_status'] = ['stitching_started']
             elif order.status == 'in_progress':
                 if order.rider_status == 'measurement_taken' and order.tailor_status == 'accepted':
                     transitions['tailor_status'] = ['stitching_started']
