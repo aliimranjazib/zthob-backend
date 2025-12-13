@@ -112,6 +112,42 @@ class RegisterFCMTokenView(APIView):
         )
 
 
+class ListFCMTokensView(APIView):
+    """List all FCM tokens for the authenticated user"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        responses=FCMDeviceTokenSerializer(many=True),
+        summary="List FCM Tokens",
+        description="Retrieve all FCM device tokens for the authenticated user. Optionally filter by is_active status.",
+        tags=["Notifications"]
+    )
+    def get(self, request):
+        # Get all FCM tokens for the user
+        fcm_tokens = FCMDeviceToken.objects.filter(user=request.user)
+        
+        # Optional filter by is_active status
+        is_active_param = request.query_params.get('is_active')
+        if is_active_param is not None:
+            is_active = is_active_param.lower() in ('true', '1', 'yes')
+            fcm_tokens = fcm_tokens.filter(is_active=is_active)
+        
+        # Order by created_at descending (newest first)
+        fcm_tokens = fcm_tokens.order_by('-created_at')
+        
+        serializer = FCMDeviceTokenSerializer(fcm_tokens, many=True)
+        
+        return api_response(
+            success=True,
+            message="FCM tokens retrieved successfully",
+            data={
+                'count': fcm_tokens.count(),
+                'tokens': serializer.data
+            },
+            status_code=status.HTTP_200_OK
+        )
+
+
 class UnregisterFCMTokenView(APIView):
     """Unregister (deactivate) FCM device token"""
     permission_classes = [IsAuthenticated]

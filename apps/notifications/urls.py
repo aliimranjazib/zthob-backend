@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     RegisterFCMTokenView,
+    ListFCMTokensView,
     UnregisterFCMTokenView,
     NotificationLogListView,
     MarkNotificationReadView,
@@ -17,6 +18,7 @@ app_name = 'notifications'
 urlpatterns = [
     path('fcm-token/register/', RegisterFCMTokenView.as_view(), name='register-fcm-token'),
     path('fcm-token/update/', RegisterFCMTokenView.as_view(), name='update-fcm-token'),
+    path('fcm-token/list/', ListFCMTokensView.as_view(), name='list-fcm-tokens'),
     path('fcm-token/unregister/', UnregisterFCMTokenView.as_view(), name='unregister-fcm-token'),
     path('logs/', NotificationLogListView.as_view(), name='notification-logs'),
     path('<int:notification_id>/read/', MarkNotificationReadView.as_view(), name='mark-notification-read'),
