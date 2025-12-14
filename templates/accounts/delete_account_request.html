@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>حذف الحساب - {{ app_name }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', 'Tahoma', 'Arial', 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #8B0000 0%, #5C0000 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        body[dir="ltr"] {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        .lang-switcher {
+            text-align: left;
+            margin-bottom: 20px;
+        }
+        
+        body[dir="rtl"] .lang-switcher {
+            text-align: right;
+        }
+        
+        .lang-btn {
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin: 0 2px;
+            transition: all 0.3s;
+        }
+        
+        .lang-btn:hover {
+            background: #e0e0e0;
+        }
+        
+        .lang-btn.active {
+            background: #8B0000;
+            color: white;
+            border-color: #8B0000;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            text-align: right;
+        }
+        
+        body[dir="ltr"] .alert {
+            text-align: left;
+        }
+        
+        .alert-error {
+            background-color: #fee;
+            color: #c33;
+            border: 1px solid #fcc;
+        }
+        
+        .alert-success {
+            background-color: #efe;
+            color: #3c3;
+            border: 1px solid #cfc;
+        }
+        
+        .alert-info {
+            background-color: #eef;
+            color: #33c;
+            border: 1px solid #ccf;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        input[type="text"],
+        input[type="email"],
+        input[type="tel"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            text-align: right;
+        }
+        
+        body[dir="ltr"] input[type="text"],
+        body[dir="ltr"] input[type="email"],
+        body[dir="ltr"] input[type="tel"] {
+            text-align: left;
+        }
+        
+        input[type="text"]:focus,
+        input[type="email"]:focus,
+        input[type="tel"]:focus {
+            outline: none;
+            border-color: #8B0000;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: flex-start;
+            margin: 20px 0;
+            direction: rtl;
+        }
+        
+        body[dir="ltr"] .checkbox-group {
+            direction: ltr;
+        }
+        
+        .checkbox-group input[type="checkbox"] {
+            margin-left: 10px;
+            margin-top: 4px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        
+        body[dir="ltr"] .checkbox-group input[type="checkbox"] {
+            margin-left: 0;
+            margin-right: 10px;
+        }
+        
+        .checkbox-group label {
+            margin-bottom: 0;
+            font-weight: normal;
+            cursor: pointer;
+            line-height: 1.5;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #8B0000 0%, #5C0000 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(139, 0, 0, 0.4);
+        }
+        
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .btn-danger {
+            background: #8B0000;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #6B0000;
+            box-shadow: 0 5px 15px rgba(139, 0, 0, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .info-box {
+            background: #fff5f5;
+            border-right: 4px solid #8B0000;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            text-align: right;
+        }
+        
+        body[dir="ltr"] .info-box {
+            border-right: none;
+            border-left: 4px solid #8B0000;
+            text-align: left;
+        }
+        
+        .info-box h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .info-box ul {
+            margin-right: 20px;
+            color: #666;
+            font-size: 14px;
+            list-style-type: disc;
+        }
+        
+        body[dir="ltr"] .info-box ul {
+            margin-right: 0;
+            margin-left: 20px;
+        }
+        
+        .info-box li {
+            margin-bottom: 8px;
+        }
+        
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            position: relative;
+            direction: rtl;
+        }
+        
+        body[dir="ltr"] .step-indicator {
+            direction: ltr;
+        }
+        
+        .step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+        
+        .step-number {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #e0e0e0;
+            color: #999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 8px;
+            font-weight: 600;
+        }
+        
+        .step.active .step-number {
+            background: #8B0000;
+            color: white;
+        }
+        
+        .step.completed .step-number {
+            background: #8B0000;
+            color: white;
+        }
+        
+        .step-label {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .step.active .step-label {
+            color: #8B0000;
+            font-weight: 600;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            color: #999;
+            font-size: 12px;
+        }
+        
+        small {
+            display: block;
+            margin-top: 5px;
+            color: #666;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body dir="rtl">
+    <div class="container">
+        <!-- Language Switcher -->
+        <div class="lang-switcher">
+            <button class="lang-btn active" onclick="switchLang('ar')" id="lang-ar">العربية</button>
+            <button class="lang-btn" onclick="switchLang('en')" id="lang-en">English</button>
+        </div>
+        
+        <div class="header">
+            <h1 data-en="Delete Your Account" data-ar="حذف حسابك">حذف حسابك</h1>
+            <p data-en="{{ app_name }} by {{ developer_name }}" data-ar="{{ app_name }} بواسطة {{ developer_name }}">{{ app_name }} بواسطة {{ developer_name }}</p>
+        </div>
+        
+        {% if success %}
+            <div class="alert alert-success">
+                <strong data-en="Account Deleted Successfully!" data-ar="تم حذف الحساب بنجاح!">تم حذف الحساب بنجاح!</strong><br>
+                <span data-en="Your account and all associated data have been permanently deleted." data-ar="تم حذف حسابك وجميع البيانات المرتبطة به بشكل دائم.">تم حذف حسابك وجميع البيانات المرتبطة به بشكل دائم.</span>
+            </div>
+            <div class="info-box">
+                <p data-en="If you have any questions or need assistance, please contact our support team." data-ar="إذا كان لديك أي أسئلة أو تحتاج إلى مساعدة، يرجى الاتصال بفريق الدعم لدينا.">إذا كان لديك أي أسئلة أو تحتاج إلى مساعدة، يرجى الاتصال بفريق الدعم لدينا.</p>
+            </div>
+        {% else %}
+            <!-- Step Indicator -->
+            <div class="step-indicator">
+                <div class="step {% if not phone %}active{% elif success_otp %}completed{% endif %}">
+                    <div class="step-number">1</div>
+                    <div class="step-label" data-en="Enter Phone Number" data-ar="أدخل رقم الهاتف">أدخل رقم الهاتف</div>
+                </div>
+                <div class="step {% if success_otp %}active{% elif phone and not success_otp %}active{% endif %}">
+                    <div class="step-number">2</div>
+                    <div class="step-label" data-en="Verify OTP" data-ar="التحقق من الرمز">التحقق من الرمز</div>
+                </div>
+                <div class="step {% if phone and success_otp %}active{% endif %}">
+                    <div class="step-number">3</div>
+                    <div class="step-label" data-en="Confirm" data-ar="تأكيد">تأكيد</div>
+                </div>
+            </div>
+            
+            <!-- Error Messages -->
+            {% if error %}
+                <div class="alert alert-error">
+                    <strong data-en="Error:" data-ar="خطأ:">خطأ:</strong> {{ error }}
+                </div>
+            {% endif %}
+            
+            <!-- Success Messages -->
+            {% if success_otp %}
+                <div class="alert alert-success">
+                    <strong data-en="OTP Sent!" data-ar="تم إرسال الرمز!">تم إرسال الرمز!</strong><br>
+                    <span data-en="Please check your phone and enter the verification code below." data-ar="يرجى التحقق من هاتفك وإدخال رمز التحقق أدناه.">يرجى التحقق من هاتفك وإدخال رمز التحقق أدناه.</span>
+                </div>
+            {% endif %}
+            
+            <!-- Step 1: Enter Phone Number -->
+            <div id="step1" class="{% if phone %}hidden{% endif %}">
+                <form method="post" action="{% url 'accounts:delete-account-send-otp' %}">
+                    {% csrf_token %}
+                    <div class="form-group">
+                        <label for="phone" data-en="Phone Number" data-ar="رقم الهاتف">رقم الهاتف</label>
+                        <input type="tel" id="phone" name="phone" 
+                               placeholder="مثال: 0501234567" 
+                               data-placeholder-en="e.g., 0501234567"
+                               data-placeholder-ar="مثال: 0501234567"
+                               value="{{ phone|default:'' }}" 
+                               pattern="[0-9+\s\-()]+"
+                               required>
+                    </div>
+                    
+                    <div class="info-box">
+                        <h3 data-en="What happens when you delete your account?" data-ar="ماذا يحدث عند حذف حسابك؟">ماذا يحدث عند حذف حسابك؟</h3>
+                        <ul>
+                            <li data-en="Your account will be permanently deleted" data-ar="سيتم حذف حسابك بشكل دائم">سيتم حذف حسابك بشكل دائم</li>
+                            <li data-en="All your personal information will be removed" data-ar="سيتم إزالة جميع معلوماتك الشخصية">سيتم إزالة جميع معلوماتك الشخصية</li>
+                            <li data-en="Your orders, addresses, and preferences will be deleted" data-ar="سيتم حذف طلباتك وعناوينك وتفضيلاتك">سيتم حذف طلباتك وعناوينك وتفضيلاتك</li>
+                            <li data-en="This action cannot be undone" data-ar="لا يمكن التراجع عن هذا الإجراء">لا يمكن التراجع عن هذا الإجراء</li>
+                        </ul>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" data-en="Send Verification Code" data-ar="إرسال رمز التحقق">إرسال رمز التحقق</button>
+                </form>
+            </div>
+            
+            <!-- Step 2 & 3: Verify OTP and Confirm -->
+            {% if phone %}
+                <div id="step2">
+                    <form method="post" action="{% url 'accounts:delete-account-request' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="phone" value="{{ phone }}">
+                        
+                        <div class="form-group">
+                            <label for="otp_code" data-en="Verification Code" data-ar="رمز التحقق">رمز التحقق</label>
+                            <input type="text" id="otp_code" name="otp_code" 
+                                   placeholder="أدخل الرمز المكون من 6 أرقام" 
+                                   data-placeholder-en="Enter 6-digit code"
+                                   data-placeholder-ar="أدخل الرمز المكون من 6 أرقام"
+                                   maxlength="6" pattern="[0-9]{6}" required>
+                            <small data-en="Enter the code sent to {{ phone }}" data-ar="أدخل الرمز المرسل إلى {{ phone }}">أدخل الرمز المرسل إلى {{ phone }}</small>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="confirm_deletion" name="confirm_deletion" required>
+                            <label for="confirm_deletion" data-en="I understand that deleting my account will permanently remove all my data and this action cannot be undone." data-ar="أفهم أن حذف حسابي سيزيل بشكل دائم جميع بياناتي ولا يمكن التراجع عن هذا الإجراء.">
+                                أفهم أن حذف حسابي سيزيل بشكل دائم جميع بياناتي ولا يمكن التراجع عن هذا الإجراء.
+                            </label>
+                        </div>
+                        
+                        <div class="info-box">
+                            <h3 data-en="⚠️ Important Notice" data-ar="⚠️ إشعار مهم">⚠️ إشعار مهم</h3>
+                            <p style="color: #666; font-size: 14px;" data-en="By confirming, you acknowledge that:" data-ar="بالتأكيد، أنت تقر بأن:">
+                                بالتأكيد، أنت تقر بأن:
+                            </p>
+                            <ul>
+                                <li data-en="All your account data will be permanently deleted" data-ar="سيتم حذف جميع بيانات حسابك بشكل دائم">سيتم حذف جميع بيانات حسابك بشكل دائم</li>
+                                <li data-en="You will lose access to all your orders and history" data-ar="ستفقد الوصول إلى جميع طلباتك وسجلك">ستفقد الوصول إلى جميع طلباتك وسجلك</li>
+                                <li data-en="This action is irreversible" data-ar="هذا الإجراء لا رجعة فيه">هذا الإجراء لا رجعة فيه</li>
+                                <li data-en="You may need to create a new account if you want to use our services again" data-ar="قد تحتاج إلى إنشاء حساب جديد إذا أردت استخدام خدماتنا مرة أخرى">قد تحتاج إلى إنشاء حساب جديد إذا أردت استخدام خدماتنا مرة أخرى</li>
+                            </ul>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-danger" data-en="Delete My Account Permanently" data-ar="حذف حسابي بشكل دائم">حذف حسابي بشكل دائم</button>
+                        <a href="{% url 'accounts:delete-account-request' %}" class="btn btn-secondary" style="text-decoration: none; display: block; text-align: center;" data-en="Cancel" data-ar="إلغاء">إلغاء</a>
+                    </form>
+                </div>
+            {% endif %}
+        {% endif %}
+        
+        <div class="footer">
+            <p data-en="Need help? Contact our support team." data-ar="تحتاج مساعدة؟ اتصل بفريق الدعم لدينا.">تحتاج مساعدة؟ اتصل بفريق الدعم لدينا.</p>
+            <p>&copy; {{ developer_name }}</p>
+        </div>
+    </div>
+    
+    <script>
+        // Language switching functionality
+        function switchLang(lang) {
+            const body = document.body;
+            const html = document.documentElement;
+            
+            if (lang === 'ar') {
+                body.setAttribute('dir', 'rtl');
+                html.setAttribute('lang', 'ar');
+                document.getElementById('lang-ar').classList.add('active');
+                document.getElementById('lang-en').classList.remove('active');
+            } else {
+                body.setAttribute('dir', 'ltr');
+                html.setAttribute('lang', 'en');
+                document.getElementById('lang-en').classList.add('active');
+                document.getElementById('lang-ar').classList.remove('active');
+            }
+            
+            // Update all text content
+            document.querySelectorAll('[data-en][data-ar]').forEach(element => {
+                if (lang === 'ar') {
+                    element.textContent = element.getAttribute('data-ar');
+                } else {
+                    element.textContent = element.getAttribute('data-en');
+                }
+            });
+            
+            // Update placeholders
+            document.querySelectorAll('[data-placeholder-en][data-placeholder-ar]').forEach(element => {
+                if (lang === 'ar') {
+                    element.placeholder = element.getAttribute('data-placeholder-ar');
+                } else {
+                    element.placeholder = element.getAttribute('data-placeholder-en');
+                }
+            });
+            
+            // Store preference
+            localStorage.setItem('preferred-lang', lang);
+        }
+        
+        // Load saved language preference
+        const savedLang = localStorage.getItem('preferred-lang') || 'ar';
+        if (savedLang === 'en') {
+            switchLang('en');
+        }
+    </script>
+</body>
+</html>
