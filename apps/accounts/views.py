@@ -496,3 +496,202 @@ class PhoneResendOTPView(APIView):
             status_code=status.HTTP_400_BAD_REQUEST,
             request=request
         )
+
+
+class PublicDeleteAccountRequestView(APIView):
+    """
+    Public view for account deletion request (Google Play compliance).
+    No authentication required - users can request account deletion via web form.
+    """
+    permission_classes = [AllowAny]
+    
+    @extend_schema(
+        tags=["Account Deletion"],
+        summary="Public Account Deletion Request Form",
+        description="Public web form for users to request account deletion. No authentication required. "
+                    "This endpoint serves the HTML form for Google Play compliance.",
+        responses={200: {'description': 'HTML form for account deletion'}}
+    )
+    def get(self, request):
+        """Display the account deletion request form"""
+        from django.shortcuts import render
+        return render(request, 'accounts/delete_account_request.html', {
+            'app_name': 'Zthob',
+            'developer_name': 'Mgask'
+        })
+    
+    @extend_schema(
+        tags=["Account Deletion"],
+        summary="Submit Account Deletion Request",
+        description="Process account deletion request after OTP verification. "
+                    "This endpoint handles form submission from the public form.",
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'phone': {'type': 'string', 'description': 'Phone number or email'},
+                    'otp_code': {'type': 'string', 'description': 'OTP verification code'},
+                    'confirm_deletion': {'type': 'boolean', 'description': 'User confirmation'}
+                },
+                'required': ['phone', 'otp_code', 'confirm_deletion']
+            }
+        }
+    )
+    def post(self, request):
+        """Process account deletion request"""
+        from apps.accounts.services.account_deletion import AccountDeletionService
+        from apps.core.services import PhoneVerificationService
+        from django.shortcuts import render
+        
+        phone = request.data.get('phone') or request.POST.get('phone')
+        otp_code = request.data.get('otp_code') or request.POST.get('otp_code')
+        confirm_deletion = request.data.get('confirm_deletion') or request.POST.get('confirm_deletion')
+        
+        # Validate inputs
+        if not phone:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': 'Phone number is required',
+                'app_name': 'Zthob',
+                'developer_name': 'Mgask'
+            }, status=400)
+        
+        if not otp_code:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': 'OTP code is required',
+                'phone': phone,
+                'app_name': 'Zthob',
+                'developer_name': 'Mgask'
+            }, status=400)
+        
+        if not confirm_deletion or str(confirm_deletion).lower() not in ['true', '1', 'on', 'yes']:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': 'Please confirm that you want to delete your account',
+                'phone': phone,
+                'app_name': 'Zthob',
+                'developer_name': 'Mgask'
+            }, status=400)
+        
+        # Find user
+        user = AccountDeletionService.find_user_by_phone_or_email(phone)
+        if not user:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': 'No account found with this phone number or email',
+                'phone': phone,
+                'app_name': 'Zthob',
+                'developer_name': 'Mgask'
+            }, status=404)
+        
+        # Verify OTP
+        is_valid, message = AccountDeletionService.verify_user_identity(
+            user=user,
+            phone_number=phone,
+            otp_code=otp_code
+        )
+        
+        if not is_valid:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': message or 'Invalid or expired OTP code',
+                'phone': phone,
+                'app_name': 'Zthob',
+                'developer_name': 'Mgask'
+            }, status=400)
+        
+        # Delete account
+        result = AccountDeletionService.delete_user_account(user)
+        
+        if result['success']:
+            return render(request, 'accounts/delete_account_request.html', {
+                'success': True,
+                'message': 'Your account and all associated data have been permanently deleted.',
+                'app_name': 'Zthob',
+                'developer_name': 'Mgask'
+            })
+        else:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': result.get('message', 'Failed to delete account. Please contact support.'),
+                'phone': phone,
+                'app_name': 'Zthob',
+                'developer_name': 'Mgask'
+            }, status=500)
+
+
+class PublicDeleteAccountSendOTPView(APIView):
+    """
+    Send OTP for account deletion verification (public endpoint).
+    No authentication required.
+    """
+    permission_classes = [AllowAny]
+    
+    @extend_schema(
+        tags=["Account Deletion"],
+        summary="Send OTP for Account Deletion",
+        description="Send OTP code to user's phone number for account deletion verification. "
+                    "This is used by the public deletion form.",
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'phone': {'type': 'string', 'description': 'Phone number'}
+                },
+                'required': ['phone']
+            }
+        }
+    )
+    def post(self, request):
+        """Send OTP for account deletion"""
+        from apps.accounts.services.account_deletion import AccountDeletionService
+        from apps.core.services import PhoneVerificationService
+        from django.shortcuts import render
+        
+        phone = request.data.get('phone') or request.POST.get('phone')
+        
+        if not phone:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': 'Phone number is required',
+                'app_name': 'Zthob',
+                'developer_name': 'Mgask'
+            }, status=400)
+        
+        # Find user by phone only
+        from apps.core.services import PhoneVerificationService
+        local_phone = PhoneVerificationService.normalize_phone_to_local(phone)
+        user = AccountDeletionService.find_user_by_phone_or_email(local_phone)
+        if not user:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': 'No account found with this phone number',
+                'phone': phone,
+                'app_name': 'Zthob',
+                'developer_name': 'Mgask'
+            }, status=404)
+        
+        # Send OTP
+        try:
+            verification, otp_code, sms_success, sms_message, _ = PhoneVerificationService.create_verification_for_phone(
+                phone_number=phone,
+                user=user
+            )
+            
+            if sms_success:
+                return render(request, 'accounts/delete_account_request.html', {
+                    'success_otp': True,
+                    'message': f'OTP sent to {phone}. Please check your phone and enter the code below.',
+                    'phone': phone,
+                    'app_name': 'Zthob',
+                    'developer_name': 'Mgask'
+                })
+            else:
+                return render(request, 'accounts/delete_account_request.html', {
+                    'error': f'Failed to send OTP: {sms_message}. Please try again or contact support.',
+                    'phone': phone,
+                    'app_name': 'Zthob',
+                    'developer_name': 'Mgask'
+                }, status=400)
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error sending OTP for account deletion: {str(e)}")
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': 'Failed to send OTP. Please try again or contact support.',
+                'phone': phone,
+                'app_name': 'Zthob',
+                'developer_name': 'Mgask'
+            }, status=500)
