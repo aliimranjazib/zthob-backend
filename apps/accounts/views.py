@@ -516,7 +516,7 @@ class PublicDeleteAccountRequestView(APIView):
         """Display the account deletion request form"""
         from django.shortcuts import render
         return render(request, 'accounts/delete_account_request.html', {
-            'app_name': 'Zthob',
+            'app_name': 'Mgask',
             'developer_name': 'Mgask'
         })
     
@@ -551,7 +551,7 @@ class PublicDeleteAccountRequestView(APIView):
         if not phone:
             return render(request, 'accounts/delete_account_request.html', {
                 'error': 'Phone number is required',
-                'app_name': 'Zthob',
+                'app_name': 'Mgask',
                 'developer_name': 'Mgask'
             }, status=400)
         
@@ -559,7 +559,7 @@ class PublicDeleteAccountRequestView(APIView):
             return render(request, 'accounts/delete_account_request.html', {
                 'error': 'OTP code is required',
                 'phone': phone,
-                'app_name': 'Zthob',
+                'app_name': 'Mgask',
                 'developer_name': 'Mgask'
             }, status=400)
         
@@ -567,7 +567,7 @@ class PublicDeleteAccountRequestView(APIView):
             return render(request, 'accounts/delete_account_request.html', {
                 'error': 'Please confirm that you want to delete your account',
                 'phone': phone,
-                'app_name': 'Zthob',
+                'app_name': 'Mgask',
                 'developer_name': 'Mgask'
             }, status=400)
         
@@ -577,7 +577,7 @@ class PublicDeleteAccountRequestView(APIView):
             return render(request, 'accounts/delete_account_request.html', {
                 'error': 'No account found with this phone number or email',
                 'phone': phone,
-                'app_name': 'Zthob',
+                'app_name': 'Mgask',
                 'developer_name': 'Mgask'
             }, status=404)
         
@@ -592,7 +592,7 @@ class PublicDeleteAccountRequestView(APIView):
             return render(request, 'accounts/delete_account_request.html', {
                 'error': message or 'Invalid or expired OTP code',
                 'phone': phone,
-                'app_name': 'Zthob',
+                'app_name': 'Mgask',
                 'developer_name': 'Mgask'
             }, status=400)
         
@@ -603,14 +603,14 @@ class PublicDeleteAccountRequestView(APIView):
             return render(request, 'accounts/delete_account_request.html', {
                 'success': True,
                 'message': 'Your account and all associated data have been permanently deleted.',
-                'app_name': 'Zthob',
+                'app_name': 'Mgask',
                 'developer_name': 'Mgask'
             })
         else:
             return render(request, 'accounts/delete_account_request.html', {
                 'error': result.get('message', 'Failed to delete account. Please contact support.'),
                 'phone': phone,
-                'app_name': 'Zthob',
+                'app_name': 'Mgask',
                 'developer_name': 'Mgask'
             }, status=500)
 
@@ -648,7 +648,7 @@ class PublicDeleteAccountSendOTPView(APIView):
         if not phone:
             return render(request, 'accounts/delete_account_request.html', {
                 'error': 'Phone number is required',
-                'app_name': 'Zthob',
+                'app_name': 'Mgask',
                 'developer_name': 'Mgask'
             }, status=400)
         
@@ -660,7 +660,7 @@ class PublicDeleteAccountSendOTPView(APIView):
             return render(request, 'accounts/delete_account_request.html', {
                 'error': 'No account found with this phone number',
                 'phone': phone,
-                'app_name': 'Zthob',
+                'app_name': 'Mgask',
                 'developer_name': 'Mgask'
             }, status=404)
         
@@ -676,14 +676,14 @@ class PublicDeleteAccountSendOTPView(APIView):
                     'success_otp': True,
                     'message': f'OTP sent to {phone}. Please check your phone and enter the code below.',
                     'phone': phone,
-                    'app_name': 'Zthob',
+                    'app_name': 'Mgask',
                     'developer_name': 'Mgask'
                 })
             else:
                 return render(request, 'accounts/delete_account_request.html', {
                     'error': f'Failed to send OTP: {sms_message}. Please try again or contact support.',
                     'phone': phone,
-                    'app_name': 'Zthob',
+                    'app_name': 'Mgask',
                     'developer_name': 'Mgask'
                 }, status=400)
         except Exception as e:
@@ -692,6 +692,6 @@ class PublicDeleteAccountSendOTPView(APIView):
             return render(request, 'accounts/delete_account_request.html', {
                 'error': 'Failed to send OTP. Please try again or contact support.',
                 'phone': phone,
-                'app_name': 'Zthob',
+                'app_name': 'Mgask',
                 'developer_name': 'Mgask'
             }, status=500)
