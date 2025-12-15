@@ -76,6 +76,7 @@ class Order(BaseModel):
     TAILOR_STATUS_CHOICES = (
         ("none", "None"),                          # No tailor activity
         ("accepted", "Accepted Order"),           # Tailor accepted the order
+        ("in_progress", "In Progress"),           # Tailor is working on the order
         ("stitching_started", "Started Stitching"), # Tailor started stitching (stitching only)
         ("stitched", "Finished Stitching"),       # Tailor finished stitching (stitching only)
     )
