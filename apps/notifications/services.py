@@ -404,6 +404,11 @@ class NotificationService:
                 'tailor': 'You have accepted order #{order_number}',
                 'rider': 'Order #{order_number} has been accepted by tailor and is ready for pickup',
             },
+            'in_progress': {
+                'customer': 'Tailor is working on your order #{order_number}',
+                'tailor': 'You have marked order #{order_number} as in progress',
+                'rider': 'Order #{order_number} is now in progress',
+            },
             'stitching_started': {
                 'customer': 'Tailor has started stitching your garment for order #{order_number}',
                 'tailor': 'You have started stitching order #{order_number}',

@@ -114,7 +114,7 @@ class TailorUpdateOrderStatusView(APIView):
         request=TailorUpdateOrderStatusSerializer,
         responses=OrderStatusUpdateResponseSerializer,
         summary="Update order status",
-        description="Tailor updates order tailor_status (stitching_started, stitched). Use /accept/ endpoint to accept orders.",
+        description="Tailor updates order tailor_status (accepted, in_progress, stitching_started, stitched). You can also use /accept/ endpoint to accept orders.",
         tags=["Tailor Orders"]
     )
     def patch(self, request, order_id):
@@ -137,16 +137,15 @@ class TailorUpdateOrderStatusView(APIView):
         
         serializer = TailorUpdateOrderStatusSerializer(data=request.data)
         if serializer.is_valid():
-            new_tailor_status = serializer.validated_data['tailor_status']
+            new_tailor_status = serializer.validated_data.get('tailor_status')
+            new_status = serializer.validated_data.get('status')
             notes = serializer.validated_data.get('notes', '')
             
-            # Don't allow accepting via this endpoint - use /accept/ instead
-            if new_tailor_status == 'accepted':
-                return api_response(
-                    success=False,
-                    message="Please use /api/tailors/orders/{order_id}/accept/ endpoint to accept orders",
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
+            # Special handling: if tailor_status is "ready_for_delivery", map it to main status
+            # This allows consistent use of tailor_status field
+            if new_tailor_status == 'ready_for_delivery':
+                new_status = 'ready_for_delivery'
+                new_tailor_status = None  # Don't update tailor_status
             
             # Store old tailor_status for notification
             old_tailor_status = order.tailor_status
@@ -156,6 +155,7 @@ class TailorUpdateOrderStatusView(APIView):
             
             success, error_msg, updated_order = OrderStatusTransitionService.transition(
                 order=order,
+                new_status=new_status,
                 new_tailor_status=new_tailor_status,
                 user_role='TAILOR',
                 user=request.user,
@@ -171,26 +171,36 @@ class TailorUpdateOrderStatusView(APIView):
             
             order = updated_order
             
-            # Send push notification for tailor_status change
-            try:
-                from apps.notifications.services import NotificationService
-                NotificationService.send_tailor_status_notification(
-                    order=order,
-                    old_tailor_status=old_tailor_status,
-                    new_tailor_status=new_tailor_status,
-                    changed_by=request.user
-                )
-            except Exception as e:
-                # Log error but don't fail the update
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Failed to send tailor status notification: {str(e)}")
+            # Send push notification for tailor_status change if it changed
+            if new_tailor_status and new_tailor_status != old_tailor_status:
+                try:
+                    from apps.notifications.services import NotificationService
+                    NotificationService.send_tailor_status_notification(
+                        order=order,
+                        old_tailor_status=old_tailor_status,
+                        new_tailor_status=new_tailor_status,
+                        changed_by=request.user
+                    )
+                except Exception as e:
+                    # Log error but don't fail the update
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Failed to send tailor status notification: {str(e)}")
             
             # Use lightweight response serializer for status updates
             response_serializer = OrderStatusUpdateResponseSerializer(order, context={'request': request})
+            
+            # Build success message
+            if new_tailor_status and new_status:
+                message = f"Order tailor status updated to {order.get_tailor_status_display()} and status updated to {order.get_status_display()}"
+            elif new_tailor_status:
+                message = f"Order tailor status updated to {order.get_tailor_status_display()}"
+            else:
+                message = f"Order status updated to {order.get_status_display()}"
+            
             return api_response(
                 success=True,
-                message=f"Order tailor status updated to {order.get_tailor_status_display()}",
+                message=message,
                 data=response_serializer.data,
                 status_code=status.HTTP_200_OK
             )

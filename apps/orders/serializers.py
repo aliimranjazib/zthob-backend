@@ -215,23 +215,46 @@ class OrderSerializer(serializers.ModelSerializer):
         # Build next available actions
         next_actions = []
         
+        # Track values to avoid duplicates (prefer more specific status types)
+        seen_values = set()
+        
         # Add status actions
         for status_value in allowed_transitions.get('status', []):
+            # Skip if already at this status
+            if status_value == obj.status:
+                continue
             action = self._build_status_action('status', status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(status_value)
         
-        # Add rider_status actions
+        # Add rider_status actions (prefer over status if same value)
         for rider_status_value in allowed_transitions.get('rider_status', []):
+            # Skip if already at this status
+            if rider_status_value == obj.rider_status:
+                continue
+            # If this value already exists as a status action, remove the status action and use this one
+            if rider_status_value in seen_values:
+                # Remove the duplicate status action
+                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == rider_status_value)]
             action = self._build_status_action('rider_status', rider_status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(rider_status_value)
         
-        # Add tailor_status actions
+        # Add tailor_status actions (prefer over status if same value)
         for tailor_status_value in allowed_transitions.get('tailor_status', []):
+            # Skip if already at this status
+            if tailor_status_value == obj.tailor_status:
+                continue
+            # If this value already exists as a status action, remove the status action and use this one
+            if tailor_status_value in seen_values:
+                # Remove the duplicate status action
+                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == tailor_status_value)]
             action = self._build_status_action('tailor_status', tailor_status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(tailor_status_value)
         
         # Check if order can be cancelled
         can_cancel = False
@@ -284,6 +307,7 @@ class OrderSerializer(serializers.ModelSerializer):
             },
             'tailor_status': {
                 'accepted': {'label': 'Accept Order', 'description': 'Accept this order'},
+                'in_progress': {'label': 'Mark In Progress', 'description': 'Mark order as in progress'},
                 'stitching_started': {'label': 'Start Stitching', 'description': 'Start stitching the garment'},
                 'stitched': {'label': 'Finish Stitching', 'description': 'Stitching completed'},
             }
@@ -815,23 +839,46 @@ class OrderListSerializer(serializers.ModelSerializer):
         # Build next available actions
         next_actions = []
         
+        # Track values to avoid duplicates (prefer more specific status types)
+        seen_values = set()
+        
         # Add status actions
         for status_value in allowed_transitions.get('status', []):
+            # Skip if already at this status
+            if status_value == obj.status:
+                continue
             action = OrderSerializer._build_status_action(self, 'status', status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(status_value)
         
-        # Add rider_status actions
+        # Add rider_status actions (prefer over status if same value)
         for rider_status_value in allowed_transitions.get('rider_status', []):
+            # Skip if already at this status
+            if rider_status_value == obj.rider_status:
+                continue
+            # If this value already exists as a status action, remove the status action and use this one
+            if rider_status_value in seen_values:
+                # Remove the duplicate status action
+                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == rider_status_value)]
             action = OrderSerializer._build_status_action(self, 'rider_status', rider_status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(rider_status_value)
         
-        # Add tailor_status actions
+        # Add tailor_status actions (prefer over status if same value)
         for tailor_status_value in allowed_transitions.get('tailor_status', []):
+            # Skip if already at this status
+            if tailor_status_value == obj.tailor_status:
+                continue
+            # If this value already exists as a status action, remove the status action and use this one
+            if tailor_status_value in seen_values:
+                # Remove the duplicate status action
+                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == tailor_status_value)]
             action = OrderSerializer._build_status_action(self, 'tailor_status', tailor_status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(tailor_status_value)
         
         # Check if order can be cancelled
         can_cancel = False
