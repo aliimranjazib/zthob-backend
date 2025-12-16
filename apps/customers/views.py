@@ -16,17 +16,32 @@ from apps.tailors.serializers import TailorProfileSerializer
 
 
 # Create your views here.
+@extend_schema(
+    tags=["Fabric Catalog"],
+    description="Get all active fabrics (No authentication required)",
+    responses={200: FabricCatalogSerializer(many=True)}
+)
 class FabricCatalogAPIView(APIView):
     serializer_class = FabricCatalogSerializer
     permission_classes = [AllowAny]  # Allow unauthenticated users to browse fabrics
     
-    def get(self,request):
-        fabrics=Fabric.objects.select_related('category','fabric_type','tailor'
-        ).prefetch_related('tags','gallery').all()
-        serializers=FabricCatalogSerializer(fabrics, many=True,context={"request": request})
-        return api_response(success=True, message="Fabrics fetched successfully",
-                            data=serializers.data,
-                            status_code=status.HTTP_200_OK)
+    def get(self, request):
+        """Get all active fabrics without authentication."""
+        fabrics = Fabric.objects.filter(
+            is_active=True
+        ).select_related(
+            'category', 'fabric_type', 'tailor'
+        ).prefetch_related(
+            'tags', 'gallery'
+        ).order_by('-created_at')
+        
+        serializer = FabricCatalogSerializer(fabrics, many=True, context={"request": request})
+        return api_response(
+            success=True, 
+            message="Fabrics fetched successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
  
  
 
@@ -283,12 +298,18 @@ class CustomerProfileAPIView(APIView):
                             )
          
          
+@extend_schema(
+    tags=["Tailor Profile"],
+    description="Get all tailors (No authentication required)",
+    responses={200: TailorProfileSerializer(many=True)}
+)
 class TailorListAPIView(APIView):
-
-    serializer_class=TailorProfileSerializer
+    serializer_class = TailorProfileSerializer
+    permission_classes = [AllowAny]  # Allow unauthenticated users to browse tailors
 
     @extend_schema(operation_id="customers_tailor_list")
     def get(self, request):
+        """Get all tailors without authentication."""
         # Fetch all tailor profiles with related data
         tailors = TailorProfile.objects.select_related('user').prefetch_related('review').all()
         
@@ -302,14 +323,20 @@ class TailorListAPIView(APIView):
             status_code=status.HTTP_200_OK
         )
 
+@extend_schema(
+    tags=["Fabric Catalog"],
+    description="Get all active fabrics for a specific tailor (No authentication required)",
+    responses={200: FabricCatalogSerializer(many=True), 404: {"description": "Tailor not found"}}
+)
 class TailorFabricsAPIView(APIView):
     """API view to fetch fabrics of a specific tailor for customers"""
     serializer_class = FabricCatalogSerializer
+    permission_classes = [AllowAny]  # Allow unauthenticated users to browse tailor fabrics
     
     @extend_schema(operation_id="customers_tailor_fabrics")
     def get(self, request, tailor_id):
         """
-        Fetch all fabrics of a specific tailor
+        Fetch all active fabrics of a specific tailor without authentication.
         URL: /api/customers/tailors/{tailor_id}/fabrics/
         """
         try:
@@ -348,6 +375,107 @@ class TailorFabricsAPIView(APIView):
             return api_response(
                 success=False,
                 message="Error fetching tailor fabrics",
+                data=None,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+@extend_schema(
+    tags=["Tailor Profile"],
+    description="Get a single tailor's profile details (No authentication required)",
+    responses={200: TailorProfileSerializer, 404: {"description": "Tailor not found"}}
+)
+class TailorDetailAPIView(APIView):
+    """API view to fetch a single tailor's profile details"""
+    serializer_class = TailorProfileSerializer
+    permission_classes = [AllowAny]  # Allow unauthenticated users to view tailor details
+    
+    @extend_schema(operation_id="customers_tailor_detail")
+    def get(self, request, tailor_id):
+        """
+        Get a single tailor's profile details without authentication.
+        URL: /api/customers/tailors/{tailor_id}/
+        """
+        try:
+            # Get the tailor profile
+            from apps.tailors.models import TailorProfile
+            tailor = TailorProfile.objects.select_related('user').prefetch_related('review').get(user__id=tailor_id)
+            
+            # Serialize the data
+            serializer = TailorProfileSerializer(tailor, context={'request': request})
+            
+            return api_response(
+                success=True, 
+                message="Tailor details fetched successfully",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+            
+        except TailorProfile.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Tailor not found",
+                data=None,
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return api_response(
+                success=False,
+                message="Error fetching tailor details",
+                data=None,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+@extend_schema(
+    tags=["Fabric Catalog"],
+    description="Get a single fabric's details (No authentication required)",
+    responses={200: FabricCatalogSerializer, 404: {"description": "Fabric not found"}}
+)
+class FabricDetailAPIView(APIView):
+    """API view to fetch a single fabric's details"""
+    serializer_class = FabricCatalogSerializer
+    permission_classes = [AllowAny]  # Allow unauthenticated users to view fabric details
+    
+    @extend_schema(operation_id="customers_fabric_detail")
+    def get(self, request, fabric_id):
+        """
+        Get a single fabric's details without authentication.
+        URL: /api/customers/fabrics/{fabric_id}/
+        """
+        try:
+            # Get the fabric - only show active fabrics
+            fabric = Fabric.objects.filter(
+                id=fabric_id,
+                is_active=True
+            ).select_related(
+                'category', 'fabric_type', 'tailor'
+            ).prefetch_related(
+                'tags', 'gallery'
+            ).first()
+            
+            if not fabric:
+                return api_response(
+                    success=False,
+                    message="Fabric not found or not available",
+                    data=None,
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Serialize the data
+            serializer = FabricCatalogSerializer(fabric, context={'request': request})
+            
+            return api_response(
+                success=True, 
+                message="Fabric details fetched successfully",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            return api_response(
+                success=False,
+                message="Error fetching fabric details",
                 data=None,
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
