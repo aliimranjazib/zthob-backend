@@ -563,13 +563,16 @@ class RiderAvailableOrdersView(APIView):
             )
         
         # Get orders that are paid, don't have a rider assigned, and tailor has confirmed
-        # Riders should only see orders after tailor has accepted them (status != 'pending')
+        # Riders should only see orders after tailor has accepted them
         # AND rider_status must be 'none' (not yet accepted by any rider)
         orders = Order.objects.filter(
             payment_status='paid',
             rider__isnull=True,
             rider_status='none',  # Only show orders not yet accepted by any rider
-            status__in=['confirmed', 'in_progress', 'ready_for_delivery']
+        ).filter(
+            # Show if main status is confirmed/in_progress OR if tailor has accepted it
+            Q(status__in=['confirmed', 'in_progress', 'ready_for_delivery']) | 
+            Q(tailor_status__in=['accepted', 'in_progress', 'stitching_started', 'stitched'])
         ).select_related(
             'customer',
             'tailor',
@@ -681,7 +684,7 @@ class RiderOrderDetailView(APIView):
         
         # Riders should not see orders that are still pending (not yet accepted by tailor)
         # Unless the rider is already assigned to it (shouldn't happen normally)
-        if order.status == 'pending' and order.rider != request.user:
+        if order.tailor_status == 'none' and order.rider != request.user:
             return api_response(
                 success=False,
                 message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
@@ -754,7 +757,7 @@ class RiderAcceptOrderView(APIView):
             )
         
         # Riders should not accept orders that are still pending (not yet accepted by tailor)
-        if order.status == 'pending':
+        if order.tailor_status == 'none':
             return api_response(
                 success=False,
                 message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
@@ -1016,7 +1019,7 @@ class RiderUpdateOrderStatusView(APIView):
                 )
             
             # Rider can only accept if tailor has already accepted
-            if order.tailor_status != 'accepted':
+            if order.tailor_status == 'none':
                 return api_response(
                     success=False,
                     message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",

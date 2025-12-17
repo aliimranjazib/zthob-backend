@@ -39,7 +39,7 @@ if ENVIRONMENT == 'production':
     DEBUG = False
 
 # ALLOWED_HOSTS configuration - ensure production IP is always included
-default_hosts = ['localhost', '127.0.0.1', '0.0.0.0', '69.62.126.95', 'mgask.net', 'www.mgask.net', 'app.mgask.net']
+default_hosts = ['localhost', '127.0.0.1', '0.0.0.0', '69.62.126.95', 'mgask.net', 'www.mgask.net', 'app.mgask.net', 'prod.mgask.net']
 env_hosts = os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',')
 # Filter out empty strings from split
 env_hosts = [h.strip() for h in env_hosts if h.strip()]
@@ -216,6 +216,7 @@ if ENVIRONMENT == 'production':
         'https://mgask.net',
         'https://www.mgask.net',
         'https://app.mgask.net',
+        'https://prod.mgask.net',
     ]
 
 # Logging Configuration
@@ -307,6 +308,7 @@ CORS_ALLOWED_ORIGINS=[
     "https://mgask.net",
     "https://www.mgask.net",
     "https://app.mgask.net",
+    "https://prod.mgask.net",
 ]
 
 CORS_ALLOW_CREDENTIALS=True
