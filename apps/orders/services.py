@@ -461,7 +461,11 @@ class OrderStatusTransitionService:
         # For fabric_only flow
         if order.order_type == 'fabric_only':
             if order.status == 'pending':
-                return  # Don't auto-change from pending
+                # Auto-confirm if tailor has accepted
+                if order.tailor_status != 'none':
+                    order.status = 'confirmed'
+                else:
+                    return
             elif order.status == 'confirmed' and order.rider_status in ['accepted', 'on_way_to_pickup', 'picked_up', 'on_way_to_delivery']:
                 order.status = 'in_progress'
             elif order.rider_status == 'picked_up' and order.status == 'in_progress':
@@ -470,7 +474,11 @@ class OrderStatusTransitionService:
         # For fabric_with_stitching flow
         else:  # fabric_with_stitching
             if order.status == 'pending':
-                return  # Don't auto-change from pending
+                # Auto-confirm if tailor has accepted
+                if order.tailor_status != 'none':
+                    order.status = 'confirmed'
+                else:
+                    return
             elif order.status == 'confirmed' and order.rider_status in ['accepted', 'on_way_to_measurement', 'measurement_taken']:
                 order.status = 'in_progress'
             elif order.tailor_status == 'stitched' and order.rider_status in ['on_way_to_pickup', 'picked_up', 'on_way_to_delivery']:
