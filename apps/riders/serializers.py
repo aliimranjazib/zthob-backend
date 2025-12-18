@@ -559,6 +559,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
     """Serializer for order details for riders"""
     customer_info = serializers.SerializerMethodField()
     order_recipient = serializers.SerializerMethodField()
+    all_recipients = serializers.SerializerMethodField()
     tailor_info = serializers.SerializerMethodField()
     delivery_address = serializers.SerializerMethodField()
     items = serializers.SerializerMethodField()
@@ -585,6 +586,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'delivery_fee',
             'customer_info',
             'order_recipient',
+            'all_recipients',
             'tailor_info',
             'delivery_address',
             'items',
@@ -611,39 +613,60 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             }
         return None
     
+    def get_all_recipients(self, obj):
+        """Get all recipients for this order as an array."""
+        return self._collect_recipients(obj)
+
     def get_order_recipient(self, obj):
-        """Get order recipient - either family member or customer. Include measurements when rider_status is 'measurement_taken'."""
-        # Check if measurements should be included (when rider_status is 'measurement_taken')
+        """Get primary order recipient (for backward compatibility)."""
+        recipients = self._collect_recipients(obj)
+        return recipients[0] if recipients else None
+
+    def _collect_recipients(self, obj):
+        """Helper to collect unique recipients from order items."""
         include_measurements = obj.rider_status == 'measurement_taken' and obj.rider_measurements
+        recipients = []
+        seen_recipients = set()
         
-        # If order is for a family member
+        # Add order-level family member if exists
         if obj.family_member:
-            recipient_data = {
+            recipients.append({
                 'type': 'family_member',
                 'id': obj.family_member.id,
                 'name': obj.family_member.name,
-                'relationship': obj.family_member.relationship,
-                'gender': obj.family_member.gender,
-            }
-            # Include measurements if rider_status is 'measurement_taken'
-            if include_measurements:
-                recipient_data['measurements'] = obj.rider_measurements
-            return recipient_data
-        # If order is for the customer themselves
-        elif obj.customer:
-            recipient_data = {
-                'type': 'customer',
-                'id': obj.customer.id,
-                'name': obj.customer.get_full_name() or obj.customer.username,
-                'phone': obj.customer.phone,
-                'email': obj.customer.email,
-            }
-            # Include measurements if rider_status is 'measurement_taken'
-            if include_measurements:
-                recipient_data['measurements'] = obj.rider_measurements
-            return recipient_data
-        return None
-    
+            })
+            seen_recipients.add(f"family_{obj.family_member.id}")
+        
+        # Add recipients from items
+        for item in obj.order_items.all():
+            if item.family_member:
+                key = f"family_{item.family_member.id}"
+                if key not in seen_recipients:
+                    recipients.append({
+                        'type': 'family_member',
+                        'id': item.family_member.id,
+                        'name': item.family_member.name,
+                    })
+                    seen_recipients.add(key)
+            else:
+                key = "customer"
+                if key not in seen_recipients:
+                    if obj.customer:
+                        recipients.append({
+                            'type': 'customer',
+                            'id': obj.customer.id,
+                            'name': obj.customer.get_full_name() or obj.customer.username,
+                            'phone': obj.customer.phone,
+                            'email': obj.customer.email,
+                        })
+                        seen_recipients.add(key)
+
+        if include_measurements:
+            for recipient in recipients:
+                recipient['measurements'] = obj.rider_measurements
+        
+        return recipients
+
     def get_tailor_info(self, obj):
         """Return tailor info with structured address from Address model."""
         if obj.tailor:
@@ -721,8 +744,22 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
                 'quantity': item.quantity,
                 'unit_price': str(item.unit_price),
                 'total_price': str(item.total_price),
+                'family_member': item.family_member.id if item.family_member else None,
+                'family_member_name': self._get_item_recipient_name(item),
             })
         return items
+
+    def _get_item_recipient_name(self, item):
+        if item.family_member:
+            return item.family_member.name
+        
+        # If no family member, return customer name with (Self) tag
+        try:
+            customer = item.order.customer
+            name = customer.get_full_name() or customer.username
+            return f"{name} (Self)"
+        except:
+            return "Customer (Self)"
     
     def get_assignment_status(self, obj):
         try:
@@ -853,6 +890,7 @@ class RiderAcceptOrderSerializer(serializers.Serializer):
 
 class RiderAddMeasurementsSerializer(serializers.Serializer):
     """Serializer for rider adding measurements"""
+    family_member = serializers.IntegerField(required=False, allow_null=True, help_text="ID of family member being measured. Null means customer.")
     measurements = serializers.JSONField(required=True)
     notes = serializers.CharField(required=False, allow_blank=True)
     

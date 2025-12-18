@@ -669,20 +669,34 @@ class CustomerMeasurementsListView(APIView):
         if family_member_id:
             orders_query = orders_query.filter(family_member_id=family_member_id)
         
-        orders = orders_query.order_by('-measurement_taken_at', '-created_at')
+        orders = orders_query.order_by('-measurement_taken_at', '-created_at').prefetch_related('order_items__family_member')
         
         # Separate customer and family member measurements
         customer_measurements = []
         family_member_measurements = []
         family_members_data = {}  # Track family members for summary
         
+        processed_recipients_per_order = set() # Track (order_id, recipient_id) to avoid duplicates if multiple items for same person
+
         for order in orders:
-            if order.rider_measurements:
+            # Check order items for recipients and measurements
+            for item in order.order_items.all():
+                # Skip if no measurements for this item
+                if not item.measurements and not order.rider_measurements:
+                    continue
+                
+                recipient_id = item.family_member.id if item.family_member else request.user.id
+                recipient_type_val = 'family_member' if item.family_member else 'customer'
+                
+                key = (order.id, recipient_id)
+                if key in processed_recipients_per_order:
+                    continue
+                
                 measurement_data = {
                     'order_id': order.id,
                     'order_number': order.order_number,
                     'order_type': order.order_type,
-                    'measurements': order.rider_measurements,
+                    'measurements': item.measurements or order.rider_measurements,
                     'measurement_taken_at': order.measurement_taken_at.isoformat() if order.measurement_taken_at else None,
                     'order_status': order.status,
                     'rider_status': order.rider_status,
@@ -697,35 +711,36 @@ class CustomerMeasurementsListView(APIView):
                         measurement_data['tailor_name'] = order.tailor.username if order.tailor else None
                 except:
                     measurement_data['tailor_name'] = None
-                
-                if order.family_member:
-                    # Family member order
+
+                if item.family_member:
+                    # Family member recipient
                     if not recipient_type or recipient_type == 'family_member':
-                        if not family_member_id or order.family_member.id == int(family_member_id):
+                        if not family_member_id or item.family_member.id == int(family_member_id):
                             measurement_data.update({
                                 'recipient_type': 'family_member',
-                                'recipient_id': order.family_member.id,
-                                'recipient_name': order.family_member.name,
-                                'recipient_relationship': order.family_member.relationship,
-                                'recipient_gender': order.family_member.gender,
+                                'recipient_id': item.family_member.id,
+                                'recipient_name': item.family_member.name,
+                                'recipient_relationship': item.family_member.relationship,
+                                'recipient_gender': item.family_member.gender,
                             })
                             family_member_measurements.append(measurement_data)
                             
                             # Track for summary
-                            if order.family_member.id not in family_members_data:
-                                family_members_data[order.family_member.id] = {
-                                    'family_member_id': order.family_member.id,
-                                    'family_member_name': order.family_member.name,
-                                    'relationship': order.family_member.relationship,
+                            fm_id = item.family_member.id
+                            if fm_id not in family_members_data:
+                                family_members_data[fm_id] = {
+                                    'family_member_id': fm_id,
+                                    'family_member_name': item.family_member.name,
+                                    'relationship': item.family_member.relationship,
                                     'total_measurements': 0,
                                     'latest_measurement_date': None,
                                 }
-                            family_members_data[order.family_member.id]['total_measurements'] += 1
-                            if not family_members_data[order.family_member.id]['latest_measurement_date'] or \
-                               order.measurement_taken_at > family_members_data[order.family_member.id]['latest_measurement_date']:
-                                family_members_data[order.family_member.id]['latest_measurement_date'] = order.measurement_taken_at
+                            family_members_data[fm_id]['total_measurements'] += 1
+                            if not family_members_data[fm_id]['latest_measurement_date'] or \
+                               (order.measurement_taken_at and order.measurement_taken_at > family_members_data[fm_id]['latest_measurement_date']):
+                                family_members_data[fm_id]['latest_measurement_date'] = order.measurement_taken_at
                 else:
-                    # Customer's own order
+                    # Customer's own recipient
                     if not recipient_type or recipient_type == 'customer':
                         measurement_data.update({
                             'recipient_type': 'customer',
@@ -733,10 +748,27 @@ class CustomerMeasurementsListView(APIView):
                             'recipient_name': request.user.get_full_name() or request.user.username,
                         })
                         customer_measurements.append(measurement_data)
+                
+                processed_recipients_per_order.add(key)
         
         # Get stored profile measurements
         stored_profile_measurements = []
         if include_stored:
+            # Customer's own stored measurements
+            try:
+                if hasattr(request.user, 'customer_profile') and request.user.customer_profile.measurements:
+                    stored_profile_measurements.append({
+                        'recipient_type': 'customer',
+                        'recipient_id': request.user.id,
+                        'recipient_name': request.user.get_full_name() or request.user.username,
+                        'measurements': request.user.customer_profile.measurements,
+                        'last_updated': None,
+                        'note': 'Stored customer profile measurements'
+                    })
+            except:
+                pass
+
+            # Family members' stored measurements
             family_members = FamilyMember.objects.filter(user=request.user)
             if family_member_id:
                 family_members = family_members.filter(id=family_member_id)
@@ -850,27 +882,38 @@ class FamilyMemberMeasurementsView(APIView):
             )
         
         # Get all orders with measurements for this family member
+        # Search in both order-level family_member and item-level family_member
+        from django.db.models import Q
         orders = Order.objects.filter(
+            Q(family_member=family_member) | Q(order_items__family_member=family_member),
             customer=request.user,
-            family_member=family_member,
-            rider_status='measurement_taken',
-            rider_measurements__isnull=False
+            rider_status='measurement_taken'
         ).select_related(
             'customer',
             'family_member',
             'tailor',
             'rider'
-        ).prefetch_related('tailor__tailor_profile').order_by('-measurement_taken_at', '-created_at')
+        ).prefetch_related('tailor__tailor_profile', 'order_items__family_member').distinct().order_by('-measurement_taken_at', '-created_at')
         
         # Build order measurements list
         order_measurements = []
         for order in orders:
-            if order.rider_measurements:
+            # Look for measurements in items for this family member
+            item_measurements = None
+            for item in order.order_items.all():
+                if item.family_member == family_member and item.measurements:
+                    item_measurements = item.measurements
+                    break
+            
+            # Fallback to order-level measurements
+            measurements = item_measurements or order.rider_measurements
+            
+            if measurements:
                 measurement_data = {
                     'order_id': order.id,
                     'order_number': order.order_number,
                     'order_type': order.order_type,
-                    'measurements': order.rider_measurements,
+                    'measurements': measurements,
                     'measurement_taken_at': order.measurement_taken_at.isoformat() if order.measurement_taken_at else None,
                     'order_status': order.status,
                     'rider_status': order.rider_status,
