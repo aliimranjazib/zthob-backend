@@ -267,8 +267,11 @@ class OrderStatusTransitionService:
                 # Allow tailor to mark as in_progress if already accepted
                 if order.tailor_status == 'accepted':
                     transitions['tailor_status'] = ['in_progress']
-                # Allow tailor to start stitching if measurements are taken (skip accept step)
-                if order.rider_status == 'measurement_taken':
+                
+                # Handle stitching workflow - Check tailor status before rider status
+                if order.tailor_status == 'stitching_started':
+                    transitions['tailor_status'] = ['stitched']
+                elif order.rider_status == 'measurement_taken':
                     # If measurements are taken, tailor can directly start stitching (accept is implied)
                     transitions['tailor_status'] = ['stitching_started']
             elif order.status == 'in_progress':
@@ -278,18 +281,19 @@ class OrderStatusTransitionService:
                 # Allow tailor to mark as in_progress if accepted
                 if order.tailor_status == 'accepted':
                     transitions['tailor_status'] = ['in_progress']
-                # Handle stitching workflow
-                if order.rider_status == 'measurement_taken':
+                
+                # Handle stitching workflow - Restructured for correct priority
+                if order.tailor_status == 'stitching_started':
+                    transitions['tailor_status'] = ['stitched']
+                elif order.tailor_status == 'stitched':
+                    transitions['status'] = ['ready_for_delivery']
+                elif order.rider_status == 'measurement_taken':
                     # If measurements are taken, tailor can directly start stitching (accept is implied)
                     transitions['tailor_status'] = ['stitching_started']
                 elif order.tailor_status == 'in_progress':
                     # From in_progress, can start stitching if measurements are taken
                     if order.rider_status == 'measurement_taken':
                         transitions['tailor_status'] = ['stitching_started']
-                elif order.tailor_status == 'stitching_started':
-                    transitions['tailor_status'] = ['stitched']
-                elif order.tailor_status == 'stitched':
-                    transitions['status'] = ['ready_for_delivery']
             elif order.status == 'ready_for_delivery':
                 # Tailor can't change status once ready for delivery
                 pass
