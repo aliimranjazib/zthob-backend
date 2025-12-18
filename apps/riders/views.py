@@ -882,21 +882,37 @@ class RiderAddMeasurementsView(APIView):
         serializer = RiderAddMeasurementsSerializer(data=request.data)
         if serializer.is_valid():
             measurements_data = serializer.validated_data['measurements']
+            family_member_id = serializer.validated_data.get('family_member')
             
-            # Add measurements to order
+            # Add measurements to order level (deprecated but kept for compatibility)
             order.rider_measurements = measurements_data
             order.measurement_taken_at = timezone.now()
             
-            # If order is for a family member, also save measurements to family member profile
+            # Identify the recipient and update profiles/items
             recipient_name = None
-            if order.family_member:
-                order.family_member.measurements = measurements_data
-                order.family_member.save()
-                recipient_name = order.family_member.name
+            if family_member_id:
+                from apps.customers.models import FamilyMember
+                family_member = get_object_or_404(FamilyMember, id=family_member_id, user=order.customer)
+                family_member.measurements = measurements_data
+                family_member.save()
+                recipient_name = family_member.name
+                
+                # Update all items for this family member in this order
+                order.order_items.filter(family_member=family_member).update(measurements=measurements_data)
             else:
+                # Update customer profile measurements
+                from apps.customers.models import CustomerProfile
+                profile, created = CustomerProfile.objects.get_or_create(user=order.customer)
+                profile.measurements = measurements_data
+                profile.save()
+                
+                # Update all items for the customer in this order
+                order.order_items.filter(family_member__isnull=True).update(measurements=measurements_data)
                 recipient_name = order.customer.get_full_name() or order.customer.username if order.customer else 'Customer'
             
             # Use transition service to update rider status to 'measurement_taken'
+            # Note: For multi-recipient orders, we might want to wait until ALL are measured
+            # but for now, we'll mark as measurement_taken if at least one is measured
             from apps.orders.services import OrderStatusTransitionService
             
             notes_text = f"Measurements taken by rider for {recipient_name}. {serializer.validated_data.get('notes', '')}"

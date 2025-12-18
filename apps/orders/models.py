@@ -311,7 +311,15 @@ class Order(BaseModel):
         if self.family_member and self.family_member.name:
             recipient = self.family_member.name
         else:
-            recipient = self.customer.username if self.customer else 'Unknown'
+            # Check items for recipients
+            item_recipients = self.order_items.filter(family_member__isnull=False).values_list('family_member__name', flat=True).distinct()
+            if item_recipients.exists():
+                recipient = f"Family ({', '.join(item_recipients)})"
+                # If customer is also a recipient
+                if self.order_items.filter(family_member__isnull=True).exists():
+                    recipient = f"{self.customer.username} & {recipient}"
+            else:
+                recipient = self.customer.username if self.customer else 'Unknown'
         
         # Get customer username
         customer_name = self.customer.username if self.customer else 'Unknown'
@@ -416,6 +424,14 @@ class OrderItem(BaseModel):
     is_ready=models.BooleanField(
     default=False,
     help_text="Whether this item is ready for delivery"
+    )
+
+    family_member=models.ForeignKey(
+    'customers.FamilyMember',
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True,
+    help_text="Family member this item is for (optional - if not specified, item is for the customer)"
     )
 
     class Meta:

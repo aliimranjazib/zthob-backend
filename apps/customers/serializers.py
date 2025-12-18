@@ -150,7 +150,7 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
     
     class Meta:
         model=FamilyMember
-        fields = ['id', 'name', 'gender', 'relationship', 'measurements', 'address', 'address_response']
+        fields = ['id', 'name', 'measurements', 'address', 'address_response']
         read_only_fields = ['user']
         
     def to_representation(self, instance):
@@ -233,7 +233,7 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
     dob = serializers.DateField(source='date_of_birth', required=False, allow_null=True)
     class Meta:
         model=CustomerProfile
-        fields = ['user', 'default_address','addresses','phone_verified', 'dob', 'gender']
+        fields = ['user', 'default_address','addresses','phone_verified', 'dob', 'gender', 'measurements']
 
     def get_phone_verified(self, obj):
         """Get phone verification status from user"""
@@ -293,8 +293,6 @@ class FamilyMemberMeasurementSerializer(serializers.Serializer):
     recipient_type = serializers.CharField()
     recipient_id = serializers.IntegerField()
     recipient_name = serializers.CharField()
-    recipient_relationship = serializers.CharField(required=False, allow_null=True)
-    recipient_gender = serializers.CharField(required=False, allow_null=True)
     measurements = serializers.DictField()
     measurement_taken_at = serializers.DateTimeField()
     order_status = serializers.CharField()
@@ -306,7 +304,6 @@ class FamilyMemberSummarySerializer(serializers.Serializer):
     """Serializer for family member summary in list view"""
     family_member_id = serializers.IntegerField()
     family_member_name = serializers.CharField()
-    relationship = serializers.CharField(required=False, allow_null=True)
     total_measurements = serializers.IntegerField()
     latest_measurement_date = serializers.DateTimeField(required=False, allow_null=True)
     has_stored_measurements = serializers.BooleanField()
@@ -317,8 +314,6 @@ class StoredProfileMeasurementSerializer(serializers.Serializer):
     recipient_type = serializers.CharField()
     recipient_id = serializers.IntegerField()
     recipient_name = serializers.CharField()
-    recipient_relationship = serializers.CharField(required=False, allow_null=True)
-    recipient_gender = serializers.CharField(required=False, allow_null=True)
     measurements = serializers.DictField()
     last_updated = serializers.DateTimeField(required=False, allow_null=True)
     note = serializers.CharField()

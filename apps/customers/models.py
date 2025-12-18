@@ -49,6 +49,7 @@ class CustomerProfile(models.Model):
                                 related_name='customer_profile')
     gender=models.CharField(max_length=10, blank=True,null=True)
     date_of_birth=models.DateField(blank=True,null=True)
+    measurements = models.JSONField(blank=True, null=True)
     default_address=models.ForeignKey(Address, on_delete=models.SET_NULL,
                                     null=True,
                                     blank=True,
