@@ -532,6 +532,23 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
         # Calculate status progress
         status_progress = self._calculate_status_progress(obj)
         
+        # Add measurement tracking for fabric_with_stitching orders
+        measurement_status = None
+        if obj.order_type == 'fabric_with_stitching' and obj.rider_status in ['on_way_to_measurement', 'measurement_taken']:
+            from django.db.models import Q
+            total_items = obj.order_items.count()
+            items_with_measurements = obj.order_items.exclude(
+                Q(measurements__isnull=True) | Q(measurements={})
+            ).count()
+            items_without_measurements = total_items - items_with_measurements
+            
+            measurement_status = {
+                'all_measured': obj.all_items_have_measurements,
+                'total_items': total_items,
+                'measured_items': items_with_measurements,
+                'remaining_items': items_without_measurements,
+            }
+        
         return {
             'current_status': obj.status,
             'current_rider_status': obj.rider_status,
@@ -540,6 +557,7 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'can_cancel': can_cancel,
             'cancel_reason': cancel_reason,
             'status_progress': status_progress,
+            'measurement_status': measurement_status,
         }
     
     def _build_status_action(self, action_type, value, user_role):
@@ -849,6 +867,23 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
         # Calculate status progress
         status_progress = self._calculate_status_progress(obj)
         
+        # Add measurement tracking for fabric_with_stitching orders
+        measurement_status = None
+        if obj.order_type == 'fabric_with_stitching' and obj.rider_status in ['on_way_to_measurement', 'measurement_taken']:
+            from django.db.models import Q
+            total_items = obj.order_items.count()
+            items_with_measurements = obj.order_items.exclude(
+                Q(measurements__isnull=True) | Q(measurements={})
+            ).count()
+            items_without_measurements = total_items - items_with_measurements
+            
+            measurement_status = {
+                'all_measured': obj.all_items_have_measurements,
+                'total_items': total_items,
+                'measured_items': items_with_measurements,
+                'remaining_items': items_without_measurements,
+            }
+        
         return {
             'current_status': obj.status,
             'current_rider_status': obj.rider_status,
@@ -857,6 +892,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'can_cancel': can_cancel,
             'cancel_reason': cancel_reason,
             'status_progress': status_progress,
+            'measurement_status': measurement_status,
         }
     
     def _build_status_action(self, action_type, value, user_role):
