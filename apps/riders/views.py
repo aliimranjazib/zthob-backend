@@ -910,63 +910,91 @@ class RiderAddMeasurementsView(APIView):
                 order.order_items.filter(family_member__isnull=True).update(measurements=measurements_data)
                 recipient_name = order.customer.get_full_name() or order.customer.username if order.customer else 'Customer'
             
-            # Use transition service to update rider status to 'measurement_taken'
-            # Note: For multi-recipient orders, we might want to wait until ALL are measured
-            # but for now, we'll mark as measurement_taken if at least one is measured
+            # Save order first to persist measurements
+            order.save()
+            
+            # Check if all items now have measurements
+            all_measured = order.all_items_have_measurements
             from apps.orders.services import OrderStatusTransitionService
             
             notes_text = f"Measurements taken by rider for {recipient_name}. {serializer.validated_data.get('notes', '')}"
             
-            success, error_msg, updated_order = OrderStatusTransitionService.transition(
-                order=order,
-                new_rider_status='measurement_taken',
-                user_role='RIDER',
-                user=request.user,
-                notes=notes_text
-            )
-            
-            if not success:
-                return api_response(
-                    success=False,
-                    message=error_msg,
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
-            
-            order = updated_order
-            
-            # Update assignment status
-            try:
-                assignment = order.rider_assignment
-                assignment.status = 'in_progress'
-                assignment.started_at = timezone.now()
-                if serializer.validated_data.get('notes'):
-                    assignment.notes = serializer.validated_data['notes']
-                assignment.save()
-            except RiderOrderAssignment.DoesNotExist:
-                pass
-            
-            order.save()
-            
-            # Send notification that measurements are taken
-            try:
-                from apps.notifications.services import NotificationService
-                NotificationService.send_measurement_taken_notification(
+            if all_measured:
+                # All items have measurements - can transition to measurement_taken
+                success, error_msg, updated_order = OrderStatusTransitionService.transition(
                     order=order,
-                    rider=request.user
+                    new_rider_status='measurement_taken',
+                    user_role='RIDER',
+                    user=request.user,
+                    notes=notes_text
                 )
-            except Exception as e:
-                # Log error but don't fail the measurement addition
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Failed to send measurement taken notification: {str(e)}")
-            
-            response_serializer = RiderOrderDetailSerializer(order, context={'request': request})
-            return api_response(
-                success=True,
-                message=f"Measurements added successfully for {recipient_name}. Tailor can now proceed with cutting.",
-                data=response_serializer.data,
-                status_code=status.HTTP_200_OK
-            )
+                
+                if not success:
+                    return api_response(
+                        success=False,
+                        message=error_msg,
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                order = updated_order
+                
+                # Update assignment status
+                try:
+                    assignment = order.rider_assignment
+                    assignment.status = 'in_progress'
+                    assignment.started_at = timezone.now()
+                    if serializer.validated_data.get('notes'):
+                        assignment.notes = serializer.validated_data['notes']
+                    assignment.save()
+                except RiderOrderAssignment.DoesNotExist:
+                    pass
+                
+                # Send notification that all measurements are taken
+                try:
+                    from apps.notifications.services import NotificationService
+                    NotificationService.send_measurement_taken_notification(
+                        order=order,
+                        rider=request.user
+                    )
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Failed to send measurement taken notification: {str(e)}")
+                
+                response_serializer = RiderOrderDetailSerializer(order, context={'request': request})
+                return api_response(
+                    success=True,
+                    message=f"All measurements completed for {recipient_name}. Tailor can now proceed.",
+                    data=response_serializer.data,
+                    status_code=status.HTTP_200_OK
+                )
+            else:
+                # Not all items measured yet - save measurements but don't change status
+                # Count how many items still need measurements
+                from django.db.models import Q
+                items_without_measurements = order.order_items.filter(
+                    Q(measurements__isnull=True) | Q(measurements={})
+                ).count()
+                
+                # Update assignment status to in_progress if not already
+                try:
+                    assignment = order.rider_assignment
+                    if assignment.status != 'in_progress':
+                        assignment.status = 'in_progress'
+                        assignment.started_at = timezone.now()
+                    if serializer.validated_data.get('notes'):
+                        assignment.notes = serializer.validated_data['notes']
+                    assignment.save()
+                except RiderOrderAssignment.DoesNotExist:
+                    pass
+                
+                response_serializer = RiderOrderDetailSerializer(order, context={'request': request})
+                return api_response(
+                    success=True,
+                    message=f"Measurements saved for {recipient_name}. {items_without_measurements} item(s) still need measurements.",
+                    data=response_serializer.data,
+                    status_code=status.HTTP_200_OK
+                )
         
         return api_response(
             success=False,
@@ -1072,6 +1100,18 @@ class RiderUpdateOrderStatusView(APIView):
             
             order = updated_order
             
+            # If all items already have measurements (customer provided them), automatically transition to measurement_taken
+            if order.order_type == 'fabric_with_stitching' and order.all_items_have_measurements:
+                success, error_msg, updated_order = OrderStatusTransitionService.transition(
+                    order=order,
+                    new_rider_status='measurement_taken',
+                    user_role='RIDER',
+                    user=request.user,
+                    notes='Measurements already provided by customer - automatically confirmed'
+                )
+                if success:
+                    order = updated_order
+            
             # Use lightweight response serializer for status updates
             from apps.orders.serializers import OrderStatusUpdateResponseSerializer
             response_serializer = OrderStatusUpdateResponseSerializer(order, context={'request': request})
@@ -1093,6 +1133,14 @@ class RiderUpdateOrderStatusView(APIView):
         # Security check: For fabric_with_stitching orders, prevent setting measurement_taken
         # without actually adding measurements via the /measurements/ endpoint
         if new_rider_status == 'measurement_taken' and order.order_type == 'fabric_with_stitching':
+            # Check if all items have measurements
+            if not order.all_items_have_measurements:
+                return api_response(
+                    success=False,
+                    message="Cannot mark measurements as complete. Some items still need measurements.",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            # Also check legacy fields for backward compatibility
             if not order.rider_measurements or not order.measurement_taken_at:
                 return api_response(
                     success=False,

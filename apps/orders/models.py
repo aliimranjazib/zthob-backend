@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from django.conf import settings
 from apps.core.models import BaseModel
 from decimal import Decimal
@@ -335,6 +336,19 @@ class Order(BaseModel):
     def can_be_cancelled(self):
         """Check if order can still be cancelled"""
         return self.status in ['pending','confirmed']
+    
+    @property
+    def all_items_have_measurements(self):
+        """Check if all order items have measurements (for fabric_with_stitching orders)"""
+        if self.order_type != 'fabric_with_stitching':
+            return True  # Not applicable for fabric_only orders
+        
+        # Check if any items are missing measurements
+        items_without_measurements = self.order_items.filter(
+            Q(measurements__isnull=True) | Q(measurements={})
+        )
+        
+        return items_without_measurements.count() == 0
     
     def get_allowed_status_transitions(self, user_role=None):
         """

@@ -250,8 +250,11 @@ class OrderStatusTransitionService:
                 # If stitching has started, allow finishing stitching
                 elif order.tailor_status == 'stitching_started':
                     transitions['tailor_status'] = ['stitched']
-                # If measurements are already taken, tailor can start stitching directly
-                elif order.rider_status == 'measurement_taken' and order.tailor_status == 'accepted':
+                # If measurements are already taken and complete, tailor can start stitching directly
+                elif (order.order_type == 'fabric_with_stitching' and 
+                      order.rider_status == 'measurement_taken' and 
+                      order.all_items_have_measurements and 
+                      order.tailor_status == 'accepted'):
                     transitions['tailor_status'] = ['stitching_started']
                 else:
                     # Otherwise, allow status change to confirmed and tailor acceptance
@@ -264,36 +267,52 @@ class OrderStatusTransitionService:
                 if order.tailor_status == 'none' and order.rider_status != 'measurement_taken':
                     transitions['tailor_status'] = ['accepted']
                 transitions['status'] = ['in_progress']
-                # Allow tailor to mark as in_progress if already accepted
-                if order.tailor_status == 'accepted':
-                    transitions['tailor_status'] = ['in_progress']
                 
-                # Handle stitching workflow - Check tailor status before rider status
-                if order.tailor_status == 'stitching_started':
-                    transitions['tailor_status'] = ['stitched']
-                elif order.rider_status == 'measurement_taken':
-                    # If measurements are taken, tailor can directly start stitching (accept is implied)
-                    transitions['tailor_status'] = ['stitching_started']
+                # For fabric_with_stitching, only allow progression if measurements are complete
+                if order.order_type == 'fabric_with_stitching':
+                    # Check if measurements are complete
+                    measurements_complete = (order.rider_status == 'measurement_taken' and 
+                                           order.all_items_have_measurements)
+                    
+                    if measurements_complete:
+                        # Measurements complete - allow progression
+                        if order.tailor_status == 'accepted':
+                            transitions['tailor_status'] = ['in_progress', 'stitching_started']
+                        elif order.tailor_status == 'stitching_started':
+                            transitions['tailor_status'] = ['stitched']
+                    # If measurements not complete, don't allow any progression
+                else:
+                    # fabric_only doesn't need measurements - allow normal progression
+                    if order.tailor_status == 'accepted':
+                        transitions['tailor_status'] = ['in_progress']
             elif order.status == 'in_progress':
                 # Allow tailor to accept if not yet accepted and measurements not taken yet
                 if order.tailor_status == 'none' and order.rider_status != 'measurement_taken':
                     transitions['tailor_status'] = ['accepted']
-                # Allow tailor to mark as in_progress if accepted
-                if order.tailor_status == 'accepted':
-                    transitions['tailor_status'] = ['in_progress']
                 
-                # Handle stitching workflow - Restructured for correct priority
-                if order.tailor_status == 'stitching_started':
-                    transitions['tailor_status'] = ['stitched']
-                elif order.tailor_status == 'stitched':
-                    transitions['status'] = ['ready_for_delivery']
-                elif order.rider_status == 'measurement_taken':
-                    # If measurements are taken, tailor can directly start stitching (accept is implied)
-                    transitions['tailor_status'] = ['stitching_started']
-                elif order.tailor_status == 'in_progress':
-                    # From in_progress, can start stitching if measurements are taken
-                    if order.rider_status == 'measurement_taken':
-                        transitions['tailor_status'] = ['stitching_started']
+                # For fabric_with_stitching, only allow progression if measurements are complete
+                if order.order_type == 'fabric_with_stitching':
+                    # Check if measurements are complete
+                    measurements_complete = (order.rider_status == 'measurement_taken' and 
+                                           order.all_items_have_measurements)
+                    
+                    if measurements_complete:
+                        # Measurements complete - allow progression
+                        if order.tailor_status == 'accepted':
+                            transitions['tailor_status'] = ['in_progress', 'stitching_started']
+                        elif order.tailor_status == 'in_progress':
+                            transitions['tailor_status'] = ['stitching_started']
+                        elif order.tailor_status == 'stitching_started':
+                            transitions['tailor_status'] = ['stitched']
+                        elif order.tailor_status == 'stitched':
+                            transitions['status'] = ['ready_for_delivery']
+                    # If measurements not complete, don't allow any progression
+                else:
+                    # fabric_only doesn't need measurements - allow normal progression
+                    if order.tailor_status == 'accepted':
+                        transitions['tailor_status'] = ['in_progress']
+                    elif order.tailor_status == 'stitched':
+                        transitions['status'] = ['ready_for_delivery']
             elif order.status == 'ready_for_delivery':
                 # Tailor can't change status once ready for delivery
                 pass
@@ -302,12 +321,22 @@ class OrderStatusTransitionService:
             if order.rider_status == 'none' and order.tailor_status == 'accepted':
                 transitions['rider_status'] = ['accepted']
             elif order.rider_status == 'accepted':
-                transitions['rider_status'] = ['on_way_to_measurement']
+                # Check if all items already have measurements (customer provided them during order creation)
+                if order.all_items_have_measurements:
+                    # Measurements already provided - skip measurement step
+                    transitions['rider_status'] = ['measurement_taken']
+                else:
+                    # Need to take measurements - rider must go to customer location
+                    transitions['rider_status'] = ['on_way_to_measurement']
             elif order.rider_status == 'on_way_to_measurement':
-                transitions['rider_status'] = ['measurement_taken']
+                # Only allow measurement_taken if all items have measurements
+                if order.all_items_have_measurements:
+                    transitions['rider_status'] = ['measurement_taken']
+                # If not all items measured, don't allow transition (rider must continue taking measurements)
             elif order.rider_status == 'measurement_taken':
                 # Wait for tailor to stitch - rider can't proceed until tailor finishes
-                if order.tailor_status == 'stitched':
+                # Also ensure all items have measurements before allowing pickup
+                if order.tailor_status == 'stitched' and order.all_items_have_measurements:
                     transitions['rider_status'] = ['on_way_to_pickup']
             elif order.rider_status == 'on_way_to_pickup':
                 transitions['rider_status'] = ['picked_up']
