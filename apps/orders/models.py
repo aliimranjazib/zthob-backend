@@ -69,6 +69,7 @@ class Order(BaseModel):
         ("picked_up", "Picked Up"),               # Rider picked up order from tailor
         ("on_way_to_delivery", "On Way to Delivery"), # Rider en route to customer
         ("on_way_to_measurement", "On Way to Measurement"), # Rider en route to take measurements (stitching only)
+        ("measuring", "Measuring"), # Rider is taking measurements
         ("measurement_taken", "Measurement Taken"), # Rider took measurements (stitching only)
         ("delivered", "Delivered"),                # Rider delivered to customer
     )
@@ -201,6 +202,46 @@ class Order(BaseModel):
     related_name='delivery_orders',
     help_text="Delivery address for this order"
     )
+
+    delivery_latitude=models.DecimalField(
+    max_digits=9,
+    decimal_places=6,
+    null=True,
+    blank=True,
+    help_text="Delivery latitude"
+    )
+
+    delivery_longitude=models.DecimalField(
+    max_digits=9,
+    decimal_places=6,
+    null=True,
+    blank=True,
+    help_text="Delivery longitude"
+    )
+    delivery_formatted_address=models.TextField(
+    null=True,
+    blank=True,
+    help_text="Formatted address from geocoding (current location)"
+    )
+    delivery_street=models.CharField(
+    max_length=100,
+    null=True,
+    blank=True,
+    help_text="Delivery street"
+    )
+    delivery_city=models.CharField(
+    max_length=100,
+    null=True,
+    blank=True,
+    help_text="Delivery city"
+    )
+    delivery_extra_info=models.TextField(
+    null=True,
+    blank=True,
+    help_text="Delivery extra info"
+    )
+   
+
 
     estimated_delivery_date=models.DateField(
     null=True,

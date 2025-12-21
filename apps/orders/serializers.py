@@ -445,6 +445,14 @@ class OrderSerializer(serializers.ModelSerializer):
 class OrderCreateSerializer(serializers.ModelSerializer):
 
     items=OrderItemCreateSerializer(many=True)
+    
+    # Allow passing either an Address ID (int) or an Address Object (dict)
+    delivery_address = serializers.JSONField(
+        required=False,
+        allow_null=True,
+        help_text="Either an address ID (int) or complete address object"
+    )
+
     distance_km = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -538,12 +546,44 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         return value
     
     def validate_delivery_address(self, value):
-        if value:
-            # Get the customer from context (set in the view)
-            customer = self.context.get('request').user
-            if value.user != customer:
-                raise serializers.ValidationError('Delivery address must belong to the authenticated customer')
-        return value
+        if value is None:
+            return None
+            
+        customer = self.context.get('request').user
+        
+        # Case 1: Integer ID (Saved Address)
+        if isinstance(value, int):
+            try:
+                address = Address.objects.get(id=value, user=customer)
+                self.context['using_saved_address'] = True
+                self.context['saved_address'] = address
+                return address # Return actual Address object for the ForeignKey
+            except Address.DoesNotExist:
+                raise serializers.ValidationError('Selected address does not exist')
+                
+        # Case 2: Dict/Object (Current Location)
+        elif isinstance(value, dict):
+            if 'latitude' not in value or 'longitude' not in value:
+                raise serializers.ValidationError('Address must contain latitude and longitude')
+            
+            try:
+                lat = float(value['latitude'])
+                lng = float(value['longitude'])
+            except (ValueError, TypeError):
+                raise serializers.ValidationError('Invalid latitude or longitude')
+                
+            # Basic validation for Saudi Arabia bounds (approximate)
+            if not (16 <= lat <= 32):
+                raise serializers.ValidationError('Latitude must be within Saudi Arabia bounds')
+            if not (34 <= lng <= 56):
+                raise serializers.ValidationError('Longitude must be within Saudi Arabia bounds')
+                
+            self.context['using_current_location'] = True
+            self.context['current_location_data'] = value
+            return None # Return None for the ForeignKey field
+            
+        else:
+            raise serializers.ValidationError('Invalid delivery address format. Must be an ID (int) or Address object (dict).')
     
     def validate_custom_styles(self, value):
         """Validate custom_styles array structure"""
@@ -601,7 +641,10 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     def create(self,validated_data):
         items_data=validated_data.pop('items')
         tailor=validated_data.get('tailor')  # Use .get() method
-        delivery_address=validated_data.get('delivery_address')
+        validated_data.pop('delivery_address',None)
+        using_current_location=self.context.get('using_current_location',False)
+        saved_address=self.context.get('saved_address',None)
+        current_location_data=self.context.get('current_location_data',None)
         items_with_fabrics=[]
         fabric_ids=[]
         # order=Order.objects.create(**validated_data)
@@ -641,6 +684,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'family_member': item_data.get('family_member'),
         })
         # Get distance_km from validated_data if provided
+        # Get distance_km from validated_data if provided
         distance_km = validated_data.pop('distance_km', None)
         if distance_km is not None:
             distance_km = float(distance_km)
@@ -648,10 +692,42 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         # Get order_type to pass to calculation service
         order_type = validated_data.get('order_type', 'fabric_only')
         
+        # Prepare delivery coordinates based on delivery type
+        delivery_lat = None
+        delivery_lng = None
+        
+        if using_current_location and current_location_data:
+            
+            validated_data['delivery_address'] = None
+            validated_data['delivery_latitude'] = current_location_data['latitude']
+            validated_data['delivery_longitude'] = current_location_data['longitude']
+            validated_data['delivery_formatted_address'] = current_location_data.get('formatted_address', '')
+            validated_data['delivery_street'] = current_location_data.get('street', '')
+            validated_data['delivery_city'] = current_location_data.get('city', '')
+            validated_data['delivery_extra_info'] = current_location_data.get('extra_info', '')
+            
+            delivery_lat = current_location_data['latitude']
+            delivery_lng = current_location_data['longitude']
+        else:
+            # Using saved address (or None)
+            validated_data['delivery_address'] = saved_address
+            validated_data['delivery_latitude'] = None
+            validated_data['delivery_longitude'] = None
+            validated_data['delivery_formatted_address'] = None
+            validated_data['delivery_street'] = None
+            validated_data['delivery_city'] = None
+            validated_data['delivery_extra_info'] = None
+            
+            if saved_address:
+                delivery_lat = saved_address.latitude
+                delivery_lng = saved_address.longitude
+        
+        # Calculate totals with coordinates
         totals = OrderCalculationService.calculate_all_totals(
             items_data=items_with_fabrics,
             distance_km=distance_km,
-            delivery_address=delivery_address,
+            delivery_latitude=delivery_lat,
+            delivery_longitude=delivery_lng,
             tailor=tailor,
             order_type=order_type
         )
