@@ -41,7 +41,7 @@ class OrderCalculationService:
         return tax_amount.quantize(Decimal('0.01'))
 
     @staticmethod
-    def calculate_delivery_fee(subtotal, distance_km=None, delivery_address=None, tailor=None):
+    def calculate_delivery_fee(subtotal, distance_km=None, delivery_address=None, tailor=None, delivery_latitude=None, delivery_longitude=None):
         """
         Calculate delivery fee based on distance and order subtotal.
         
@@ -50,6 +50,8 @@ class OrderCalculationService:
             distance_km: Distance in kilometers (required for distance-based calculation)
             delivery_address: Delivery address (optional, for future use)
             tailor: Tailor object (optional, for future use)
+            delivery_latitude: Delivery latitude (optional)
+            delivery_longitude: Delivery longitude (optional)
         """
         system_settings = OrderCalculationService.get_system_settings()
         
@@ -95,7 +97,7 @@ class OrderCalculationService:
         return stitching_total.quantize(Decimal('0.01'))
 
     @staticmethod
-    def calculate_all_totals(items_data, distance_km=None, delivery_address=None, tailor=None, tax_rate=None, order_type='fabric_only'):
+    def calculate_all_totals(items_data, distance_km=None, delivery_address=None, tailor=None, tax_rate=None, order_type='fabric_only', delivery_latitude=None, delivery_longitude=None):
         """
         Calculate all order totals.
         
@@ -106,6 +108,8 @@ class OrderCalculationService:
             tailor: Tailor object (optional)
             tax_rate: Custom tax rate (optional, uses system settings if not provided)
             order_type: Type of order ('fabric_only' or 'fabric_with_stitching') - determines if stitching price is included
+            delivery_latitude: Delivery latitude (optional)
+            delivery_longitude: Delivery longitude (optional)
         """
         subtotal = OrderCalculationService.calculate_subtotal(items_data)
         
@@ -121,7 +125,9 @@ class OrderCalculationService:
             subtotal, 
             distance_km=distance_km,
             delivery_address=delivery_address,
-            tailor=tailor
+            tailor=tailor,
+            delivery_latitude=delivery_latitude,
+            delivery_longitude=delivery_longitude
         )
         
         # Total includes: subtotal (fabric) + stitching_price + tax + delivery_fee
@@ -231,7 +237,7 @@ class OrderStatusTransitionService:
         if user_role == OrderStatusTransitionService.ROLE_ADMIN:
             # Admin can do everything
             transitions['status'] = ['confirmed', 'in_progress', 'ready_for_delivery', 'delivered', 'cancelled']
-            transitions['rider_status'] = ['accepted', 'on_way_to_measurement', 'measurement_taken', 
+            transitions['rider_status'] = ['accepted', 'on_way_to_measurement', 'measuring', 'measurement_taken', 
                                            'on_way_to_pickup', 'picked_up', 'on_way_to_delivery', 'delivered']
             transitions['tailor_status'] = ['accepted', 'in_progress', 'stitching_started', 'stitched']
         elif user_role == OrderStatusTransitionService.ROLE_TAILOR:
@@ -329,10 +335,10 @@ class OrderStatusTransitionService:
                     # Need to take measurements - rider must go to customer location
                     transitions['rider_status'] = ['on_way_to_measurement']
             elif order.rider_status == 'on_way_to_measurement':
-                # Only allow measurement_taken if all items have measurements
-                if order.all_items_have_measurements:
-                    transitions['rider_status'] = ['measurement_taken']
-                # If not all items measured, don't allow transition (rider must continue taking measurements)
+                transitions['rider_status'] = ['measuring']
+            elif order.rider_status == 'measuring':
+                # Can finish measurement if ready
+                transitions['rider_status'] = ['measurement_taken']
             elif order.rider_status == 'measurement_taken':
                 # Wait for tailor to stitch - rider can't proceed until tailor finishes
                 # Also ensure all items have measurements before allowing pickup
@@ -408,7 +414,11 @@ class OrderStatusTransitionService:
         # Additional business logic validations
         if new_status == 'cancelled' and user_role != OrderStatusTransitionService.ROLE_USER and user_role != OrderStatusTransitionService.ROLE_ADMIN:
             return False, "Only customers and admins can cancel orders"
-        
+            
+        # Validate measurement completion
+        if new_rider_status == 'measurement_taken' and not order.all_items_have_measurements:
+            return False, "Cannot complete measurement step. Please ensure all items have measurements recorded."
+            
         return True, ""
     
     @staticmethod
