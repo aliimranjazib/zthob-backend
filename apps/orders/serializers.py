@@ -364,6 +364,7 @@ class OrderSerializer(serializers.ModelSerializer):
                 'picked_up': {'label': 'Mark Picked Up', 'description': 'Order picked up from tailor'},
                 'on_way_to_delivery': {'label': 'Start Delivery', 'description': 'On way to deliver order to customer'},
                 'on_way_to_measurement': {'label': 'Start Measurement', 'description': 'On way to take customer measurements'},
+                'measuring': {'label': 'Taking Measurements', 'description': 'Currently taking customer measurements'},
                 'measurement_taken': {'label': 'Complete Measurement', 'description': 'Measurements taken successfully'},
                 'delivered': {'label': 'Mark Delivered', 'description': 'Order delivered to customer'},
             },

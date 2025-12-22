@@ -947,6 +947,7 @@ class RiderUpdateOrderStatusSerializer(serializers.Serializer):
             'picked_up',  # Rider picked up
             'on_way_to_delivery',  # Rider on way to delivery
             'on_way_to_measurement',  # Rider on way to take measurements (stitching only)
+            'measuring',  # Rider is taking measurements (stitching only)
             'measurement_taken',  # Rider took measurements (stitching only)
             'delivered',  # Rider delivered
         ],
