@@ -506,14 +506,14 @@ class NotificationService:
         
         payment_messages = {
             'paid': {
-                'customer': f'Payment of ${order.total_amount} received for order #{order_number}',
-                'tailor': f'Payment received for order #{order_number} - ${order.total_amount}',
+                'customer': f'Payment of SAR {order.total_amount} received for order #{order_number}',
+                'tailor': f'Payment received for order #{order_number} - SAR {order.total_amount}',
             },
             'pending': {
                 'customer': f'Payment pending for order #{order_number}',
             },
             'refunded': {
-                'customer': f'Refund of ${order.total_amount} has been processed for order #{order_number}',
+                'customer': f'Refund of SAR {order.total_amount} has been processed for order #{order_number}',
                 'tailor': f'Refund issued for order #{order_number}',
             },
         }
