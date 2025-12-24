@@ -164,6 +164,10 @@ USE_I18N = True
 
 USE_TZ = True
 
+# Currency settings for Saudi Arabia
+CURRENCY_CODE = 'SAR'  # Saudi Riyal
+CURRENCY_SYMBOL = 'SAR'  # Display as 'SAR' instead of 'ر.س'
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
