@@ -1,8 +1,12 @@
 from django.db import models
 from django.db.models import Q
 from django.conf import settings
+from django.utils import timezone
+from django.dispatch import receiver
 from apps.core.models import BaseModel
 from decimal import Decimal
+from django_fsm import FSMField, transition
+from django_fsm.signals import post_transition
 
 # Create your models here.
 class Order(BaseModel):
@@ -133,17 +137,19 @@ class Order(BaseModel):
     help_text="Main status of the order"
     )
     
-    rider_status=models.CharField(
+    rider_status=FSMField(
         max_length=30,
         choices=RIDER_STATUS_CHOICES,
         default="none",
+        protected=False,  # Allow direct assignment for backward compatibility
         help_text="Current rider activity status"
     )
     
-    tailor_status=models.CharField(
+    tailor_status=FSMField(
         max_length=30,
         choices=TAILOR_STATUS_CHOICES,
         default="none",
+        protected=False,  # Allow direct assignment for backward compatibility
         help_text="Current tailor activity status"
     )
 
@@ -315,7 +321,126 @@ class Order(BaseModel):
         if not self.total_amount:
             self.total_amount=self.subtotal+self.tax_amount+self.delivery_fee
 
+        # Auto-sync main status based on rider_status and tailor_status
+        # This preserves the existing auto-sync logic from OrderStatusTransitionService
+        self._sync_main_status()
+
         super().save(*args, **kwargs)
+    
+    def _sync_main_status(self):
+        """
+        Automatically sync main status based on rider_status and tailor_status.
+        This ensures the main status reflects the current state of the order.
+        Moved from OrderStatusTransitionService to keep logic in the model.
+        """
+        # If delivered by rider, main status should be delivered
+        if self.rider_status == 'delivered':
+            self.status = 'delivered'
+            return
+        
+        # If cancelled, keep cancelled
+        if self.status == 'cancelled':
+            return
+        
+        # For fabric_only flow
+        if self.order_type == 'fabric_only':
+            if self.status == 'pending':
+                # Auto-confirm if tailor has accepted
+                if self.tailor_status != 'none':
+                    self.status = 'confirmed'
+                else:
+                    return
+            elif self.status == 'confirmed' and self.rider_status in ['accepted', 'on_way_to_pickup', 'picked_up', 'on_way_to_delivery']:
+                self.status = 'in_progress'
+            elif self.rider_status == 'picked_up' and self.status == 'in_progress':
+                self.status = 'ready_for_delivery'
+        
+        # For fabric_with_stitching flow
+        else:  # fabric_with_stitching
+            if self.status == 'pending':
+                # Auto-confirm if tailor has accepted
+                if self.tailor_status != 'none':
+                    self.status = 'confirmed'
+                else:
+                    return
+            elif self.status == 'confirmed' and self.rider_status in ['accepted', 'on_way_to_measurement', 'measurement_taken']:
+                self.status = 'in_progress'
+            elif self.tailor_status == 'stitched' and self.rider_status in ['on_way_to_pickup', 'picked_up', 'on_way_to_delivery']:
+                self.status = 'ready_for_delivery'
+
+    # ============================================================================
+    # RIDER FSM TRANSITIONS
+    # ============================================================================
+    
+    @transition(field=rider_status, source='none', target='accepted')
+    def rider_accept_order(self, user=None):
+        """Rider accepts the order"""
+        pass
+    
+    @transition(field=rider_status, source='accepted', target='on_way_to_pickup')
+    def rider_start_pickup(self):
+        """Rider starts going to pickup location (fabric_only)"""
+        pass
+    
+    @transition(field=rider_status, source='accepted', target='on_way_to_measurement')
+    def rider_start_measurement(self):
+        """Rider starts going to take measurements (fabric_with_stitching)"""
+        pass
+    
+    @transition(field=rider_status, source='on_way_to_measurement', target='measuring')
+    def rider_start_measuring(self):
+        """Rider starts taking measurements"""
+        pass
+    
+    @transition(field=rider_status, source='measuring', target='measurement_taken')
+    def rider_complete_measurements(self):
+        """Rider completes measurements"""
+        pass
+    
+    @transition(field=rider_status, source='measurement_taken', target='on_way_to_pickup')
+    def rider_start_pickup_after_measurement(self):
+        """Rider starts going to pickup after measurements (fabric_with_stitching)"""
+        pass
+    
+    @transition(field=rider_status, source='on_way_to_pickup', target='picked_up')
+    def rider_mark_picked_up(self):
+        """Rider picks up order from tailor"""
+        pass
+    
+    @transition(field=rider_status, source='picked_up', target='on_way_to_delivery')
+    def rider_start_delivery(self):
+        """Rider starts delivery to customer"""
+        pass
+    
+    @transition(field=rider_status, source='on_way_to_delivery', target='delivered')
+    def rider_mark_delivered(self):
+        """Rider delivers order to customer"""
+        self.actual_delivery_date = timezone.now().date()
+    
+    # ============================================================================
+    # TAILOR FSM TRANSITIONS
+    # ============================================================================
+    
+    @transition(field=tailor_status, source='none', target='accepted')
+    def tailor_accept_order(self, user=None):
+        """Tailor accepts the order"""
+        pass
+    
+    @transition(field=tailor_status, source='accepted', target='in_progress')
+    def tailor_start_work(self):
+        """Tailor starts working on order"""
+        pass
+    
+    @transition(field=tailor_status, source=['accepted', 'in_progress'], target='stitching_started')
+    def tailor_start_stitching(self):
+        """Tailor starts stitching (fabric_with_stitching only)"""
+        pass
+    
+    @transition(field=tailor_status, source='stitching_started', target='stitched')
+    def tailor_finish_stitching(self):
+        """Tailor finishes stitching"""
+        pass
+
 
     def recalculate_totals(self):
         from apps.orders.services import OrderCalculationService
@@ -538,10 +663,63 @@ class OrderStatusHistory(BaseModel):
     )
     
     class Meta:
-        ordering = ['-created_at']
-        verbose_name = "Order Status History"
-        verbose_name_plural = "Order Status Histories"
-    
-    def __str__(self):
-        return f"{self.order.order_number}: {self.previous_status} → {self.status}"
+        ordering=['-created_at']
+        verbose_name='Order Status History'
+        verbose_name_plural='Order Status Histories'
 
+    def __str__(self):
+        return f"{self.order.order_number} - {self.status} (changed by {self.changed_by.username})"
+
+
+# ============================================================================
+# FSM SIGNAL HANDLERS FOR AUTOMATIC NOTIFICATIONS
+# ============================================================================
+
+@receiver(post_transition, sender=Order)
+def send_notification_on_status_transition(sender, instance, name, source, target, **kwargs):
+    """
+    Automatically send notifications when order status transitions occur.
+    This fixes the bug where old_status and new_status were the same.
+    
+    Args:
+        sender: Order model class
+        instance: The order instance
+        name: Name of the transition method (e.g., 'rider_accept_order')
+        source: Previous status value
+        target: New status value
+        **kwargs: Additional arguments including method_kwargs
+    """
+    from apps.notifications.services import NotificationService
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    # Get the user who made the change from method arguments
+    method_kwargs = kwargs.get('method_kwargs', {})
+    user = method_kwargs.get('user')
+    
+    try:
+        # Determine which field changed based on transition method name
+        if name.startswith('rider_'):
+            # Rider status transition - send order status notification
+            NotificationService.send_order_status_notification(
+                order=instance,
+                old_status=source,  # ✅ Correct old value from FSM
+                new_status=target,  # ✅ Correct new value from FSM
+                changed_by=user
+            )
+            logger.info(f"Sent rider status notification: {source} → {target} for order {instance.order_number}")
+            
+        elif name.startswith('tailor_'):
+            # Tailor status transition - send tailor status notification
+            NotificationService.send_tailor_status_notification(
+                order=instance,
+                old_tailor_status=source,  # ✅ Correct old value from FSM
+                new_tailor_status=target,  # ✅ Correct new value from FSM
+                changed_by=user
+            )
+            logger.info(f"Sent tailor status notification: {source} → {target} for order {instance.order_number}")
+            
+    except Exception as e:
+        # Log error but don't fail the transition
+        logger.error(f"Failed to send notification for {name}: {str(e)}")
