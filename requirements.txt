@@ -280,6 +280,10 @@ django-cors-headers==4.7.0 \
     --hash=sha256:6fdf31bf9c6d6448ba09ef57157db2268d515d94fc5c89a0a1028e1fc03ee52b \
     --hash=sha256:f1c125dcd58479fe7a67fe2499c16ee38b81b397463cf025f0e2c42937421070
     # via zthob
+django-fsm==3.0.1 \
+    --hash=sha256:d6436f5931e09d76e9a434781548627deab80c74cd6726adce95b31b5ddd4d1e \
+    --hash=sha256:ea07be2da221efa5cb8743cc94e0bb64fd962adff594f82269040eb4708c30c6
+    # via zthob
 django-jazzmin==3.0.1 \
     --hash=sha256:12a0a4c1d4fd09c2eef22acf6a1f03112b515ba695c59faa8ea80efc81c1f21b \
     --hash=sha256:67ae148bade41267a09ca8e4352ddefa6121795ebbac238bb9a6564ff841eb1b
@@ -1125,4 +1129,3 @@ yarl==1.22.0 \
     --hash=sha256:f87ac53513d22240c7d59203f25cc3beac1e574c6cd681bbfd321987b69f95fd \
     --hash=sha256:ff86011bd159a9d2dfc89c34cfd8aff12875980e3bd6a39ff097887520e60249
     # via aiohttp
-django-fsm==2.8.0
