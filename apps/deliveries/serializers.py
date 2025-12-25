@@ -92,15 +92,8 @@ class DeliveryTrackingSerializer(serializers.ModelSerializer):
             return obj.rider.username if obj.rider else None
     
     def get_rider_phone(self, obj):
-        """Get rider phone"""
-        try:
-            if hasattr(obj.rider, 'rider_profile') and obj.rider.rider_profile:
-                phone_number = obj.rider.rider_profile.phone_number
-                if phone_number:
-                    return phone_number
-            return obj.rider.phone if obj.rider else None
-        except:
-            return obj.rider.phone if obj.rider else None
+        """Get rider phone (verified phone from user account)"""
+        return obj.rider.phone if obj.rider else None
     
     def get_customer_name(self, obj):
         """Get customer name"""
@@ -244,15 +237,8 @@ class CustomerTrackingSerializer(serializers.ModelSerializer):
             return obj.rider.username if obj.rider else None
     
     def get_rider_phone(self, obj):
-        """Get rider phone number"""
-        try:
-            if hasattr(obj.rider, 'rider_profile') and obj.rider.rider_profile:
-                phone_number = obj.rider.rider_profile.phone_number
-                if phone_number:
-                    return phone_number
-            return obj.rider.phone if obj.rider else None
-        except:
-            return obj.rider.phone if obj.rider else None
+        """Get rider phone number (verified phone from user account)"""
+        return obj.rider.phone if obj.rider else None
     
     def get_current_location(self, obj):
         """Get current rider location"""

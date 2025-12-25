@@ -145,12 +145,7 @@ class OrderSerializer(serializers.ModelSerializer):
             return obj.tailor.username
 
     def get_tailor_contact(self, obj):
-        try:
-            contact_number = obj.tailor.tailor_profile.contact_number
-            if contact_number:
-                return contact_number
-        except TailorProfile.DoesNotExist:
-            pass
+        """Get tailor contact (verified phone from user account)"""
         return obj.tailor.phone if obj.tailor else None
 
     def get_rider_name(self, obj):
@@ -164,14 +159,8 @@ class OrderSerializer(serializers.ModelSerializer):
         return None
 
     def get_rider_phone(self, obj):
-        if obj.rider:
-            try:
-                if hasattr(obj.rider, 'rider_profile') and obj.rider.rider_profile:
-                    return obj.rider.rider_profile.phone_number
-            except:
-                pass
-            return obj.rider.phone
-        return None
+        """Get rider phone (verified phone from user account)"""
+        return obj.rider.phone if obj.rider else None
 
     def get_family_member_name(self, obj):
         if obj.family_member:
