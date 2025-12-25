@@ -435,10 +435,12 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
     def get_tailor_phone(self, obj):
         try:
             if hasattr(obj.tailor, 'tailor_profile') and obj.tailor.tailor_profile:
-                return obj.tailor.tailor_profile.contact_number
+                contact_number = obj.tailor.tailor_profile.contact_number
+                if contact_number:
+                    return contact_number
         except:
             pass
-        return None
+        return obj.tailor.phone if obj.tailor else None
     
     def get_delivery_address(self, obj):
         """Return delivery address matching customer address structure."""
@@ -716,7 +718,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
                     'id': obj.tailor.id,
                     'username': obj.tailor.username,
                     'shop_name': tailor_profile.shop_name if tailor_profile else None,
-                    'contact_number': tailor_profile.contact_number if tailor_profile else None,
+                    'contact_number': tailor_profile.contact_number if (tailor_profile and tailor_profile.contact_number) else obj.tailor.phone,
                     'address': tailor_address,  # Structured address matching delivery_address format
                 }
             except:

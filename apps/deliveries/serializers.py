@@ -95,10 +95,12 @@ class DeliveryTrackingSerializer(serializers.ModelSerializer):
         """Get rider phone"""
         try:
             if hasattr(obj.rider, 'rider_profile') and obj.rider.rider_profile:
-                return obj.rider.rider_profile.phone_number
-            return obj.rider.phone_number if hasattr(obj.rider, 'phone_number') else None
+                phone_number = obj.rider.rider_profile.phone_number
+                if phone_number:
+                    return phone_number
+            return obj.rider.phone if obj.rider else None
         except:
-            return None
+            return obj.rider.phone if obj.rider else None
     
     def get_customer_name(self, obj):
         """Get customer name"""
@@ -206,6 +208,7 @@ class CustomerTrackingSerializer(serializers.ModelSerializer):
     
     order_number = serializers.CharField(source='order.order_number', read_only=True)
     rider_name = serializers.SerializerMethodField()
+    rider_phone = serializers.SerializerMethodField()
     current_location = serializers.SerializerMethodField()
     estimated_time_minutes = serializers.SerializerMethodField()
     recent_route = serializers.SerializerMethodField()
@@ -216,6 +219,7 @@ class CustomerTrackingSerializer(serializers.ModelSerializer):
             'id',
             'order_number',
             'rider_name',
+            'rider_phone',
             'current_status',
             'current_location',
             'delivery_address',
@@ -238,6 +242,17 @@ class CustomerTrackingSerializer(serializers.ModelSerializer):
             return obj.rider.username
         except:
             return obj.rider.username if obj.rider else None
+    
+    def get_rider_phone(self, obj):
+        """Get rider phone number"""
+        try:
+            if hasattr(obj.rider, 'rider_profile') and obj.rider.rider_profile:
+                phone_number = obj.rider.rider_profile.phone_number
+                if phone_number:
+                    return phone_number
+            return obj.rider.phone if obj.rider else None
+        except:
+            return obj.rider.phone if obj.rider else None
     
     def get_current_location(self, obj):
         """Get current rider location"""
