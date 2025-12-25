@@ -146,9 +146,12 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_tailor_contact(self, obj):
         try:
-            return obj.tailor.tailor_profile.contact_number
+            contact_number = obj.tailor.tailor_profile.contact_number
+            if contact_number:
+                return contact_number
         except TailorProfile.DoesNotExist:
-            return None
+            pass
+        return obj.tailor.phone if obj.tailor else None
 
     def get_rider_name(self, obj):
         if obj.rider:
