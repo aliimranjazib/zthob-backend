@@ -205,3 +205,4 @@ urllib3==2.5.0
     # via requests
 yarl==1.22.0
     # via aiohttp
+django-fsm==2.8.0
