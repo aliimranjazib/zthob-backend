@@ -386,6 +386,15 @@ wheels = [
 ]
 
 [[package]]
+name = "django-fsm"
+version = "3.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/06/0b/605c646b09bcf4d49aa64fec87c732c6acbff93b945339381a6df0f78e99/django-fsm-3.0.1.tar.gz", hash = "sha256:d6436f5931e09d76e9a434781548627deab80c74cd6726adce95b31b5ddd4d1e", size = 12800, upload-time = "2025-10-07T16:33:27.398Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fc/87/ad5a38d1a8241b485835c6e6158634b29e885be78424ca42fb63df15b965/django_fsm-3.0.1-py2.py3-none-any.whl", hash = "sha256:ea07be2da221efa5cb8743cc94e0bb64fd962adff594f82269040eb4708c30c6", size = 12454, upload-time = "2025-10-07T16:33:26.218Z" },
+]
+
+[[package]]
 name = "django-jazzmin"
 version = "3.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1589,6 +1598,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "django" },
     { name = "django-cors-headers" },
+    { name = "django-fsm" },
     { name = "django-jazzmin" },
     { name = "djangorestframework" },
     { name = "djangorestframework-simplejwt" },
@@ -1605,6 +1615,7 @@ dependencies = [
 requires-dist = [
     { name = "django", specifier = ">=5.2.5" },
     { name = "django-cors-headers", specifier = ">=4.7.0" },
+    { name = "django-fsm", specifier = ">=2.8.0" },
     { name = "django-jazzmin", specifier = ">=2.6.0" },
     { name = "djangorestframework", specifier = ">=3.15.0" },
     { name = "djangorestframework-simplejwt", specifier = ">=5.5.1" },
