@@ -418,7 +418,12 @@ class OrderStatusTransitionService:
         # Validate measurement completion
         if new_rider_status == 'measurement_taken' and not order.all_items_have_measurements:
             return False, "Cannot complete measurement step. Please ensure all items have measurements recorded."
-            
+        
+        # Validate stitching completion date is set before starting stitching
+        if new_tailor_status == 'stitching_started':
+            if order.order_type == 'fabric_with_stitching' and not order.stitching_completion_date:
+                return False, "You must set the stitching completion date before starting stitching. Please update the order with expected completion date first."
+        
         return True, ""
     
     @staticmethod
