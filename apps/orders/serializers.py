@@ -121,6 +121,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'estimated_delivery_date',
             'actual_delivery_date',
             'special_instructions',
+            'stitching_completion_date',
+'stitching_completion_time',
             'appointment_date',
             'appointment_time',
             'custom_styles',
@@ -135,7 +137,8 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id', 'order_number', 'total_amount', 'items_count', 
-            'can_be_cancelled', 'created_at', 'updated_at'
+            'can_be_cancelled', 'created_at', 'updated_at',
+            'stitching_completion_date', 'stitching_completion_time'
         ]
 
     def get_tailor_name(self, obj):
@@ -780,10 +783,20 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
+    stitching_completion_date = serializers.DateField(
+        required=False,
+        allow_null=True,
+        help_text="Date when tailor expects to complete stitching"
+    )
+    stitching_completion_time = serializers.TimeField(
+        required=False,
+        allow_null=True,
+        help_text="Time when tailor expects to complete stitching (optional)"
+    )
     
     class Meta:
         model=Order
-        fields=['status', 'rider_status', 'tailor_status', 'notes', 'appointment_date', 'appointment_time', 'custom_styles']
+        fields=['status', 'rider_status', 'tailor_status', 'notes', 'appointment_date', 'appointment_time', 'custom_styles', 'stitching_completion_date', 'stitching_completion_time']
     
     def validate_custom_styles(self, value):
         """Validate custom_styles array structure"""
@@ -836,7 +849,14 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
                 )
         
         return value
-    
+    def validate_stitching_completion_date(self, value):
+        """Validate stitching completion date is in the future"""
+        if value:
+            from django.utils import timezone
+            today = timezone.now().date()
+            if value < today:
+                raise serializers.ValidationError("Stitching completion date must be today or in the future")
+        return value
     def validate(self, attrs):
         """Validate status transitions using OrderStatusTransitionService"""
         instance = self.instance

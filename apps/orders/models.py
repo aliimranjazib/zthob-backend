@@ -295,6 +295,17 @@ class Order(BaseModel):
         blank=True,
         help_text="Appointment time for customer (optional)"
     )
+    stitching_completion_date=models.DateField(
+        null=True,
+        blank=True,
+        help_text="Stitching completion date"
+    )
+    stitching_completion_time=models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Stitching completion time"
+    )
+
     
     # Custom styles for the order
     custom_styles = models.JSONField(
