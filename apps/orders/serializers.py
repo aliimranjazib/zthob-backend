@@ -1096,6 +1096,8 @@ class OrderStatusUpdateResponseSerializer(OrderSerializer):
             'status',
             'rider_status',
             'tailor_status',
+            'stitching_completion_date',
+            'stitching_completion_time',
             'status_info',
             'updated_at'
         ]
