@@ -921,6 +921,10 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'status': error_msg})
             
             instance = updated_order
+        else:
+            # No status change, but other fields may have been updated
+            # Save the instance to persist changes like stitching_completion_date
+            instance.save()
         
         # Send push notification for order status change
         try:
