@@ -137,8 +137,7 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id', 'order_number', 'total_amount', 'items_count', 
-            'can_be_cancelled', 'created_at', 'updated_at',
-            'stitching_completion_date', 'stitching_completion_time'
+            'can_be_cancelled', 'created_at', 'updated_at'
         ]
 
     def get_tailor_name(self, obj):
@@ -965,6 +964,8 @@ class OrderListSerializer(serializers.ModelSerializer):
             'payment_status',
             'appointment_date',
             'appointment_time',
+            'stitching_completion_date',
+            'stitching_completion_time',
             'custom_styles',
             'rider_measurements',
             'measurement_taken_at',
