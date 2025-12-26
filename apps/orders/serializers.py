@@ -965,6 +965,8 @@ class OrderListSerializer(serializers.ModelSerializer):
             'payment_status',
             'appointment_date',
             'appointment_time',
+            'stitching_completion_date',
+            'stitching_completion_time',
             'custom_styles',
             'rider_measurements',
             'measurement_taken_at',
