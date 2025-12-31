@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     "apps.riders",
     "apps.notifications",
     "apps.deliveries",
+    "apps.customization",
 ]
     
 MIDDLEWARE = [
