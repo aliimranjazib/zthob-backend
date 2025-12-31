@@ -1,9 +1,12 @@
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions, viewsets, status
+from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import CustomStyleCategory, CustomStyle
+from .models import CustomStyleCategory, CustomStyle, UserStylePreset
 from .serializers import (
     CustomStyleCategorySerializer,
-    CustomStyleListSerializer
+    CustomStyleListSerializer,
+    UserStylePresetSerializer,
+    UserStylePresetCreateSerializer
 )
 
 
@@ -42,3 +45,42 @@ class CustomStyleListView(generics.ListAPIView):
             queryset = queryset.filter(category__name=category)
         
         return queryset.order_by('category__display_order', 'display_order', 'name')
+
+
+class UserStylePresetViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing user style presets
+    
+    list: Get all presets for current user
+    create: Create a new preset
+    retrieve: Get a specific preset
+    update: Update a preset
+    destroy: Delete a preset
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        """Only return presets for the current user"""
+        return UserStylePreset.objects.filter(user=self.request.user)
+    
+    def get_serializer_class(self):
+        """Use different serializers for read vs write operations"""
+        if self.action in ['create', 'update', 'partial_update']:
+            return UserStylePresetCreateSerializer
+        return UserStylePresetSerializer
+    
+    @action(detail=True, methods=['post'])
+    def set_default(self, request, pk=None):
+        """Set this preset as user's default"""
+        preset = self.get_object()
+        preset.set_as_default()
+        serializer = self.get_serializer(preset)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def use(self, request, pk=None):
+        """Increment usage counter when preset is used"""
+        preset = self.get_object()
+        preset.increment_usage()
+        serializer = self.get_serializer(preset)
+        return Response(serializer.data)
