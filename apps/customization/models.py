@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 from apps.core.models import BaseModel  
 
 
@@ -84,3 +85,60 @@ class CustomStyle(BaseModel):
     
     def __str__(self):
         return f"{self.category.name} - {self.name}"
+
+class UserStylePreset(BaseModel):
+    """
+    User's custom style preset
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='style_presets',
+        help_text="User this preset belongs to"
+    )
+    name=models.CharField(
+        max_length=100,
+        help_text="Name of this style preset"
+    )
+    description=models.TextField(
+        blank=True,
+        null=True,
+        help_text="Optional description of this style preset"
+    )
+    styles = models.JSONField(
+        default=list,
+        help_text="Selected styles. Format: [{'category': 'collar', 'style_id': 8}]"
+    )
+    is_default = models.BooleanField(
+        default=False,
+        help_text="Whether this is the user's default style preset"
+    )
+    usage_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of times this preset has been used"
+    )
+    class Meta:
+        ordering = ['-is_default', '-usage_count', '-created_at']
+        verbose_name = 'User Style Preset'
+        verbose_name_plural = 'User Style Presets'
+        unique_together = ['user', 'name']
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.name}"
+    
+    def increment_usage(self):
+        """Increment usage counter when preset is used"""
+        self.usage_count += 1
+        self.save(update_fields=['usage_count'])
+    
+    def set_as_default(self):
+        """Set this preset as user's default, unset others"""
+        # Unset all other defaults for this user
+        UserStylePreset.objects.filter(user=self.user).update(is_default=False)
+        # Set this one as default
+        self.is_default = True
+        self.save(update_fields=['is_default'])
+    
+    
+    
+        

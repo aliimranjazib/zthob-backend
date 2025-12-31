@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import CustomStyleCategory, CustomStyle
+from .models import CustomStyleCategory, CustomStyle, UserStylePreset
 
 
 @admin.register(CustomStyleCategory)
@@ -85,3 +85,67 @@ class CustomStyleAdmin(admin.ModelAdmin):
             )
         return 'No image uploaded'
     image_preview_large.short_description = 'Image Preview'
+
+
+@admin.register(UserStylePreset)
+class UserStylePresetAdmin(admin.ModelAdmin):
+    """
+    Admin interface for managing user style presets
+    """
+    list_display = [
+        'name',
+        'user',
+        'is_default',
+        'usage_count',
+        'styles_count',
+        'created_at'
+    ]
+    list_filter = ['is_default', 'created_at', 'user']
+    search_fields = ['name', 'description', 'user__username', 'user__email']
+    ordering = ['-created_at']
+    readonly_fields = ['usage_count', 'created_at', 'updated_at', 'styles_preview']
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('user', 'name', 'description')
+        }),
+        ('Styles', {
+            'fields': ('styles', 'styles_preview'),
+            'description': 'Selected style combinations for this preset'
+        }),
+        ('Settings', {
+            'fields': ('is_default', 'usage_count')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def styles_count(self, obj):
+        """Show number of styles in this preset"""
+        if obj.styles:
+            return len(obj.styles)
+        return 0
+    styles_count.short_description = 'Styles'
+    
+    def styles_preview(self, obj):
+        """Show preview of selected styles"""
+        if not obj.styles:
+            return 'No styles selected'
+        
+        html = '<ul>'
+        for selection in obj.styles:
+            category = selection.get('category', 'Unknown')
+            style_id = selection.get('style_id', 'N/A')
+            
+            try:
+                from .models import CustomStyle
+                style = CustomStyle.objects.get(id=style_id)
+                html += f'<li><strong>{category.title()}:</strong> {style.name} (ID: {style_id})</li>'
+            except CustomStyle.DoesNotExist:
+                html += f'<li><strong>{category.title()}:</strong> Style ID {style_id} (Not found)</li>'
+        
+        html += '</ul>'
+        return format_html(html)
+    styles_preview.short_description = 'Selected Styles'
