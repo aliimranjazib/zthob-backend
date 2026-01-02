@@ -42,6 +42,7 @@ from apps.tailors.views import (
     # Order views
     TailorAcceptOrderView,
     TailorUpdateOrderStatusView,
+    TailorAddMeasurementsView,
 )
 
 urlpatterns = [
@@ -95,6 +96,7 @@ urlpatterns = [
     # Order URLs
     path('orders/<int:order_id>/accept/', TailorAcceptOrderView.as_view(), name='tailor-accept-order'),
     path('orders/<int:order_id>/update-status/', TailorUpdateOrderStatusView.as_view(), name='tailor-update-order-status'),
+    path('orders/<int:order_id>/measurements/', TailorAddMeasurementsView.as_view(), name='tailor-add-measurements'),
 
     path('phone/send-otp/', SendOTPView.as_view(), name='customer-send-otp'),
     path('phone/verify-otp/', VerifyOTPView.as_view(), name='customer-verify-otp'),

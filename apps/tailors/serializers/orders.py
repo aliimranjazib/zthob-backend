@@ -21,3 +21,17 @@ class TailorUpdateOrderStatusSerializer(serializers.Serializer):
             raise serializers.ValidationError("Either 'tailor_status' or 'status' must be provided")
         return attrs
 
+
+class TailorAddMeasurementsSerializer(serializers.Serializer):
+    """Serializer for tailor adding measurements"""
+    family_member = serializers.IntegerField(required=False, allow_null=True, help_text="ID of family member being measured. Null means customer.")
+    measurements = serializers.JSONField(required=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+    
+    def validate_measurements(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Measurements must be a dictionary/JSON object")
+        if not value:
+            raise serializers.ValidationError("Measurements cannot be empty")
+        return value
+

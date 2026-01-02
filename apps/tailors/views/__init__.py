@@ -38,7 +38,8 @@ from .analytics import (
 )
 from .orders import (
     TailorAcceptOrderView,
-    TailorUpdateOrderStatusView
+    TailorUpdateOrderStatusView,
+    TailorAddMeasurementsView
 )
 
 # Export all views
@@ -83,4 +84,5 @@ __all__ = [
     # Order views
     'TailorAcceptOrderView',
     'TailorUpdateOrderStatusView',
+    'TailorAddMeasurementsView',
 ]

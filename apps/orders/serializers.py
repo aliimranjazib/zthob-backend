@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from .models import Order, OrderItem, OrderStatusHistory
 from apps.tailors.models import TailorProfile,Fabric
 from apps.customers.models import Address
+from apps.customization.models import CustomStyle
 from decimal import Decimal
 from django.db import transaction
 from apps.orders.services import OrderCalculationService
@@ -103,6 +104,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'rider_name',
             'rider_phone',
             'order_type',
+            'service_mode',
             'status',
             'rider_status',
             'tailor_status',
@@ -349,7 +351,9 @@ class OrderSerializer(serializers.ModelSerializer):
                 'confirmed': {'label': 'Accept Order', 'description': 'Accept this order'},
                 'in_progress': {'label': 'Mark In Progress', 'description': 'Start processing this order'},
                 'ready_for_delivery': {'label': 'Mark Ready for Delivery', 'description': 'Order is ready for pickup/delivery'},
+                'ready_for_pickup': {'label': 'Mark Ready for Pickup', 'description': 'Order is ready for customer pickup'},
                 'delivered': {'label': 'Mark Delivered', 'description': 'Mark order as delivered'},
+                'collected': {'label': 'Mark Collected', 'description': 'Order collected by customer'},
                 'cancelled': {'label': 'Cancel Order', 'description': 'Cancel this order'},
             },
             'rider_status': {
@@ -413,6 +417,15 @@ class OrderSerializer(serializers.ModelSerializer):
                 'delivered': 5,
                 'cancelled': 0
             }
+            if obj.service_mode == 'walk_in':
+                steps = {
+                    'pending': 1,
+                    'confirmed': 2,
+                    'in_progress': 3,
+                    'ready_for_pickup': 4,
+                    'collected': 5,
+                    'cancelled': 0
+                }
             current_step = steps.get(obj.status, 0)
             total_steps = 5
         else:  # fabric_with_stitching
@@ -426,6 +439,15 @@ class OrderSerializer(serializers.ModelSerializer):
                 'delivered': 5,
                 'cancelled': 0
             }
+            if obj.service_mode == 'walk_in':
+                steps = {
+                    'pending': 1,
+                    'confirmed': 2,
+                    'in_progress': 3,
+                    'ready_for_pickup': 4,
+                    'collected': 5,
+                    'cancelled': 0
+                }
             current_step = steps.get(obj.status, 0)
             total_steps = 5
         
@@ -463,6 +485,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'customer',
             'tailor',
             'order_type',
+            'service_mode',
             'payment_method',
             'family_member',
             'delivery_address',
@@ -581,56 +604,58 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Invalid delivery address format. Must be an ID (int) or Address object (dict).')
     
     def validate_custom_styles(self, value):
-        """Validate custom_styles array structure"""
+        """Validate custom_styles and enrich ID-only format with full details"""
         if value is None:
             return None
         
         if not isinstance(value, list):
             raise serializers.ValidationError("custom_styles must be an array")
         
-        required_fields = ['style_type', 'index', 'label', 'asset_path']
-        
+        enriched_styles = []
         for idx, style in enumerate(value):
             if not isinstance(style, dict):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}] must be an object"
-                )
+                raise serializers.ValidationError(f"custom_styles[{idx}] must be an object")
             
-            # Check required fields
-            for field in required_fields:
-                if field not in style:
-                    raise serializers.ValidationError(
-                        f"custom_styles[{idx}] is missing required field: {field}"
-                    )
+            # Scenario 1: ID-only format {"style_id": 8, "category": "collar"}
+            if 'style_id' in style:
+                style_id = style.get('style_id')
+                try:
+                    style_obj = CustomStyle.objects.select_related('category').get(id=style_id, is_active=True)
+                    enriched_styles.append({
+                        "style_type": style_obj.category.name,
+                        "index": style_obj.display_order,
+                        "label": style_obj.name,
+                        "asset_path": style_obj.image.name if style_obj.image else ""
+                    })
+                except CustomStyle.DoesNotExist:
+                    raise serializers.ValidationError(f"Custom style with ID {style_id} not found or inactive")
             
-            # Validate field types
-            if not isinstance(style['style_type'], str):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].style_type must be a string"
-                )
-            
-            if not isinstance(style['index'], int):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].index must be an integer"
-                )
-            
-            if not isinstance(style['label'], str):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].label must be a string"
-                )
-            
-            if not isinstance(style['asset_path'], str):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].asset_path must be a string"
-                )
-            
-            # Validate index is non-negative
-            if style['index'] < 0:
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].index must be a non-negative integer"
-                )
+            # Scenario 2: Traditional format (for backward compatibility)
+            else:
+                required_fields = ['style_type', 'index', 'label', 'asset_path']
+                for field in required_fields:
+                    if field not in style:
+                        raise serializers.ValidationError(
+                            f"custom_styles[{idx}] must contain either 'style_id' or '{field}'"
+                        )
+                enriched_styles.append(style)
         
-        return value
+        return enriched_styles
+
+    def validate(self, data):
+        """Cross-field validation for service_mode and delivery_address"""
+        service_mode = data.get('service_mode', 'home_delivery')
+        delivery_address = data.get('delivery_address')
+        
+        # Check context for one-time address (current location)
+        using_current_location = self.context.get('using_current_location', False)
+        
+        if service_mode == 'home_delivery' and not delivery_address and not using_current_location:
+            raise serializers.ValidationError({
+                'delivery_address': 'Delivery address is required for home delivery orders.'
+            })
+            
+        return data
 
     @transaction.atomic
     def create(self,validated_data):
@@ -686,6 +711,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         
         # Get order_type to pass to calculation service
         order_type = validated_data.get('order_type', 'fabric_only')
+        service_mode = validated_data.get('service_mode', 'home_delivery')
         
         # Prepare delivery coordinates based on delivery type
         delivery_lat = None
@@ -724,7 +750,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             delivery_latitude=delivery_lat,
             delivery_longitude=delivery_lng,
             tailor=tailor,
-            order_type=order_type
+            order_type=order_type,
+            service_mode=service_mode
         )
         
         # Remove stitching_price from totals if it exists (Order model doesn't have this field yet)
@@ -798,56 +825,43 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         fields=['status', 'rider_status', 'tailor_status', 'notes', 'appointment_date', 'appointment_time', 'custom_styles', 'stitching_completion_date', 'stitching_completion_time']
     
     def validate_custom_styles(self, value):
-        """Validate custom_styles array structure"""
+        """Validate custom_styles and enrich ID-only format with full details"""
         if value is None:
             return None
         
         if not isinstance(value, list):
             raise serializers.ValidationError("custom_styles must be an array")
         
-        required_fields = ['style_type', 'index', 'label', 'asset_path']
-        
+        enriched_styles = []
         for idx, style in enumerate(value):
             if not isinstance(style, dict):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}] must be an object"
-                )
+                raise serializers.ValidationError(f"custom_styles[{idx}] must be an object")
             
-            # Check required fields
-            for field in required_fields:
-                if field not in style:
-                    raise serializers.ValidationError(
-                        f"custom_styles[{idx}] is missing required field: {field}"
-                    )
+            # Scenario 1: ID-only format {"style_id": 8, "category": "collar"}
+            if 'style_id' in style:
+                style_id = style.get('style_id')
+                try:
+                    style_obj = CustomStyle.objects.select_related('category').get(id=style_id, is_active=True)
+                    enriched_styles.append({
+                        "style_type": style_obj.category.name,
+                        "index": style_obj.display_order,
+                        "label": style_obj.name,
+                        "asset_path": style_obj.image.name if style_obj.image else ""
+                    })
+                except CustomStyle.DoesNotExist:
+                    raise serializers.ValidationError(f"Custom style with ID {style_id} not found or inactive")
             
-            # Validate field types
-            if not isinstance(style['style_type'], str):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].style_type must be a string"
-                )
-            
-            if not isinstance(style['index'], int):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].index must be an integer"
-                )
-            
-            if not isinstance(style['label'], str):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].label must be a string"
-                )
-            
-            if not isinstance(style['asset_path'], str):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].asset_path must be a string"
-                )
-            
-            # Validate index is non-negative
-            if style['index'] < 0:
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].index must be a non-negative integer"
-                )
+            # Scenario 2: Traditional format (for backward compatibility)
+            else:
+                required_fields = ['style_type', 'index', 'label', 'asset_path']
+                for field in required_fields:
+                    if field not in style:
+                        raise serializers.ValidationError(
+                            f"custom_styles[{idx}] must contain either 'style_id' or '{field}'"
+                        )
+                enriched_styles.append(style)
         
-        return value
+        return enriched_styles
     def validate_stitching_completion_date(self, value):
         """Validate stitching completion date is in the future"""
         if value:

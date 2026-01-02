@@ -7,7 +7,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 
 from apps.orders.models import Order
-from apps.tailors.serializers.orders import TailorUpdateOrderStatusSerializer
+from apps.tailors.serializers.orders import TailorUpdateOrderStatusSerializer, TailorAddMeasurementsSerializer
 from apps.orders.serializers import OrderStatusUpdateResponseSerializer, OrderSerializer
 from zthob.utils import api_response
 
@@ -208,6 +208,104 @@ class TailorUpdateOrderStatusView(APIView):
         return api_response(
             success=False,
             message="Failed to update order status",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class TailorAddMeasurementsView(APIView):
+    """Tailor adds measurements for orders (especially Walk-In orders)"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        request=TailorAddMeasurementsSerializer,
+        responses={200: OrderSerializer},
+        summary="Add measurements",
+        description="Tailor adds measurements taken at the shop. Required before stitching can start.",
+        tags=["Tailor Orders"]
+    )
+    def post(self, request, order_id):
+        if request.user.role != 'TAILOR':
+            return api_response(
+                success=False,
+                message="Only tailors can access this endpoint",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        order = get_object_or_404(
+            Order.objects.select_related('family_member', 'customer'),
+            id=order_id
+        )
+        
+        # Verify tailor has access
+        if order.tailor != request.user:
+            return api_response(
+                success=False,
+                message="You don't have access to this order",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Verify order type
+        if order.order_type != 'fabric_with_stitching':
+            return api_response(
+                success=False,
+                message="Measurements can only be added for fabric_with_stitching orders",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer = TailorAddMeasurementsSerializer(data=request.data)
+        if serializer.is_valid():
+            measurements_data = serializer.validated_data['measurements']
+            family_member_id = serializer.validated_data.get('family_member')
+            
+            # Save measurement timestamp
+            order.measurement_taken_at = timezone.now()
+            
+            # Identify the recipient and update profiles/items
+            recipient_name = None
+            if family_member_id:
+                from apps.customers.models import FamilyMember
+                family_member = get_object_or_404(FamilyMember, id=family_member_id, user=order.customer)
+                family_member.measurements = measurements_data
+                family_member.save()
+                recipient_name = family_member.name
+                
+                # Update all items for this family member in this order
+                order.order_items.filter(family_member=family_member).update(measurements=measurements_data)
+            else:
+                # Update customer profile measurements
+                from apps.customers.models import CustomerProfile
+                profile, created = CustomerProfile.objects.get_or_create(user=order.customer)
+                profile.measurements = measurements_data
+                profile.save()
+                
+                # Update all items for the customer in this order
+                order.order_items.filter(family_member__isnull=True).update(measurements=measurements_data)
+                recipient_name = order.customer.get_full_name() or order.customer.username if order.customer else 'Customer'
+            
+            # Save order to persist timestamp
+            order.save()
+            
+            # Check if all items now have measurements
+            all_measured = order.all_items_have_measurements
+            
+            # Build message
+            message = f"Measurements saved for {recipient_name}."
+            if all_measured:
+                message += " You can now proceed to stitching."
+            
+            # Return updated order
+            response_serializer = OrderSerializer(order, context={'request': request})
+            return api_response(
+                success=True,
+                message=message,
+                data=response_serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+        
+        return api_response(
+            success=False,
+            message="Failed to save measurements",
             errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
         )
