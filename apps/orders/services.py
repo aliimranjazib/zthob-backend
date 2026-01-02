@@ -97,7 +97,7 @@ class OrderCalculationService:
         return stitching_total.quantize(Decimal('0.01'))
 
     @staticmethod
-    def calculate_all_totals(items_data, distance_km=None, delivery_address=None, tailor=None, tax_rate=None, order_type='fabric_only', delivery_latitude=None, delivery_longitude=None):
+    def calculate_all_totals(items_data, distance_km=None, delivery_address=None, tailor=None, tax_rate=None, order_type='fabric_only', service_mode='home_delivery', delivery_latitude=None, delivery_longitude=None):
         """
         Calculate all order totals.
         
@@ -108,6 +108,7 @@ class OrderCalculationService:
             tailor: Tailor object (optional)
             tax_rate: Custom tax rate (optional, uses system settings if not provided)
             order_type: Type of order ('fabric_only' or 'fabric_with_stitching') - determines if stitching price is included
+            service_mode: Service mode ('home_delivery' or 'walk_in') - determines if delivery fee is charged
             delivery_latitude: Delivery latitude (optional)
             delivery_longitude: Delivery longitude (optional)
         """
@@ -121,14 +122,18 @@ class OrderCalculationService:
         tax_amount = OrderCalculationService.calculate_tax(subtotal, tax_rate)
         
         # Delivery fee is calculated on subtotal (fabric price only)
-        delivery_fee = OrderCalculationService.calculate_delivery_fee(
-            subtotal, 
-            distance_km=distance_km,
-            delivery_address=delivery_address,
-            tailor=tailor,
-            delivery_latitude=delivery_latitude,
-            delivery_longitude=delivery_longitude
-        )
+        # Skip delivery fee for walk-in orders
+        if service_mode == 'walk_in':
+            delivery_fee = Decimal('0.00')
+        else:
+            delivery_fee = OrderCalculationService.calculate_delivery_fee(
+                subtotal, 
+                distance_km=distance_km,
+                delivery_address=delivery_address,
+                tailor=tailor,
+                delivery_latitude=delivery_latitude,
+                delivery_longitude=delivery_longitude
+            )
         
         # Total includes: subtotal (fabric) + stitching_price + tax + delivery_fee
         total_amount = subtotal + stitching_price + tax_amount + delivery_fee
@@ -169,8 +174,11 @@ class OrderStatusTransitionService:
         if order.status == 'delivered' or order.status == 'cancelled':
             return {'status': [], 'rider_status': [], 'tailor_status': []}
         
+        if order.service_mode == 'walk_in':
+            return OrderStatusTransitionService._get_walk_in_transitions(order, user_role)
+        
         if order.order_type == 'fabric_only':
-            return OrderStatusTransitionService._get_fabric_only_transitions(order, user_role)
+            return OrderStatusTransitionService._get_walk_in_transitions(order, user_role) if order.service_mode == 'walk_in' else OrderStatusTransitionService._get_fabric_only_transitions(order, user_role)
         else:  # fabric_with_stitching
             return OrderStatusTransitionService._get_fabric_with_stitching_transitions(order, user_role)
     
@@ -356,6 +364,48 @@ class OrderStatusTransitionService:
                 transitions['status'] = ['cancelled']
         
         return transitions
+
+    @staticmethod
+    def _get_walk_in_transitions(order, user_role):
+        """Get transitions for walk-in orders (no rider involvement)"""
+        transitions = {'status': [], 'rider_status': [], 'tailor_status': []}
+        
+        if user_role == OrderStatusTransitionService.ROLE_ADMIN:
+            transitions['status'] = ['confirmed', 'in_progress', 'ready_for_pickup', 'collected', 'cancelled']
+            transitions['tailor_status'] = ['accepted', 'in_progress', 'stitching_started', 'stitched']
+        
+        elif user_role == OrderStatusTransitionService.ROLE_TAILOR:
+            if order.status == 'pending':
+                transitions['status'] = ['confirmed']
+                if order.tailor_status == 'none':
+                    transitions['tailor_status'] = ['accepted']
+            elif order.status == 'confirmed':
+                transitions['status'] = ['in_progress']
+                if order.tailor_status == 'accepted':
+                    transitions['tailor_status'] = ['in_progress', 'stitching_started']
+                elif order.tailor_status == 'none':
+                    transitions['tailor_status'] = ['accepted', 'in_progress', 'stitching_started']
+            elif order.status == 'in_progress':
+                if order.tailor_status == 'accepted':
+                    transitions['tailor_status'] = ['in_progress', 'stitching_started']
+                elif order.tailor_status == 'in_progress':
+                    transitions['tailor_status'] = ['stitching_started']
+                elif order.tailor_status == 'stitching_started':
+                    transitions['tailor_status'] = ['stitched']
+                elif order.tailor_status == 'stitched':
+                    transitions['status'] = ['ready_for_pickup']
+            elif order.status == 'ready_for_pickup':
+                # Tailor can't do much once ready, waiting for customer
+                pass
+        
+        elif user_role == OrderStatusTransitionService.ROLE_USER:
+            if order.status == 'pending':
+                transitions['status'] = ['cancelled']
+            elif order.status == 'ready_for_pickup':
+                # Customer can mark as collected
+                transitions['status'] = ['collected']
+        
+        return transitions
     
     @staticmethod
     def validate_transition(order, new_status=None, new_rider_status=None, new_tailor_status=None, user_role=None, user=None):
@@ -374,7 +424,7 @@ class OrderStatusTransitionService:
             tuple: (is_valid: bool, error_message: str)
         """
         # Check if order is in final state
-        if order.status in ['delivered', 'cancelled']:
+        if order.status in ['delivered', 'cancelled', 'collected']:
             return False, f"Cannot change status of {order.status} order"
         
         # Role-based access checks
@@ -387,9 +437,9 @@ class OrderStatusTransitionService:
         elif user_role == OrderStatusTransitionService.ROLE_USER:
             if order.customer != user:
                 return False, "You can only update your own orders"
-            # Users can only cancel pending orders
-            if new_status and new_status != 'cancelled':
-                return False, "Customers can only cancel orders"
+            # Users can only cancel pending orders or mark walk-ins as collected
+            if new_status and new_status not in ['cancelled', 'collected']:
+                return False, "Customers can only cancel orders or mark them as collected"
             if new_status == 'cancelled' and order.status != 'pending':
                 return False, "Orders can only be cancelled when status is pending"
         
@@ -415,7 +465,11 @@ class OrderStatusTransitionService:
         if new_status == 'cancelled' and user_role != OrderStatusTransitionService.ROLE_USER and user_role != OrderStatusTransitionService.ROLE_ADMIN:
             return False, "Only customers and admins can cancel orders"
             
-        # Validate measurement completion
+        # Validate measurement completion before starting stitching
+        if new_tailor_status == 'stitching_started' and not order.all_items_have_measurements:
+            return False, "Cannot start stitching. Please ensure all items have measurements recorded."
+            
+        # Validate measurement completion for rider (Home Delivery flow)
         if new_rider_status == 'measurement_taken' and not order.all_items_have_measurements:
             return False, "Cannot complete measurement step. Please ensure all items have measurements recorded."
         
@@ -497,6 +551,10 @@ class OrderStatusTransitionService:
         Automatically sync main status based on rider_status and tailor_status.
         This ensures the main status reflects the current state of the order.
         """
+        # If collected (Walk-In final state)
+        if order.status == 'collected':
+            return
+
         # If delivered by rider, main status should be delivered
         if order.rider_status == 'delivered':
             order.status = 'delivered'
@@ -505,11 +563,23 @@ class OrderStatusTransitionService:
         # If cancelled, keep cancelled
         if order.status == 'cancelled':
             return
-        
-        # For fabric_only flow
+
+        # NEW: For Walk-In flow
+        if order.service_mode == 'walk_in':
+            if order.status == 'pending':
+                if order.tailor_status != 'none':
+                    order.status = 'confirmed'
+                else:
+                    return
+            elif order.status == 'confirmed' and order.tailor_status in ['in_progress', 'stitching_started']:
+                 order.status = 'in_progress'
+            elif order.tailor_status == 'stitched' and order.status != 'collected':
+                order.status = 'ready_for_pickup'
+            return
+
+        # For fabric_only flow (Home Delivery)
         if order.order_type == 'fabric_only':
             if order.status == 'pending':
-                # Auto-confirm if tailor has accepted
                 if order.tailor_status != 'none':
                     order.status = 'confirmed'
                 else:
@@ -519,10 +589,9 @@ class OrderStatusTransitionService:
             elif order.rider_status == 'picked_up' and order.status == 'in_progress':
                 order.status = 'ready_for_delivery'
         
-        # For fabric_with_stitching flow
+        # For fabric_with_stitching flow (Home Delivery)
         else:  # fabric_with_stitching
             if order.status == 'pending':
-                # Auto-confirm if tailor has accepted
                 if order.tailor_status != 'none':
                     order.status = 'confirmed'
                 else:

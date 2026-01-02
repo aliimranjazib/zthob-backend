@@ -54,15 +54,20 @@ class Order(BaseModel):
         ('fabric_only', 'Fabric Purchase Only'),
         ('fabric_with_stitching', 'Fabric + Stitching'),
     )
-    
+    SERVICE_MODE_CHOICES = (
+        ('home_delivery', 'Home Delivery'),
+        ('walk_in', 'Walk-In Service'),
+    )
     # Main order status (simplified)
     ORDER_STATUS_CHOICES=(
-        ("pending", "Pending"),                    # Initial state - waiting for tailor
-        ("confirmed", "Confirmed"),                # Tailor accepted the order
-        ("in_progress", "In Progress"),           # Order being processed
-        ("ready_for_delivery", "Ready for Delivery"), # Order ready for delivery
-        ("delivered", "Delivered"),                # Order completed (final state)
-        ("cancelled", "Cancelled"),                # Order cancelled (final state)
+        ("pending", "Pending"),                    # Initial state
+        ("confirmed", "Confirmed"),                # Tailor accepted
+        ("in_progress", "In Progress"),            # Being processed
+        ("ready_for_delivery", "Ready for Delivery"), # For Home Delivery
+        ("ready_for_pickup", "Ready for Pickup"),   # NEW: For Walk-In orders
+        ("delivered", "Delivered"),                # Completed (Home Delivery)
+        ("collected", "Collected"),                # NEW: Completed (Walk-In)
+        ("cancelled", "Cancelled"),                # Order cancelled
     )
     
     # Rider activity status
@@ -122,6 +127,12 @@ class Order(BaseModel):
         choices=ORDER_TYPE_CHOICES,
         default='fabric_with_stitching',
         help_text="Type of order - fabric only or fabric with stitching"
+    )
+    service_mode = models.CharField(
+        max_length=20,
+        choices=SERVICE_MODE_CHOICES,
+        default='home_delivery',
+        help_text="Service mode - Home Delivery or Walk-In"
     )
     order_number=models.CharField(
     max_length=20,
@@ -342,8 +353,11 @@ class Order(BaseModel):
         """
         Automatically sync main status based on rider_status and tailor_status.
         This ensures the main status reflects the current state of the order.
-        Moved from OrderStatusTransitionService to keep logic in the model.
         """
+        # If collected (Walk-In final state)
+        if self.status == 'collected':
+            return
+
         # If delivered by rider, main status should be delivered
         if self.rider_status == 'delivered':
             self.status = 'delivered'
@@ -352,11 +366,23 @@ class Order(BaseModel):
         # If cancelled, keep cancelled
         if self.status == 'cancelled':
             return
-        
-        # For fabric_only flow
+
+        # NEW: For Walk-In flow
+        if self.service_mode == 'walk_in':
+            if self.status == 'pending':
+                if self.tailor_status != 'none':
+                    self.status = 'confirmed'
+                else:
+                    return
+            elif self.status == 'confirmed' and self.tailor_status in ['in_progress', 'stitching_started']:
+                 self.status = 'in_progress'
+            elif self.tailor_status == 'stitched' and self.status != 'collected':
+                self.status = 'ready_for_pickup'
+            return
+
+        # For fabric_only flow (Home Delivery)
         if self.order_type == 'fabric_only':
             if self.status == 'pending':
-                # Auto-confirm if tailor has accepted
                 if self.tailor_status != 'none':
                     self.status = 'confirmed'
                 else:
@@ -366,10 +392,9 @@ class Order(BaseModel):
             elif self.rider_status == 'picked_up' and self.status == 'in_progress':
                 self.status = 'ready_for_delivery'
         
-        # For fabric_with_stitching flow
+        # For fabric_with_stitching flow (Home Delivery)
         else:  # fabric_with_stitching
             if self.status == 'pending':
-                # Auto-confirm if tailor has accepted
                 if self.tailor_status != 'none':
                     self.status = 'confirmed'
                 else:
@@ -452,6 +477,17 @@ class Order(BaseModel):
         """Tailor finishes stitching"""
         pass
 
+    # ============================================================================
+    # CUSTOMER ACTIONS
+    # ============================================================================
+    def mark_as_collected(self):
+        """Allow customer to mark the order as collected (for Walk-In Mode)"""
+        if self.service_mode == 'walk_in' and self.status == 'ready_for_pickup':
+            self.status = 'collected'
+            self.save()
+            return True, "Order marked as collected"
+        return False, "Order is not ready for pickup or not a walk-in order"
+
 
     def recalculate_totals(self):
         from apps.orders.services import OrderCalculationService
@@ -465,7 +501,8 @@ class Order(BaseModel):
                 items_data,
                 delivery_address=self.delivery_address,
                 tailor=self.tailor,
-                order_type=self.order_type
+                order_type=self.order_type,
+                service_mode=self.service_mode
         )
         self.subtotal = totals['subtotal']
         self.tax_amount = totals['tax_amount']
