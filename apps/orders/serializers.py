@@ -237,8 +237,31 @@ class OrderSerializer(serializers.ModelSerializer):
         return None
     
     def get_custom_styles(self, obj):
-        """Return custom_styles, or empty array if None"""
-        return obj.custom_styles if obj.custom_styles is not None else []
+        """Return custom_styles with absolute URLs for images"""
+        styles = obj.custom_styles if obj.custom_styles is not None else []
+        if not styles:
+            return []
+            
+        request = self.context.get('request')
+        if not request:
+            return styles
+            
+        import copy
+        processed_styles = copy.deepcopy(styles)
+        
+        from django.conf import settings
+        media_url = getattr(settings, 'MEDIA_URL', '/media/')
+        
+        for style in processed_styles:
+            asset_path = style.get('asset_path')
+            if asset_path and not (asset_path.startswith('http://') or asset_path.startswith('https://')):
+                if not asset_path.startswith(media_url) and not asset_path.startswith('/'):
+                    full_path = media_url + asset_path
+                else:
+                    full_path = asset_path
+                style['asset_path'] = request.build_absolute_uri(full_path)
+                
+        return processed_styles
     
     def get_status_info(self, obj):
         """Get status information including next available actions"""
@@ -1000,8 +1023,31 @@ class OrderListSerializer(serializers.ModelSerializer):
             return obj.tailor.username
     
     def get_custom_styles(self, obj):
-        """Return custom_styles, or empty array if None"""
-        return obj.custom_styles if obj.custom_styles is not None else []
+        """Return custom_styles with absolute URLs for images"""
+        styles = obj.custom_styles if obj.custom_styles is not None else []
+        if not styles:
+            return []
+            
+        request = self.context.get('request')
+        if not request:
+            return styles
+            
+        import copy
+        processed_styles = copy.deepcopy(styles)
+        
+        from django.conf import settings
+        media_url = getattr(settings, 'MEDIA_URL', '/media/')
+        
+        for style in processed_styles:
+            asset_path = style.get('asset_path')
+            if asset_path and not (asset_path.startswith('http://') or asset_path.startswith('https://')):
+                if not asset_path.startswith(media_url) and not asset_path.startswith('/'):
+                    full_path = media_url + asset_path
+                else:
+                    full_path = asset_path
+                style['asset_path'] = request.build_absolute_uri(full_path)
+                
+        return processed_styles
     
     def get_status_info(self, obj):
         """Get status information including next available actions - reuse from OrderSerializer"""
