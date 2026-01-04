@@ -181,7 +181,7 @@ class OrderDetailView(APIView):
                         # Allow customers to mark walk-in orders as collected
                         if order.service_mode != 'walk_in':
                             raise PermissionError("Only walk-in orders can be marked as collected by customers")
-                        if order.status != 'ready_for_delivery':
+                        if order.status != 'ready_for_pickup':
                             raise PermissionError("Order must be ready for pickup before marking as collected")
                     else:
                         # Any other status change is not allowed
@@ -291,7 +291,7 @@ class OrderStatusUpdateView(APIView):
                         # Allow customers to mark walk-in orders as collected
                         if order.service_mode != 'walk_in':
                             raise PermissionError("Only walk-in orders can be marked as collected by customers")
-                        if order.status != 'ready_for_delivery':
+                        if order.status != 'ready_for_pickup':
                             raise PermissionError("Order must be ready for pickup before marking as collected")
                     else:
                         # Any other status change is not allowed
