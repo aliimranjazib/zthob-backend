@@ -172,13 +172,20 @@ class OrderDetailView(APIView):
             new_status = request.data.get('status')
             if new_status:
                 if request.user.role == 'USER':
-                    # Customers can only cancel orders (pending -> cancelled)
-                    if new_status != 'cancelled':
-                        raise PermissionError("Customers can only cancel orders. Only tailors can update order status.")
-                    
-                    # Only allow cancellation when status is pending
-                    if new_status == 'cancelled' and order.status != 'pending':
-                        raise PermissionError("Orders can only be cancelled when status is pending")
+                    # Customers can cancel orders OR mark walk-in orders as collected
+                    if new_status == 'cancelled':
+                        # Only allow cancellation when status is pending
+                        if order.status != 'pending':
+                            raise PermissionError("Orders can only be cancelled when status is pending")
+                    elif new_status == 'collected':
+                        # Allow customers to mark walk-in orders as collected
+                        if order.service_mode != 'walk_in':
+                            raise PermissionError("Only walk-in orders can be marked as collected by customers")
+                        if order.status != 'ready_for_delivery':
+                            raise PermissionError("Order must be ready for pickup before marking as collected")
+                    else:
+                        # Any other status change is not allowed
+                        raise PermissionError("Customers can only cancel orders or mark walk-in orders as collected")
                         
                 elif request.user.role == 'TAILOR':
                     # Tailors cannot cancel orders (only customers can cancel)
@@ -270,14 +277,22 @@ class OrderStatusUpdateView(APIView):
                 if order.customer != request.user:
                     raise PermissionError("You can only update your own orders")
                 
-                # Customers can only cancel orders (pending -> cancelled)
+                # Customers can cancel orders OR mark walk-in orders as collected
                 new_status = request.data.get('status')
-                if new_status and new_status != 'cancelled':
-                    raise PermissionError("Customers can only cancel orders. Only tailors can update order status.")
-                
-                # Only allow cancellation when status is pending
-                if new_status == 'cancelled' and order.status != 'pending':
-                    raise PermissionError("Orders can only be cancelled when status is pending")
+                if new_status:
+                    if new_status == 'cancelled':
+                        # Only allow cancellation when status is pending
+                        if order.status != 'pending':
+                            raise PermissionError("Orders can only be cancelled when status is pending")
+                    elif new_status == 'collected':
+                        # Allow customers to mark walk-in orders as collected
+                        if order.service_mode != 'walk_in':
+                            raise PermissionError("Only walk-in orders can be marked as collected by customers")
+                        if order.status != 'ready_for_delivery':
+                            raise PermissionError("Order must be ready for pickup before marking as collected")
+                    else:
+                        # Any other status change is not allowed
+                        raise PermissionError("Customers can only cancel orders or mark walk-in orders as collected")
                     
             elif request.user.role == 'TAILOR':
                 # Tailors can only update orders assigned to them
