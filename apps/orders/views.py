@@ -191,12 +191,9 @@ class OrderDetailView(APIView):
                     # Tailors cannot cancel orders (only customers can cancel)
                     if new_status == 'cancelled':
                         raise PermissionError("Tailors cannot cancel orders. Only customers can cancel their orders.")
-                    # Tailors can mark walk-in orders as collected when customer picks up
+                    # Tailors cannot mark as collected (only customers can)
                     elif new_status == 'collected':
-                        if order.service_mode != 'walk_in':
-                            raise PermissionError("Only walk-in orders can be marked as collected")
-                        if order.status != 'ready_for_pickup':
-                            raise PermissionError("Order must be ready for pickup before marking as collected")
+                        raise PermissionError("Only customers can mark walk-in orders as collected")
                         
                 elif request.user.role == 'ADMIN':
                     # Admins can do everything - no restrictions
@@ -309,12 +306,9 @@ class OrderStatusUpdateView(APIView):
                 new_status = request.data.get('status')
                 if new_status and new_status == 'cancelled':
                     raise PermissionError("Tailors cannot cancel orders. Only customers can cancel their orders.")
-                # Tailors can mark walk-in orders as collected when customer picks up
+                # Tailors cannot mark as collected (only customers can)
                 elif new_status == 'collected':
-                    if order.service_mode != 'walk_in':
-                        raise PermissionError("Only walk-in orders can be marked as collected")
-                    if order.status != 'ready_for_pickup':
-                        raise PermissionError("Order must be ready for pickup before marking as collected")
+                    raise PermissionError("Only customers can mark walk-in orders as collected")
                     
             elif request.user.role == 'ADMIN':
                 # Admins can do everything - no restrictions

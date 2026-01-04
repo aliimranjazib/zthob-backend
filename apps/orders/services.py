@@ -395,8 +395,9 @@ class OrderStatusTransitionService:
                 elif order.tailor_status == 'stitched':
                     transitions['status'] = ['ready_for_pickup']
             elif order.status == 'ready_for_pickup':
-                # Tailor can mark as collected when customer picks up
-                transitions['status'] = ['collected']
+                # Tailor's work is done - waiting for customer to collect
+                # Only customer can mark as collected
+                pass
         
         elif user_role == OrderStatusTransitionService.ROLE_USER:
             if order.status == 'pending':
