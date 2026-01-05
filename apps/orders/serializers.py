@@ -998,6 +998,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'customer_name',
             'tailor_name',
             'order_type',
+            'service_mode',
             'status',
             'rider_status',
             'tailor_status',
