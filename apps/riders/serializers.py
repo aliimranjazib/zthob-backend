@@ -923,6 +923,7 @@ class RiderAcceptOrderSerializer(serializers.Serializer):
 class RiderAddMeasurementsSerializer(serializers.Serializer):
     """Serializer for rider adding measurements"""
     family_member = serializers.IntegerField(required=False, allow_null=True, help_text="ID of family member being measured. Null means customer.")
+    title = serializers.CharField(required=False, allow_blank=True, help_text="Title for measurements (e.g. 'Wedding Thobe')")
     measurements = serializers.JSONField(required=True)
     notes = serializers.CharField(required=False, allow_blank=True)
     

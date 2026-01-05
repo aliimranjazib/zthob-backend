@@ -257,6 +257,11 @@ class TailorAddMeasurementsView(APIView):
         if serializer.is_valid():
             measurements_data = serializer.validated_data['measurements']
             family_member_id = serializer.validated_data.get('family_member')
+            title = serializer.validated_data.get('title')
+            
+            # Add title to measurements if provided
+            if title:
+                measurements_data['title'] = title
             
             # Save measurement timestamp
             order.measurement_taken_at = timezone.now()
