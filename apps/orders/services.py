@@ -375,16 +375,24 @@ class OrderStatusTransitionService:
             transitions['tailor_status'] = ['accepted', 'in_progress', 'stitching_started', 'stitched']
         
         elif user_role == OrderStatusTransitionService.ROLE_TAILOR:
+            # For walk-in orders, tailors strictly update their OWN status (tailor_status)
+            # The main status is automatically synced via _sync_main_status() model method
+            
             if order.status == 'pending':
-                transitions['status'] = ['confirmed']
+                # No direct status update - must accept first
+                # transitions['status'] = ['confirmed']  <-- REMOVED to avoid duplicate/error
                 if order.tailor_status == 'none':
                     transitions['tailor_status'] = ['accepted']
+            
             elif order.status == 'confirmed':
-                transitions['status'] = ['in_progress']
+                # No direct status update
+                # transitions['status'] = ['in_progress'] <-- REMOVED
                 if order.tailor_status == 'accepted':
                     transitions['tailor_status'] = ['in_progress', 'stitching_started']
                 elif order.tailor_status == 'none':
+                    # Allow late acceptance (jump to in_progress/stitching)
                     transitions['tailor_status'] = ['accepted', 'in_progress', 'stitching_started']
+            
             elif order.status == 'in_progress':
                 if order.tailor_status == 'accepted':
                     transitions['tailor_status'] = ['in_progress', 'stitching_started']
@@ -393,7 +401,10 @@ class OrderStatusTransitionService:
                 elif order.tailor_status == 'stitching_started':
                     transitions['tailor_status'] = ['stitched']
                 elif order.tailor_status == 'stitched':
-                    transitions['status'] = ['ready_for_pickup']
+                    # No manual update needed - auto-syncs to ready_for_pickup
+                    # transitions['status'] = ['ready_for_pickup'] <-- REMOVED
+                    pass
+            
             elif order.status == 'ready_for_pickup':
                 # Tailor's work is done - waiting for customer to collect
                 # Only customer can mark as collected
