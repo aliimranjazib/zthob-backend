@@ -883,6 +883,11 @@ class RiderAddMeasurementsView(APIView):
         if serializer.is_valid():
             measurements_data = serializer.validated_data['measurements']
             family_member_id = serializer.validated_data.get('family_member')
+            title = serializer.validated_data.get('title')
+            
+            # Add title to measurements if provided
+            if title:
+                measurements_data['title'] = title
             
             # Add measurements to order level (deprecated but kept for compatibility)
             order.rider_measurements = measurements_data
@@ -917,7 +922,8 @@ class RiderAddMeasurementsView(APIView):
             all_measured = order.all_items_have_measurements
             from apps.orders.services import OrderStatusTransitionService
             
-            notes_text = f"Measurements taken by rider for {recipient_name}. {serializer.validated_data.get('notes', '')}"
+            title_text = f" ({title})" if title else ""
+            notes_text = f"Measurements taken by rider for {recipient_name}{title_text}. {serializer.validated_data.get('notes', '')}"
             
             if all_measured:
                 # All items have measurements - can transition to measurement_taken
