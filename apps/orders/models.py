@@ -53,6 +53,7 @@ class Order(BaseModel):
     ORDER_TYPE_CHOICES = (
         ('fabric_only', 'Fabric Purchase Only'),
         ('fabric_with_stitching', 'Fabric + Stitching'),
+        ('measurement_service', 'Measurement Service Only'),
     )
     SERVICE_MODE_CHOICES = (
         ('home_delivery', 'Home Delivery'),
@@ -90,6 +91,7 @@ class Order(BaseModel):
         ("in_progress", "In Progress"),           # Tailor is working on the order
         ("stitching_started", "Started Stitching"), # Tailor started stitching (stitching only)
         ("stitched", "Finished Stitching"),       # Tailor finished stitching (stitching only)
+        ("measurements_complete", "Measurements Complete"),  # Measurement service complete
     )
     PAYMENT_STATUS_CHOICES = (
         ("pending", "Pending"),
@@ -111,6 +113,8 @@ class Order(BaseModel):
     tailor=models.ForeignKey(
     settings.AUTH_USER_MODEL,
     on_delete=models.CASCADE,
+    null=True,  # Allow null for home delivery measurement orders
+    blank=True,
     related_name='tailor_orders',
     help_text='Tailor assigned to this order'
     )
@@ -324,6 +328,12 @@ class Order(BaseModel):
         blank=True,
         null=True,
         help_text="Array of custom style selections (optional). Format: [{'style_type': 'collar', 'index': 0, 'label': 'Collar Style 1', 'asset_path': 'assets/thobs/collar/collar1.png'}]"
+    )
+    
+    # Free measurement tracking
+    is_free_measurement = models.BooleanField(
+        default=False,
+        help_text="Whether this is a free first-time measurement order"
     )
 
     class Meta:
@@ -553,11 +563,12 @@ class Order(BaseModel):
     
     @property
     def all_items_have_measurements(self):
-        """Check if all order items have measurements (for fabric_with_stitching orders)"""
-        if self.order_type != 'fabric_with_stitching':
-            return True  # Not applicable for fabric_only orders
+        """Check if all order items have measurements"""
+        # For fabric_only orders, measurements not required
+        if self.order_type == 'fabric_only':
+            return True
         
-        # Check if any items are missing measurements
+        # For measurement_service and fabric_with_stitching, check measurements
         items_without_measurements = self.order_items.filter(
             Q(measurements__isnull=True) | Q(measurements={})
         )
@@ -616,6 +627,8 @@ class OrderItem(BaseModel):
     fabric=models.ForeignKey(
     'tailors.Fabric',
     on_delete=models.CASCADE,
+    null=True,  # Allow null for measurement orders
+    blank=True,  # Not required
     help_text='Fabric beginf ordered'
 
     )

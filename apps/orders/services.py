@@ -111,7 +111,17 @@ class OrderCalculationService:
             service_mode: Service mode ('home_delivery' or 'walk_in') - determines if delivery fee is charged
             delivery_latitude: Delivery latitude (optional)
             delivery_longitude: Delivery longitude (optional)
-        """
+        """ 
+        # For measurement service orders, all costs are zero
+        if order_type == 'measurement_service':
+            return {
+                'subtotal': Decimal('0.00'),
+                'stitching_price': Decimal('0.00'),
+                'tax_amount': Decimal('0.00'),
+                'delivery_fee': Decimal('0.00'),
+                'total_amount': Decimal('0.00'),
+            }
+        
         subtotal = OrderCalculationService.calculate_subtotal(items_data)
         
         # Calculate stitching price if order type is fabric_with_stitching
@@ -174,6 +184,10 @@ class OrderStatusTransitionService:
         if order.status == 'delivered' or order.status == 'cancelled':
             return {'status': [], 'rider_status': [], 'tailor_status': []}
         
+        # Handle measurement service orders specifically
+        if order.order_type == 'measurement_service':
+            return OrderStatusTransitionService._get_measurement_service_transitions(order, user_role)
+        
         if order.service_mode == 'walk_in':
             return OrderStatusTransitionService._get_walk_in_transitions(order, user_role)
         
@@ -234,6 +248,67 @@ class OrderStatusTransitionService:
         elif user_role == OrderStatusTransitionService.ROLE_USER:
             if order.status == 'pending':
                 transitions['status'] = ['cancelled']
+        
+        return transitions
+    
+    @staticmethod
+    def _get_measurement_service_transitions(order, user_role):
+        """
+        Get allowed transitions for measurement_service orders.
+        Walk-in: Tailor takes measurements
+        Home delivery: Rider takes measurements
+        """
+        transitions = {'status': [], 'rider_status': [], 'tailor_status': [], 'custom_actions': []}
+        
+        if user_role == OrderStatusTransitionService.ROLE_TAILOR:
+            if order.service_mode == 'walk_in':
+                # Walk-in measurement flow for tailor
+                if order.tailor_status == 'none' and order.status == 'pending':
+                    transitions['tailor_status'] = ['accepted']
+                
+                elif order.tailor_status == 'accepted':
+                    # After accepting, check if measurements are recorded
+                    # Check if all items have non-empty measurements
+                    all_measured = True
+                    if order.order_items.count() == 0:
+                        all_measured = False
+                    else:
+                        for item in order.order_items.all():
+                            if not item.measurements or len(item.measurements) == 0:
+                                all_measured = False
+                                break
+                    
+                    if all_measured:
+                        # All measurements recorded, can mark as complete
+                        transitions['tailor_status'] = ['measurements_complete']
+                    else:
+                        # Need to record measurements first
+                        transitions['custom_actions'] = [{
+                            "type": "form_action", 
+                            "value": "record_measurements",
+                            "label": "Record Measurements",
+                            "description": "Open measurement form to record customer measurements"
+                        }]
+                
+        elif user_role == OrderStatusTransitionService.ROLE_RIDER:
+            if order.service_mode == 'home_delivery':
+                # Home delivery measurement flow for rider
+                if order.rider_status == 'none' and order.status == 'pending':
+                    transitions['rider_status'] = ['accepted']
+                
+                elif order.rider_status == 'accepted':
+                    transitions['rider_status'] = ['on_way_to_measurement']
+                
+                elif order.rider_status == 'on_way_to_measurement':
+                    transitions['rider_status'] = ['measuring']
+                
+                elif order.rider_status == 'measuring':
+                    transitions['rider_status'] = ['measurement_taken']
+        
+        elif user_role == OrderStatusTransitionService.ROLE_USER:
+            # Customer can mark walk-in measurements as collected
+            if order.service_mode == 'walk_in' and order.status == 'ready_for_pickup':
+                transitions['status'] = ['collected']
         
         return transitions
     

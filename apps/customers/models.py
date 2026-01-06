@@ -56,6 +56,18 @@ class CustomerProfile(models.Model):
                                     related_name="default_for_customers")
     loyalty_points = models.IntegerField(null=True, blank=True)
     tags=models.CharField(max_length=20, blank=True, null=True)
+    
+    # Free measurement service tracking (account-level, one-time)
+    first_free_measurement_used = models.BooleanField(
+        default=False,
+        help_text="Whether customer account has used the one-time free measurement service"
+    )
+    free_measurement_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the free measurement order was completed"
+    )
+    
     def __str__(self):
         return f"Customer Profile for {self.user.username}"
     

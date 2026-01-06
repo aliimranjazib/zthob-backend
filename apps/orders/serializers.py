@@ -43,6 +43,10 @@ class OrderItemSerializer(serializers.ModelSerializer):
             return None
 
     def get_fabric_image(self,obj):
+        # Handle measurement orders where fabric is None
+        if not obj.fabric:
+            return None
+        
         if obj.fabric.primary_image:
             request=self.context.get('request')
             if request:
@@ -55,6 +59,9 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model=OrderItem
         fields=['fabric','quantity','measurements','custom_instructions','family_member']
+        extra_kwargs = {
+            'fabric': {'required': False, 'allow_null': True}
+        }
 
     def validate_quantity(self,value):
         if value<=0:
@@ -143,6 +150,8 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
 
     def get_tailor_name(self, obj):
+        if not obj.tailor:
+            return None
         try:
             return obj.tailor.tailor_profile.shop_name
         except TailorProfile.DoesNotExist:
@@ -528,8 +537,42 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'items',
             'distance_km'
         ]
+        extra_kwargs = {
+            'tailor': {'required': False, 'allow_null': True}
+        }
 
     def validate_items(self,value):
+        # Get order_type from initial_data
+        order_type = self.initial_data.get('order_type', 'fabric_only')
+        
+        # For measurement_service orders, allow items without fabric
+        if order_type == 'measurement_service':
+            if not value or len(value)==0:
+                raise serializers.ValidationError(
+                    "Measurement orders must specify at least one person to measure"
+                )
+            
+            customer = self.context.get('request').user
+            validated_items = []
+            
+            for item_data in value:
+                family_member = item_data.get('family_member')
+                
+                # Validate family member belongs to customer if specified
+                if family_member and family_member.user != customer:
+                    raise serializers.ValidationError(
+                        f"Family member {family_member.name} must belong to the authenticated customer"
+                    )
+                
+                # For measurement orders, set default values
+                item_data['fabric'] = None
+                item_data['quantity'] = 1
+                item_data['unit_price'] = Decimal('0.00')
+                validated_items.append(item_data)
+            
+            return validated_items
+        
+        # For regular orders (fabric_only, fabric_with_stitching), existing logic
         if not value or len(value)==0:
             raise serializers.ValidationError("Order must have at least one item")
         
@@ -573,8 +616,19 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         return validated_items
 
     def validate_tailor(self,value):
+        order_type = self.initial_data.get('order_type', 'fabric_only')
+        service_mode = self.initial_data.get('service_mode', 'home_delivery')
+        
+        # For home_delivery measurement orders, tailor is optional (rider handles it)
+        if order_type == 'measurement_service' and service_mode == 'home_delivery':
+            if value is None:
+                return None  # Allow null tailor for home delivery measurements
+            # If tailor is provided, still validate it (fall through to validation below)
+        
+        # For all other cases, tailor is required
         if value is None:
             raise serializers.ValidationError('Tailor is required')
+        
         if value.role!='TAILOR':
             raise serializers.ValidationError('Selected user is not a tailor')
         try:
@@ -681,9 +735,13 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         # Check context for one-time address (current location)
         using_current_location = self.context.get('using_current_location', False)
         
-        if service_mode == 'home_delivery' and not delivery_address and not using_current_location:
+        # Also check for flat location fields (delivery_latitude, delivery_longitude)
+        has_flat_location = ('delivery_latitude' in self.initial_data and 
+                            'delivery_longitude' in self.initial_data)
+        
+        if service_mode == 'home_delivery' and not delivery_address and not using_current_location and not has_flat_location:
             raise serializers.ValidationError({
-                'delivery_address': 'Delivery address is required for home delivery orders.'
+                'delivery_address': 'Delivery address or location coordinates are required for home delivery orders.'
             })
             
         return data
@@ -700,40 +758,59 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         fabric_ids=[]
         # order=Order.objects.create(**validated_data)
         for item_data in items_data:
-            fabric=item_data['fabric']
-            fabric_ids.append(fabric.id)
+            fabric=item_data.get('fabric')
+            # Skip fabric processing for measurement orders (fabric is None)
+            if fabric is not None:
+                fabric_ids.append(fabric.id)
 
-        #lock fabric to prevent race conditions
-        locked_fabrics=Fabric.objects.select_for_update().filter(
-            id__in=fabric_ids
-        )
-        fabric_dict={f.id:f for f in locked_fabrics}
-        for item_data in items_data:
-            fabric=item_data['fabric']
-            quantity=item_data.get('quantity',1)
+        # Only lock fabrics if there are any (not for measurement orders)
+        if fabric_ids:
+            #lock fabric to prevent race conditions
+            locked_fabrics=Fabric.objects.select_for_update().filter(
+                id__in=fabric_ids
+            )
+            fabric_dict={f.id:f for f in locked_fabrics}
+            for item_data in items_data:
+                fabric=item_data.get('fabric')
+                if fabric is None:
+                    # Measurement order item - no fabric
+                    continue
+                    
+                quantity=item_data.get('quantity',1)
 
-            locked_fabric=fabric_dict.get(fabric.id)
-            if not locked_fabric:
-               raise serializers.ValidationError(
-                f"Fabric {fabric.name} not found or locked"
-            )
-            if locked_fabric.stock<quantity:
-               raise serializers.ValidationError(
-                f"Insufficient stock for {locked_fabric.name}. "
-                f"Available: {locked_fabric.stock}, Requested: {quantity}"
-            )
-            if not locked_fabric.is_active:
-                raise serializers.ValidationError(
-                f"{locked_fabric.name} is no longer available"
-            )
+                locked_fabric=fabric_dict.get(fabric.id)
+                if not locked_fabric:
+                   raise serializers.ValidationError(
+                    f"Fabric {fabric.name} not found or locked"
+                )
+                if locked_fabric.stock<quantity:
+                   raise serializers.ValidationError(
+                    f"Insufficient stock for {locked_fabric.name}. "
+                    f"Available: {locked_fabric.stock}, Requested: {quantity}"
+                )
+                if not locked_fabric.is_active:
+                    raise serializers.ValidationError(
+                    f"{locked_fabric.name} is no longer available"
+                )
             items_with_fabrics.append({
-            'fabric': locked_fabric,
-            'quantity': quantity,
-            'unit_price': locked_fabric.price,  # ALWAYS use current DB price
-            'measurements': item_data.get('measurements', {}),
-            'custom_instructions': item_data.get('custom_instructions', ''),
-            'family_member': item_data.get('family_member'),
-        })
+                'fabric': locked_fabric,
+                'quantity': quantity,
+                'unit_price': locked_fabric.price,  # ALWAYS use current DB price
+                'measurements': item_data.get('measurements', {}),
+                'custom_instructions': item_data.get('custom_instructions', ''),
+                'family_member': item_data.get('family_member'),
+            })
+        else:
+            # Measurement orders - no fabric validation needed
+            for item_data in items_data:
+                items_with_fabrics.append({
+                    'fabric': None,
+                    'quantity': 1,
+                    'unit_price': Decimal('0.00'),
+                    'measurements': item_data.get('measurements', {}),
+                    'custom_instructions': item_data.get('custom_instructions', ''),
+                    'family_member': item_data.get('family_member'),
+                })
         # Get distance_km from validated_data if provided
         # Get distance_km from validated_data if provided
         distance_km = validated_data.pop('distance_km', None)
@@ -791,26 +868,51 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         
         validated_data.update(totals)
         order = Order.objects.create(**validated_data)
-        for item_data in items_with_fabrics:
-            fabric = item_data['fabric']
-            quantity = item_data['quantity']
+        
+        # Handle measurement service orders differently
+        if order_type == 'measurement_service':
+            # Auto-mark as paid (free)
+            order.is_free_measurement = True
+            order.payment_status = 'paid'
+            order.payment_method = 'cod'
+            order.total_amount = Decimal('0.00')
+            order.subtotal = Decimal('0.00')
+            order.delivery_fee = Decimal('0.00')
+            order.save()
             
-            # Create order item
-            OrderItem.objects.create(
-                order=order,
-                fabric=fabric,
-                quantity=quantity,
-                unit_price=item_data['unit_price'],  # Snapshot of price at order time
-                measurements=item_data['measurements'],
-                custom_instructions=item_data['custom_instructions'],
-                family_member=item_data['family_member'],
-            )
-            fabric.stock -= quantity
-            if fabric.stock < 0:
-                raise serializers.ValidationError(
-                    f"Stock cannot be negative for {fabric.name}"
+            # Create order items (each represents a person to measure)
+            for item_data in items_with_fabrics:
+                OrderItem.objects.create(
+                    order=order,
+                    fabric=None,  # No fabric for measurement orders
+                    quantity=1,
+                    unit_price=Decimal('0.00'),
+                    measurements=item_data.get('measurements', {}),
+                    custom_instructions=item_data.get('custom_instructions', ''),
+                    family_member=item_data.get('family_member'),
                 )
-            fabric.save(update_fields=['stock'])
+        else:
+            # Regular orders - create items with fabric and reduce stock
+            for item_data in items_with_fabrics:
+                fabric = item_data['fabric']
+                quantity = item_data['quantity']
+                
+                # Create order item
+                OrderItem.objects.create(
+                    order=order,
+                    fabric=fabric,
+                    quantity=quantity,
+                    unit_price=item_data['unit_price'],  # Snapshot of price at order time
+                    measurements=item_data['measurements'],
+                    custom_instructions=item_data['custom_instructions'],
+                    family_member=item_data['family_member'],
+                )
+                fabric.stock -= quantity
+                if fabric.stock < 0:
+                    raise serializers.ValidationError(
+                        f"Stock cannot be negative for {fabric.name}"
+                    )
+                fabric.save(update_fields=['stock'])
         try:
             OrderStatusHistory.objects.create(
                 order=order,
