@@ -246,10 +246,10 @@ class TailorAddMeasurementsView(APIView):
             )
         
         # Verify order type
-        if order.order_type != 'fabric_with_stitching':
+        if order.order_type not in ['fabric_with_stitching', 'measurement_service']:
             return api_response(
                 success=False,
-                message="Measurements can only be added for fabric_with_stitching orders",
+                message="Measurements can only be added for fabric_with_stitching and measurement_service orders",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
         
