@@ -319,6 +319,10 @@ class OrderSerializer(serializers.ModelSerializer):
                 next_actions.append(action)
                 seen_values.add(tailor_status_value)
         
+        # Add custom actions
+        for custom_action in allowed_transitions.get('custom_actions', []):
+            next_actions.append(custom_action)
+        
         # Check if order can be cancelled
         can_cancel = False
         cancel_reason = None
@@ -336,20 +340,24 @@ class OrderSerializer(serializers.ModelSerializer):
         
         # Add measurement tracking for fabric_with_stitching orders
         measurement_status = None
-        if obj.order_type == 'fabric_with_stitching' and obj.rider_status in ['on_way_to_measurement', 'measurement_taken']:
-            from django.db.models import Q
-            total_items = obj.order_items.count()
-            items_with_measurements = obj.order_items.exclude(
-                Q(measurements__isnull=True) | Q(measurements={})
-            ).count()
-            items_without_measurements = total_items - items_with_measurements
+        if obj.order_type == 'fabric_with_stitching':
+            is_rider_measuring = obj.rider_status in ['on_way_to_measurement', 'measurement_taken']
+            is_walk_in_measuring = obj.service_mode == 'walk_in' and obj.status in ['confirmed', 'in_progress']
             
-            measurement_status = {
-                'all_measured': obj.all_items_have_measurements,
-                'total_items': total_items,
-                'measured_items': items_with_measurements,
-                'remaining_items': items_without_measurements,
-            }
+            if is_rider_measuring or is_walk_in_measuring:
+                from django.db.models import Q
+                total_items = obj.order_items.count()
+                items_with_measurements = obj.order_items.exclude(
+                    Q(measurements__isnull=True) | Q(measurements={})
+                ).count()
+                items_without_measurements = total_items - items_with_measurements
+                
+                measurement_status = {
+                    'all_measured': obj.all_items_have_measurements,
+                    'total_items': total_items,
+                    'measured_items': items_with_measurements,
+                    'remaining_items': items_without_measurements,
+                }
         
         return {
             'current_status': obj.status,
@@ -1107,6 +1115,10 @@ class OrderListSerializer(serializers.ModelSerializer):
                 next_actions.append(action)
                 seen_values.add(tailor_status_value)
         
+        # Add custom actions
+        for custom_action in allowed_transitions.get('custom_actions', []):
+            next_actions.append(custom_action)
+        
         # Check if order can be cancelled
         can_cancel = False
         cancel_reason = None
@@ -1124,20 +1136,24 @@ class OrderListSerializer(serializers.ModelSerializer):
         
         # Add measurement tracking for fabric_with_stitching orders
         measurement_status = None
-        if obj.order_type == 'fabric_with_stitching' and obj.rider_status in ['on_way_to_measurement', 'measurement_taken']:
-            from django.db.models import Q
-            total_items = obj.order_items.count()
-            items_with_measurements = obj.order_items.exclude(
-                Q(measurements__isnull=True) | Q(measurements={})
-            ).count()
-            items_without_measurements = total_items - items_with_measurements
+        if obj.order_type == 'fabric_with_stitching':
+            is_rider_measuring = obj.rider_status in ['on_way_to_measurement', 'measurement_taken']
+            is_walk_in_measuring = obj.service_mode == 'walk_in' and obj.status in ['confirmed', 'in_progress']
             
-            measurement_status = {
-                'all_measured': obj.all_items_have_measurements,
-                'total_items': total_items,
-                'measured_items': items_with_measurements,
-                'remaining_items': items_without_measurements,
-            }
+            if is_rider_measuring or is_walk_in_measuring:
+                from django.db.models import Q
+                total_items = obj.order_items.count()
+                items_with_measurements = obj.order_items.exclude(
+                    Q(measurements__isnull=True) | Q(measurements={})
+                ).count()
+                items_without_measurements = total_items - items_with_measurements
+                
+                measurement_status = {
+                    'all_measured': obj.all_items_have_measurements,
+                    'total_items': total_items,
+                    'measured_items': items_with_measurements,
+                    'remaining_items': items_without_measurements,
+                }
         
         return {
             'current_status': obj.status,

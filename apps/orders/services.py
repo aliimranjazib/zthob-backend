@@ -388,21 +388,51 @@ class OrderStatusTransitionService:
                 # No direct status update
                 # transitions['status'] = ['in_progress'] <-- REMOVED
                 if order.tailor_status == 'accepted':
-                    transitions['tailor_status'] = ['in_progress', 'stitching_started']
+                    # User requested to skip 'in_progress' and go directly to stitching
+                    # BUT only if measurements are present for stitching orders
+                    if order.order_type == 'fabric_with_stitching' and not order.all_items_have_measurements:
+                        transitions['tailor_status'] = []
+                        transitions['custom_actions'] = [{
+                            "type": "form_action", 
+                            "value": "record_measurements",
+                            "label": "Record Measurements",
+                            "description": "Open measurement form for customer"
+                        }]
+                    else:
+                        transitions['tailor_status'] = ['stitching_started']
                 elif order.tailor_status == 'none':
-                    # Allow late acceptance (jump to in_progress/stitching)
-                    transitions['tailor_status'] = ['accepted', 'in_progress', 'stitching_started']
+                    # Allow late acceptance (jump to stitching)
+                    transitions['tailor_status'] = ['accepted']
+                    # Add stitching_started only if measurements present (or if we want to allow quick accept -> check -> stitch loop)
+                    if not (order.order_type == 'fabric_with_stitching' and not order.all_items_have_measurements):
+                         transitions['tailor_status'].append('stitching_started')
             
             elif order.status == 'in_progress':
                 if order.tailor_status == 'accepted':
-                    transitions['tailor_status'] = ['in_progress', 'stitching_started']
+                    if order.order_type == 'fabric_with_stitching' and not order.all_items_have_measurements:
+                        transitions['tailor_status'] = []
+                        transitions['custom_actions'] = [{
+                            "type": "form_action", 
+                            "value": "record_measurements",
+                            "label": "Record Measurements",
+                            "description": "Open measurement form for customer"
+                        }]
+                    else:
+                        transitions['tailor_status'] = ['stitching_started']
                 elif order.tailor_status == 'in_progress':
-                    transitions['tailor_status'] = ['stitching_started']
+                    if order.order_type == 'fabric_with_stitching' and not order.all_items_have_measurements:
+                        transitions['tailor_status'] = []
+                        transitions['custom_actions'] = [{
+                            "type": "form_action", 
+                            "value": "record_measurements",
+                            "label": "Record Measurements",
+                            "description": "Open measurement form for customer"
+                        }]
+                    else:
+                        transitions['tailor_status'] = ['stitching_started']
                 elif order.tailor_status == 'stitching_started':
                     transitions['tailor_status'] = ['stitched']
                 elif order.tailor_status == 'stitched':
-                    # No manual update needed - auto-syncs to ready_for_pickup
-                    # transitions['status'] = ['ready_for_pickup'] <-- REMOVED
                     pass
             
             elif order.status == 'ready_for_pickup':
