@@ -1128,6 +1128,8 @@ class OrderListSerializer(serializers.ModelSerializer):
         ]
 
     def get_tailor_name(self, obj):
+        if not obj.tailor:
+            return None
         try:
             return obj.tailor.tailor_profile.shop_name
         except TailorProfile.DoesNotExist:
