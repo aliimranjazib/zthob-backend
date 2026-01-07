@@ -304,6 +304,10 @@ class OrderStatusTransitionService:
                 
                 elif order.rider_status == 'measuring':
                     transitions['rider_status'] = ['measurement_taken']
+                
+                elif order.rider_status == 'measurement_taken':
+                    # After measurements, rider can mark as delivered
+                    transitions['rider_status'] = ['delivered']
         
         elif user_role == OrderStatusTransitionService.ROLE_USER:
             # Customer can mark walk-in measurements as collected

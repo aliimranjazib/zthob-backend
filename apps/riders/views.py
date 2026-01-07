@@ -684,12 +684,14 @@ class RiderOrderDetailView(APIView):
         
         # Riders should not see orders that are still pending (not yet accepted by tailor)
         # Unless the rider is already assigned to it (shouldn't happen normally)
+        # Exception: measurement_service orders don't require tailor acceptance for home_delivery
         if order.tailor_status == 'none' and order.rider != request.user:
-            return api_response(
-                success=False,
-                message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+            if order.order_type != 'measurement_service' or order.service_mode != 'home_delivery':
+                return api_response(
+                    success=False,
+                    message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
         
         serializer = RiderOrderDetailSerializer(order, context={'request': request})
         return api_response(
@@ -757,12 +759,14 @@ class RiderAcceptOrderView(APIView):
             )
         
         # Riders should not accept orders that are still pending (not yet accepted by tailor)
+        # Exception: measurement_service orders don't require tailor acceptance for home_delivery
         if order.tailor_status == 'none':
-            return api_response(
-                success=False,
-                message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
+            if order.order_type != 'measurement_service' or order.service_mode != 'home_delivery':
+                return api_response(
+                    success=False,
+                    message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
         
         if order.rider is not None:
             return api_response(
@@ -872,10 +876,10 @@ class RiderAddMeasurementsView(APIView):
             )
         
         # Verify order type
-        if order.order_type != 'fabric_with_stitching':
+        if order.order_type not in ['fabric_with_stitching', 'measurement_service']:
             return api_response(
                 success=False,
-                message="Measurements can only be added for fabric_with_stitching orders",
+                message="Measurements can only be added for fabric_with_stitching and measurement_service orders",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
         
@@ -1069,12 +1073,14 @@ class RiderUpdateOrderStatusView(APIView):
                 )
             
             # Rider can only accept if tailor has already accepted
+            # Exception: measurement_service orders don't require tailor acceptance for home_delivery
             if order.tailor_status == 'none':
-                return api_response(
-                    success=False,
-                    message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
+                if order.order_type != 'measurement_service' or order.service_mode != 'home_delivery':
+                    return api_response(
+                        success=False,
+                        message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
             
             # Assign rider and create assignment
             order.rider = request.user
