@@ -1,0 +1,70 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Deploy to staging environment
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        
+        ssh -o StrictHostKeyChecking=no root@69.62.126.95 '
+          cd /home/zthob-backend
+          
+          echo "📦 Pulling latest changes..."
+          git fetch origin
+          git reset --hard origin/main
+          
+          echo "🐍 Activating virtual environment..."
+          source magsk_venv/bin/activate
+          
+          echo "📥 Installing dependencies..."
+          pip3 install -r requirements.txt --quiet
+          
+          echo "🔧 Loading staging environment..."
+          export $(grep -v "^#" .env.staging | xargs)
+          export APP_ENV=staging
+          
+          echo "🗄️  Running migrations for staging..."
+          python3 manage.py migrate --verbosity=2 || {
+            echo "❌ ERROR: Migration failed!"
+            exit 1
+          }
+          
+          echo "📊 Checking migration status..."
+          python3 manage.py showmigrations
+          
+          echo "📁 Collecting static files..."
+          python3 manage.py collectstatic --noinput
+          
+          echo "🔄 Restarting staging service..."
+          sudo systemctl restart gunicorn-staging
+          
+          echo "⏳ Waiting for service to start..."
+          sleep 3
+          
+          if systemctl is-active --quiet gunicorn-staging; then
+            echo "✅ STAGING deployment successful!"
+            echo "🌐 Staging URL: http://app.mgask.net"
+            
+            # Test the endpoint
+            curl -s -o /dev/null -w "HTTP Status: %{http_code}\n" http://app.mgask.net/api/config/version/ || true
+          else
+            echo "❌ Staging service failed to start"
+            echo "📋 Recent logs:"
+            sudo journalctl -u gunicorn-staging --since "2 minutes ago" --no-pager
+            exit 1
+          fi
+        '

@@ -27,16 +27,20 @@ except ImportError:
     # python-dotenv not installed, skip .env loading
     pass
 
-# Environment variables
-ENVIRONMENT = os.getenv('DJANGO_ENVIRONMENT', 'development')
+# Environment Detection
+# APP_ENV can be: development, staging, production
+APP_ENV = os.getenv('APP_ENV', 'development')
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-vv#!hz_y7dae4soqei&61+5l-5@(cr@kaz#($@5-nyb5jsku1=')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-if ENVIRONMENT == 'production':
+if APP_ENV == 'production':
     DEBUG = False
+elif APP_ENV == 'staging':
+    # Allow debug in staging for easier troubleshooting
+    DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
 # ALLOWED_HOSTS configuration - ensure production IP is always included
 default_hosts = ['localhost', '127.0.0.1', '0.0.0.0', '69.62.126.95', 'mgask.net', 'www.mgask.net', 'app.mgask.net', 'prod.mgask.net']
@@ -108,22 +112,36 @@ TEMPLATES = [
 WSGI_APPLICATION = "zthob.wsgi.application"
 
 
-# Database
+# Database Configuration
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-if ENVIRONMENT == 'production':
-    # Use PostgreSQL in production
+if APP_ENV == 'production':
+    # Production: Use PostgreSQL
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('DB_NAME', 'zthob'),
-            'USER': os.getenv('DB_USER', 'postgres'),
+            'NAME': os.getenv('DB_NAME', 'mgask'),
+            'USER': os.getenv('DB_USER', 'mgask_user'),
             'PASSWORD': os.getenv('DB_PASSWORD', ''),
             'HOST': os.getenv('DB_HOST', 'localhost'),
             'PORT': os.getenv('DB_PORT', '5432'),
+            'CONN_MAX_AGE': 600,  # Connection pooling
+        }
+    }
+elif APP_ENV == 'staging':
+    # Staging: Use PostgreSQL
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'mgask_staging'),
+            'USER': os.getenv('DB_USER', 'mgask_staging_user'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+            'CONN_MAX_AGE': 600,  # Connection pooling
         }
     }
 else:
-    # Use SQLite for local development
+    # Development: Use SQLite for local development
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -193,7 +211,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Security Settings
-if ENVIRONMENT == 'production':
+if APP_ENV in ['production', 'staging']:
     # HTTPS settings
     SECURE_SSL_REDIRECT = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -272,8 +290,8 @@ CACHES = {
     }
 }
 
-# Email settings (for production)
-if ENVIRONMENT == 'production':
+# Email settings (for production and staging)
+if APP_ENV in ['production', 'staging']:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
     EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
