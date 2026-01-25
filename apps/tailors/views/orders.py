@@ -294,10 +294,29 @@ class TailorAddMeasurementsView(APIView):
             # Check if all items now have measurements
             all_measured = order.all_items_have_measurements
             
+            # For measurement_service orders, auto-update tailor_status when measurements are complete
+            if order.order_type == 'measurement_service' and order.service_mode == 'walk_in':
+                if all_measured and order.tailor_status == 'accepted':
+                    # Use transition service to update status
+                    from apps.orders.services import OrderStatusTransitionService
+                    success, error_msg, updated_order = OrderStatusTransitionService.transition(
+                        order=order,
+                        new_tailor_status='measurements_complete',
+                        user_role='TAILOR',
+                        user=request.user,
+                        notes=f'Measurements recorded for {recipient_name}'
+                    )
+                    if success:
+                        order = updated_order
+                    # Note: If transition fails, we still continue - measurements are saved
+            
             # Build message
             message = f"Measurements saved for {recipient_name}."
             if all_measured:
-                message += " You can now proceed to stitching."
+                if order.order_type == 'measurement_service':
+                    message += " Measurement service completed."
+                else:
+                    message += " You can now proceed to stitching."
             
             # Return updated order
             response_serializer = OrderSerializer(order, context={'request': request})
