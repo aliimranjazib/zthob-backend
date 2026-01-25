@@ -388,6 +388,22 @@ class Order(BaseModel):
                  self.status = 'in_progress'
             elif self.tailor_status == 'stitched' and self.status != 'collected':
                 self.status = 'ready_for_pickup'
+            elif self.tailor_status == 'measurements_complete' and self.status != 'collected':
+                # For measurement service walk-in orders - measurements are done, ready for pickup
+                self.status = 'ready_for_pickup'
+            return
+
+        # For measurement_service flow (Home Delivery)
+        if self.order_type == 'measurement_service':
+            if self.service_mode == 'home_delivery':
+                # Home delivery measurement: rider-driven flow (no tailor confirmation needed)
+                if self.status == 'pending' and self.rider_status == 'accepted':
+                    self.status = 'confirmed'
+                elif self.status == 'confirmed' and self.rider_status in ['on_way_to_measurement', 'measuring']:
+                    self.status = 'in_progress'
+                elif self.rider_status == 'delivered':
+                    self.status = 'delivered'
+            # Walk-in measurement handled in walk_in flow above
             return
 
         # For fabric_only flow (Home Delivery)

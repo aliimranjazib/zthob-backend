@@ -511,8 +511,9 @@ class OrderStatusTransitionService:
                         transitions['tailor_status'] = ['stitching_started']
                 elif order.tailor_status == 'stitching_started':
                     transitions['tailor_status'] = ['stitched']
-                elif order.tailor_status == 'stitched':
-                    pass
+                # When tailor_status='stitched', _sync_main_status() will auto-transition
+                # the main status from 'in_progress' to 'ready_for_pickup'
+                # No explicit tailor_status transitions needed at this point
             
             elif order.status == 'ready_for_pickup':
                 # Tailor's work is done - waiting for customer to collect
@@ -696,6 +697,22 @@ class OrderStatusTransitionService:
                  order.status = 'in_progress'
             elif order.tailor_status == 'stitched' and order.status != 'collected':
                 order.status = 'ready_for_pickup'
+            elif order.tailor_status == 'measurements_complete' and order.status != 'collected':
+                # For measurement service walk-in orders - measurements are done, ready for pickup
+                order.status = 'ready_for_pickup'
+            return
+
+        # For measurement_service flow (Home Delivery)
+        if order.order_type == 'measurement_service':
+            if order.service_mode == 'home_delivery':
+                # Home delivery measurement: rider-driven flow (no tailor confirmation needed)
+                if order.status == 'pending' and order.rider_status == 'accepted':
+                    order.status = 'confirmed'
+                elif order.status == 'confirmed' and order.rider_status in ['on_way_to_measurement', 'measuring']:
+                    order.status = 'in_progress'
+                elif order.rider_status == 'delivered':
+                    order.status = 'delivered'
+            # Walk-in measurement handled in walk_in flow above
             return
 
         # For fabric_only flow (Home Delivery)
