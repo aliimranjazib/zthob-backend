@@ -3,6 +3,7 @@ from typing import List, Dict, Optional
 from django.conf import settings
 from django.utils import timezone
 from .models import FCMDeviceToken, NotificationLog
+from zthob.translations import translate_message, get_language_from_request
 
 # Import Firebase Admin SDK
 try:
@@ -98,6 +99,16 @@ class NotificationService:
             bool: True if notification was sent successfully, False otherwise
         """
         try:
+            # Detect user's language preference
+            # Check if user has language preference (you can add this to user model later)
+            user_language = 'ar'  # Default to Arabic
+            if hasattr(user, 'language_preference'):
+                user_language = user.language_preference
+            
+            # Translate title and body to user's language
+            translated_title = translate_message(title, user_language, **data) if data else translate_message(title, user_language)
+            translated_body = translate_message(body, user_language, **data) if data else translate_message(body, user_language)
+            
             # Initialize Firebase Admin SDK
             if not FIREBASE_SDK_AVAILABLE:
                 logger.error("Firebase Admin SDK not available. Please install: pip install firebase-admin")
@@ -156,10 +167,10 @@ class NotificationService:
             
             for fcm_token in fcm_tokens:
                 try:
-                    # Build notification payload
+                    # Build notification payload with translated text
                     notification = messaging.Notification(
-                        title=title,
-                        body=body
+                        title=translated_title,
+                        body=translated_body
                     )
                     
                     # Build message
@@ -194,8 +205,8 @@ class NotificationService:
                         fcm_token=fcm_token,
                         notification_type=notification_type,
                         category=category,
-                        title=title,
-                        body=body,
+                        title=translated_title,
+                        body=translated_body,
                         data=data or {},
                         status='sent',
                         sent_at=timezone.now()
