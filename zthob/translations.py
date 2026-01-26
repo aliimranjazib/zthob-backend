@@ -307,7 +307,8 @@ TRANSLATIONS = {
     
     # Test Notifications
     "Test Notification": "إشعار تجريبي",
-    "Hello {username}! This is a test notification from Mgask.": "مرحباً {username}! هذا إشعار تجريبي من ثوب.",
+    "Hello {username}! This is a test notification from Zthob.": "مرحباً {username}! هذا إشعار تجريبي من ثوب.",
+}
 
 
 def get_language_from_request(request):
