@@ -411,12 +411,13 @@ class TestNotificationView(APIView):
             success = NotificationService.send_notification(
                 user=request.user,
                 title="Test Notification",
-                body=f"Hello {request.user.username}! This is a test notification from Zthob.",
+                body="Hello {username}! This is a test notification from Zthob.",
                 notification_type='SYSTEM',
                 category='test_notification',
                 data={
                     'test': 'true',
-                    'timestamp': str(request.user.id)
+                    'timestamp': str(request.user.id),
+                    'username': request.user.username or 'User'
                 },
                 priority='high'
             )
@@ -484,12 +485,13 @@ class RiderTestNotificationView(APIView):
             success = NotificationService.send_notification(
                 user=request.user,
                 title="Test Notification",
-                body=f"Hello {request.user.username}! This is a test notification from Zthob.",
+                body="Hello {username}! This is a test notification from Zthob.",
                 notification_type='SYSTEM',
                 category='test_notification',
                 data={
                     'test': 'true',
-                    'timestamp': str(request.user.id)
+                    'timestamp': str(request.user.id),
+                    'username': request.user.username or 'Rider'
                 },
                 priority='high'
             )
@@ -745,12 +747,13 @@ class CustomerTestNotificationView(APIView):
             success = NotificationService.send_notification(
                 user=request.user,
                 title="Test Notification",
-                body=f"Hello {request.user.username}! This is a test notification from Zthob.",
+                body="Hello {username}! This is a test notification from Zthob.",
                 notification_type='SYSTEM',
                 category='test_notification',
                 data={
                     'test': 'true',
-                    'timestamp': str(request.user.id)
+                    'timestamp': str(request.user.id),
+                    'username': request.user.username or 'Customer'
                 },
                 priority='high'
             )
