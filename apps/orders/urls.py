@@ -12,6 +12,7 @@ from .views import (
     TailorOrderDetailView,
     OrderPaymentStatusUpdateView,
     OrderMeasurementsDetailView,
+    WorkOrderPDFView,
 )
 from .measurement_views import MeasurementEligibilityView
 
@@ -38,4 +39,7 @@ urlpatterns = [
     path('tailor/my-orders/', TailorOrderListView.as_view(), name='tailor-orders'),
     path('tailor/paid-orders/', TailorPaidOrdersView.as_view(), name='tailor-paid-orders'),
     path('tailor/<int:order_id>/', TailorOrderDetailView.as_view(), name='tailor-order-detail'),
+    
+    # PDF endpoints
+    path('<int:order_id>/work-order-pdf/', WorkOrderPDFView.as_view(), name='work-order-pdf'),
 ]
