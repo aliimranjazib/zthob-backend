@@ -778,11 +778,11 @@ def send_notification_on_status_transition(sender, instance, name, source, targe
     try:
         # Determine which field changed based on transition method name
         if name.startswith('rider_'):
-            # Rider status transition - send order status notification
-            NotificationService.send_order_status_notification(
+            # Rider status transition - send rider status notification
+            NotificationService.send_rider_status_notification(
                 order=instance,
-                old_status=source,  # ✅ Correct old value from FSM
-                new_status=target,  # ✅ Correct new value from FSM
+                old_rider_status=source,  # ✅ Correct old value from FSM
+                new_rider_status=target,  # ✅ Correct new value from FSM
                 changed_by=user
             )
             logger.info(f"Sent rider status notification: {source} → {target} for order {instance.order_number}")
