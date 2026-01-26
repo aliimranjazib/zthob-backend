@@ -304,7 +304,10 @@ TRANSLATIONS = {
     "Measurements Taken": "تم أخذ القياسات",
     "Measurements Ready": "القياسات جاهزة",
     "Measurements Recorded": "تم تسجيل القياسات",
-}
+    
+    # Test Notifications
+    "Test Notification": "إشعار تجريبي",
+    "Hello {username}! This is a test notification from Mgask.": "مرحباً {username}! هذا إشعار تجريبي من ثوب.",
 
 
 def get_language_from_request(request):
