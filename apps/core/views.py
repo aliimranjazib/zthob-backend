@@ -143,14 +143,20 @@ class VersionView(APIView):
     )
     def get(self, request):
         """Get application version and git info"""
+        from django.conf import settings
         version = get_version()
         git_info = get_git_info()
+        
+        # Get DB name safely
+        db_name = settings.DATABASES.get('default', {}).get('NAME', 'unknown')
         
         data = {
             'version': version,
             'commit_hash': git_info.get('commit_hash', 'unknown'),
             'branch': git_info.get('branch', 'unknown'),
             'commit_date': git_info.get('commit_date', 'unknown'),
+            'app_env': getattr(settings, 'APP_ENV', 'unknown'),
+            'database_name': db_name,
         }
         
         return api_response(
