@@ -793,3 +793,49 @@ class OrderMeasurementsDetailView(APIView):
 
 
 
+
+class WorkOrderPDFView(APIView):
+    """Generate and download work order PDF for tailors"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, order_id):
+        from django.http import HttpResponse
+        from .pdf_service import WorkOrderPDFService
+        
+        try:
+            order = Order.objects.select_related('customer', 'tailor').prefetch_related(
+                'order_items__fabric',
+                'order_items__customization',
+                'order_items__customization__collar_style',
+                'order_items__customization__cuff_style',
+                'order_items__customization__pocket_style',
+            ).get(id=order_id)
+        except Order.DoesNotExist:
+            return api_response(success=False, message='Order not found',
+                              status_code=status.HTTP_404_NOT_FOUND, request=request)
+        
+        if request.user.role != 'TAILOR' or order.tailor != request.user:
+            return api_response(success=False,
+                              message='You do not have permission to access this work order',
+                              status_code=status.HTTP_403_FORBIDDEN, request=request)
+        
+        language = request.GET.get('lang', 'ar')
+        if language not in ['ar', 'en']:
+            language = 'ar'
+        
+        try:
+            pdf_service = WorkOrderPDFService(order, language=language)
+            pdf_bytes = pdf_service.generate()
+            
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            filename = f'work_order_{order.order_number}_{language}.pdf'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error generating PDF: {str(e)}")
+            return api_response(success=False, message='Error generating work order PDF',
+                              errors=str(e), status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                              request=request)
