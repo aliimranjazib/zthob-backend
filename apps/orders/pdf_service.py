@@ -65,7 +65,7 @@ class WorkOrderPDFService:
         self.pdf.setFont("Helvetica-Bold", 18)
         title = "Work Order" if self.language == 'en' else "أمر العمل"
         title_rendered = self.render_text(title)
-        self.pdf.drawCentredString(self.PAGE_WIDTH / 2, self.y_position, title_rendered)
+        self.pdf.drawCenteredString(self.PAGE_WIDTH / 2, self.y_position, title_rendered)
         self.y_position -= 10 * mm
         
         # Order number
@@ -74,7 +74,7 @@ class WorkOrderPDFService:
         if self.language == 'ar':
             order_num = f"#{self.order.order_number} الطلب رقم"
         order_num_rendered = self.render_text(order_num)
-        self.pdf.drawCentredString(self.PAGE_WIDTH / 2, self.y_position, order_num_rendered)
+        self.pdf.drawCenteredString(self.PAGE_WIDTH / 2, self.y_position, order_num_rendered)
         self.y_position -= 15 * mm
         
         # Horizontal line
