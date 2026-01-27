@@ -603,7 +603,7 @@ class CustomerMeasurementsListView(APIView):
     
     @extend_schema(
         summary="Get all measurements",
-        description="Retrieve all measurements for the authenticated customer and their family members. Supports filtering by family_member_id, recipient_type, and order_id.",
+        description="Retrieve all measurements grouped by recipient (Customer and Family Members). Supports filtering by family_member_id, recipient_type, and order_id.",
         tags=["Customer Measurements"],
         parameters=[
             {
@@ -627,13 +627,6 @@ class CustomerMeasurementsListView(APIView):
                 'required': False,
                 'schema': {'type': 'integer'}
             },
-            {
-                'name': 'include_stored',
-                'in': 'query',
-                'description': 'Include stored profile measurements (default: true)',
-                'required': False,
-                'schema': {'type': 'boolean', 'default': True}
-            }
         ]
     )
     def get(self, request):
@@ -646,210 +639,162 @@ class CustomerMeasurementsListView(APIView):
         
         # Get query parameters
         family_member_id = request.query_params.get('family_member_id')
-        recipient_type = request.query_params.get('recipient_type')
+        recipient_type_filter = request.query_params.get('recipient_type')
         order_id = request.query_params.get('order_id')
-        include_stored = request.query_params.get('include_stored', 'true').lower() == 'true'
         
-        # Get all orders with measurements for this customer
+        # 1. Initialize Recipients map (key: string "type_id")
+        recipients_map = {}
+        
+        # Add Customer (Self)
+        if not recipient_type_filter or recipient_type_filter == 'customer':
+            customer_key = f"customer_{request.user.id}"
+            recipients_map[customer_key] = {
+                'recipient_type': 'customer',
+                'recipient_id': request.user.id,
+                'recipient_name': request.user.get_full_name() or request.user.username,
+                'recipient_relationship': None,
+                'recipient_gender': getattr(request.user, 'customer_profile', None).gender if hasattr(request.user, 'customer_profile') else None,
+                'current_measurements': None,
+                'current_measurements_note': None,
+                'order_history': [],
+                'stats': {'total_orders': 0, 'last_measured_at': None}
+            }
+            
+            # Populate stored measurements for customer
+            if hasattr(request.user, 'customer_profile') and request.user.customer_profile.measurements:
+                recipients_map[customer_key]['current_measurements'] = request.user.customer_profile.measurements
+                recipients_map[customer_key]['current_measurements_note'] = 'Stored customer profile measurements'
+
+        # Add Family Members
+        if not recipient_type_filter or recipient_type_filter == 'family_member':
+            family_members = FamilyMember.objects.filter(user=request.user)
+            if family_member_id:
+                family_members = family_members.filter(id=family_member_id)
+                
+            for fm in family_members:
+                fm_key = f"family_member_{fm.id}"
+                recipients_map[fm_key] = {
+                    'recipient_type': 'family_member',
+                    'recipient_id': fm.id,
+                    'recipient_name': fm.name,
+                    'recipient_relationship': fm.relationship,
+                    'recipient_gender': fm.gender,
+                    'current_measurements': None,
+                    'current_measurements_note': None,
+                    'order_history': [],
+                    'stats': {'total_orders': 0, 'last_measured_at': None}
+                }
+                
+                # Populate stored measurements for family member
+                if fm.measurements:
+                    recipients_map[fm_key]['current_measurements'] = fm.measurements
+                    recipients_map[fm_key]['current_measurements_note'] = 'Stored profile measurements'
+
+        # 2. Fetch Order Measurements
         orders_query = Order.objects.filter(
             customer=request.user,
             rider_status='measurement_taken',
             rider_measurements__isnull=False
         ).select_related(
-            'customer',
-            'family_member',
-            'tailor',
-            'rider'
-        ).prefetch_related('tailor__tailor_profile')
+            'customer', 'tailor', 'rider'
+        ).prefetch_related(
+            'order_items__family_member', 
+            'tailor__tailor_profile'
+        )
         
         # Apply filters
         if order_id:
             orders_query = orders_query.filter(id=order_id)
         
         if family_member_id:
-            orders_query = orders_query.filter(family_member_id=family_member_id)
+             orders_query = orders_query.filter(order_items__family_member_id=family_member_id).distinct()
         
-        orders = orders_query.order_by('-measurement_taken_at', '-created_at').prefetch_related('order_items__family_member')
+        orders = orders_query.order_by('-measurement_taken_at', '-created_at')
         
-        # Separate customer and family member measurements
-        customer_measurements = []
-        family_member_measurements = []
-        family_members_data = {}  # Track family members for summary
-        
-        processed_recipients_per_order = set() # Track (order_id, recipient_id) to avoid duplicates if multiple items for same person
-
         for order in orders:
-            # Check order items for recipients and measurements
-            for item in order.order_items.all():
-                # Skip if no measurements for this item
-                if not item.measurements and not order.rider_measurements:
-                    continue
+            # Helper to add measurement to map
+            def add_measurement_to_recipient(r_type, r_id, order_obj, measurements):
+                key = f"{r_type}_{r_id}"
                 
-                recipient_id = item.family_member.id if item.family_member else request.user.id
-                recipient_type_val = 'family_member' if item.family_member else 'customer'
-                
-                key = (order.id, recipient_id)
-                if key in processed_recipients_per_order:
-                    continue
-                
-                measurement_data = {
-                    'order_id': order.id,
-                    'order_number': order.order_number,
-                    'order_type': order.order_type,
-                    'measurements': item.measurements or order.rider_measurements,
-                    'measurement_taken_at': order.measurement_taken_at.isoformat() if order.measurement_taken_at else None,
-                    'order_status': order.status,
-                    'rider_status': order.rider_status,
-                    'order_created_at': order.created_at.isoformat() if order.created_at else None,
+                # If filtered out, skip
+                if key not in recipients_map:
+                    return
+
+                # Create history entry
+                entry = {
+                    'order_id': order_obj.id,
+                    'order_number': order_obj.order_number,
+                    'order_type': order_obj.order_type,
+                    'measurements': measurements,
+                    'measurement_taken_at': order_obj.measurement_taken_at,
+                    'order_status': order_obj.status,
+                    'rider_status': order_obj.rider_status,
+                    'order_created_at': order_obj.created_at,
+                    'tailor_name': None
                 }
                 
-                # Get tailor name if available
+                # Get tailor name
                 try:
-                    if order.tailor and hasattr(order.tailor, 'tailor_profile'):
-                        measurement_data['tailor_name'] = order.tailor.tailor_profile.shop_name
+                    if order_obj.tailor and hasattr(order_obj.tailor, 'tailor_profile'):
+                        entry['tailor_name'] = order_obj.tailor.tailor_profile.shop_name
                     else:
-                        measurement_data['tailor_name'] = order.tailor.username if order.tailor else None
+                        entry['tailor_name'] = order_obj.tailor.username if order_obj.tailor else None
                 except:
-                    measurement_data['tailor_name'] = None
-
-                if item.family_member:
-                    # Family member recipient
-                    if not recipient_type or recipient_type == 'family_member':
-                        if not family_member_id or item.family_member.id == int(family_member_id):
-                            measurement_data.update({
-                                'recipient_type': 'family_member',
-                                'recipient_id': item.family_member.id,
-                                'recipient_name': item.family_member.name,
-                                'recipient_relationship': item.family_member.relationship,
-                                'recipient_gender': item.family_member.gender,
-                            })
-                            family_member_measurements.append(measurement_data)
-                            
-                            # Track for summary
-                            fm_id = item.family_member.id
-                            if fm_id not in family_members_data:
-                                family_members_data[fm_id] = {
-                                    'family_member_id': fm_id,
-                                    'family_member_name': item.family_member.name,
-                                    'relationship': item.family_member.relationship,
-                                    'total_measurements': 0,
-                                    'latest_measurement_date': None,
-                                }
-                            family_members_data[fm_id]['total_measurements'] += 1
-                            if not family_members_data[fm_id]['latest_measurement_date'] or \
-                               (order.measurement_taken_at and order.measurement_taken_at > family_members_data[fm_id]['latest_measurement_date']):
-                                family_members_data[fm_id]['latest_measurement_date'] = order.measurement_taken_at
-                else:
-                    # Customer's own recipient
-                    if not recipient_type or recipient_type == 'customer':
-                        measurement_data.update({
-                            'recipient_type': 'customer',
-                            'recipient_id': request.user.id,
-                            'recipient_name': request.user.get_full_name() or request.user.username,
-                        })
-                        customer_measurements.append(measurement_data)
+                    pass
                 
-                processed_recipients_per_order.add(key)
-        
-        # Get stored profile measurements
-        stored_profile_measurements = []
-        if include_stored:
-            # Customer's own stored measurements
-            try:
-                if hasattr(request.user, 'customer_profile') and request.user.customer_profile.measurements:
-                    stored_profile_measurements.append({
-                        'recipient_type': 'customer',
-                        'recipient_id': request.user.id,
-                        'recipient_name': request.user.get_full_name() or request.user.username,
-                        'measurements': request.user.customer_profile.measurements,
-                        'last_updated': None,
-                        'note': 'Stored customer profile measurements'
-                    })
-            except:
-                pass
+                recipients_map[key]['order_history'].append(entry)
+                
+                # Update stats
+                recipients_map[key]['stats']['total_orders'] += 1
+                current_last = recipients_map[key]['stats']['last_measured_at']
+                if not current_last or (order_obj.measurement_taken_at and order_obj.measurement_taken_at > current_last):
+                     recipients_map[key]['stats']['last_measured_at'] = order_obj.measurement_taken_at
 
-            # Family members' stored measurements
-            family_members = FamilyMember.objects.filter(user=request.user)
-            if family_member_id:
-                family_members = family_members.filter(id=family_member_id)
+
+            # Strategy: Iterate fully distinct items in order
+            processed_in_order = set()
             
-            for fm in family_members:
-                if fm.measurements:
-                    stored_profile_measurements.append({
-                        'recipient_type': 'family_member',
-                        'recipient_id': fm.id,
-                        'recipient_name': fm.name,
-                        'recipient_relationship': fm.relationship,
-                        'recipient_gender': fm.gender,
-                        'measurements': fm.measurements,
-                        'last_updated': None,  # FamilyMember doesn't have last_updated field
-                        'note': 'Stored profile measurements (not tied to a specific order)'
-                    })
+            for item in order.order_items.all():
+                # Determine recipient for this item
+                if item.family_member:
+                    r_type, r_id = 'family_member', item.family_member.id
+                else:
+                    r_type, r_id = 'customer', request.user.id
                     
-                    # Update summary
-                    if fm.id not in family_members_data:
-                        family_members_data[fm.id] = {
-                            'family_member_id': fm.id,
-                            'family_member_name': fm.name,
-                            'relationship': fm.relationship,
-                            'total_measurements': 0,
-                            'latest_measurement_date': None,
-                            'has_stored_measurements': True,
-                        }
-                    else:
-                        family_members_data[fm.id]['has_stored_measurements'] = True
+                unique_key = (r_type, r_id)
+                if unique_key in processed_in_order:
+                    continue
+                
+                measurements = item.measurements or order.rider_measurements
+                
+                if measurements:
+                    add_measurement_to_recipient(r_type, r_id, order, measurements)
+                    processed_in_order.add(unique_key)
+            
+            # Edge case: Order has measurements but NO items -> Assign to Customer
+            if not processed_in_order and order.rider_measurements:
+                 add_measurement_to_recipient('customer', request.user.id, order, order.rider_measurements)
+
+        # 3. Format Response
+        recipients_list = list(recipients_map.values())
         
-        # Build summary
-        summary = {
-            'total_customer_measurements': len(customer_measurements),
-            'total_family_member_measurements': len(family_member_measurements),
-            'total_family_members_with_measurements': len(family_members_data),
-            'total_unique_recipients': len(customer_measurements) + len(family_members_data),
-        }
+        # Calculate global summary
+        total_recipients = len(recipients_list)
+        active_recipients = sum(1 for r in recipients_list if r['current_measurements'] is not None or r['stats']['total_orders'] > 0)
         
-        # Build response data
         response_data = {
-            'customer_measurements': customer_measurements,
-            'family_member_measurements': family_member_measurements,
-            'family_members_summary': list(family_members_data.values()),
-            'stored_profile_measurements': stored_profile_measurements,
-            'summary': summary,
+            'recipients': recipients_list,
+            'global_summary': {
+                'total_recipients': total_recipients,
+                'active_recipients_with_data': active_recipients
+            }
         }
         
-        # If filtering by family_member_id, return simplified structure
-        if family_member_id:
-            try:
-                fm = FamilyMember.objects.get(id=family_member_id, user=request.user)
-                response_data = {
-                    'family_member_info': {
-                        'id': fm.id,
-                        'name': fm.name,
-                        'relationship': fm.relationship,
-                        'gender': fm.gender,
-                    },
-                    'order_measurements': family_member_measurements,
-                    'stored_profile_measurements': {
-                        'measurements': fm.measurements if fm.measurements else None,
-                        'last_updated': None,
-                        'note': 'Stored profile measurements'
-                    } if fm.measurements else None,
-                    'summary': {
-                        'total_order_measurements': len(family_member_measurements),
-                        'has_stored_measurements': bool(fm.measurements),
-                        'latest_measurement_date': family_members_data.get(fm.id, {}).get('latest_measurement_date').isoformat() if family_members_data.get(fm.id, {}).get('latest_measurement_date') else None,
-                    }
-                }
-            except FamilyMember.DoesNotExist:
-                return api_response(
-                    success=False,
-                    message="Family member not found",
-                    status_code=status.HTTP_404_NOT_FOUND
-                )
-        
+        from apps.customers.serializers import RecipientMeasurementsResponseSerializer
         return api_response(
             success=True,
             message="Measurements retrieved successfully",
-            data=response_data,
+            data=RecipientMeasurementsResponseSerializer(response_data).data,
             status_code=status.HTTP_200_OK
         )
 

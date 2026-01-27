@@ -333,4 +333,33 @@ class FamilyMemberMeasurementsDetailSerializer(serializers.Serializer):
     family_member = serializers.DictField()
     order_measurements = OrderMeasurementItemSerializer(many=True)
     stored_profile_measurements = serializers.DictField(required=False, allow_null=True)
-    summary = serializers.DictField()
+
+class RecipientMeasurementStatsSerializer(serializers.Serializer):
+    """Statistics for a recipient's measurements"""
+    total_orders = serializers.IntegerField()
+    last_measured_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class RecipientMeasurementProfileSerializer(serializers.Serializer):
+    """Complete measurement profile for a single recipient"""
+    recipient_type = serializers.ChoiceField(choices=['customer', 'family_member'])
+    recipient_id = serializers.IntegerField()
+    recipient_name = serializers.CharField()
+    recipient_relationship = serializers.CharField(required=False, allow_null=True)
+    recipient_gender = serializers.CharField(required=False, allow_null=True)
+    
+    # The current active/stored measurements (from profile)
+    current_measurements = serializers.DictField(required=False, allow_null=True)
+    current_measurements_note = serializers.CharField(required=False, allow_null=True)
+    
+    # History of measurements from orders
+    order_history = OrderMeasurementItemSerializer(many=True)
+    
+    # Summary stats
+    stats = RecipientMeasurementStatsSerializer()
+
+
+class RecipientMeasurementsResponseSerializer(serializers.Serializer):
+    """New top-level response serializer"""
+    recipients = RecipientMeasurementProfileSerializer(many=True)
+    global_summary = serializers.DictField()
