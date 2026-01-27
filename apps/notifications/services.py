@@ -501,6 +501,10 @@ class NotificationService:
                     priority='high'
                 )
         
+       
+        if new_tailor_status == 'accepted':
+            NotificationService.send_new_order_broadcast(order)
+            
         # Notify rider
         if order.rider and new_tailor_status in tailor_status_messages:
             message_template = tailor_status_messages[new_tailor_status].get('rider', '')
@@ -820,6 +824,7 @@ class NotificationService:
                 },
                 priority='high'
             )
+
         
         # Notify rider (confirmation)
         if is_measurement_order:
@@ -839,5 +844,54 @@ class NotificationService:
             },
             priority='normal'
         )
+
+    @staticmethod
+    def send_new_order_broadcast(order):
+        """
+        Send broadcast notification to all active and approved riders 
+        when a new order becomes available (e.g. tailor accepted).
+        """
+        from apps.accounts.models import CustomUser
+        
+        # Get all active riders with approved profiles
+        # Note: We filter for users with role='RIDER', is_active=True
+        # and their profile is_approved=True and is_available=True
+        active_riders = CustomUser.objects.filter(
+            role='RIDER',
+            is_active=True,
+            rider_profile__review__review_status='approved',
+            rider_profile__is_available=True
+        ).distinct()
+        
+        if not active_riders.exists():
+            logger.info("No active riders found for broadcast")
+            return
+            
+        order_number = order.order_number
+        title = "New available order #{order_number}"
+        body = "A new order is available for pickup. Check your available orders list."
+        
+        if FIREBASE_SDK_AVAILABLE:
+            # We can use send_bulk_notifications if we want individual tracking
+            # Or iterate and send. For better logging, let's iterate.
+            
+            count = 0
+            for rider in active_riders:
+                success = NotificationService.send_notification(
+                    user=rider,
+                    title=title,
+                    body=body,
+                    notification_type='ORDER_AVAILABLE',
+                    category='new_order_available',
+                    data={
+                        'order_id': order.id,
+                        'order_number': order_number,
+                    },
+                    priority='high'
+                )
+                if success:
+                    count += 1
+            
+            logger.info(f"Broadcast sent to {count} riders for order {order_number}")
 
 

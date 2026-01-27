@@ -301,6 +301,9 @@ TRANSLATIONS = {
     "You are delivering order #{order_number} to customer": "أنت توصل الطلب رقم #{order_number} للعميل",
     
     # Notification Titles
+    "New available order #{order_number}": "طلب جديد متاح #{order_number}",
+    "A new order is available for pickup. Check your available orders list.": "طلب جديد متاح للاستلام. تحقق من قائمة الطلبات المتاحة.",
+    
     "Measurements Taken": "تم أخذ القياسات",
     "Measurements Ready": "القياسات جاهزة",
     "Measurements Recorded": "تم تسجيل القياسات",
