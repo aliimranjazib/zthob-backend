@@ -152,12 +152,12 @@ class NotificationService:
             success_count = 0
             failed_tokens = []
             
-            # Build data payload with translated text
+            # Build data payload
             payload_data = {
                 'type': notification_type,
                 'category': category,
-                'title': translated_title,  # Use translated title
-                'body': translated_body,    # Use translated body
+                'title': title,
+                'body': body,
             }
             
             if data:
@@ -344,16 +344,10 @@ class NotificationService:
         if order.customer and new_status in status_messages:
             message_template = status_messages[new_status].get('customer', '')
             if message_template:
-                title = f"Order #{order_number} Update"
-                body = message_template.format(
-                    order_number=order_number,
-                    customer_name=customer_name
-                )
-                
                 NotificationService.send_notification(
                     user=order.customer,
-                    title=title,
-                    body=body,
+                    title='Order #{order_number} Update',
+                    body=message_template,
                     notification_type='ORDER_STATUS',
                     category=f'order_{new_status}',
                     data={
@@ -361,6 +355,7 @@ class NotificationService:
                         'order_number': order_number,
                         'status': new_status,
                         'old_status': old_status,
+                        'customer_name': customer_name,
                     },
                     priority='high'
                 )
@@ -369,16 +364,10 @@ class NotificationService:
         if order.tailor and new_status in status_messages:
             message_template = status_messages[new_status].get('tailor', '')
             if message_template:
-                title = f"Order #{order_number} Update"
-                body = message_template.format(
-                    order_number=order_number,
-                    customer_name=customer_name
-                )
-                
                 NotificationService.send_notification(
                     user=order.tailor,
-                    title=title,
-                    body=body,
+                    title='Order #{order_number} Update',
+                    body=message_template,
                     notification_type='ORDER_STATUS',
                     category=f'order_{new_status}',
                     data={
@@ -386,6 +375,7 @@ class NotificationService:
                         'order_number': order_number,
                         'status': new_status,
                         'old_status': old_status,
+                        'customer_name': customer_name,
                     },
                     priority='high'
                 )
@@ -394,16 +384,10 @@ class NotificationService:
         if order.rider and new_status in status_messages:
             message_template = status_messages[new_status].get('rider', '')
             if message_template:
-                title = f"Order #{order_number} Update"
-                body = message_template.format(
-                    order_number=order_number,
-                    customer_name=customer_name
-                )
-                
                 NotificationService.send_notification(
                     user=order.rider,
-                    title=title,
-                    body=body,
+                    title='Order #{order_number} Update',
+                    body=message_template,
                     notification_type='ORDER_STATUS',
                     category=f'order_{new_status}',
                     data={
@@ -411,6 +395,7 @@ class NotificationService:
                         'order_number': order_number,
                         'status': new_status,
                         'old_status': old_status,
+                        'customer_name': customer_name,
                     },
                     priority='high'
                 )
@@ -453,16 +438,10 @@ class NotificationService:
         if order.customer and new_tailor_status in tailor_status_messages:
             message_template = tailor_status_messages[new_tailor_status].get('customer', '')
             if message_template:
-                title = f"Order #{order_number} Update"
-                body = message_template.format(
-                    order_number=order_number,
-                    customer_name=customer_name
-                )
-                
                 NotificationService.send_notification(
                     user=order.customer,
-                    title=title,
-                    body=body,
+                    title='Order #{order_number} Update',
+                    body=message_template,
                     notification_type='ORDER_STATUS',
                     category=f'tailor_{new_tailor_status}',
                     data={
@@ -471,6 +450,7 @@ class NotificationService:
                         'tailor_status': new_tailor_status,
                         'old_tailor_status': old_tailor_status,
                         'status': order.status,
+                        'customer_name': customer_name,
                     },
                     priority='high'
                 )
@@ -479,16 +459,10 @@ class NotificationService:
         if order.tailor and new_tailor_status in tailor_status_messages:
             message_template = tailor_status_messages[new_tailor_status].get('tailor', '')
             if message_template:
-                title = f"Order #{order_number} Update"
-                body = message_template.format(
-                    order_number=order_number,
-                    customer_name=customer_name
-                )
-                
                 NotificationService.send_notification(
                     user=order.tailor,
-                    title=title,
-                    body=body,
+                    title='Order #{order_number} Update',
+                    body=message_template,
                     notification_type='ORDER_STATUS',
                     category=f'tailor_{new_tailor_status}',
                     data={
@@ -497,6 +471,7 @@ class NotificationService:
                         'tailor_status': new_tailor_status,
                         'old_tailor_status': old_tailor_status,
                         'status': order.status,
+                        'customer_name': customer_name,
                     },
                     priority='high'
                 )
@@ -509,16 +484,10 @@ class NotificationService:
         if order.rider and new_tailor_status in tailor_status_messages:
             message_template = tailor_status_messages[new_tailor_status].get('rider', '')
             if message_template:
-                title = f"Order #{order_number} Update"
-                body = message_template.format(
-                    order_number=order_number,
-                    customer_name=customer_name
-                )
-                
                 NotificationService.send_notification(
                     user=order.rider,
-                    title=title,
-                    body=body,
+                    title='Order #{order_number} Update',
+                    body=message_template,
                     notification_type='ORDER_STATUS',
                     category=f'tailor_{new_tailor_status}',
                     data={
@@ -527,6 +496,7 @@ class NotificationService:
                         'tailor_status': new_tailor_status,
                         'old_tailor_status': old_tailor_status,
                         'status': order.status,
+                        'customer_name': customer_name,
                     },
                     priority='high'
                 )
@@ -544,46 +514,44 @@ class NotificationService:
         # Map rider_status to notification messages
         rider_status_messages = {
             'accepted': {
-                'customer': f'Rider has accepted your order #{order_number}',
-                'tailor': f'Rider has accepted order #{order_number}',
-                'rider': f'You have accepted order #{order_number}',
+                'customer': 'Rider has accepted your order #{order_number}',
+                'tailor': 'Rider has accepted order #{order_number}',
+                'rider': 'You have accepted order #{order_number}',
             },
             'on_way_to_measurement': {
-                'customer': f'Rider is on the way to take your measurements for order #{order_number}',
-                'tailor': f'Rider is on the way to customer for measurements - order #{order_number}',
-                'rider': f'You are on the way to take measurements for order #{order_number}',
+                'customer': 'Rider is on the way to take your measurements for order #{order_number}',
+                'tailor': 'Rider is on the way to customer for measurements - order #{order_number}',
+                'rider': 'You are on the way to take measurements for order #{order_number}',
             },
             'measuring': {
-                'customer': f'Rider is taking your measurements now for order #{order_number}',
-                'tailor': f'Rider is currently taking customer measurements - order #{order_number}',
-                'rider': f'Measurements in progress for order #{order_number}',
+                'customer': 'Rider is taking your measurements now for order #{order_number}',
+                'tailor': 'Rider is currently taking customer measurements - order #{order_number}',
+                'rider': 'Measurements in progress for order #{order_number}',
             },
             'measurement_taken': {
-                'customer': f'Your measurements have been completed for order #{order_number}' + 
-                           ('' if is_measurement_order else '. Tailor will now start stitching.'),
-                'tailor': f'Measurements ready for order #{order_number}' + 
-                         ('' if is_measurement_order else '. You can now start stitching.'),
-                'rider': f'Measurements successfully recorded for order #{order_number}',
+                'customer': 'Your measurements have been completed for order #{order_number}' if is_measurement_order else 'Your measurements have been completed for order #{order_number}. Tailor will now start stitching.',
+                'tailor': 'Measurements ready for order #{order_number}' if is_measurement_order else 'Measurements ready for order #{order_number}. You can now start stitching.',
+                'rider': 'Measurements successfully recorded for order #{order_number}',
             },
             'on_way_to_pickup': {
-                'customer': f'Rider is on the way to pickup your order #{order_number} from tailor',
-                'tailor': f'Rider is on the way to pickup order #{order_number}',
-                'rider': f'You are on the way to pickup order #{order_number} from tailor',
+                'customer': 'Rider is on the way to pickup your order #{order_number} from tailor',
+                'tailor': 'Rider is on the way to pickup order #{order_number}',
+                'rider': 'You are on the way to pickup order #{order_number} from tailor',
             },
             'picked_up': {
-                'customer': f'Rider has picked up your order #{order_number} and is preparing for delivery',
-                'tailor': f'Rider has picked up order #{order_number}',
-                'rider': f'You have picked up order #{order_number} from tailor',
+                'customer': 'Rider has picked up your order #{order_number} and is preparing for delivery',
+                'tailor': 'Rider has picked up order #{order_number}',
+                'rider': 'You have picked up order #{order_number} from tailor',
             },
             'on_way_to_delivery': {
-                'customer': f'Your order #{order_number} is on the way! Rider will arrive soon.',
-                'tailor': f'Order #{order_number} is now out for delivery',
-                'rider': f'You are delivering order #{order_number} to customer',
+                'customer': 'Your order #{order_number} is on the way! Rider will arrive soon.',
+                'tailor': 'Order #{order_number} is now out for delivery',
+                'rider': 'You are delivering order #{order_number} to customer',
             },
             'delivered': {
-                'customer': f'Your order #{order_number} has been delivered successfully',
-                'tailor': f'Order #{order_number} has been delivered to customer',
-                'rider': f'Order #{order_number} delivery completed',
+                'customer': 'Your order #{order_number} has been delivered successfully',
+                'tailor': 'Order #{order_number} has been delivered to customer',
+                'rider': 'Order #{order_number} delivery completed',
             },
         }
         
@@ -591,11 +559,9 @@ class NotificationService:
         if order.customer and new_rider_status in rider_status_messages:
             message_template = rider_status_messages[new_rider_status].get('customer', '')
             if message_template:
-                title = f"Order #{order_number} Update"
-                
                 NotificationService.send_notification(
                     user=order.customer,
-                    title=title,
+                    title='Order #{order_number} Update',
                     body=message_template,
                     notification_type='ORDER_STATUS',
                     category=f'rider_{new_rider_status}',
@@ -613,11 +579,9 @@ class NotificationService:
         if order.tailor and new_rider_status in rider_status_messages:
             message_template = rider_status_messages[new_rider_status].get('tailor', '')
             if message_template:
-                title = f"Order #{order_number} Update"
-                
                 NotificationService.send_notification(
                     user=order.tailor,
-                    title=title,
+                    title='Order #{order_number} Update',
                     body=message_template,
                     notification_type='ORDER_STATUS',
                     category=f'rider_{new_rider_status}',
@@ -635,11 +599,9 @@ class NotificationService:
         if order.rider and new_rider_status in rider_status_messages:
             message_template = rider_status_messages[new_rider_status].get('rider', '')
             if message_template:
-                title = f"Order #{order_number} Update"
-                
                 NotificationService.send_notification(
                     user=order.rider,
-                    title=title,
+                    title='Order #{order_number} Update',
                     body=message_template,
                     notification_type='ORDER_STATUS',
                     category=f'rider_{new_rider_status}',
@@ -657,18 +619,20 @@ class NotificationService:
     def send_payment_status_notification(order, old_status: str, new_status: str):
         """Send notification when payment status changes"""
         order_number = order.order_number
+        customer_name = order.customer.username if order.customer else "Customer"
+        total_amount = str(order.total_amount)
         
         payment_messages = {
             'paid': {
-                'customer': f'Your order #{order_number} has been placed successfully! Payment of SAR {order.total_amount} confirmed.',
-                'tailor': f'New order #{order_number} received from {order.customer.username if order.customer else "Customer"}. Payment of SAR {order.total_amount} confirmed.',
+                'customer': 'Your order #{order_number} has been placed successfully! Payment of SAR {total_amount} confirmed.',
+                'tailor': 'New order #{order_number} received from {customer}. Payment of SAR {total_amount} confirmed.',
             },
             'pending': {
-                'customer': f'Payment pending for order #{order_number}',
+                'customer': 'Payment pending for order #{order_number}',
             },
             'refunded': {
-                'customer': f'Refund of SAR {order.total_amount} has been processed for order #{order_number}',
-                'tailor': f'Refund issued for order #{order_number}',
+                'customer': 'Refund of SAR {total_amount} has been processed for order #{order_number}',
+                'tailor': 'Refund issued for order #{order_number}',
             },
         }
         
@@ -687,7 +651,7 @@ class NotificationService:
                         'order_number': order_number,
                         'payment_status': new_status,
                         'old_payment_status': old_status,
-                        'amount': str(order.total_amount),
+                        'total_amount': total_amount,
                     },
                     priority='high'
                 )
@@ -707,7 +671,8 @@ class NotificationService:
                         'order_number': order_number,
                         'payment_status': new_status,
                         'old_payment_status': old_status,
-                        'amount': str(order.total_amount),
+                        'customer': customer_name,
+                        'total_amount': total_amount,
                     },
                     priority='high'
                 )
@@ -723,7 +688,7 @@ class NotificationService:
             NotificationService.send_notification(
                 user=order.customer,
                 title='Rider Assigned',
-                body=f'Rider {rider_name} has been assigned to deliver your order #{order_number}',
+                body='Rider {rider_name} has been assigned to deliver your order #{order_number}',
                 notification_type='RIDER_ASSIGNMENT',
                 category='rider_assigned',
                 data={
@@ -740,7 +705,7 @@ class NotificationService:
             NotificationService.send_notification(
                 user=order.tailor,
                 title='Rider Assigned',
-                body=f'Rider {rider_name} will pick up order #{order_number}',
+                body='Rider {rider_name} will pick up order #{order_number}',
                 notification_type='RIDER_ASSIGNMENT',
                 category='rider_assigned',
                 data={
@@ -756,7 +721,7 @@ class NotificationService:
         NotificationService.send_notification(
             user=rider,
             title='New Order Assignment',
-            body=f'You have been assigned to order #{order_number}',
+            body='You have been assigned to order #{order_number}',
             notification_type='RIDER_ASSIGNMENT',
             category='order_assigned',
             data={
@@ -780,10 +745,10 @@ class NotificationService:
         if order.customer:
             if is_measurement_order:
                 # Measurement service - no stitching
-                body = f'Your measurements have been completed for order #{order_number}. Thank you!'
+                body = 'Your measurements have been completed for order #{order_number}. Thank you!'
             else:
                 # Fabric with stitching - mention stitching
-                body = f'Measurements have been taken for your order #{order_number}. Tailor will now start stitching.'
+                body = 'Measurements have been taken for your order #{order_number}. Tailor will now start stitching.'
             
             NotificationService.send_notification(
                 user=order.customer,
@@ -804,10 +769,10 @@ class NotificationService:
         if order.tailor:
             if is_measurement_order:
                 # Measurement service - no stitching needed
-                body = f'Measurements have been completed for order #{order_number}.'
+                body = 'Measurements have been completed for order #{order_number}.'
             else:
                 # Fabric with stitching - can start stitching
-                body = f'Measurements have been taken for order #{order_number}. You can now start stitching.'
+                body = 'Measurements have been taken for order #{order_number}. You can now start stitching.'
             
             NotificationService.send_notification(
                 user=order.tailor,
@@ -828,9 +793,9 @@ class NotificationService:
         
         # Notify rider (confirmation)
         if is_measurement_order:
-            body = f'Measurements successfully recorded for order #{order_number}.'
+            body = 'Measurements successfully recorded for order #{order_number}.'
         else:
-            body = f'Measurements successfully recorded for order #{order_number}. Waiting for tailor to complete stitching.'
+            body = 'Measurements successfully recorded for order #{order_number}. Waiting for tailor to complete stitching.'
         
         NotificationService.send_notification(
             user=rider,
