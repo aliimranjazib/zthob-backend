@@ -277,8 +277,8 @@ TRANSLATIONS = {
     "Measurements completed for order #{order_number}. Order is ready for customer pickup.": "تم إكمال القياسات للطلب رقم #{order_number}. الطلب جاهز لاستلام العميل",
     
     # Rider Status Notifications
-    "Rider has accepted your order #{order_number}": "قبل السائق طلبك رقم #{order_number}",
-    "Rider has accepted order #{order_number}": "قبل السائق الطلب رقم #{order_number}",
+    "Rider has accepted your order #{order_number}": "قام السائق بقبول طلبك رقم #{order_number}",
+    "Rider has accepted order #{order_number}": "قام السائق بقبول الطلب رقم #{order_number}",
     "Rider is on the way to customer for measurements - order #{order_number}": "السائق في الطريق للعميل لأخذ القياسات - الطلب رقم #{order_number}",
     "You are on the way to take measurements for order #{order_number}": "أنت في الطريق لأخذ القياسات للطلب رقم #{order_number}",
     "Rider is taking your measurements now for order #{order_number}": "السائق يأخذ قياساتك الآن للطلب رقم #{order_number}",
