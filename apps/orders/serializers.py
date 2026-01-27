@@ -1073,15 +1073,77 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
             # Save the instance to persist changes like stitching_completion_date
             instance.save()
         
-        # Send push notification for order status change
+        
+        # Send push notifications for status changes
+        # Track which status fields changed and call the appropriate notification methods
         try:
             from apps.notifications.services import NotificationService
-            NotificationService.send_order_status_notification(
-                order=instance,
-                old_status=instance.status,  # This will be handled by history
-                new_status=instance.status,
-                changed_by=user
-            )
+            
+            # Get old values before transition (from history if available, or use current values)
+            # Note: The transition service already saved the order, so we need to get old values from before
+            # We'll use the new_* variables we extracted earlier to determine what changed
+            
+            if new_rider_status is not None:
+                # Rider status changed - notify customer, tailor, and rider
+                # Get the old rider_status from history or use the current value
+                from apps.orders.models import OrderHistory
+                try:
+                    latest_history = instance.history.filter(
+                        rider_status__isnull=False
+                    ).exclude(
+                        rider_status=instance.rider_status
+                    ).order_by('-created_at').first()
+                    old_rider_status = latest_history.rider_status if latest_history else 'none'
+                except:
+                    old_rider_status = 'none'
+                
+                NotificationService.send_rider_status_notification(
+                    order=instance,
+                    old_rider_status=old_rider_status,
+                    new_rider_status=instance.rider_status,
+                    changed_by=user
+                )
+            
+            if new_tailor_status is not None:
+                # Tailor status changed - notify customer, tailor, and rider
+                from apps.orders.models import OrderHistory
+                try:
+                    latest_history = instance.history.filter(
+                        tailor_status__isnull=False
+                    ).exclude(
+                        tailor_status=instance.tailor_status
+                    ).order_by('-created_at').first()
+                    old_tailor_status = latest_history.tailor_status if latest_history else 'none'
+                except:
+                    old_tailor_status = 'none'
+                
+                NotificationService.send_tailor_status_notification(
+                    order=instance,
+                    old_tailor_status=old_tailor_status,
+                    new_tailor_status=instance.tailor_status,
+                    changed_by=user
+                )
+            
+            if new_status is not None:
+                # Main status changed - notify relevant parties
+                from apps.orders.models import OrderHistory
+                try:
+                    latest_history = instance.history.filter(
+                        status__isnull=False
+                    ).exclude(
+                        status=instance.status
+                    ).order_by('-created_at').first()
+                    old_status = latest_history.status if latest_history else 'pending'
+                except:
+                    old_status = 'pending'
+                
+                NotificationService.send_order_status_notification(
+                    order=instance,
+                    old_status=old_status,
+                    new_status=instance.status,
+                    changed_by=user
+                )
+                
         except Exception as e:
             # Log error but don't fail the update
             import logging
@@ -1089,6 +1151,7 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
             logger.error(f"Failed to send order status notification: {str(e)}")
         
         return instance
+
 
 class OrderListSerializer(serializers.ModelSerializer):
     customer_name=serializers.CharField(source='customer.username',read_only=True)

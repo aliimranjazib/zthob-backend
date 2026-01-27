@@ -152,12 +152,12 @@ class NotificationService:
             success_count = 0
             failed_tokens = []
             
-            # Build data payload
+            # Build data payload with translated text
             payload_data = {
                 'type': notification_type,
                 'category': category,
-                'title': title,
-                'body': body,
+                'title': translated_title,  # Use translated title
+                'body': translated_body,    # Use translated body
             }
             
             if data:
