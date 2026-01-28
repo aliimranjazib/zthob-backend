@@ -175,6 +175,13 @@ class Order(BaseModel):
     help_text="sub total before taxes and fees"
     )
 
+    stitching_price=models.DecimalField(
+    max_digits=10,
+    decimal_places=2,
+    default=Decimal('0.00'),
+    help_text="Total stitching price for order (only for fabric_with_stitching orders)"
+    )
+
     tax_amount=models.DecimalField(
     max_digits=10,
     decimal_places=2,
@@ -351,7 +358,7 @@ class Order(BaseModel):
            import uuid
            self.order_number = f"ORD-{uuid.uuid4().hex[:8].upper()}"
         if not self.total_amount:
-            self.total_amount=self.subtotal+self.tax_amount+self.delivery_fee
+            self.total_amount=self.subtotal+self.stitching_price+self.tax_amount+self.delivery_fee
 
         # Auto-sync main status based on rider_status and tailor_status
         # This preserves the existing auto-sync logic from OrderStatusTransitionService
@@ -531,12 +538,11 @@ class Order(BaseModel):
                 service_mode=self.service_mode
         )
         self.subtotal = totals['subtotal']
+        self.stitching_price = totals.get('stitching_price', Decimal('0.00'))
         self.tax_amount = totals['tax_amount']
         self.delivery_fee = totals['delivery_fee']
-        # Remove stitching_price from totals if it exists (Order model doesn't have this field yet)
-        totals.pop('stitching_price', None)
         self.total_amount = totals['total_amount']
-        self.save(update_fields=['subtotal', 'tax_amount', 'delivery_fee', 'total_amount'])
+        self.save(update_fields=['subtotal', 'stitching_price', 'tax_amount', 'delivery_fee', 'total_amount'])
 
     def __str__(self):
         # Get tailor name from profile if available
