@@ -19,12 +19,14 @@ class OrderItemSerializer(serializers.ModelSerializer):
     fabric_stitching_price = serializers.DecimalField(source='fabric.stitching_price', max_digits=10, decimal_places=2, read_only=True)
     fabric_image = serializers.SerializerMethodField()
     family_member_name = serializers.SerializerMethodField()
+    custom_styles = serializers.SerializerMethodField()
+    
     class Meta:
         model = OrderItem
         fields = [
             'id','fabric','fabric_name','fabric_sku', 'fabric_stitching_price', 'fabric_image','quantity',
             'unit_price','total_price','measurements','custom_instructions',
-            'is_ready','family_member','family_member_name','created_at'
+            'is_ready','family_member','family_member_name','custom_styles','created_at'
         ]
         read_only_fields = ['id', 'total_price', 'created_at']
 
@@ -53,12 +55,39 @@ class OrderItemSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.fabric.primary_image.url)
             return obj.fabric.primary_image.url
         return None
+    
+    def get_custom_styles(self, obj):
+        """Return custom_styles with absolute URLs for images"""
+        styles = obj.custom_styles if obj.custom_styles is not None else []
+        if not styles:
+            return []
+            
+        request = self.context.get('request')
+        if not request:
+            return styles
+            
+        import copy
+        processed_styles = copy.deepcopy(styles)
+        
+        from django.conf import settings
+        media_url = getattr(settings, 'MEDIA_URL', '/media/')
+        
+        for style in processed_styles:
+            asset_path = style.get('asset_path')
+            if asset_path and not (asset_path.startswith('http://') or asset_path.startswith('https://')):
+                if not asset_path.startswith(media_url) and not asset_path.startswith('/'):
+                    full_path = media_url + asset_path
+                else:
+                    full_path = asset_path
+                style['asset_path'] = request.build_absolute_uri(full_path)
+                
+        return processed_styles
 
 class OrderItemCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model=OrderItem
-        fields=['fabric','quantity','measurements','custom_instructions','family_member']
+        fields=['fabric','quantity','measurements','custom_instructions','family_member','custom_styles']
         extra_kwargs = {
             'fabric': {'required': False, 'allow_null': True}
         }
@@ -95,6 +124,7 @@ class OrderSerializer(serializers.ModelSerializer):
     rider_status = serializers.CharField(read_only=True)
     tailor_status = serializers.CharField(read_only=True)
     status_info = serializers.SerializerMethodField()
+    pricing_summary = serializers.SerializerMethodField()
 
     class Meta:
         model=Order
@@ -142,6 +172,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'items_count',
             'can_be_cancelled',
             'status_info',
+            'pricing_summary',
             'created_at',
             'updated_at'
         ]
@@ -500,6 +531,16 @@ class OrderSerializer(serializers.ModelSerializer):
             'percentage': percentage
         }
 
+    def get_pricing_summary(self, obj):
+        """Return grouped pricing information"""
+        return {
+            'subtotal': obj.subtotal,
+            'stitching_price': obj.stitching_price,
+            'tax_amount': obj.tax_amount,
+            'delivery_fee': obj.delivery_fee,
+            'total_amount': obj.total_amount
+        }
+
 class OrderCreateSerializer(serializers.ModelSerializer):
 
     items=OrderItemCreateSerializer(many=True)
@@ -800,6 +841,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 'measurements': item_data.get('measurements', {}),
                 'custom_instructions': item_data.get('custom_instructions', ''),
                 'family_member': item_data.get('family_member'),
+                'custom_styles': item_data.get('custom_styles'),  # Item-level custom styles
             })
         else:
             # Measurement orders - no fabric validation needed
@@ -811,6 +853,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     'measurements': item_data.get('measurements', {}),
                     'custom_instructions': item_data.get('custom_instructions', ''),
                     'family_member': item_data.get('family_member'),
+                    'custom_styles': item_data.get('custom_styles'),  # Item-level custom styles
                 })
         # Get distance_km from validated_data if provided
         # Get distance_km from validated_data if provided
@@ -888,6 +931,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     measurements=item_data.get('measurements', {}),
                     custom_instructions=item_data.get('custom_instructions', ''),
                     family_member=item_data.get('family_member'),
+                    custom_styles=item_data.get('custom_styles'),  # Item-level custom styles
                 )
         else:
             # Regular orders - create items with fabric and reduce stock
@@ -904,6 +948,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     measurements=item_data['measurements'],
                     custom_instructions=item_data['custom_instructions'],
                     family_member=item_data['family_member'],
+                    custom_styles=item_data.get('custom_styles'),  # Item-level custom styles
                 )
                 fabric.stock -= quantity
                 if fabric.stock < 0:
@@ -1160,6 +1205,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     rider_status = serializers.CharField(read_only=True)
     tailor_status = serializers.CharField(read_only=True)
     status_info = serializers.SerializerMethodField()
+    pricing_summary = serializers.SerializerMethodField()
 
     class Meta:
         model=Order
@@ -1175,6 +1221,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'tailor_status',
             'stitching_price',
             'total_amount',
+            'pricing_summary',
             'payment_status',
             'appointment_date',
             'appointment_time',
@@ -1196,6 +1243,16 @@ class OrderListSerializer(serializers.ModelSerializer):
             return obj.tailor.tailor_profile.shop_name
         except TailorProfile.DoesNotExist:
             return obj.tailor.username
+    
+    def get_pricing_summary(self, obj):
+        """Return grouped pricing summary for consistency with detail view"""
+        return {
+            'subtotal': str(obj.subtotal),
+            'stitching_price': str(obj.stitching_price),
+            'tax_amount': str(obj.tax_amount),
+            'delivery_fee': str(obj.delivery_fee),
+            'total_amount': str(obj.total_amount),
+        }
     
     def get_custom_styles(self, obj):
         """Return custom_styles with absolute URLs for images"""
