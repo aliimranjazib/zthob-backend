@@ -210,6 +210,7 @@ urlpatterns = [
     path('api/notifications/',include('apps.notifications.urls')),
     path('api/deliveries/',include('apps.deliveries.urls')),
     path('api/customization/',include('apps.customization.urls')),
+    path('api/measurements/', include('apps.measurements.urls')),  # Measurement templates
     
     # System Configuration
     path('api/config/', include('apps.core.urls')),

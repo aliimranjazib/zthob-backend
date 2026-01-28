@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     "apps.notifications",
     "apps.deliveries",
     "apps.customization",
+    "apps.measurements",  # Dynamic measurement templates
 ]
     
 MIDDLEWARE = [
@@ -451,6 +452,10 @@ JAZZMIN_SETTINGS = {
         "core.SystemSettings": "fas fa-cog",
         "core.Slider": "fas fa-images",
         "core.PhoneVerification": "fas fa-phone-alt",
+        
+        # Measurements
+        "measurements.MeasurementTemplate": "fas fa-ruler-combined",
+        "measurements.MeasurementField": "fas fa-ruler",
     },
 
     # Simplified forms - single column for easier use
