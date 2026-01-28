@@ -116,6 +116,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'rider_status',
             'tailor_status',
             'subtotal',
+            'stitching_price',
             'tax_amount',
             'delivery_fee',
             'total_amount',
@@ -145,7 +146,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'updated_at'
         ]
         read_only_fields = [
-            'id', 'order_number', 'total_amount', 'items_count', 
+            'id', 'order_number', 'stitching_price', 'total_amount', 'items_count', 
             'can_be_cancelled', 'created_at', 'updated_at'
         ]
 
@@ -862,10 +863,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             service_mode=service_mode
         )
         
-        # Remove stitching_price from totals if it exists (Order model doesn't have this field yet)
-        # It's already included in total_amount
-        totals.pop('stitching_price', None)
-        
+        # Update validated_data with calculated totals (including stitching_price)
         validated_data.update(totals)
         order = Order.objects.create(**validated_data)
         
@@ -1175,6 +1173,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'status',
             'rider_status',
             'tailor_status',
+            'stitching_price',
             'total_amount',
             'payment_status',
             'appointment_date',
