@@ -387,9 +387,9 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
     items_count = serializers.SerializerMethodField()
     custom_styles = serializers.SerializerMethodField()
     items = OrderItemSerializer(source='order_items', many=True, read_only=True)
-    rider_status = serializers.CharField(read_only=True)
     tailor_status = serializers.CharField(read_only=True)
     status_info = serializers.SerializerMethodField()
+    pricing_summary = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -402,6 +402,7 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'tailor_status',
             'payment_status',
             'total_amount',
+            'pricing_summary',
             'customer_name',
             'customer_phone',
             'tailor_name',
@@ -417,6 +418,16 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'status_info',
             'created_at',
         ]
+    
+    def get_pricing_summary(self, obj):
+        """Return grouped pricing summary for consistency"""
+        return {
+            'subtotal': str(obj.subtotal),
+            'stitching_price': str(obj.stitching_price),
+            'tax_amount': str(obj.tax_amount),
+            'delivery_fee': str(obj.delivery_fee),
+            'total_amount': str(obj.total_amount),
+        }
     
     def get_customer_name(self, obj):
         return obj.customer.get_full_name() if obj.customer else obj.customer.username if obj.customer else 'Unknown'
@@ -579,9 +590,9 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
     items = serializers.SerializerMethodField()
     assignment_status = serializers.SerializerMethodField()
     custom_styles = serializers.SerializerMethodField()
-    status_info = serializers.SerializerMethodField()
     rider_status = serializers.CharField(read_only=True)
     tailor_status = serializers.CharField(read_only=True)
+    pricing_summary = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -598,6 +609,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'subtotal',
             'tax_amount',
             'delivery_fee',
+            'pricing_summary',
             'customer_info',
             'order_recipient',
             'all_recipients',
@@ -615,6 +627,16 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'status_info',
             'created_at',
         ]
+    
+    def get_pricing_summary(self, obj):
+        """Return grouped pricing summary for consistency"""
+        return {
+            'subtotal': str(obj.subtotal),
+            'stitching_price': str(obj.stitching_price),
+            'tax_amount': str(obj.tax_amount),
+            'delivery_fee': str(obj.delivery_fee),
+            'total_amount': str(obj.total_amount),
+        }
     
     def get_customer_info(self, obj):
         if obj.customer:
@@ -760,6 +782,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
                 'total_price': str(item.total_price),
                 'family_member': item.family_member.id if item.family_member else None,
                 'family_member_name': self._get_item_recipient_name(item),
+                'custom_styles': OrderItemSerializer(item, context=self.context).data.get('custom_styles', []),
             })
         return items
 

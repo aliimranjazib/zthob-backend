@@ -47,9 +47,9 @@ class OrderCalculationService:
         
         Args:
             subtotal: Order subtotal amount
-            distance_km: Distance in kilometers (required for distance-based calculation)
-            delivery_address: Delivery address (optional, for future use)
-            tailor: Tailor object (optional, for future use)
+            distance_km: Distance in kilometers (optional, will be calculated if not provided)
+            delivery_address: Delivery address object (optional)
+            tailor: Tailor object (optional, used to get tailor's location)
             delivery_latitude: Delivery latitude (optional)
             delivery_longitude: Delivery longitude (optional)
         """
@@ -60,14 +60,50 @@ class OrderCalculationService:
             if subtotal >= system_settings.free_delivery_threshold:
                 return Decimal('0.00')
         
-        # Calculate based on distance if provided
+        # If distance is not provided, try to calculate it on the backend
+        if distance_km is None:
+            # Get customer coordinates
+            cust_lat = None
+            cust_lng = None
+            
+            if delivery_latitude is not None and delivery_longitude is not None:
+                cust_lat = delivery_latitude
+                cust_lng = delivery_longitude
+            elif delivery_address:
+                cust_lat = delivery_address.latitude
+                cust_lng = delivery_address.longitude
+            
+            # Get tailor coordinates
+            tailor_lat = None
+            tailor_lng = None
+            
+            if tailor:
+                # Get tailor's default address
+                from apps.customers.models import Address
+                tailor_address = Address.objects.filter(user=tailor, is_default=True).first()
+                if not tailor_address:
+                    # Try any address if no default
+                    tailor_address = Address.objects.filter(user=tailor).first()
+                
+                if tailor_address:
+                    tailor_lat = tailor_address.latitude
+                    tailor_lng = tailor_address.longitude
+            
+            # If we have both coordinates, calculate distance
+            if all([cust_lat, cust_lng, tailor_lat, tailor_lng]):
+                from apps.deliveries.services import DistanceCalculationService
+                distance_km = DistanceCalculationService.haversine_distance(
+                    cust_lat, cust_lng, tailor_lat, tailor_lng
+                )
+        
+        # Calculate based on distance if we have it now (either provided or calculated)
         if distance_km is not None:
             if distance_km < system_settings.distance_threshold_km:
                 return system_settings.delivery_fee_under_10km
             else:
                 return system_settings.delivery_fee_10km_and_above
         
-        # Fallback to default (under 10km fee) if distance not provided
+        # Fallback to default (under 10km fee) if distance still missing
         return system_settings.delivery_fee_under_10km
 
     @staticmethod

@@ -678,6 +678,13 @@ class OrderItem(BaseModel):
         help_text="Customer measurements for this item"
     )
 
+    custom_styles = models.JSONField(
+        default=None,
+        blank=True,
+        null=True,
+        help_text="Custom style selections for this item. Format: [{'style_type': 'collar', 'index': 0, 'label': 'Collar Style 1', 'asset_path': 'assets/thobs/collar/collar1.png'}]"
+    )
+
     custom_instructions=models.TextField(
     null=True,
     blank=True,
