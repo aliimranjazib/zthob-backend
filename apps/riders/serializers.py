@@ -429,7 +429,10 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
         }
     
     def get_customer_name(self, obj):
-        return obj.customer.get_full_name() if obj.customer else obj.customer.username if obj.customer else 'Unknown'
+        if not obj.customer:
+            return 'Unknown'
+        full_name = obj.customer.get_full_name().strip()
+        return full_name if full_name else obj.customer.username
     
     def get_customer_phone(self, obj):
         return obj.customer.phone if obj.customer else None
@@ -652,10 +655,11 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
     
     def get_customer_info(self, obj):
         if obj.customer:
+            full_name = obj.customer.get_full_name().strip()
             return {
                 'id': obj.customer.id,
                 'username': obj.customer.username,
-                'full_name': obj.customer.get_full_name(),
+                'full_name': full_name if full_name else obj.customer.username,
                 'email': obj.customer.email,
                 'phone': obj.customer.phone,
             }
