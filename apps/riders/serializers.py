@@ -591,6 +591,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
     custom_styles = serializers.SerializerMethodField()
     rider_status = serializers.CharField(read_only=True)
     tailor_status = serializers.CharField(read_only=True)
+    status_info = serializers.SerializerMethodField()
     pricing_summary = serializers.SerializerMethodField()
     
     class Meta:
