@@ -125,6 +125,7 @@ class OrderSerializer(serializers.ModelSerializer):
     tailor_status = serializers.CharField(read_only=True)
     status_info = serializers.SerializerMethodField()
     pricing_summary = serializers.SerializerMethodField()
+    delivery_address = serializers.SerializerMethodField()
 
     class Meta:
         model=Order
@@ -272,9 +273,43 @@ class OrderSerializer(serializers.ModelSerializer):
         
         return recipients
 
-    def get_delivery_address_text(self,obj):
+    def get_delivery_address(self, obj):
+        """Return structured delivery address with fallback for current location orders"""
         if obj.delivery_address:
-            return f"{obj.delivery_address.street}, {obj.delivery_address.city}, {obj.delivery_address.country}"
+            return {
+                'id': obj.delivery_address.id,
+                'latitude': obj.delivery_address.latitude,
+                'longitude': obj.delivery_address.longitude,
+                'address': obj.delivery_address.address or '',
+                'extra_info': obj.delivery_address.extra_info or '',
+                'is_default': obj.delivery_address.is_default,
+                'address_tag': obj.delivery_address.address_tag,
+            }
+        
+        # Fallback to coordinate fields if it was a "current location" order
+        elif obj.delivery_latitude and obj.delivery_longitude:
+            return {
+                'id': None,
+                'latitude': obj.delivery_latitude,
+                'longitude': obj.delivery_longitude,
+                'address': obj.delivery_formatted_address or '',
+                'extra_info': obj.delivery_extra_info or '',
+                'is_default': False,
+                'address_tag': 'Current Location',
+            }
+        return None
+
+    def get_delivery_address_text(self, obj):
+        if obj.delivery_address:
+            street = obj.delivery_address.street or ""
+            city = obj.delivery_address.city or ""
+            country = obj.delivery_address.country or ""
+            return f"{street}, {city}, {country}".strip(", ")
+            
+        # Fallback for current location
+        elif obj.delivery_formatted_address:
+            return obj.delivery_formatted_address
+            
         return None
     
     def get_custom_styles(self, obj):
