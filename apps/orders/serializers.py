@@ -107,7 +107,7 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
 
-    customer_name=serializers.CharField(source='customer.username',read_only=True)
+    customer_name=serializers.SerializerMethodField()
     customer_email=serializers.CharField(source='customer.email',read_only=True)
     tailor_name=serializers.SerializerMethodField()
     tailor_contact=serializers.SerializerMethodField()
@@ -1232,7 +1232,7 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
 
 
 class OrderListSerializer(serializers.ModelSerializer):
-    customer_name=serializers.CharField(source='customer.username',read_only=True)
+    customer_name=serializers.SerializerMethodField()
     tailor_name = serializers.SerializerMethodField()
     items_count = serializers.IntegerField(read_only=True)
     custom_styles = serializers.SerializerMethodField()
