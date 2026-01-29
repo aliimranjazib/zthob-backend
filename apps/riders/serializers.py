@@ -458,6 +458,18 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
                 'is_default': obj.delivery_address.is_default,
                 'address_tag': obj.delivery_address.address_tag,
             }
+        
+        # Fallback to coordinate fields if it was a "current location" order
+        elif obj.delivery_latitude and obj.delivery_longitude:
+            return {
+                'id': None,
+                'latitude': obj.delivery_latitude,
+                'longitude': obj.delivery_longitude,
+                'address': obj.delivery_formatted_address or '',
+                'extra_info': obj.delivery_extra_info or '',
+                'is_default': False,
+                'address_tag': 'Current Location',
+            }
         return None
     
     def get_items_count(self, obj):
@@ -755,6 +767,18 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
                 'extra_info': obj.delivery_address.extra_info or '',
                 'is_default': obj.delivery_address.is_default,
                 'address_tag': obj.delivery_address.address_tag,
+            }
+        
+        # Fallback to coordinate fields if it was a "current location" order
+        elif obj.delivery_latitude and obj.delivery_longitude:
+            return {
+                'id': None,
+                'latitude': obj.delivery_latitude,
+                'longitude': obj.delivery_longitude,
+                'address': obj.delivery_formatted_address or '',
+                'extra_info': obj.delivery_extra_info or '',
+                'is_default': False,
+                'address_tag': 'Current Location',
             }
         return None
     
