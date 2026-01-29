@@ -274,7 +274,6 @@ class RiderProfileSubmissionSerializer(serializers.ModelSerializer):
         required_fields = [
             'full_name',
             'iqama_number',
-            'phone_number',
             'license_number',
             'vehicle_type',
             'vehicle_plate_number_english',
