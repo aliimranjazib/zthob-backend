@@ -182,6 +182,12 @@ class OrderSerializer(serializers.ModelSerializer):
             'can_be_cancelled', 'created_at', 'updated_at'
         ]
 
+    def get_customer_name(self, obj):
+        if not obj.customer:
+            return 'Unknown'
+        full_name = obj.customer.get_full_name().strip()
+        return full_name if full_name else obj.customer.username
+
     def get_tailor_name(self, obj):
         if not obj.tailor:
             return None
@@ -1270,6 +1276,12 @@ class OrderListSerializer(serializers.ModelSerializer):
             'status_info',
             'created_at'
         ]
+
+    def get_customer_name(self, obj):
+        if not obj.customer:
+            return 'Unknown'
+        full_name = obj.customer.get_full_name().strip()
+        return full_name if full_name else obj.customer.username
 
     def get_tailor_name(self, obj):
         if not obj.tailor:
