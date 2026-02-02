@@ -1,32 +1,13 @@
 from django.urls import path
-from .views import (
-    RegisterFCMTokenView,
-    ListFCMTokensView,
-    UnregisterFCMTokenView,
-    NotificationLogListView,
-    MarkNotificationReadView,
-    MarkAllNotificationsReadView,
-    UnreadCountView,
-    TestNotificationView,
-    RiderTestNotificationView,
-    CustomerTestNotificationView,
-    BulkNotificationView,
-)
-
-app_name = 'notifications'
+from . import views
 
 urlpatterns = [
-    path('fcm-token/register/', RegisterFCMTokenView.as_view(), name='register-fcm-token'),
-    path('fcm-token/update/', RegisterFCMTokenView.as_view(), name='update-fcm-token'),
-    path('fcm-token/list/', ListFCMTokensView.as_view(), name='list-fcm-tokens'),
-    path('fcm-token/unregister/', UnregisterFCMTokenView.as_view(), name='unregister-fcm-token'),
-    path('logs/', NotificationLogListView.as_view(), name='notification-logs'),
-    path('<int:notification_id>/read/', MarkNotificationReadView.as_view(), name='mark-notification-read'),
-    path('mark-all-read/', MarkAllNotificationsReadView.as_view(), name='mark-all-read'),
-    path('unread-count/', UnreadCountView.as_view(), name='unread-count'),
-    path('test/', TestNotificationView.as_view(), name='test-notification'),
-    path('test-rider/', RiderTestNotificationView.as_view(), name='test-notification-rider'),
-    path('test-customer/', CustomerTestNotificationView.as_view(), name='test-notification-customer'),
-    path('bulk/', BulkNotificationView.as_view(), name='bulk-notification'),
+    # Role-based notification lists
+    path('customer/', views.CustomerNotificationListView.as_view(), name='customer-notifications'),
+    path('tailor/', views.TailorNotificationListView.as_view(), name='tailor-notifications'),
+    path('rider/', views.RiderNotificationListView.as_view(), name='rider-notifications'),
+    
+    # Read status actions
+    path('<int:pk>/read/', views.MarkNotificationReadView.as_view(), name='mark-notification-read'),
+    path('read-all/', views.MarkAllReadView.as_view(), name='mark-all-read'),
 ]
-
