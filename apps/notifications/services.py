@@ -811,16 +811,58 @@ class NotificationService:
         )
 
     @staticmethod
-    def send_new_order_broadcast(order):
+    def send_new_order_broadcast(order, assigned_rider_id=None):
         """
-        Send broadcast notification to all active and approved riders 
-        when a new order becomes available (e.g. tailor accepted).
+        Send notification to riders when order is accepted by tailor.
+        
+        Args:
+            order: Order instance
+            assigned_rider_id: If provided, only notify this specific rider.
+                              If None, broadcast to all available riders.
         """
         from apps.accounts.models import CustomUser
+        import logging
         
-        # Get all active riders with approved profiles
-        # Note: We filter for users with role='RIDER', is_active=True
-        # and their profile is_approved=True and is_available=True
+        logger = logging.getLogger(__name__)
+        
+        if assigned_rider_id:
+            # Specific rider assignment - send targeted notification
+            try:
+                assigned_rider = CustomUser.objects.get(
+                    id=assigned_rider_id,
+                    role='RIDER',
+                    is_active=True,
+                    rider_profile__review__review_status='approved',
+                    rider_profile__is_available=True
+                )
+                
+                # Send notification to only this rider
+                success = NotificationService.send_notification(
+                    user=assigned_rider,
+                    title=f"New order #{order.order_number} assigned to you",
+                    body="You have been specifically assigned to this order by the tailor",
+                    notification_type='ORDER_ASSIGNMENT',
+                    category='order_assigned',
+                    data={
+                        'order_id': order.id,
+                        'order_number': order.order_number,
+                        'assigned': True
+                    },
+                    priority='high'
+                )
+                
+                if success:
+                    logger.info(f"Order {order.order_number} assigned to rider {assigned_rider.id}")
+                else:
+                    logger.warning(f"Failed to notify assigned rider {assigned_rider.id} for order {order.order_number}")
+                
+                return  # Don't broadcast if specific rider assigned
+                
+            except CustomUser.DoesNotExist:
+                logger.warning(f"Assigned rider {assigned_rider_id} not found or not eligible. Falling back to broadcast.")
+                # Fall through to broadcast
+        
+        # No specific assignment or assigned rider not available - broadcast to all
         active_riders = CustomUser.objects.filter(
             role='RIDER',
             is_active=True,
@@ -837,9 +879,6 @@ class NotificationService:
         body = "A new order is available for pickup. Check your available orders list."
         
         if FIREBASE_SDK_AVAILABLE:
-            # We can use send_bulk_notifications if we want individual tracking
-            # Or iterate and send. For better logging, let's iterate.
-            
             count = 0
             for rider in active_riders:
                 success = NotificationService.send_notification(
@@ -851,6 +890,7 @@ class NotificationService:
                     data={
                         'order_id': order.id,
                         'order_number': order_number,
+                        'broadcast': True
                     },
                     priority='high'
                 )

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from apps.core.services import PhoneVerificationService
+from . import models
 from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
 from apps.orders.models import Order
 from apps.orders.serializers import OrderItemSerializer
@@ -1002,3 +1003,199 @@ class RiderUpdateOrderStatusSerializer(serializers.Serializer):
         required=True
     )
     notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class TailorInvitationCodeSerializer(serializers.ModelSerializer):
+    """Serializer for tailor invitation codes"""
+    can_be_used = serializers.SerializerMethodField()
+    status_message = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = models.TailorInvitationCode
+        fields = [
+            'id',
+            'code',
+            'is_active',
+            'max_uses',
+            'times_used',
+            'expires_at',
+            'can_be_used',
+            'status_message',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'code', 'times_used', 'created_at']
+    
+    def get_can_be_used(self, obj):
+        """Check if code can still be used"""
+        can_use, _ = obj.can_be_used()
+        return can_use
+    
+    def get_status_message(self, obj):
+        """Get status message"""
+        _, message = obj.can_be_used()
+        return message
+
+
+class CreateInvitationCodeSerializer(serializers.Serializer):
+    """Serializer for creating invitation codes"""
+    max_uses = serializers.IntegerField(default=0, min_value=0)
+    expires_in_days = serializers.IntegerField(required=False, min_value=1)
+    
+    def create(self, validated_data):
+        """Create a new invitation code"""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        tailor = self.context['request'].user
+        code = models.TailorInvitationCode.generate_unique_code(tailor.id)
+        
+        expires_at = None
+        if 'expires_in_days' in validated_data:
+            expires_at = timezone.now() + timedelta(days=validated_data['expires_in_days'])
+        
+        invitation_code = models.TailorInvitationCode.objects.create(
+            tailor=tailor,
+            code=code,
+            max_uses=validated_data.get('max_uses', 0),
+            expires_at=expires_at
+        )
+        
+        return invitation_code
+
+
+class RiderBasicInfoSerializer(serializers.ModelSerializer):
+    """Basic rider information for association listing"""
+    full_name = serializers.CharField(source='rider_profile.full_name', read_only=True)
+    phone_number = serializers.CharField(source='rider_profile.phone_number', read_only=True)
+    vehicle_type = serializers.CharField(source='rider_profile.vehicle_type', read_only=True)
+    rating = serializers.DecimalField(source='rider_profile.rating', max_digits=3, decimal_places=2, read_only=True)
+    is_available = serializers.BooleanField(source='rider_profile.is_available', read_only=True)
+    
+    class Meta:
+        model = User
+        fields = ['id', 'full_name', 'phone_number', 'vehicle_type', 'rating', 'is_available']
+
+
+class TailorRiderAssociationSerializer(serializers.ModelSerializer):
+    """Serializer for tailor-rider associations with statistics"""
+    rider_info = RiderBasicInfoSerializer(source='rider', read_only=True)
+    statistics = serializers.SerializerMethodField()
+    joined_via_code_display = serializers.CharField(source='joined_via_code.code', read_only=True)
+    
+    class Meta:
+        model = models.TailorRiderAssociation
+        fields = [
+            'id',
+            'rider_info',
+            'is_active',
+            'nickname',
+            'priority',
+            'joined_via_code_display',
+            'statistics',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+    
+    def get_statistics(self, obj):
+        """Calculate rider statistics for this tailor"""
+        from django.db.models import Q, Max
+        
+        tailor = obj.tailor
+        rider = obj.rider
+        
+        # Orders completed for this specific tailor
+        orders_for_tailor = Order.objects.filter(
+            tailor=tailor,
+            rider=rider,
+            status='delivered'
+        ).count()
+        
+        # Total orders across all tailors (from rider profile)
+        total_orders = rider.rider_profile.total_deliveries if hasattr(rider, 'rider_profile') else 0
+        
+        # Last delivery date for this tailor
+        last_delivery = Order.objects.filter(
+            tailor=tailor,
+            rider=rider,
+            status='delivered'
+        ).aggregate(last=Max('updated_at'))['last']
+        
+        # Acceptance rate - orders assigned vs accepted
+        assigned_count = Order.objects.filter(
+            tailor=tailor,
+            assigned_rider=rider
+        ).count()
+        
+        accepted_count = Order.objects.filter(
+            tailor=tailor,
+            assigned_rider=rider,
+            rider=rider  # Rider actually accepted
+        ).count()
+        
+        acceptance_rate = (accepted_count / assigned_count * 100) if assigned_count > 0 else 100.0
+        
+        return {
+            'orders_for_this_tailor': orders_for_tailor,
+            'total_orders_all_tailors': total_orders,
+            'last_delivery_date': last_delivery,
+            'acceptance_rate': round(acceptance_rate, 1)
+        }
+
+
+class JoinTailorTeamSerializer(serializers.Serializer):
+    """Serializer for riders joining a tailor's team using code"""
+    code = serializers.CharField(max_length=20)
+    
+    def validate_code(self, value):
+        """Validate that the code exists and is valid"""
+        try:
+            code_obj = models.TailorInvitationCode.objects.get(code=value.upper())
+            can_use, message = code_obj.can_be_used()
+            if not can_use:
+                raise serializers.ValidationError(message)
+            return value.upper()
+        except models.TailorInvitationCode.DoesNotExist:
+            raise serializers.ValidationError('Invalid invitation code')
+    
+    def create(self, validated_data):
+        """Create association between rider and tailor"""
+        rider = self.context['request'].user
+        code = validated_data['code']
+        
+        code_obj = models.TailorInvitationCode.objects.get(code=code)
+        tailor = code_obj.tailor
+        
+        # Check if association already exists
+        association, created = models.TailorRiderAssociation.objects.get_or_create(
+            tailor=tailor,
+            rider=rider,
+            defaults={
+                'joined_via_code': code_obj,
+                'is_active': True
+            }
+        )
+        
+        if not created and not association.is_active:
+            # Reactivate if it was previously deactivated
+            association.is_active = True
+            association.save()
+        
+        # Increment code usage
+        code_obj.times_used += 1
+        code_obj.save()
+        
+        return {
+            'association': association,
+            'tailor': tailor,
+            'created': created
+        }
+
+
+class TailorBasicInfoSerializer(serializers.ModelSerializer):
+    """Basic tailor information for rider's associated tailors list"""
+    shop_name = serializers.CharField(source='tailor_profile.shop_name', read_only=True)
+    phone = serializers.CharField(source='tailor_profile.phone_number', read_only=True)
+    
+    class Meta:
+        model = User
+        fields = ['id', 'shop_name', 'phone']

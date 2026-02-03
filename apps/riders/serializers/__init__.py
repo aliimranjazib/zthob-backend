@@ -41,6 +41,13 @@ try:
     RiderAcceptOrderSerializer = _module.RiderAcceptOrderSerializer
     RiderAddMeasurementsSerializer = _module.RiderAddMeasurementsSerializer
     RiderUpdateOrderStatusSerializer = _module.RiderUpdateOrderStatusSerializer
+    # New serializers for tailor-rider association
+    TailorInvitationCodeSerializer = _module.TailorInvitationCodeSerializer
+    CreateInvitationCodeSerializer = _module.CreateInvitationCodeSerializer
+    RiderBasicInfoSerializer = _module.RiderBasicInfoSerializer
+    TailorRiderAssociationSerializer = _module.TailorRiderAssociationSerializer
+    JoinTailorTeamSerializer = _module.JoinTailorTeamSerializer
+    TailorBasicInfoSerializer = _module.TailorBasicInfoSerializer
 finally:
     # Restore if needed
     if _old_module:
@@ -61,4 +68,11 @@ __all__ = [
     'RiderAcceptOrderSerializer',
     'RiderAddMeasurementsSerializer',
     'RiderUpdateOrderStatusSerializer',
+    # New serializers
+    'TailorInvitationCodeSerializer',
+    'CreateInvitationCodeSerializer',
+    'RiderBasicInfoSerializer',
+    'TailorRiderAssociationSerializer',
+    'JoinTailorTeamSerializer',
+    'TailorBasicInfoSerializer',
 ]
