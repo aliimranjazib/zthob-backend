@@ -11,6 +11,9 @@ urlpatterns = [
     path('<int:pk>/read/', views.MarkNotificationReadView.as_view(), name='mark-notification-read'),
     path('read-all/', views.MarkAllReadView.as_view(), name='mark-all-read'),
     
+    # FCM Token registration
+    path('fcm-token/register/', views.FCMTokenRegisterView.as_view(), name='fcm-token-register'),
+    
     # Test notification endpoints
     path('test-customer/', views.TestCustomerNotificationView.as_view(), name='test-customer-notification'),
     path('test-tailor/', views.TestTailorNotificationView.as_view(), name='test-tailor-notification'),

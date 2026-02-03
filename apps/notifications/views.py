@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from .models import NotificationLog
-from .serializers import NotificationLogSerializer
+from .serializers import NotificationLogSerializer, FCMDeviceTokenSerializer
 
 # Base class to avoid code duplication
 class BaseNotificationListView(generics.ListAPIView):
@@ -178,3 +178,14 @@ class TestRiderNotificationView(APIView):
                 'message': 'Failed to send test notification. Check your FCM token.',
                 'success': False
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class FCMTokenRegisterView(generics.CreateAPIView):
+    """
+    Register or update an FCM device token for the current user.
+    """
+    serializer_class = FCMDeviceTokenSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def perform_create(self, serializer):
+        serializer.save()
