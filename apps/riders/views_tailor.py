@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from apps.tailors.permissions import IsTailor
+from zthob.utils import api_response
 from . import models
 from .serializers import (
     TailorInvitationCodeSerializer,
@@ -25,7 +26,13 @@ def tailor_invitation_codes(request):
         ).order_by('-created_at')
         
         serializer = TailorInvitationCodeSerializer(codes, many=True)
-        return Response({'codes': serializer.data})
+        return api_response(
+            success=True,
+            message="Invitation codes retrieved successfully",
+            data={'codes': serializer.data},
+            status_code=status.HTTP_200_OK,
+            request=request
+        )
     
     elif request.method == 'POST':
         serializer = CreateInvitationCodeSerializer(
@@ -36,9 +43,21 @@ def tailor_invitation_codes(request):
         if serializer.is_valid():
             invitation_code = serializer.save()
             response_serializer = TailorInvitationCodeSerializer(invitation_code)
-            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+            return api_response(
+                success=True,
+                message="Invitation code created successfully",
+                data=response_serializer.data,
+                status_code=status.HTTP_201_CREATED,
+                request=request
+            )
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return api_response(
+            success=False,
+            message="Invalid data",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            request=request
+        )
 
 
 @api_view(['DELETE'])
@@ -54,9 +73,12 @@ def deactivate_invitation_code(request, code):
     invitation_code.is_active = False
     invitation_code.save()
     
-    return Response({
-        'message': 'Invitation code deactivated successfully'
-    })
+    return api_response(
+        success=True,
+        message="Invitation code deactivated successfully",
+        status_code=status.HTTP_200_OK,
+        request=request
+    )
 
 
 @api_view(['GET'])
@@ -88,7 +110,13 @@ def tailor_my_riders(request):
         }
         riders_data.append(rider_data)
     
-    return Response({'riders': riders_data})
+    return api_response(
+        success=True,
+        message="Riders retrieved successfully",
+        data={'riders': riders_data},
+        status_code=status.HTTP_200_OK,
+        request=request
+    )
 
 
 @api_view(['DELETE'])
@@ -104,6 +132,9 @@ def remove_rider_from_team(request, rider_id):
     association.is_active = False
     association.save()
     
-    return Response({
-        'message': 'Rider removed from your team successfully'
-    })
+    return api_response(
+        success=True,
+        message="Rider removed from your team successfully",
+        status_code=status.HTTP_200_OK,
+        request=request
+    )
