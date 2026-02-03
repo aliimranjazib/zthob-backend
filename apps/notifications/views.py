@@ -76,8 +76,8 @@ class TestCustomerNotificationView(APIView):
     def post(self, request):
         from .services import NotificationService
         
-        # Verify user is a customer
-        if request.user.role != 'CUSTOMER':
+        # Verify user is a customer (role is 'USER' in model)
+        if request.user.role != 'USER':
             return Response(
                 {'error': 'This endpoint is only for customers'},
                 status=status.HTTP_403_FORBIDDEN
