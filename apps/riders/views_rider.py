@@ -2,6 +2,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from zthob.utils import api_response
 from .permissions import IsRider
 from . import models
 from .serializers import (
@@ -35,12 +36,21 @@ def join_tailor_team(request):
         
         message = 'Successfully joined tailor\'s team' if created else 'You are already part of this tailor\'s team'
         
-        return Response({
-            'message': message,
-            'tailor': tailor_info
-        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        return api_response(
+            success=True,
+            message=message,
+            data={'tailor': tailor_info},
+            status_code=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+            request=request
+        )
     
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    return api_response(
+        success=False,
+        message="Invalid invitation code",
+        errors=serializer.errors,
+        status_code=status.HTTP_400_BAD_REQUEST,
+        request=request
+    )
 
 
 @api_view(['GET'])
@@ -62,4 +72,10 @@ def rider_my_tailors(request):
         }
         tailors_data.append(tailor_data)
     
-    return Response({'tailors': tailors_data})
+    return api_response(
+        success=True,
+        message="Tailors retrieved successfully",
+        data={'tailors': tailors_data},
+        status_code=status.HTTP_200_OK,
+        request=request
+    )

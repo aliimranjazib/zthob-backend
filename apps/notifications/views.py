@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from .models import NotificationLog
 from .serializers import NotificationLogSerializer, FCMDeviceTokenSerializer
+from zthob.utils import api_response
 
 # Base class to avoid code duplication
 class BaseNotificationListView(generics.ListAPIView):
@@ -53,9 +54,19 @@ class MarkNotificationReadView(APIView):
                 notification.is_read = True
                 notification.read_at = timezone.now()
                 notification.save()
-            return Response({'status': 'marked as read'})
+            return api_response(
+                success=True,
+                message="Notification marked as read",
+                status_code=status.HTTP_200_OK,
+                request=request
+            )
         except NotificationLog.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+            return api_response(
+                success=False,
+                message="Notification not found",
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request
+            )
 
 # 5. Mark ALL as Read (Optional but standard)
 class MarkAllReadView(APIView):
@@ -66,7 +77,12 @@ class MarkAllReadView(APIView):
             user=request.user, 
             is_read=False
         ).update(is_read=True, read_at=timezone.now())
-        return Response({'status': 'all marked as read'})
+        return api_response(
+            success=True,
+            message="All notifications marked as read",
+            status_code=status.HTTP_200_OK,
+            request=request
+        )
 
 # 6. Test Notification Endpoints
 class TestCustomerNotificationView(APIView):
@@ -78,9 +94,11 @@ class TestCustomerNotificationView(APIView):
         
         # Verify user is a customer (role is 'USER' in model)
         if request.user.role != 'USER':
-            return Response(
-                {'error': 'This endpoint is only for customers'},
-                status=status.HTTP_403_FORBIDDEN
+            return api_response(
+                success=False,
+                message="This endpoint is only for customers",
+                status_code=status.HTTP_403_FORBIDDEN,
+                request=request
             )
         
         # Send test notification
@@ -95,15 +113,19 @@ class TestCustomerNotificationView(APIView):
         )
         
         if success:
-            return Response({
-                'message': 'Test notification sent successfully',
-                'success': True
-            }, status=status.HTTP_200_OK)
+            return api_response(
+                success=True,
+                message="Test notification sent successfully",
+                status_code=status.HTTP_200_OK,
+                request=request
+            )
         else:
-            return Response({
-                'message': 'Failed to send test notification. Check your FCM token.',
-                'success': False
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return api_response(
+                success=False,
+                message="Failed to send test notification. Check your FCM token.",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                request=request
+            )
 
 
 class TestTailorNotificationView(APIView):
@@ -115,9 +137,11 @@ class TestTailorNotificationView(APIView):
         
         # Verify user is a tailor
         if request.user.role != 'TAILOR':
-            return Response(
-                {'error': 'This endpoint is only for tailors'},
-                status=status.HTTP_403_FORBIDDEN
+            return api_response(
+                success=False,
+                message="This endpoint is only for tailors",
+                status_code=status.HTTP_403_FORBIDDEN,
+                request=request
             )
         
         # Send test notification
@@ -132,15 +156,19 @@ class TestTailorNotificationView(APIView):
         )
         
         if success:
-            return Response({
-                'message': 'Test notification sent successfully',
-                'success': True
-            }, status=status.HTTP_200_OK)
+            return api_response(
+                success=True,
+                message="Test notification sent successfully",
+                status_code=status.HTTP_200_OK,
+                request=request
+            )
         else:
-            return Response({
-                'message': 'Failed to send test notification. Check your FCM token.',
-                'success': False
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return api_response(
+                success=False,
+                message="Failed to send test notification. Check your FCM token.",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                request=request
+            )
 
 
 class TestRiderNotificationView(APIView):
@@ -152,9 +180,11 @@ class TestRiderNotificationView(APIView):
         
         # Verify user is a rider
         if request.user.role != 'RIDER':
-            return Response(
-                {'error': 'This endpoint is only for riders'},
-                status=status.HTTP_403_FORBIDDEN
+            return api_response(
+                success=False,
+                message="This endpoint is only for riders",
+                status_code=status.HTTP_403_FORBIDDEN,
+                request=request
             )
         
         # Send test notification
@@ -169,15 +199,19 @@ class TestRiderNotificationView(APIView):
         )
         
         if success:
-            return Response({
-                'message': 'Test notification sent successfully',
-                'success': True
-            }, status=status.HTTP_200_OK)
+            return api_response(
+                success=True,
+                message="Test notification sent successfully",
+                status_code=status.HTTP_200_OK,
+                request=request
+            )
         else:
-            return Response({
-                'message': 'Failed to send test notification. Check your FCM token.',
-                'success': False
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return api_response(
+                success=False,
+                message="Failed to send test notification. Check your FCM token.",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                request=request
+            )
 
 
 class FCMTokenRegisterView(generics.CreateAPIView):
@@ -187,5 +221,24 @@ class FCMTokenRegisterView(generics.CreateAPIView):
     serializer_class = FCMDeviceTokenSerializer
     permission_classes = [IsAuthenticated]
     
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            self.perform_create(serializer)
+            return api_response(
+                success=True,
+                message="FCM token registered successfully",
+                data=serializer.data,
+                status_code=status.HTTP_201_CREATED,
+                request=request
+            )
+        return api_response(
+            success=False,
+            message="Invalid data",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            request=request
+        )
+
     def perform_create(self, serializer):
         serializer.save()
