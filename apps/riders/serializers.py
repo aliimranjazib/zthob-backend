@@ -1065,15 +1065,35 @@ class CreateInvitationCodeSerializer(serializers.Serializer):
 
 class RiderBasicInfoSerializer(serializers.ModelSerializer):
     """Basic rider information for association listing"""
-    full_name = serializers.CharField(source='rider_profile.full_name', read_only=True)
-    phone_number = serializers.CharField(source='rider_profile.phone_number', read_only=True)
-    vehicle_type = serializers.CharField(source='rider_profile.vehicle_type', read_only=True)
-    rating = serializers.DecimalField(source='rider_profile.rating', max_digits=3, decimal_places=2, read_only=True)
-    is_available = serializers.BooleanField(source='rider_profile.is_available', read_only=True)
+    full_name = serializers.SerializerMethodField()
+    phone_number = serializers.SerializerMethodField()
+    vehicle_type = serializers.SerializerMethodField()
+    rating = serializers.SerializerMethodField()
+    is_available = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = ['id', 'full_name', 'phone_number', 'vehicle_type', 'rating', 'is_available']
+
+    def get_full_name(self, obj):
+        profile = getattr(obj, 'rider_profile', None)
+        return getattr(profile, 'full_name', obj.username)
+
+    def get_phone_number(self, obj):
+        profile = getattr(obj, 'rider_profile', None)
+        return getattr(profile, 'phone_number', getattr(obj, 'phone', ''))
+
+    def get_vehicle_type(self, obj):
+        profile = getattr(obj, 'rider_profile', None)
+        return getattr(profile, 'vehicle_type', '')
+
+    def get_rating(self, obj):
+        profile = getattr(obj, 'rider_profile', None)
+        return float(getattr(profile, 'rating', 0.0))
+
+    def get_is_available(self, obj):
+        profile = getattr(obj, 'rider_profile', None)
+        return getattr(profile, 'is_available', False)
 
 
 class TailorRiderAssociationSerializer(serializers.ModelSerializer):
