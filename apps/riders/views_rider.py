@@ -27,11 +27,12 @@ def join_tailor_team(request):
         tailor = result['tailor']
         created = result['created']
         
-        # Get tailor info
+        # Get tailor info - use getattr for maximum safety
+        tailor_profile = getattr(tailor, 'tailor_profile', None)
         tailor_info = {
             'id': tailor.id,
-            'shop_name': tailor.tailor_profile.shop_name if hasattr(tailor, 'tailor_profile') else tailor.username,
-            'phone': tailor.tailor_profile.phone_number if hasattr(tailor, 'tailor_profile') else '',
+            'shop_name': getattr(tailor_profile, 'shop_name', tailor.username),
+            'phone': getattr(tailor_profile, 'contact_number', getattr(tailor, 'phone', '')),
         }
         
         message = 'Successfully joined tailor\'s team' if created else 'You are already part of this tailor\'s team'
@@ -64,10 +65,11 @@ def rider_my_tailors(request):
     
     tailors_data = []
     for assoc in associations:
+        tailor_profile = getattr(assoc.tailor, 'tailor_profile', None)
         tailor_data = {
             'id': assoc.tailor.id,
-            'shop_name': assoc.tailor.tailor_profile.shop_name if hasattr(assoc.tailor, 'tailor_profile') else assoc.tailor.username,
-            'phone': assoc.tailor.tailor_profile.phone_number if hasattr(assoc.tailor, 'tailor_profile') else '',
+            'shop_name': getattr(tailor_profile, 'shop_name', assoc.tailor.username),
+            'phone': getattr(tailor_profile, 'contact_number', getattr(assoc.tailor, 'phone', '')),
             'joined_at': assoc.created_at
         }
         tailors_data.append(tailor_data)

@@ -98,13 +98,14 @@ def tailor_my_riders(request):
     riders_data = []
     for assoc in associations:
         serializer = TailorRiderAssociationSerializer(assoc)
+        rider_profile = getattr(assoc.rider, 'rider_profile', None)
         rider_data = {
             'id': assoc.rider.id,
-            'full_name': assoc.rider.rider_profile.full_name if hasattr(assoc.rider, 'rider_profile') else assoc.rider.username,
-            'phone_number': assoc.rider.rider_profile.phone_number if hasattr(assoc.rider, 'rider_profile') else '',
-            'vehicle_type': assoc.rider.rider_profile.vehicle_type if hasattr(assoc.rider, 'rider_profile') else '',
-            'rating': float(assoc.rider.rider_profile.rating) if hasattr(assoc.rider, 'rider_profile') else 0.0,
-            'is_available': assoc.rider.rider_profile.is_available if hasattr(assoc.rider, 'rider_profile') else False,
+            'full_name': getattr(rider_profile, 'full_name', assoc.rider.username),
+            'phone_number': getattr(rider_profile, 'phone_number', getattr(assoc.rider, 'phone', '')),
+            'vehicle_type': getattr(rider_profile, 'vehicle_type', ''),
+            'rating': float(getattr(rider_profile, 'rating', 0.0)),
+            'is_available': getattr(rider_profile, 'is_available', False),
             'joined_at': assoc.created_at,
             'statistics': serializer.data['statistics']
         }

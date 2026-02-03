@@ -1193,9 +1193,17 @@ class JoinTailorTeamSerializer(serializers.Serializer):
 
 class TailorBasicInfoSerializer(serializers.ModelSerializer):
     """Basic tailor information for rider's associated tailors list"""
-    shop_name = serializers.CharField(source='tailor_profile.shop_name', read_only=True)
-    phone = serializers.CharField(source='tailor_profile.phone_number', read_only=True)
+    shop_name = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = ['id', 'shop_name', 'phone']
+
+    def get_shop_name(self, obj):
+        profile = getattr(obj, 'tailor_profile', None)
+        return getattr(profile, 'shop_name', obj.username)
+
+    def get_phone(self, obj):
+        profile = getattr(obj, 'tailor_profile', None)
+        return getattr(profile, 'contact_number', getattr(obj, 'phone', ''))
