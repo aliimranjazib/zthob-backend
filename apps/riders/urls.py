@@ -21,6 +21,16 @@ from .views_review import (
     RiderProfileReviewListView,
     RiderProfileReviewDetailView,
 )
+from .views_tailor import (
+    tailor_invitation_codes,
+    deactivate_invitation_code,
+    tailor_my_riders,
+    remove_rider_from_team,
+)
+from .views_rider import (
+    join_tailor_team,
+    rider_my_tailors,
+)
 
 app_name = 'riders'
 
@@ -54,5 +64,15 @@ urlpatterns = [
     # Admin Review
     path('admin/reviews/', RiderProfileReviewListView.as_view(), name='admin-reviews'),
     path('admin/reviews/<int:pk>/', RiderProfileReviewDetailView.as_view(), name='admin-review-detail'),
+    
+    # Tailor - Invitation Codes & Team Management
+    path('tailor/invitation-codes/', tailor_invitation_codes, name='tailor-invitation-codes'),
+    path('tailor/invitation-codes/<str:code>/', deactivate_invitation_code, name='deactivate-invitation-code'),
+    path('tailor/my-riders/', tailor_my_riders, name='tailor-my-riders'),
+    path('tailor/my-riders/<int:rider_id>/', remove_rider_from_team, name='remove-rider'),
+    
+    # Rider - Join Team & View Tailors
+    path('join-team/', join_tailor_team, name='join-team'),
+    path('my-tailors/', rider_my_tailors, name='my-tailors'),
 ]
 

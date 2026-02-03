@@ -1,7 +1,11 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
-from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
+from . import models
+from .models import (
+    RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument,
+    TailorInvitationCode, TailorRiderAssociation
+)
 
 
 @admin.register(RiderProfile)
@@ -675,4 +679,142 @@ class RiderDocumentAdmin(admin.ModelAdmin):
             'rider_profile__user',
             'verified_by'
         )
+
+
+@admin.register(TailorInvitationCode)
+class TailorInvitationCodeAdmin(admin.ModelAdmin):
+    """Admin interface for Tailor Invitation Codes"""
+    
+    list_display = ['code', 'tailor_name', 'is_active_badge', 'times_used', 'max_uses', 'expires_at_formatted', 'created_at_formatted']
+    list_filter = ['is_active', 'created_at', 'expires_at']
+    search_fields = ['code', 'tailor__username', 'tailor__tailor_profile__shop_name']
+    readonly_fields = ['times_used', 'created_at', 'updated_at', 'created_by']
+    raw_id_fields = ['tailor']
+    
+    fieldsets = (
+        ('Code Information', {
+            'fields': ('code', 'tailor', 'is_active')
+        }),
+        ('Usage Limits', {
+            'fields': ('max_uses', 'times_used', 'expires_at')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at', 'created_by'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def tailor_name(self, obj):
+        """Display tailor name"""
+        if obj.tailor:
+            if hasattr(obj.tailor, 'tailor_profile') and obj.tailor.tailor_profile:
+                return obj.tailor.tailor_profile.shop_name or obj.tailor.username
+            return obj.tailor.username
+        return '-'
+    tailor_name.short_description = 'Tailor'
+    tailor_name.admin_order_field = 'tailor__username'
+    
+    def is_active_badge(self, obj):
+        """Display active status"""
+        if obj.is_active:
+            can_use, msg = obj.can_be_used()
+            if can_use:
+                return format_html(
+                    '<span style="background-color: #28a745; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px;">✓ Active</span>'
+                )
+            else:
+                return format_html(
+                    '<span style="background-color: #ffc107; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px;">{}</span>',
+                    msg
+                )
+        return format_html(
+            '<span style="background-color: #dc3545; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px;">Inactive</span>'
+        )
+    is_active_badge.short_description = 'Status'
+    
+    def expires_at_formatted(self, obj):
+        """Format expiration date"""
+        if obj.expires_at:
+            return obj.expires_at.strftime('%Y-%m-%d %H:%M')
+        return format_html('<em style="color: #999;">Never</em>')
+    expires_at_formatted.short_description = 'Expires'
+    expires_at_formatted.admin_order_field = 'expires_at'
+    
+    def created_at_formatted(self, obj):
+        """Format creation date"""
+        if obj.created_at:
+            return obj.created_at.strftime('%Y-%m-%d %H:%M')
+        return '-'
+    created_at_formatted.short_description = 'Created'
+    created_at_formatted.admin_order_field = 'created_at'
+
+
+@admin.register(TailorRiderAssociation)
+class TailorRiderAssociationAdmin(admin.ModelAdmin):
+    """Admin interface for Tailor-Rider Associations"""
+    
+    list_display = ['tailor_name', 'rider_name', 'is_active_badge', 'priority', 'joined_via_code', 'created_at_formatted']
+    list_filter = ['is_active', 'created_at']
+    search_fields = [
+        'tailor__username', 
+        'tailor__tailor_profile__shop_name',
+        'rider__username',
+        'rider__rider_profile__full_name'
+    ]
+    readonly_fields = ['created_at', 'updated_at', 'created_by']
+    raw_id_fields = ['tailor', 'rider', 'joined_via_code']
+    
+    fieldsets = (
+        ('Association', {
+            'fields': ('tailor', 'rider', 'is_active')
+        }),
+        ('Details', {
+            'fields': ('joined_via_code', 'nickname', 'priority')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at', 'created_by'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def tailor_name(self, obj):
+        """Display tailor name"""
+        if obj.tailor:
+            if hasattr(obj.tailor, 'tailor_profile') and obj.tailor.tailor_profile:
+                return obj.tailor.tailor_profile.shop_name or obj.tailor.username
+            return obj.tailor.username
+        return '-'
+    tailor_name.short_description = 'Tailor'
+    tailor_name.admin_order_field = 'tailor__username'
+    
+    def rider_name(self, obj):
+        """Display rider name"""
+        if obj.rider:
+            if hasattr(obj.rider, 'rider_profile') and obj.rider.rider_profile:
+                return obj.rider.rider_profile.full_name or obj.rider.username
+            return obj.rider.username
+        return '-'
+    rider_name.short_description = 'Rider'
+    rider_name.admin_order_field = 'rider__username'
+    
+    def is_active_badge(self, obj):
+        """Display active status"""
+        if obj.is_active:
+            return format_html(
+                '<span style="background-color: #28a745; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px;">✓ Active</span>'
+            )
+        return format_html(
+            '<span style="background-color: #dc3545; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px;">Inactive</span>'
+        )
+    is_active_badge.short_description = 'Status'
+    is_active_badge.admin_order_field = 'is_active'
+    
+    def created_at_formatted(self, obj):
+        """Format created date"""
+        if obj.created_at:
+            return obj.created_at.strftime('%Y-%m-%d %H:%M')
+        return '-'
+    created_at_formatted.short_description = 'Joined'
+    created_at_formatted.admin_order_field = 'created_at'
+
 

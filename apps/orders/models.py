@@ -126,6 +126,15 @@ class Order(BaseModel):
         related_name='rider_orders',
         help_text='Rider assigned to this order for delivery'
     )
+    assigned_rider=models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_deliveries',
+        limit_choices_to={'role': 'RIDER'},
+        help_text='Rider specifically assigned by tailor when accepting the order (used for targeted notifications)'
+    )
     order_type=models.CharField(
         max_length=25,
         choices=ORDER_TYPE_CHOICES,

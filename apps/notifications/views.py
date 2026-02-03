@@ -67,3 +67,114 @@ class MarkAllReadView(APIView):
             is_read=False
         ).update(is_read=True, read_at=timezone.now())
         return Response({'status': 'all marked as read'})
+
+# 6. Test Notification Endpoints
+class TestCustomerNotificationView(APIView):
+    """Send a test notification to the logged-in customer"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        from .services import NotificationService
+        
+        # Verify user is a customer
+        if request.user.role != 'CUSTOMER':
+            return Response(
+                {'error': 'This endpoint is only for customers'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Send test notification
+        success = NotificationService.send_notification(
+            user=request.user,
+            title='Test Notification',
+            body='This is a test notification for customers. If you received this, your notifications are working! 🎉',
+            notification_type='TEST',
+            category='test_notification',
+            data={'test': True, 'timestamp': timezone.now().isoformat()},
+            priority='high'
+        )
+        
+        if success:
+            return Response({
+                'message': 'Test notification sent successfully',
+                'success': True
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'message': 'Failed to send test notification. Check your FCM token.',
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TestTailorNotificationView(APIView):
+    """Send a test notification to the logged-in tailor"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        from .services import NotificationService
+        
+        # Verify user is a tailor
+        if request.user.role != 'TAILOR':
+            return Response(
+                {'error': 'This endpoint is only for tailors'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Send test notification
+        success = NotificationService.send_notification(
+            user=request.user,
+            title='Test Notification',
+            body='This is a test notification for tailors. If you received this, your notifications are working! 🎉',
+            notification_type='TEST',
+            category='test_notification',
+            data={'test': True, 'timestamp': timezone.now().isoformat()},
+            priority='high'
+        )
+        
+        if success:
+            return Response({
+                'message': 'Test notification sent successfully',
+                'success': True
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'message': 'Failed to send test notification. Check your FCM token.',
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TestRiderNotificationView(APIView):
+    """Send a test notification to the logged-in rider"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        from .services import NotificationService
+        
+        # Verify user is a rider
+        if request.user.role != 'RIDER':
+            return Response(
+                {'error': 'This endpoint is only for riders'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Send test notification
+        success = NotificationService.send_notification(
+            user=request.user,
+            title='Test Notification',
+            body='This is a test notification for riders. If you received this, your notifications are working! 🎉',
+            notification_type='TEST',
+            category='test_notification',
+            data={'test': True, 'timestamp': timezone.now().isoformat()},
+            priority='high'
+        )
+        
+        if success:
+            return Response({
+                'message': 'Test notification sent successfully',
+                'success': True
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'message': 'Failed to send test notification. Check your FCM token.',
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
