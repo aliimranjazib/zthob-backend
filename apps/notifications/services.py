@@ -478,7 +478,7 @@ class NotificationService:
         
        
         if new_tailor_status == 'accepted':
-            NotificationService.send_new_order_broadcast(order)
+            NotificationService.send_new_order_broadcast(order, assigned_rider_id=order.assigned_rider_id)
             
         # Notify rider
         if order.rider and new_tailor_status in tailor_status_messages:

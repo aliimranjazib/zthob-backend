@@ -17,10 +17,10 @@ class TailorAcceptOrderView(APIView):
     permission_classes = [IsAuthenticated]
     
     @extend_schema(
-        request=None,
+        request=TailorUpdateOrderStatusSerializer,  # Reuse the same serializer now
         responses={200: OrderSerializer},
         summary="Accept order",
-        description="Tailor accepts an order. Sets tailor_status to 'accepted' and typically updates main status to 'confirmed'.",
+        description="Tailor accepts an order. Sets tailor_status to 'accepted' and typically updates main status to 'confirmed'. Can also assign a specific rider.",
         tags=["Tailor Orders"],
         parameters=[
             {
@@ -50,6 +50,14 @@ class TailorAcceptOrderView(APIView):
                 message="You don't have access to this order",
                 status_code=status.HTTP_403_FORBIDDEN
             )
+        
+        # Handle assigned rider if provided in data
+        assigned_rider_id = request.data.get('assigned_rider_id')
+        if assigned_rider_id:
+            from apps.accounts.models import CustomUser
+            assigned_rider = get_object_or_404(CustomUser, id=assigned_rider_id, role='RIDER')
+            order.assigned_rider = assigned_rider
+            order.save()
         
         # Check if already accepted
         if order.tailor_status == 'accepted':
@@ -140,6 +148,24 @@ class TailorUpdateOrderStatusView(APIView):
             new_tailor_status = serializer.validated_data.get('tailor_status')
             new_status = serializer.validated_data.get('status')
             notes = serializer.validated_data.get('notes', '')
+            assigned_rider_id = serializer.validated_data.get('assigned_rider_id')
+            
+            # Handle assigned rider if provided
+            if assigned_rider_id:
+                from apps.accounts.models import CustomUser
+                assigned_rider = get_object_or_404(CustomUser, id=assigned_rider_id, role='RIDER')
+                order.assigned_rider = assigned_rider
+                order.save()
+                
+                # If order is already accepted, notify the new rider specifically
+                if order.tailor_status in ['accepted', 'in_progress', 'stitching_started', 'stitched'] and not new_tailor_status == 'accepted':
+                    try:
+                        from apps.notifications.services import NotificationService
+                        NotificationService.send_new_order_broadcast(order, assigned_rider_id=assigned_rider_id)
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.error(f"Failed to send assigned rider notification: {str(e)}")
             
             # Special handling: if tailor_status is "ready_for_delivery", map it to main status
             # This allows consistent use of tailor_status field

@@ -563,13 +563,13 @@ class RiderAvailableOrdersView(APIView):
             )
         
         # Get orders that are paid, don't have a rider assigned, and tailor has confirmed
-        # Riders should only see orders after tailor has accepted them
-        # AND rider_status must be 'none' (not yet accepted by any rider)
-        # EXCEPTION: measurement_service orders with home_delivery don't need tailor confirmation
+        # If assigned_rider is set, only that rider can see it
         orders = Order.objects.filter(
             payment_status='paid',
             rider__isnull=True,
-            rider_status='none',  # Only show orders not yet accepted by any rider
+            rider_status='none',
+        ).filter(
+            Q(assigned_rider__isnull=True) | Q(assigned_rider=request.user)
         ).filter(
             # Show if:
             # 1. Main status is confirmed/in_progress OR tailor has accepted it (regular orders)
