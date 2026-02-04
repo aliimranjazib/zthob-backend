@@ -123,7 +123,7 @@ class OrderSerializer(serializers.ModelSerializer):
     can_be_cancelled=serializers.BooleanField(read_only=True)
     custom_styles = serializers.SerializerMethodField()
     rider_status = serializers.CharField(read_only=True)
-    tailor_status = serializers.CharField(read_only=True)
+    tailor_status = serializers.SerializerMethodField()
     status_info = serializers.SerializerMethodField()
     pricing_summary = serializers.SerializerMethodField()
     delivery_address = serializers.SerializerMethodField()
@@ -215,6 +215,13 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_rider_phone(self, obj):
         """Get rider phone (verified phone from user account)"""
         return obj.rider.phone if obj.rider else None
+
+    def get_tailor_status(self, obj):
+        """Get translated tailor status display name"""
+        request = self.context.get('request')
+        language = get_language_from_request(request) if request else 'en'
+        display_name = obj.get_tailor_status_display()
+        return translate_message(display_name, language)
 
     def get_family_member_name(self, obj):
         if obj.family_member:
@@ -445,8 +452,11 @@ class OrderSerializer(serializers.ModelSerializer):
         
         return {
             'current_status': obj.status,
+            'current_status_display': self.get_status_display(obj),
             'current_rider_status': obj.rider_status,
+            'current_rider_status_display': self.get_rider_status(obj),
             'current_tailor_status': obj.tailor_status,
+            'current_tailor_status_display': self.get_tailor_status(obj),
             'next_available_actions': next_actions,
             'can_cancel': can_cancel,
             'cancel_reason': cancel_reason,
@@ -1245,8 +1255,9 @@ class OrderListSerializer(serializers.ModelSerializer):
     items_count = serializers.IntegerField(read_only=True)
     custom_styles = serializers.SerializerMethodField()
     items = OrderItemSerializer(source='order_items', many=True, read_only=True)
-    rider_status = serializers.CharField(read_only=True)
-    tailor_status = serializers.CharField(read_only=True)
+    rider_status = serializers.SerializerMethodField()
+    tailor_status = serializers.SerializerMethodField()
+    status_display = serializers.SerializerMethodField()
     status_info = serializers.SerializerMethodField()
     pricing_summary = serializers.SerializerMethodField()
 
@@ -1284,6 +1295,13 @@ class OrderListSerializer(serializers.ModelSerializer):
             return 'Unknown'
         full_name = obj.customer.get_full_name().strip()
         return full_name if full_name else obj.customer.username
+
+    def get_tailor_status(self, obj):
+        """Get translated tailor status display name"""
+        request = self.context.get('request')
+        language = get_language_from_request(request) if request else 'en'
+        display_name = obj.get_tailor_status_display()
+        return translate_message(display_name, language)
 
     def get_tailor_name(self, obj):
         if not obj.tailor:
@@ -1429,8 +1447,11 @@ class OrderListSerializer(serializers.ModelSerializer):
         
         return {
             'current_status': obj.status,
+            'current_status_display': self.get_status_display(obj),
             'current_rider_status': obj.rider_status,
+            'current_rider_status_display': self.get_rider_status(obj),
             'current_tailor_status': obj.tailor_status,
+            'current_tailor_status_display': self.get_tailor_status(obj),
             'next_available_actions': next_actions,
             'can_cancel': can_cancel,
             'cancel_reason': cancel_reason,

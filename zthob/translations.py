@@ -89,6 +89,23 @@ TRANSLATIONS = {
     "Mark Ready for Pickup": "تعيين جاهز للاستلام",
     "Taking Measurements": "أخذ القياسات",
     
+    # Order/Tailor Statuses
+    "New": "جديد",
+    "Accepted Order": "تم قبول الطلب",
+    "In Progress": "قيد التنفيذ",
+    "Started Stitching": "بدأ الخياطة",
+    "Finished Stitching": "تمت الخياطة",
+    "Measurements Complete": "اكتملت المقاسات",
+    "Ready for Delivery": "جاهز للتوصيل",
+    
+    # Main Order Statuses
+    "Pending": "معلق",
+    "Confirmed": "مؤكد",
+    "Ready for Pickup": "جاهز للاستلام",
+    "Delivered": "تم التوصيل",
+    "Collected": "تم الاستلام",
+    "Cancelled": "ملغي",
+    
     # Order Status Actions - Descriptions
     "Accept this order": "قبول هذا الطلب",
     "Start processing this order": "بدء معالجة هذا الطلب",
