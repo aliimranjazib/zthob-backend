@@ -452,9 +452,7 @@ class OrderSerializer(serializers.ModelSerializer):
         
         return {
             'current_status': obj.status,
-            'current_status_display': self.get_status_display(obj),
             'current_rider_status': obj.rider_status,
-            'current_rider_status_display': self.get_rider_status(obj),
             'current_tailor_status': obj.tailor_status,
             'current_tailor_status_display': self.get_tailor_status(obj),
             'next_available_actions': next_actions,
@@ -1255,9 +1253,8 @@ class OrderListSerializer(serializers.ModelSerializer):
     items_count = serializers.IntegerField(read_only=True)
     custom_styles = serializers.SerializerMethodField()
     items = OrderItemSerializer(source='order_items', many=True, read_only=True)
-    rider_status = serializers.SerializerMethodField()
+    rider_status = serializers.CharField(read_only=True)
     tailor_status = serializers.SerializerMethodField()
-    status_display = serializers.SerializerMethodField()
     status_info = serializers.SerializerMethodField()
     pricing_summary = serializers.SerializerMethodField()
 
@@ -1447,9 +1444,7 @@ class OrderListSerializer(serializers.ModelSerializer):
         
         return {
             'current_status': obj.status,
-            'current_status_display': self.get_status_display(obj),
             'current_rider_status': obj.rider_status,
-            'current_rider_status_display': self.get_rider_status(obj),
             'current_tailor_status': obj.tailor_status,
             'current_tailor_status_display': self.get_tailor_status(obj),
             'next_available_actions': next_actions,
