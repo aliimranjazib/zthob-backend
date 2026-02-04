@@ -14,11 +14,12 @@ class TailorUpdateOrderStatusSerializer(serializers.Serializer):
         required=False
     )
     notes = serializers.CharField(required=False, allow_blank=True)
+    assigned_rider_id = serializers.IntegerField(required=False, allow_null=True)
     
     def validate(self, attrs):
-        """Ensure at least one status field is provided"""
-        if not attrs.get('tailor_status') and not attrs.get('status'):
-            raise serializers.ValidationError("Either 'tailor_status' or 'status' must be provided")
+        """Ensure at least one field is provided"""
+        if not attrs.get('tailor_status') and not attrs.get('status') and not attrs.get('assigned_rider_id'):
+            raise serializers.ValidationError("Either 'tailor_status', 'status' or 'assigned_rider_id' must be provided")
         return attrs
 
 
