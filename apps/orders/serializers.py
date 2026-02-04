@@ -109,6 +109,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
     customer_name=serializers.SerializerMethodField()
     customer_email=serializers.CharField(source='customer.email',read_only=True)
+    customer_phone=serializers.CharField(source='customer.phone',read_only=True)
     tailor_name=serializers.SerializerMethodField()
     tailor_contact=serializers.SerializerMethodField()
     rider_name=serializers.SerializerMethodField()
@@ -135,6 +136,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'customer',
             'customer_name',
             'customer_email',
+            'customer_phone',
             'tailor',
             'tailor_name',
             'tailor_contact',
@@ -163,7 +165,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'actual_delivery_date',
             'special_instructions',
             'stitching_completion_date',
-'stitching_completion_time',
+            'stitching_completion_time',
             'appointment_date',
             'appointment_time',
             'custom_styles',
