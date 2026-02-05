@@ -1,15 +1,15 @@
 # apps/tailors/views/config.py
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema
 from apps.orders.models import Order
 from zthob.utils import api_response
 from zthob.translations import translate_message, get_language_from_request
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 
 class TailorConfigView(APIView):
     """Extensible configuration endpoint for Tailor App"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     @extend_schema(
         responses={200: dict},
