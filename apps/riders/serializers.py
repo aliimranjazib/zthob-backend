@@ -390,6 +390,7 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
     tailor_status = serializers.CharField(read_only=True)
     status_info = serializers.SerializerMethodField()
     pricing_summary = serializers.SerializerMethodField()
+    rider_status = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -428,6 +429,19 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'delivery_fee': str(obj.delivery_fee),
             'total_amount': str(obj.total_amount),
         }
+    
+    def get_rider_status(self, obj):
+        """Get translated rider status display name"""
+        request = self.context.get('request')
+        language = get_language_from_request(request) if request else 'en'
+        
+        status_key = obj.rider_status
+        if status_key == 'none' or status_key is None:
+            display_name = "New"
+        else:
+            display_name = obj.get_rider_status_display()
+            
+        return translate_message(display_name, language)
     
     def get_customer_name(self, obj):
         if not obj.customer:
@@ -605,10 +619,9 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
     items = serializers.SerializerMethodField()
     assignment_status = serializers.SerializerMethodField()
     custom_styles = serializers.SerializerMethodField()
-    rider_status = serializers.CharField(read_only=True)
-    tailor_status = serializers.CharField(read_only=True)
     status_info = serializers.SerializerMethodField()
     pricing_summary = serializers.SerializerMethodField()
+    rider_status = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -653,6 +666,19 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'delivery_fee': str(obj.delivery_fee),
             'total_amount': str(obj.total_amount),
         }
+    
+    def get_rider_status(self, obj):
+        """Get translated rider status display name"""
+        request = self.context.get('request')
+        language = get_language_from_request(request) if request else 'en'
+        
+        status_key = obj.rider_status
+        if status_key == 'none' or status_key is None:
+            display_name = "New"
+        else:
+            display_name = obj.get_rider_status_display()
+            
+        return translate_message(display_name, language)
     
     def get_customer_info(self, obj):
         if obj.customer:

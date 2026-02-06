@@ -98,6 +98,14 @@ TRANSLATIONS = {
     "Measurements Complete": "اكتملت المقاسات",
     "Ready for Delivery": "جاهز للتوصيل",
     
+    # Rider Statuses
+    "On Way to Pickup": "في الطريق للاستلام",
+    "Picked Up": "تم الاستلام من الخياط",
+    "On Way to Delivery": "في الطريق للتوصيل",
+    "On Way to Measurement": "في الطريق لأخذ القياسات",
+    "Measuring": "جاري أخذ القياسات",
+    "Measurement Taken": "تم أخذ القياسات",
+    
     # Main Order Statuses
     "Pending": "معلق",
     "Confirmed": "مؤكد",
