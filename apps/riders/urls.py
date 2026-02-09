@@ -17,6 +17,7 @@ from .views import (
     RiderUpdateOrderStatusView,
     RiderAnalyticsView,
 )
+from .views.config import RiderConfigView
 from .views_review import (
     RiderProfileReviewListView,
     RiderProfileReviewDetailView,
@@ -39,6 +40,9 @@ urlpatterns = [
     path('register/', RiderRegisterView.as_view(), name='register'),
     path('send-otp/', RiderSendOTPView.as_view(), name='send-otp'),
     path('verify-otp/', RiderVerifyOTPView.as_view(), name='verify-otp'),
+    
+    # Configuration
+    path('config/', RiderConfigView.as_view(), name='rider-config'),
     
     # Profile
     path('profile/', RiderProfileView.as_view(), name='profile'),
