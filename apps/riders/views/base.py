@@ -10,14 +10,15 @@ from apps.accounts.models import CustomUser
 from apps.orders.models import Order
 from apps.core.services import PhoneVerificationService
 from apps.core.serializers import PhoneVerificationSerializer, OTPVerificationSerializer
-from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
+from ..models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
 # Import serializers from serializers.py file directly
 import importlib.util
 import sys
 from pathlib import Path
 
 # Load serializers.py as a module with proper package context
-_serializers_file = Path(__file__).parent / 'serializers.py'
+# Load serializers.py from the parent directory
+_serializers_file = Path(__file__).parent.parent / 'serializers.py'
 _spec = importlib.util.spec_from_file_location("riders_serializers_file", _serializers_file)
 _serializers_module = importlib.util.module_from_spec(_spec)
 
