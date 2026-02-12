@@ -1,12 +1,13 @@
 from rest_framework import generics, permissions, viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import CustomStyleCategory, CustomStyle, UserStylePreset
+from .models import CustomStyleCategory, CustomStyle, UserStylePreset, MeasurementTemplate
 from .serializers import (
     CustomStyleCategorySerializer,
     CustomStyleListSerializer,
     UserStylePresetSerializer,
-    UserStylePresetCreateSerializer
+    UserStylePresetCreateSerializer,
+    MeasurementTemplateSerializer
 )
 
 
@@ -84,3 +85,18 @@ class UserStylePresetViewSet(viewsets.ModelViewSet):
         preset.increment_usage()
         serializer = self.get_serializer(preset)
         return Response(serializer.data)
+
+
+class MeasurementTemplateListView(generics.ListAPIView):
+    """
+    GET /api/customization/measurement-templates/
+    Returns all active measurement templates with their fields.
+    Used by tailor/customer apps to build dynamic measurement forms.
+    """
+    serializer_class = MeasurementTemplateSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        return MeasurementTemplate.objects.filter(
+            is_active=True
+        ).prefetch_related('fields').order_by('display_order', 'name')

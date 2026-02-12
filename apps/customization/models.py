@@ -138,7 +138,139 @@ class UserStylePreset(BaseModel):
         # Set this one as default
         self.is_default = True
         self.save(update_fields=['is_default'])
-    
-    
-    
-        
+
+
+class MeasurementTemplate(BaseModel):
+    """
+    Admin-defined measurement template (e.g., "Thobe Measurements").
+    Defines the structure of measurement forms that tailors/customers fill in.
+    """
+    UNIT_CHOICES = [
+        ('cm', 'Centimeters'),
+        ('inches', 'Inches'),
+    ]
+
+    name = models.CharField(
+        max_length=50,
+        unique=True,
+        help_text="Internal name (e.g., 'thobe', 'pants')"
+    )
+    display_name = models.CharField(
+        max_length=100,
+        help_text="English display name"
+    )
+    display_name_ar = models.CharField(
+        max_length=100,
+        help_text="Arabic display name"
+    )
+    description = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Optional description"
+    )
+    default_unit = models.CharField(
+        max_length=10,
+        choices=UNIT_CHOICES,
+        default='cm',
+        help_text="Default unit for measurement fields"
+    )
+    display_order = models.PositiveIntegerField(
+        default=0,
+        help_text="Order in which to display templates (lower = first)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this template is available for use"
+    )
+
+    class Meta:
+        ordering = ['display_order', 'name']
+        verbose_name = 'Measurement Template'
+        verbose_name_plural = 'Measurement Templates'
+
+    def __str__(self):
+        return self.display_name
+
+
+class MeasurementField(BaseModel):
+    """
+    Individual measurement field within a template (e.g., "الطول", "الكتف").
+    Admin can add, update, delete fields to customize what tailors measure.
+    """
+    FIELD_TYPE_CHOICES = [
+        ('decimal', 'Decimal Number'),
+        ('integer', 'Whole Number'),
+        ('text', 'Text'),
+    ]
+
+    template = models.ForeignKey(
+        MeasurementTemplate,
+        on_delete=models.CASCADE,
+        related_name='fields',
+        help_text="Template this field belongs to"
+    )
+    name = models.CharField(
+        max_length=50,
+        help_text="Internal key (e.g., 'chest', 'waist')"
+    )
+    display_name = models.CharField(
+        max_length=100,
+        help_text="English label"
+    )
+    display_name_ar = models.CharField(
+        max_length=100,
+        help_text="Arabic label"
+    )
+    field_type = models.CharField(
+        max_length=20,
+        choices=FIELD_TYPE_CHOICES,
+        default='decimal',
+        help_text="Type of value expected"
+    )
+    min_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Minimum valid value (for decimal/integer fields)"
+    )
+    max_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Maximum valid value (for decimal/integer fields)"
+    )
+    is_required = models.BooleanField(
+        default=True,
+        help_text="Whether this field must be filled"
+    )
+    display_order = models.PositiveIntegerField(
+        default=0,
+        help_text="Order in which to display (lower = first)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this field is shown in the form"
+    )
+    help_text_en = models.CharField(
+        max_length=200,
+        blank=True,
+        default='',
+        help_text="English helper tip for tailor"
+    )
+    help_text_ar = models.CharField(
+        max_length=200,
+        blank=True,
+        default='',
+        help_text="Arabic helper tip for tailor"
+    )
+
+    class Meta:
+        ordering = ['template', 'display_order', 'name']
+        unique_together = ['template', 'name']
+        verbose_name = 'Measurement Field'
+        verbose_name_plural = 'Measurement Fields'
+
+    def __str__(self):
+        return f"{self.template.name} - {self.display_name}"
