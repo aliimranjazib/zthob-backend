@@ -1,6 +1,9 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import CustomStyleCategory, CustomStyle, UserStylePreset
+from .models import (
+    CustomStyleCategory, CustomStyle, UserStylePreset,
+    MeasurementTemplate, MeasurementField
+)
 
 
 @admin.register(CustomStyleCategory)
@@ -149,3 +152,51 @@ class UserStylePresetAdmin(admin.ModelAdmin):
         html += '</ul>'
         return format_html(html)
     styles_preview.short_description = 'Selected Styles'
+
+
+class MeasurementFieldInline(admin.TabularInline):
+    """Inline editing of measurement fields within a template"""
+    model = MeasurementField
+    extra = 1
+    ordering = ['display_order', 'name']
+    fields = [
+        'name', 'display_name', 'display_name_ar',
+        'field_type', 'min_value', 'max_value',
+        'is_required', 'display_order', 'is_active',
+        'help_text_en', 'help_text_ar'
+    ]
+
+
+@admin.register(MeasurementTemplate)
+class MeasurementTemplateAdmin(admin.ModelAdmin):
+    """
+    Admin interface for managing measurement templates.
+    Add fields inline — all on one page.
+    """
+    list_display = [
+        'display_name', 'display_name_ar', 'name',
+        'default_unit', 'fields_count',
+        'display_order', 'is_active', 'created_at'
+    ]
+    list_editable = ['display_order', 'is_active']
+    list_filter = ['is_active', 'default_unit', 'created_at']
+    search_fields = ['name', 'display_name', 'display_name_ar']
+    ordering = ['display_order', 'name']
+    inlines = [MeasurementFieldInline]
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'display_name', 'display_name_ar', 'description')
+        }),
+        ('Settings', {
+            'fields': ('default_unit', 'display_order', 'is_active')
+        }),
+    )
+
+    def fields_count(self, obj):
+        """Show count of active fields in this template"""
+        active = obj.fields.filter(is_active=True).count()
+        total = obj.fields.count()
+        return f"{active} active / {total} total"
+    fields_count.short_description = 'Fields'
+

@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import CustomStyleCategory, CustomStyle, UserStylePreset
+from .models import (
+    CustomStyleCategory, CustomStyle, UserStylePreset,
+    MeasurementTemplate, MeasurementField
+)
 from zthob.translations import translate_message, get_language_from_request
 
 
@@ -230,3 +233,76 @@ class UserStylePresetCreateSerializer(serializers.ModelSerializer):
         """Auto-assign current user"""
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
+
+
+class MeasurementFieldSerializer(serializers.ModelSerializer):
+    """
+    Serializer for individual measurement fields.
+    Translates display_name and help_text based on Accept-Language header.
+    """
+    display_name = serializers.SerializerMethodField()
+    help_text = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MeasurementField
+        fields = [
+            'id',
+            'name',
+            'display_name',
+            'field_type',
+            'min_value',
+            'max_value',
+            'is_required',
+            'display_order',
+            'help_text',
+        ]
+
+    def get_display_name(self, obj):
+        request = self.context.get('request')
+        language = get_language_from_request(request)
+        if language == 'ar' and obj.display_name_ar:
+            return obj.display_name_ar
+        return obj.display_name
+
+    def get_help_text(self, obj):
+        request = self.context.get('request')
+        language = get_language_from_request(request)
+        if language == 'ar' and obj.help_text_ar:
+            return obj.help_text_ar
+        return obj.help_text_en
+
+
+class MeasurementTemplateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for measurement templates with nested fields.
+    Used for GET /api/customization/measurement-templates/
+    """
+    display_name = serializers.SerializerMethodField()
+    measurement_fields = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MeasurementTemplate
+        fields = [
+            'id',
+            'name',
+            'display_name',
+            'description',
+            'default_unit',
+            'measurement_fields',
+        ]
+
+    def get_display_name(self, obj):
+        request = self.context.get('request')
+        language = get_language_from_request(request)
+        if language == 'ar' and obj.display_name_ar:
+            return obj.display_name_ar
+        return obj.display_name
+
+    def get_measurement_fields(self, obj):
+        """Return all active fields for this template, ordered by display_order"""
+        active_fields = obj.fields.filter(
+            is_active=True
+        ).order_by('display_order', 'name')
+        return MeasurementFieldSerializer(
+            active_fields, many=True, context=self.context
+        ).data
