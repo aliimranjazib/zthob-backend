@@ -42,6 +42,10 @@ from .orders import (
     TailorAddMeasurementsView
 )
 from .config import TailorConfigView
+from .tailor_pos import (
+    TailorCustomerListView,
+    TailorCreateCustomerView
+)
 
 # Export all views
 __all__ = [
@@ -86,4 +90,8 @@ __all__ = [
     'TailorUpdateOrderStatusView',
     'TailorAddMeasurementsView',
     'TailorConfigView',
+    
+    # POS views
+    'TailorCustomerListView',
+    'TailorCreateCustomerView',
 ]
