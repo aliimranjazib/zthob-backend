@@ -84,7 +84,20 @@ class TailorCreateCustomerView(APIView):
         name = serializer.validated_data['name']
 
         # Check if user with this phone already exists
-        existing_user = User.objects.filter(phone=phone).first()
+        # Handle format variations: +966511111113, 966511111113, 0511111113, 511111113
+        phone_variations = [phone]
+        stripped = phone.lstrip('+')
+        if stripped not in phone_variations:
+            phone_variations.append(stripped)
+        if stripped.startswith('966'):
+            local = '0' + stripped[3:]
+            phone_variations.append(local)
+            phone_variations.append(stripped[3:])  # without 0 prefix
+        elif stripped.startswith('0'):
+            intl = '966' + stripped[1:]
+            phone_variations.append(intl)
+            phone_variations.append('+' + intl)
+        existing_user = User.objects.filter(phone__in=phone_variations).first()
         if existing_user:
             # Return existing customer instead of erroring
             measurements = None
