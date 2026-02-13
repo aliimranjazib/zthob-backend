@@ -99,7 +99,12 @@ class TailorCreateCustomerView(APIView):
             phone_variations.append('+' + intl)
         existing_user = User.objects.filter(phone__in=phone_variations).first()
         if existing_user:
-            # Return existing customer instead of erroring
+            # Update name if provided
+            name_parts = name.strip().split(' ', 1)
+            existing_user.first_name = name_parts[0]
+            existing_user.last_name = name_parts[1] if len(name_parts) > 1 else ''
+            existing_user.save(update_fields=['first_name', 'last_name'])
+
             measurements = None
             try:
                 measurements = existing_user.customer_profile.measurements
