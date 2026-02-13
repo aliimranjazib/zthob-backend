@@ -40,6 +40,10 @@ from .analytics import (
 from .orders import (
     TailorUpdateOrderStatusSerializer
 )
+from .tailor_pos import (
+    TailorCustomerSerializer,
+    CreateCustomerSerializer
+)
 
 # Export all serializers
 __all__ = [
@@ -85,4 +89,8 @@ __all__ = [
     
     # Order serializers
     'TailorUpdateOrderStatusSerializer',
+    
+    # POS serializers
+    'TailorCustomerSerializer',
+    'CreateCustomerSerializer',
 ]
