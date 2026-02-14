@@ -388,6 +388,7 @@ JAZZMIN_SETTINGS = {
     # Clean top menu - only essential links
     "topmenu_links": [
         {"name": "Dashboard", "url": "admin:index"},
+        {"name": "Analytics", "url": "admin:orders-analytics", "icon": "fas fa-chart-line"},
         {"name": "Users", "model": "accounts.CustomUser"},
     ],
 

@@ -1,7 +1,10 @@
 from decimal import Decimal
+from datetime import timedelta
 from django.db import transaction
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.utils import timezone
+from django.db.models import Count, Sum, Avg
 from apps.tailors.models import Fabric,TailorProfile
 from apps.core.models import SystemSettings
 
@@ -274,8 +277,251 @@ class AdminAnalyticsService:
             'status_breakdown': status_map,
             'payment_method_breakdown': list(payment_breakdown),
             'daily_trends': list(daily_trends),
-            'generated_at': timezone.now().isoformat()
         }
+
+    # =====================================================================
+    # ENHANCED ANALYTICS METHODS WITH CACHING (Phase 1)
+    # =====================================================================
+
+    @staticmethod
+    def _cache_analytics(func):
+        """Decorator for caching analytics results for 5 minutes"""
+        from functools import wraps
+        from django.core.cache import cache
+        
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Create cache key from function name and args
+            cache_key = f"analytics_{func.__name__}_{hash(str(args) + str(kwargs))}"
+            
+            result = cache.get(cache_key)
+            if result is None:
+                result = func(*args, **kwargs)
+                cache.set(cache_key, result, 300)  # 5 minutes
+            
+            return result
+        return wrapper
+
+    @staticmethod
+    @_cache_analytics
+    def get_revenue_summary(days=30):
+        """
+        Get revenue summary for last N days with earnings breakdown.
+        All amounts in SAR.
+        """
+        from apps.orders.models import Order
+        start_date = timezone.now() - timedelta(days=days)
+        
+        # Filter revenue-generating orders
+        queryset = Order.objects.filter(
+            created_at__gte=start_date,
+            status__in=['delivered', 'collected', 'ready_for_delivery', 'ready_for_pickup', 'in_progress']
+        )
+        
+        # Efficient single-query aggregation
+        stats = queryset.aggregate(
+            total_revenue=Sum('total_amount'),
+            system_earnings=Sum('system_fee'),
+            tailor_earnings=Sum('stitching_price'),
+            rider_earnings=Sum('delivery_fee'),
+            fabric_revenue=Sum('subtotal'),
+            tax_collected=Sum('tax_amount'),
+            orders_count=Count('id'),
+            avg_order_value=Avg('total_amount')
+        )
+        
+        return {
+            'total_revenue': stats['total_revenue'] or Decimal('0.00'),
+            'system_earnings': stats['system_earnings'] or Decimal('0.00'),
+            'tailor_earnings': stats['tailor_earnings'] or Decimal('0.00'),
+            'rider_earnings': stats['rider_earnings'] or Decimal('0.00'),
+            'fabric_revenue': stats['fabric_revenue'] or Decimal('0.00'),
+            'tax_collected': stats['tax_collected'] or Decimal('0.00'),
+            'orders_count': stats['orders_count'] or 0,
+            'aov': (stats['avg_order_value'] or Decimal('0.00')).quantize(Decimal('0.01')),
+            'period_days': days,
+        }
+
+    @staticmethod
+    @_cache_analytics
+    def get_tailor_earnings_summary(days=30):
+        """
+        Get earnings summary for all tailors.
+        Returns list of tailors with their earnings data.
+        """
+        from django.contrib.auth import get_user_model
+        from apps.orders.models import Order
+        User = get_user_model()
+        start_date = timezone.now() - timedelta(days=days)
+        
+        # Query all tailors with earnings
+        tailors = User.objects.filter(
+            role='TAILOR',
+            tailor_orders__created_at__gte=start_date,
+            tailor_orders__status__in=['delivered', 'collected', 'in_progress', 'ready_for_delivery', 'ready_for_pickup']
+        ).annotate(
+            total_earnings=Sum('tailor_orders__stitching_price') + Sum('tailor_orders__subtotal'),
+            stitching_earnings=Sum('tailor_orders__stitching_price'),
+            fabric_earnings=Sum('tailor_orders__subtotal'),
+            orders_count=Count('tailor_orders', distinct=True),
+            avg_per_order=Avg('tailor_orders__total_amount')
+        ).order_by('-total_earnings')
+        
+        return [{
+            'tailor_id': t.id,
+            'username': t.username,
+            'email': t.email,
+            'total_earnings': (t.total_earnings or Decimal('0.00')).quantize(Decimal('0.01')),
+            'stitching_earnings': (t.stitching_earnings or Decimal('0.00')).quantize(Decimal('0.01')),
+            'fabric_earnings': (t.fabric_earnings or Decimal('0.00')).quantize(Decimal('0.01')),
+            'orders_count': t.orders_count or 0,
+            'avg_per_order': (t.avg_per_order or Decimal('0.00')).quantize(Decimal('0.01')),
+        } for t in tailors]
+
+    @staticmethod
+    @_cache_analytics
+    def get_rider_earnings_summary(days=30):
+        """
+        Get earnings summary for all riders.
+        Returns list of riders with their delivery earnings.
+        """
+        from django.contrib.auth import get_user_model
+        from apps.orders.models import Order
+        User = get_user_model()
+        start_date = timezone.now() - timedelta(days=days)
+        
+        # Query all riders with earnings from delivered orders
+        riders = User.objects.filter(
+            role='RIDER',
+            rider_orders__created_at__gte=start_date,
+            rider_orders__status='delivered'
+        ).annotate(
+            total_earnings=Sum('rider_orders__delivery_fee'),
+            deliveries_count=Count('rider_orders', distinct=True),
+            avg_per_delivery=Avg('rider_orders__delivery_fee')
+        ).order_by('-total_earnings')
+        
+        return [{
+            'rider_id': r.id,
+            'username': r.username,
+            'email': r.email,
+            'total_earnings': (r.total_earnings or Decimal('0.00')).quantize(Decimal('0.01')),
+            'deliveries_count': r.deliveries_count or 0,
+            'avg_per_delivery': (r.avg_per_delivery or Decimal('0.00')).quantize(Decimal('0.01')),
+        } for r in riders]
+
+    @staticmethod
+    @_cache_analytics
+    def get_top_fabrics(days=30, limit=10):
+        """
+        Get top selling fabrics by revenue.
+        Returns list of fabrics with sales data.
+        """
+        from apps.orders.models import OrderItem
+        start_date = timezone.now() - timedelta(days=days)
+        
+        # Query top fabrics through OrderItem
+        top_fabrics = OrderItem.objects.filter(
+            order__created_at__gte=start_date,
+            order__status__in=['delivered', 'collected', 'in_progress', 'ready_for_delivery', 'ready_for_pickup']
+        ).values(
+            'fabric__id',
+            'fabric__name',
+            'fabric__sku',
+            'fabric__tailor__user__username'  # Fixed: traverse through user relationship
+        ).annotate(
+            total_quantity=Sum('quantity'),
+            total_revenue=Sum('total_price'),
+            orders_count=Count('order', distinct=True)
+        ).order_by('-total_revenue')[:limit]
+        
+        return [{
+            'fabric_id': f['fabric__id'],
+            'fabric_name': f['fabric__name'],
+            'fabric_sku': f['fabric__sku'],
+            'tailor_username': f['fabric__tailor__user__username'],  # Fixed
+            'total_quantity': f['total_quantity'] or 0,
+            'total_revenue': (f['total_revenue'] or Decimal('0.00')).quantize(Decimal('0.01')),
+            'orders_count': f['orders_count'] or 0,
+        } for f in top_fabrics]
+
+    @staticmethod
+    @_cache_analytics
+    def get_top_tags(days=30, limit=10):
+        """
+        Get trending fabric tags by number of orders.
+        Returns list of tags with usage data.
+        """
+        from apps.tailors.models.catalog import FabricTag
+        from apps.orders.models import OrderItem
+        start_date = timezone.now() - timedelta(days=days)
+        
+        # Get all order items within date range
+        order_items = OrderItem.objects.filter(
+            order__created_at__gte=start_date,
+            order__status__in=['delivered', 'collected', 'in_progress', 'ready_for_delivery', 'ready_for_pickup']
+        ).select_related('fabric').prefetch_related('fabric__tags')
+        
+        # Aggregate tag data manually since  we need to traverse ManyToMany
+        from collections import defaultdict
+        tag_stats = defaultdict(lambda: {'total_orders': set(), 'total_revenue': Decimal('0.00'), 'total_quantity': 0})
+        
+        for item in order_items:
+            if item.fabric:
+                for tag in item.fabric.tags.all():
+                    tag_stats[tag.id]['tag_name'] = tag.name
+                    tag_stats[tag.id]['total_orders'].add(item.order_id)
+                    tag_stats[tag.id]['total_revenue'] += item.total_price or Decimal('0.00')
+                    tag_stats[tag.id]['total_quantity'] += item.quantity or 0
+        
+        # Convert to list and sort by total_orders
+        results = [
+            {
+                'tag_id': tag_id,
+                'tag_name': stats['tag_name'],
+                'total_orders': len(stats['total_orders']),
+                'total_revenue': stats['total_revenue'].quantize(Decimal('0.01')),
+                'total_quantity': stats['total_quantity'],
+            }
+            for tag_id, stats in tag_stats.items()
+        ]
+        
+        # Sort by total_orders descending and return top N
+        results.sort(key=lambda x: x['total_orders'], reverse=True)
+        return results[:limit]
+
+    @staticmethod
+    @_cache_analytics
+    def get_top_customers(days=30, limit=10):
+        """
+        Get top customers by total spend.
+        Returns list of customers with spending data.
+        """
+        from django.contrib.auth import get_user_model
+        from apps.orders.models import Order
+        User = get_user_model()
+        start_date = timezone.now() - timedelta(days=days)
+        
+        # Query top customers
+        top_customers = User.objects.filter(
+            customer_orders__created_at__gte=start_date,
+            customer_orders__status__in=['delivered', 'collected']
+        ).annotate(
+            total_spent=Sum('customer_orders__total_amount'),
+            orders_count=Count('customer_orders', distinct=True),
+            avg_order_value=Avg('customer_orders__total_amount')
+        ).order_by('-total_spent')[:limit]
+        
+        return [{
+            'customer_id': c.id,
+            'username': c.username,
+            'email': c.email,
+            'phone': c.phone if hasattr(c, 'phone') else '',
+            'total_spent': (c.total_spent or Decimal('0.00')).quantize(Decimal('0.01')),
+            'orders_count': c.orders_count or 0,
+            'avg_order_value': (c.avg_order_value or Decimal('0.00')).quantize(Decimal('0.01')),
+        } for c in top_customers]
+
 
 
 class OrderStatusTransitionService:

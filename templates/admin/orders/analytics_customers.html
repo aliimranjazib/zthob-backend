@@ -1,0 +1,60 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div class="module">
+    <h1>{{ title }}</h1>
+
+    <!-- Date Range Selector -->
+    <form method="get" style="margin: 20px 0; padding: 15px; background: #f8f8f8; border-radius: 4px;">
+        <label for="days">Select Period:</label>
+        <select name="days" style="padding: 5px 10px;">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+        </select>
+        <button type="submit"
+            style="padding: 5px 15px; margin-left: 10px; background: #417690; color: white; border: none; border-radius: 3px;">Update</button>
+        <a href="{% url 'admin:orders-analytics' %}?days={{ days }}"
+            style="margin-left: 20px; padding: 5px 15px; text-decoration: none;">← Back to Dashboard</a>
+    </form>
+
+    <!-- Top Customers Table -->
+    <h2>Top {{ limit }} Customers by Spend</h2>
+    {% if customers_data %}
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background: #417690; color: white;">
+                <th style="padding: 12px; text-align: left;">Customer</th>
+                <th style="padding: 12px; text-align: right;">Orders</th>
+                <th style="padding: 12px; text-align: right;">Total Spent</th>
+                <th style="padding: 12px; text-align: right;">Avg Order Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for customer in customers_data %}
+            <tr {% if forloop.counter|divisibleby:2 %}style="background: #f8f8f8;" {% endif %}>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd;">
+                    <strong>{{ customer.username }}</strong><br>
+                    <small style="color: #666;">{{ customer.email }}</small>
+                    {% if customer.phone %}<br><small style="color: #666;">{{ customer.phone }}</small>{% endif %}
+                </td>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right;">{{ customer.orders_count }}
+                </td>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right; color: #28a745;"><strong>{{
+                        customer.total_spent }} SAR</strong></td>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right;">{{ customer.avg_order_value
+                    }} SAR</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="padding: 20px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">No customer data found
+        for this period.</p>
+    {% endif %}
+
+    <p style="margin-top: 30px; color: #666; font-size: 12px;">
+        <em>Data is cached for 5 minutes. Showing top {{ limit }} customers for last {{ days }} days.</em>
+    </p>
+</div>
+{% endblock %}
