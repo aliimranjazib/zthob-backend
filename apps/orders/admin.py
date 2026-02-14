@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.shortcuts import render
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.safestring import mark_safe
@@ -8,6 +9,7 @@ from django.http import HttpResponse
 import csv
 from datetime import datetime
 from .models import Order, OrderItem, OrderStatusHistory
+from .services import AdminAnalyticsService
 
 
 # ============================================================================
@@ -143,6 +145,31 @@ class OrderAdmin(admin.ModelAdmin):
     - Date hierarchy for time-based navigation
     """
     
+    change_list_template = "admin/orders/order/change_list.html"
+    
+    def get_urls(self):
+        from django.urls import path
+        urls = super().get_urls()
+        custom_urls = [
+            path('dashboard-analytics/', self.admin_site.admin_view(self.analytics_dashboard_view), name='order-analytics-dashboard'),
+        ]
+        return custom_urls + urls
+
+    def analytics_dashboard_view(self, request):
+        """Dedicated view for the analytics dashboard"""
+        context = dict(
+            self.admin_site.each_context(request),
+            title="System Analytics Dashboard",
+        )
+        
+        try:
+            stats = AdminAnalyticsService.get_dashboard_stats()
+            context['dashboard_stats'] = stats
+        except Exception as e:
+            context['error'] = str(e)
+            
+        return render(request, "admin/orders/analytics_dashboard.html", context)
+
     # List Display Configuration
     list_display = [
         'order_number_link',
@@ -583,6 +610,22 @@ class OrderAdmin(admin.ModelAdmin):
             'order_items',
             'status_history'
         )
+
+    def changelist_view(self, request, extra_context=None):
+        """Add dashboard statistics to the context"""
+        extra_context = extra_context or {}
+        
+        try:
+            # Use the existing service to get all-time stats
+            # You can also pass request.GET filters here if you want dynamic stats,
+            # but for a "fixed header" we'll show global stats.
+            stats = AdminAnalyticsService.get_dashboard_stats()
+            extra_context['dashboard_stats'] = stats
+        except Exception:
+            # Silently fail to not break the admin list if stats fail
+            pass
+            
+        return super().changelist_view(request, extra_context=extra_context)
 
 
 # ============================================================================
