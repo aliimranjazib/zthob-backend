@@ -17,12 +17,9 @@ OrderListSerializer,
 OrderStatusHistorySerializer,
 OrderPaymentStatusUpdateSerializer,
 OrderStatusUpdateResponseSerializer,
-AdminDashboardSerializer,
 )
 from apps.tailors.models import TailorProfile
 from apps.customers.models import CustomerProfile
-from apps.core.permissions import IsAdmin
-from .services import AdminAnalyticsService
 from zthob.utils import api_response 
 
 class OrderListView(APIView):
@@ -842,46 +839,3 @@ class WorkOrderPDFView(APIView):
             return api_response(success=False, message='Error generating work order PDF',
                               errors=str(e), status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                               request=request)
-
-
-class AdminDashboardView(APIView):
-    """
-    API endpoint for global admin dashboard analytics.
-    Exposes financial breakdown, order status tracking, and 7-day trends.
-    """
-    permission_classes = [IsAuthenticated, IsAdmin]
-
-    @extend_schema(
-        responses={200: AdminDashboardSerializer},
-        summary="Get global admin dashboard stats",
-        description="Retrieve comprehensive system-wide analytics including gross revenue, fee breakdown, and order status summaries.",
-        tags=["Admin Dashboard"]
-    )
-    def get(self, request):
-        try:
-            # Optional: Allow date filtering via query params
-            start_date = request.query_params.get('start_date')
-            end_date = request.query_params.get('end_date')
-            
-            stats = AdminAnalyticsService.get_dashboard_stats(
-                start_date=start_date,
-                end_date=end_date
-            )
-            
-            serializer = AdminDashboardSerializer(stats)
-            return api_response(
-                success=True,
-                message="Admin dashboard statistics retrieved successfully",
-                data=serializer.data,
-                status_code=status.HTTP_200_OK
-            )
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Admin dashboard error: {str(e)}", exc_info=True)
-            return api_response(
-                success=False,
-                message="Failed to retrieve dashboard statistics",
-                errors=str(e),
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )

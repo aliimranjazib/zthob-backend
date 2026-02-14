@@ -256,69 +256,24 @@ class AdminAnalyticsService:
             revenue=Sum('total_amount')
         ).order_by('day')
 
-        # 5. Tailor Earnings Breakdown
-        tailor_breakdown = revenue_queryset.values(
-            'tailor__id', 
-            'tailor__username',
-            'tailor__first_name',
-            'tailor__last_name'
-        ).annotate(
-            order_count=Count('id'),
-            total_revenue=Sum('total_amount'),
-            stitching_revenue=Sum('stitching_price'),
-            fabric_revenue=Sum('subtotal')
-        ).order_by('-total_revenue')
-
-        # 6. Rider Earnings Breakdown
-        rider_breakdown = revenue_queryset.exclude(rider=None).values(
-            'rider__id', 
-            'rider__username',
-            'rider__first_name',
-            'rider__last_name'
-        ).annotate(
-            order_count=Count('id'),
-            delivery_fees=Sum('delivery_fee')
-        ).order_by('-delivery_fees')
-
-        # 7. Top Selling Fabrics
-        from .models import OrderItem
-        top_fabrics = OrderItem.objects.filter(
-            order__in=revenue_queryset
-        ).values(
-            'fabric__id', 
-            'fabric__name'
-        ).annotate(
-            total_sold=Sum('quantity'),
-            total_revenue=Sum('total_price')
-        ).order_by('-total_revenue')[:10]  # Top 10
-
-        # 8. Average Order Value (AOV)
-        total_revenue = financials['total_gross'] or Decimal('0.00')
-        order_count = financials['order_count'] or 0
-        avg_order_value = total_revenue / Decimal(str(order_count)) if order_count > 0 else Decimal('0.00')
-
         return {
             'overview': {
                 'total_orders': queryset.count(),
                 'active_orders': queryset.exclude(status__in=['delivered', 'cancelled', 'collected']).count(),
                 'completed_orders': queryset.filter(status__in=['delivered', 'collected']).count(),
                 'cancelled_orders': queryset.filter(status='cancelled').count(),
-                'avg_order_value': float(avg_order_value.quantize(Decimal('0.01'))),
             },
             'financials': {
-                'gross_revenue': total_revenue,
+                'gross_revenue': financials['total_gross'] or Decimal('0.00'),
                 'fabric_revenue': financials['total_subtotal'] or Decimal('0.00'),
                 'stitching_revenue': financials['total_stitching'] or Decimal('0.00'),
                 'tax_collected': financials['total_tax'] or Decimal('0.00'),
                 'delivery_fees': financials['total_delivery_fees'] or Decimal('0.00'),
-                'system_fees': financials['total_system_fees'] or Decimal('0.00'), # Our Platform Earnings
+                'system_fees': financials['total_system_fees'] or Decimal('0.00'), # The 3 SAR fee
             },
             'status_breakdown': status_map,
             'payment_method_breakdown': list(payment_breakdown),
             'daily_trends': list(daily_trends),
-            'tailor_earnings': list(tailor_breakdown),
-            'rider_earnings': list(rider_breakdown),
-            'top_fabrics': list(top_fabrics),
             'generated_at': timezone.now().isoformat()
         }
 

@@ -1497,17 +1497,4 @@ class OrderPaymentStatusUpdateSerializer(serializers.Serializer):
         required=True,
         help_text="Payment status: pending, paid, or refunded"
     )
-
-
-class AdminDashboardSerializer(serializers.Serializer):
-    """Serializer for global admin dashboard analytics"""
-    overview = serializers.DictField()
-    financials = serializers.DictField()
-    status_breakdown = serializers.DictField()
-    payment_method_breakdown = serializers.ListField()
-    daily_trends = serializers.ListField()
-    tailor_earnings = serializers.ListField()
-    rider_earnings = serializers.ListField()
-    top_fabrics = serializers.ListField()
-    generated_at = serializers.DateTimeField()
             
