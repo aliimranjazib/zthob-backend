@@ -1,0 +1,98 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<div class="module">
+    <h1>{{ title }}</h1>
+
+    <!-- Date Range Selector -->
+    <form method="get" style="margin: 20px 0; padding: 15px; background: #f8f8f8; border-radius: 4px;">
+        <label for="days" style="margin-right: 10px;">Select Period:</label>
+        <select name="days" id="days" style="padding: 5px 10px;">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+        </select>
+        <button type="submit"
+            style="padding: 5px 15px; margin-left: 10px; background: #417690; color: white; border: none; border-radius: 3px; cursor: pointer;">Update</button>
+        <a href="{% url 'admin:orders-analytics-tailors' %}?days={{ days }}"
+            style="margin-left: 20px; padding: 5px 15px; background: #28a745; color: white; text-decoration: none; border-radius: 3px;">Tailor
+            Earnings</a>
+        <a href="{% url 'admin:orders-analytics-riders' %}?days={{ days }}"
+            style="margin-left: 10px; padding: 5px 15px; background: #17a2b8; color: white; text-decoration: none; border-radius: 3px;">Rider
+            Earnings</a>
+        <a href="{% url 'admin:orders-analytics-products' %}?days={{ days }}"
+            style="margin-left: 10px; padding: 5px 15px; background: #ffc107; color: #333; text-decoration: none; border-radius: 3px;">Top
+            Products</a>
+        <a href="{% url 'admin:orders-analytics-customers' %}?days={{ days }}"
+            style="margin-left: 10px; padding: 5px 15px; background: #6c757d; color: white; text-decoration: none; border-radius: 3px;">Top
+            Customers</a>
+    </form>
+
+    <!-- Revenue Summary -->
+    <h2>Revenue Summary</h2>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+        <thead>
+            <tr style="background: #417690; color: white;">
+                <th style="padding: 12px; text-align: left;">Metric</th>
+                <th style="padding: 12px; text-align: right;">Amount (SAR)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr style="background: #f8f8f8;">
+                <td style="padding: 10px; border-bottom: 1px solid #ddd;"><strong>Total Revenue</strong></td>
+                <td
+                    style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right; font-size: 16px; color: #28a745;">
+                    <strong>{{ revenue_data.total_revenue }}</strong>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd;">System Earnings (3 SAR Fee)</td>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right;">{{ revenue_data.system_earnings }}</td>
+            </tr>
+            <tr style="background: #f8f8f8;">
+                <td style="padding: 10px; border-bottom: 1px solid #ddd;">Tailor Earnings (Stitching + Fabric)</td>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right;">{{ revenue_data.tailor_earnings }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd;">Rider Earnings (Delivery)</td>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right;">{{ revenue_data.rider_earnings }}</td>
+            </tr>
+            <tr style="background: #f8f8f8;">
+                <td style="padding: 10px; border-bottom: 1px solid #ddd;">Fabric Revenue</td>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right;">{{ revenue_data.fabric_revenue }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd;">Tax Collected</td>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right;">{{ revenue_data.tax_collected }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- Key Metrics -->
+    <h2>Key Metrics</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background: #417690; color: white;">
+                <th style="padding: 12px; text-align: left;">Metric</th>
+                <th style="padding: 12px; text-align: right;">Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr style="background: #f8f8f8;">
+                <td style="padding: 10px; border-bottom: 1px solid #ddd;">Total Orders</td>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right;"><strong>{{ revenue_data.orders_count }}</strong></td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd;">Average Order Value (AOV)</td>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right;">{{ revenue_data.aov }} SAR
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p style="margin-top: 30px; color: #666; font-size: 12px;">
+        <em>Data is cached for 5 minutes. Last period: {{ revenue_data.period_days }} days</em>
+    </p>
+</div>
+{% endblock %}
