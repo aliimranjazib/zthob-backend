@@ -388,7 +388,6 @@ JAZZMIN_SETTINGS = {
     # Clean top menu - only essential links
     "topmenu_links": [
         {"name": "Dashboard", "url": "admin:index"},
-        {"name": "Analytics", "url": "admin:order-analytics-dashboard"},
         {"name": "Users", "model": "accounts.CustomUser"},
     ],
 
@@ -402,18 +401,6 @@ JAZZMIN_SETTINGS = {
     "navigation_expanded": False,  # Start collapsed for cleaner look
     "hide_apps": ["auth"],  # Hide Django's default auth app
     "hide_models": ["auth.Group"],  # Hide groups
-
-    # Custom links for the sidebar
-    "custom_links": {
-        "orders": [
-            {
-                "name": "Full Dashboard Analytics",
-                "url": "admin:order-analytics-dashboard",
-                "icon": "fas fa-chart-pie",
-                "permissions": ["orders.view_order"]
-            },
-        ]
-    },
 
     # Organized menu order - most important first
     "order_with_respect_to": ["accounts", "customers", "tailors", "orders", "core"],
@@ -477,6 +464,6 @@ JAZZMIN_SETTINGS = {
     "use_google_fonts_cdn": True,
     
     # Custom styling for simplicity
-    "custom_css": "admin/css/dashboard_widgets.css",
+    "custom_css": ["admin/css/custom_admin.css", "admin/css/dashboard_widgets.css"],
     "custom_js": None,
 }
