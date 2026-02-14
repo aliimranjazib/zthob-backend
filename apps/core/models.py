@@ -97,6 +97,14 @@ class SystemSettings(models.Model):
         help_text="Order subtotal threshold for free delivery (SAR). Set to 0 to disable free delivery."
     )
     
+    # System Fees
+    system_fee_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('3.00'),
+        help_text="Fixed system fee (SAR) applied to fabric_with_stitching orders (non-walk-in)."
+    )
+    
     # Metadata
     is_active = models.BooleanField(
         default=True,
