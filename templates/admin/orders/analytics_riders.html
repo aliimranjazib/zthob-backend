@@ -37,12 +37,9 @@
                     <strong>{{ rider.username }}</strong><br>
                     <small style="color: #666;">{{ rider.email }}</small>
                 </td>
-                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right;">{{ rider.deliveries_count
-                    }}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right; color: #17a2b8;"><strong>{{
-                        rider.total_earnings }} SAR</strong></td>
-                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right;">{{ rider.avg_per_delivery
-                    }} SAR</td>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right;">{{ rider.deliveries_count }}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right; color: #17a2b8;"><strong>{{ rider.total_earnings }} SAR</strong></td>
+                <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: right;">{{ rider.avg_per_delivery }} SAR</td>
             </tr>
             {% endfor %}
         </tbody>
