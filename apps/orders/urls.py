@@ -13,6 +13,7 @@ from .views import (
     OrderPaymentStatusUpdateView,
     OrderMeasurementsDetailView,
     WorkOrderPDFView,
+    AdminDashboardView,
 )
 from .measurement_views import MeasurementEligibilityView
 
@@ -42,4 +43,7 @@ urlpatterns = [
     
     # PDF endpoints
     path('<int:order_id>/work-order-pdf/', WorkOrderPDFView.as_view(), name='work-order-pdf'),
+
+    # Admin endpoints
+    path('admin/dashboard/', AdminDashboardView.as_view(), name='admin-dashboard'),
 ]
