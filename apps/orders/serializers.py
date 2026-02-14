@@ -152,6 +152,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'stitching_price',
             'tax_amount',
             'delivery_fee',
+            'system_fee',
             'total_amount',
             'payment_status',
             'payment_method',
@@ -589,6 +590,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'stitching_price': obj.stitching_price,
             'tax_amount': obj.tax_amount,
             'delivery_fee': obj.delivery_fee,
+            'system_fee': obj.system_fee,
             'total_amount': obj.total_amount
         }
 
@@ -970,6 +972,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             order.total_amount = Decimal('0.00')
             order.subtotal = Decimal('0.00')
             order.delivery_fee = Decimal('0.00')
+            order.system_fee = Decimal('0.00')
             order.save()
             
             # Create order items (each represents a person to measure)

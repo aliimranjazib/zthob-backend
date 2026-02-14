@@ -155,6 +155,7 @@ class OrderCalculationService:
                 'stitching_price': Decimal('0.00'),
                 'tax_amount': Decimal('0.00'),
                 'delivery_fee': Decimal('0.00'),
+                'system_fee': Decimal('0.00'),
                 'total_amount': Decimal('0.00'),
             }
         
@@ -182,14 +183,98 @@ class OrderCalculationService:
             )
         
         # Total includes: subtotal (fabric) + stitching_price + tax + delivery_fee
-        total_amount = subtotal + stitching_price + tax_amount + delivery_fee
+        system_fee = Decimal('0.00')
+        if order_type == 'fabric_with_stitching' and service_mode != 'walk_in':
+            system_settings = OrderCalculationService.get_system_settings()
+            system_fee = system_settings.system_fee_amount
+        
+        # Total includes: subtotal (fabric) + stitching_price + tax + delivery_fee + system_fee
+        total_amount = subtotal + stitching_price + tax_amount + delivery_fee + system_fee
         
         return {
             'subtotal': subtotal,
             'stitching_price': stitching_price,
             'tax_amount': tax_amount,
             'delivery_fee': delivery_fee,
+            'system_fee': system_fee,
             'total_amount': total_amount.quantize(Decimal('0.01'))
+        }
+
+
+class AdminAnalyticsService:
+    """
+    Service for calculating global system analytics for Admin Dashboard.
+    Provides financial breakdown, order status tracking, and transaction summaries.
+    """
+
+    @staticmethod
+    def get_dashboard_stats(start_date=None, end_date=None):
+        """
+        Get global dashboard statistics.
+        
+        Args:
+            start_date: Optional filter for order creation
+            end_date: Optional filter for order creation
+        """
+        queryset = Order.objects.all()
+        if start_date:
+            queryset = queryset.filter(created_at__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(created_at__lte=end_date)
+
+        # 1. Order Status Snapshot
+        status_counts = queryset.values('status').annotate(count=Count('id')).order_by('status')
+        status_map = {item['status']: item['count'] for item in status_counts}
+
+        # 2. Financial Breakdown (Successful Orders only)
+        # We consider delivered, ready_for_delivery, ready_for_pickup, and collected as "revenue generating"
+        revenue_queryset = queryset.filter(status__in=['delivered', 'ready_for_delivery', 'ready_for_pickup', 'collected', 'in_progress'])
+        
+        financials = revenue_queryset.aggregate(
+            total_gross=Sum('total_amount'),
+            total_subtotal=Sum('subtotal'),
+            total_stitching=Sum('stitching_price'),
+            total_tax=Sum('tax_amount'),
+            total_delivery_fees=Sum('delivery_fee'),
+            total_system_fees=Sum('system_fee'),
+            order_count=Count('id')
+        )
+
+        # 3. Payment Method Breakdown
+        payment_breakdown = queryset.values('payment_method').annotate(
+            count=Count('id'),
+            total=Sum('total_amount')
+        ).order_by('-total')
+
+        # 4. Daily Trends (Last 7 days)
+        today = timezone.now().date()
+        seven_days_ago = today - timedelta(days=7)
+        daily_trends = queryset.filter(created_at__date__gte=seven_days_ago).extra(
+            select={'day': "date(created_at)"}
+        ).values('day').annotate(
+            count=Count('id'),
+            revenue=Sum('total_amount')
+        ).order_by('day')
+
+        return {
+            'overview': {
+                'total_orders': queryset.count(),
+                'active_orders': queryset.exclude(status__in=['delivered', 'cancelled', 'collected']).count(),
+                'completed_orders': queryset.filter(status__in=['delivered', 'collected']).count(),
+                'cancelled_orders': queryset.filter(status='cancelled').count(),
+            },
+            'financials': {
+                'gross_revenue': financials['total_gross'] or Decimal('0.00'),
+                'fabric_revenue': financials['total_subtotal'] or Decimal('0.00'),
+                'stitching_revenue': financials['total_stitching'] or Decimal('0.00'),
+                'tax_collected': financials['total_tax'] or Decimal('0.00'),
+                'delivery_fees': financials['total_delivery_fees'] or Decimal('0.00'),
+                'system_fees': financials['total_system_fees'] or Decimal('0.00'), # The 3 SAR fee
+            },
+            'status_breakdown': status_map,
+            'payment_method_breakdown': list(payment_breakdown),
+            'daily_trends': list(daily_trends),
+            'generated_at': timezone.now().isoformat()
         }
 
 
