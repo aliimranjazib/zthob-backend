@@ -72,7 +72,10 @@ class OrderCreateView(APIView):
     def post(self,request):
 
         data=request.data.copy()
-        data['customer'] = request.user.id
+        if request.user.role == 'USER':
+            data['customer'] = request.user.id
+        # For TAILOR and ADMIN, we respect the 'customer' ID passed in the request.
+        # This ensures that when a tailor/admin creates an order, the correct customer is linked.
         serializer = OrderCreateSerializer(data=data, context={'request':request})
         if serializer.is_valid():
             try:
