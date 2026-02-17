@@ -961,6 +961,12 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         
         # Update validated_data with calculated totals (including stitching_price)
         validated_data.update(totals)
+
+        # Requirement: Automatically set payment status to 'paid' for walk-in orders created by tailors
+        request = self.context.get('request')
+        if request and request.user.role == 'TAILOR' and service_mode == 'walk_in':
+            validated_data['payment_status'] = 'paid'
+
         order = Order.objects.create(**validated_data)
         
         # Handle measurement service orders differently
