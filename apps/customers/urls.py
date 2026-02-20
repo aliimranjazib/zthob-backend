@@ -1,7 +1,7 @@
 from django.urls import path
 
 from apps.core.views import SendOTPView, VerifyOTPView
-from apps.customers.views import AddressListView, AddressCreateView, AddressDetailView, CustomerProfileAPIView, FabricCatalogAPIView, FamilyMemberListView, FamilyMemberDetailView, TailorFabricsAPIView, TailorListAPIView, TailorDetailAPIView, FabricDetailAPIView, FabricFavoriteToggleView, FabricFavoriteListView, CustomerMeasurementsListView, FamilyMemberMeasurementsView
+from apps.customers.views import AddressListView, AddressCreateView, AddressDetailView, CustomerProfileAPIView, FabricCatalogAPIView, FamilyMemberListView, FamilyMemberDetailView, TailorFabricsAPIView, TailorListAPIView, TailorDetailAPIView, FabricDetailAPIView, FabricFavoriteToggleView, FabricFavoriteListView, CustomerMeasurementsListView, FamilyMemberMeasurementsView, CustomerPreviousTailorsView
 
 
 urlpatterns = [
@@ -15,6 +15,7 @@ urlpatterns = [
     path('phone/send-otp/', SendOTPView.as_view(), name='customer-send-otp'),
     path('phone/verify-otp/', VerifyOTPView.as_view(), name='customer-verify-otp'),
     path('tailors/', TailorListAPIView.as_view(), name='tailor-list'),
+    path('previous-tailors/', CustomerPreviousTailorsView.as_view(), name='customer-previous-tailors'),
     path('tailors/<int:tailor_id>/fabrics',TailorFabricsAPIView.as_view(),name='tailor-fabrics'),
     path('tailors/<int:tailor_id>/', TailorDetailAPIView.as_view(), name='tailor-detail'),
     # Fabric Catalog
