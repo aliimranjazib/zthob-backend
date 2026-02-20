@@ -922,3 +922,38 @@ class FamilyMemberMeasurementsView(APIView):
             data=response_data,
             status_code=status.HTTP_200_OK
         )
+
+
+class CustomerPreviousTailorsView(APIView):
+    """
+    API view to get all unique tailors previously ordered from by the customer.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Tailor Profile"],
+        operation_id="customers_previous_tailors",
+        description="Get all previous ordered tailors for the customer",
+        responses={200: TailorProfileSerializer(many=True)}
+    )
+    def get(self, request):
+        # 1. Get unique tailor ids from user's orders, ignoring null tailors
+        ordered_tailor_ids = Order.objects.filter(
+            customer=request.user,
+            tailor__isnull=False
+        ).values_list('tailor_id', flat=True).distinct()
+
+        # 2. Get tailor profiles for those tailors
+        tailors = TailorProfile.objects.filter(
+            user_id__in=ordered_tailor_ids
+        ).select_related('user').prefetch_related('review')
+
+        # 3. Serialize
+        serializer = TailorProfileSerializer(tailors, many=True, context={'request': request})
+        
+        return api_response(
+            success=True,
+            message="Previous ordered tailors fetched successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
