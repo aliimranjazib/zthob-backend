@@ -11,7 +11,8 @@ from .models import (
     FabricType,
     FabricTag,
     TailorProfileReview,
-    ServiceArea
+    ServiceArea,
+    TailorRating
 )
 
 
@@ -1708,3 +1709,61 @@ class ServiceAreaAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """Optimize queries"""
         return super().get_queryset(request)
+
+
+# ============================================================================
+# TAILOR RATING ADMIN
+# ============================================================================
+
+@admin.register(TailorRating)
+class TailorRatingAdmin(admin.ModelAdmin):
+    """Admin for customer ratings given to tailors."""
+
+    list_display = [
+        'order_number',
+        'tailor_shop',
+        'customer_username',
+        'stitching_quality',
+        'on_time_delivery',
+        'overall_satisfaction',
+        'short_review',
+        'created_at',
+    ]
+    list_filter = [
+        'stitching_quality',
+        'on_time_delivery',
+        'overall_satisfaction',
+        'created_at',
+    ]
+    search_fields = [
+        'customer__username',
+        'tailor__shop_name',
+        'order__order_number',
+        'review',
+    ]
+    readonly_fields = [
+        'order', 'tailor', 'customer', 'created_at', 'updated_at'
+    ]
+    ordering = ['-created_at']
+    list_per_page = 50
+
+    def order_number(self, obj):
+        return obj.order.order_number
+    order_number.short_description = 'Order'
+    order_number.admin_order_field = 'order__order_number'
+
+    def tailor_shop(self, obj):
+        return obj.tailor.shop_name or obj.tailor.user.username
+    tailor_shop.short_description = 'Tailor'
+    tailor_shop.admin_order_field = 'tailor__shop_name'
+
+    def customer_username(self, obj):
+        return obj.customer.username
+    customer_username.short_description = 'Customer'
+    customer_username.admin_order_field = 'customer__username'
+
+    def short_review(self, obj):
+        if obj.review:
+            return obj.review[:60] + ('...' if len(obj.review) > 60 else '')
+        return format_html('<em style="color:#999">No review</em>')
+    short_review.short_description = 'Review'

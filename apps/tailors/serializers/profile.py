@@ -29,6 +29,8 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             'review_status', 'submitted_at', 'reviewed_at', 
             'rejection_reason', 'service_areas',
             'phone_verified',
+            'avg_stitching_quality', 'avg_on_time_delivery',
+            'avg_overall_satisfaction', 'rating_count',
         ]
     
     def get_shop_image_url(self, obj):
