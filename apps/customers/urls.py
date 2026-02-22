@@ -2,7 +2,7 @@ from django.urls import path
 
 from apps.core.views import SendOTPView, VerifyOTPView
 from apps.customers.views import AddressListView, AddressCreateView, AddressDetailView, CustomerProfileAPIView, FabricCatalogAPIView, FamilyMemberListView, FamilyMemberDetailView, TailorFabricsAPIView, TailorListAPIView, TailorDetailAPIView, FabricDetailAPIView, FabricFavoriteToggleView, FabricFavoriteListView, CustomerMeasurementsListView, FamilyMemberMeasurementsView, CustomerPreviousTailorsView
-from apps.tailors.views.rating import TailorRatingListView
+from apps.tailors.views.rating import TailorRatingListView, SubmitTailorRatingView
 
 
 urlpatterns = [
@@ -28,4 +28,6 @@ urlpatterns = [
     # Measurements
     path('measurements/', CustomerMeasurementsListView.as_view(), name='customer-measurements'),
     path('family/<int:family_member_id>/measurements/', FamilyMemberMeasurementsView.as_view(), name='family-member-measurements'),
+    # Order Rating
+    path('orders/<int:order_id>/rate/', SubmitTailorRatingView.as_view(), name='customer-rate-order'),
 ]
