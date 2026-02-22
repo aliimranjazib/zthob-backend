@@ -46,6 +46,10 @@ from .tailor_pos import (
     TailorCustomerListView,
     TailorCreateCustomerView
 )
+from .rating import (
+    SubmitTailorRatingView,
+    TailorRatingListView
+)
 
 # Export all views
 __all__ = [
@@ -94,4 +98,8 @@ __all__ = [
     # POS views
     'TailorCustomerListView',
     'TailorCreateCustomerView',
+
+    # Rating views
+    'SubmitTailorRatingView',
+    'TailorRatingListView',
 ]

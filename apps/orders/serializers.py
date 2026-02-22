@@ -127,6 +127,8 @@ class OrderSerializer(serializers.ModelSerializer):
     status_info = serializers.SerializerMethodField()
     pricing_summary = serializers.SerializerMethodField()
     delivery_address = serializers.SerializerMethodField()
+    has_rating = serializers.SerializerMethodField()
+    tailor_rating = serializers.SerializerMethodField()
 
     class Meta:
         model=Order
@@ -177,6 +179,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'can_be_cancelled',
             'status_info',
             'pricing_summary',
+            'has_rating',
+            'tailor_rating',
             'created_at',
             'updated_at'
         ]
@@ -593,6 +597,26 @@ class OrderSerializer(serializers.ModelSerializer):
             'system_fee': obj.system_fee,
             'total_amount': obj.total_amount
         }
+
+    def get_has_rating(self, obj):
+        """Return True if the customer has already submitted a rating for this order."""
+        from apps.tailors.models.rating import TailorRating
+        return TailorRating.objects.filter(order=obj).exists()
+
+    def get_tailor_rating(self, obj):
+        """Return the submitted rating details if the customer has rated this order, else None."""
+        from apps.tailors.models.rating import TailorRating
+        try:
+            rating = TailorRating.objects.get(order=obj)
+            return {
+                'stitching_quality': rating.stitching_quality,
+                'on_time_delivery': rating.on_time_delivery,
+                'overall_satisfaction': rating.overall_satisfaction,
+                'review': rating.review,
+                'created_at': rating.created_at,
+            }
+        except TailorRating.DoesNotExist:
+            return None
 
 class OrderCreateSerializer(serializers.ModelSerializer):
 

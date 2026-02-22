@@ -48,6 +48,10 @@ from apps.tailors.views import (
     # POS views
     TailorCustomerListView,
     TailorCreateCustomerView,
+
+    # Rating views
+    SubmitTailorRatingView,
+    TailorRatingListView,
 )
 
 urlpatterns = [
@@ -110,5 +114,8 @@ urlpatterns = [
 
     path('phone/send-otp/', SendOTPView.as_view(), name='customer-send-otp'),
     path('phone/verify-otp/', VerifyOTPView.as_view(), name='customer-verify-otp'),
+
+    # Rating URLs
+    path('orders/<int:order_id>/rate/', SubmitTailorRatingView.as_view(), name='rate-tailor-order'),
 ]
 
