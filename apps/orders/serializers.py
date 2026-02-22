@@ -1290,6 +1290,8 @@ class OrderListSerializer(serializers.ModelSerializer):
     tailor_status = serializers.SerializerMethodField()
     status_info = serializers.SerializerMethodField()
     pricing_summary = serializers.SerializerMethodField()
+    has_rating = serializers.SerializerMethodField()
+    tailor_rating = serializers.SerializerMethodField()
 
     class Meta:
         model=Order
@@ -1317,6 +1319,8 @@ class OrderListSerializer(serializers.ModelSerializer):
             'items_count',
             'items',
             'status_info',
+            'has_rating',
+            'tailor_rating',
             'created_at'
         ]
 
@@ -1350,6 +1354,26 @@ class OrderListSerializer(serializers.ModelSerializer):
             'delivery_fee': str(obj.delivery_fee),
             'total_amount': str(obj.total_amount),
         }
+
+    def get_has_rating(self, obj):
+        """Return True if the customer has already submitted a rating for this order."""
+        from apps.tailors.models.rating import TailorRating
+        return TailorRating.objects.filter(order=obj).exists()
+
+    def get_tailor_rating(self, obj):
+        """Return the submitted rating details if this order has been rated, else None."""
+        from apps.tailors.models.rating import TailorRating
+        try:
+            rating = TailorRating.objects.get(order=obj)
+            return {
+                'stitching_quality': rating.stitching_quality,
+                'on_time_delivery': rating.on_time_delivery,
+                'overall_satisfaction': rating.overall_satisfaction,
+                'review': rating.review,
+                'created_at': rating.created_at,
+            }
+        except TailorRating.DoesNotExist:
+            return None
     
     def get_custom_styles(self, obj):
         """Return custom_styles with absolute URLs for images"""
