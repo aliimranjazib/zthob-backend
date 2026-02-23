@@ -67,7 +67,17 @@ class CustomerProfile(models.Model):
         blank=True,
         help_text="When the free measurement order was completed"
     )
-    
+
+    # POS tracking: which tailor created this customer via the POS system
+    pos_created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pos_created_customers',
+        help_text="Tailor who created this customer via the POS system"
+    )
+
     def __str__(self):
         return f"Customer Profile for {self.user.username}"
     

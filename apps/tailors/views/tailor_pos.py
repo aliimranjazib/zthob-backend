@@ -19,46 +19,88 @@ User = get_user_model()
 class TailorCustomerListView(APIView):
     """
     GET /api/tailors/pos/customers/
-    Returns all unique customers who have previously ordered from this tailor.
+    Returns all unique customers who have:
+      1. Previously ordered from this tailor, OR
+      2. Were created via this tailor's POS (even with no orders yet).
     """
     permission_classes = [IsAuthenticated, IsTailor]
 
     def get(self, request):
-        # Get all distinct customers who have orders with this tailor
-        customer_data = (
+        # --- Source 1: Customers who placed orders with this tailor ---
+        order_customer_data = (
             Order.objects.filter(tailor=request.user)
             .values('customer')
             .annotate(
                 total_orders=Count('id'),
                 last_order_date=Max('created_at'),
             )
-            .order_by('-last_order_date')
         )
+        # Build a dict keyed by customer user ID
+        order_map = {
+            entry['customer']: {
+                'total_orders': entry['total_orders'],
+                'last_order_date': entry['last_order_date'],
+            }
+            for entry in order_customer_data
+        }
+
+        # --- Source 2: Customers created via this tailor's POS with no orders yet ---
+        pos_profiles = CustomerProfile.objects.filter(
+            pos_created_by=request.user
+        ).exclude(
+            user_id__in=order_map.keys()  # skip those already in order_map
+        ).select_related('user')
+
+        # Collect all user IDs to fetch
+        all_user_ids = set(order_map.keys()) | {p.user_id for p in pos_profiles}
+
+        # Fetch all users in a single query
+        users = User.objects.filter(id__in=all_user_ids).in_bulk()
+
+        # Fetch all customer profiles in a single query
+        profiles = {
+            cp.user_id: cp
+            for cp in CustomerProfile.objects.filter(user_id__in=all_user_ids)
+        }
 
         results = []
-        for entry in customer_data:
-            try:
-                user = User.objects.get(id=entry['customer'])
-            except User.DoesNotExist:
+
+        # Add order-based customers
+        for user_id, stats in order_map.items():
+            user = users.get(user_id)
+            if not user:
                 continue
-
-            # Get measurements from customer profile
-            measurements = None
-            try:
-                profile = user.customer_profile
-                measurements = profile.measurements
-            except CustomerProfile.DoesNotExist:
-                pass
-
+            profile = profiles.get(user_id)
             results.append({
                 'id': user.id,
                 'name': user.get_full_name() or user.username,
                 'phone': user.phone or '',
                 'email': user.email,
-                'total_orders': entry['total_orders'],
-                'last_order_date': entry['last_order_date'],
-                'measurements': measurements,
+                'total_orders': stats['total_orders'],
+                'last_order_date': stats['last_order_date'],
+                'measurements': profile.measurements if profile else None,
             })
+
+        # Add POS-created, zero-order customers
+        for profile in pos_profiles:
+            user = profile.user
+            if not user:
+                continue
+            results.append({
+                'id': user.id,
+                'name': user.get_full_name() or user.username,
+                'phone': user.phone or '',
+                'email': user.email,
+                'total_orders': 0,
+                'last_order_date': None,
+                'measurements': profile.measurements,
+            })
+
+        # Sort: customers with orders first (by last_order_date), then zero-order at the end
+        results.sort(
+            key=lambda x: (x['last_order_date'] is None, x['last_order_date'] or ''),
+            reverse=True
+        )
 
         serializer = TailorCustomerSerializer(results, many=True)
         return api_response(
@@ -72,7 +114,7 @@ class TailorCustomerListView(APIView):
 class TailorCreateCustomerView(APIView):
     """
     POST /api/tailors/pos/customers/create/
-    Creates a new customer account (User + CustomerProfile).
+    Creates a new customer account (User + CustomerProfile) and tags it with this tailor.
     """
     permission_classes = [IsAuthenticated, IsTailor]
 
@@ -97,6 +139,7 @@ class TailorCreateCustomerView(APIView):
             intl = '966' + stripped[1:]
             phone_variations.append(intl)
             phone_variations.append('+' + intl)
+
         existing_user = User.objects.filter(phone__in=phone_variations).first()
         if existing_user:
             # Update name if provided
@@ -105,11 +148,19 @@ class TailorCreateCustomerView(APIView):
             existing_user.last_name = name_parts[1] if len(name_parts) > 1 else ''
             existing_user.save(update_fields=['first_name', 'last_name'])
 
-            measurements = None
+            # Tag with this tailor if not already tagged
             try:
-                measurements = existing_user.customer_profile.measurements
+                profile = existing_user.customer_profile
+                if not profile.pos_created_by:
+                    profile.pos_created_by = request.user
+                    profile.save(update_fields=['pos_created_by'])
+                measurements = profile.measurements
             except CustomerProfile.DoesNotExist:
-                pass
+                profile = CustomerProfile.objects.create(
+                    user=existing_user,
+                    pos_created_by=request.user
+                )
+                measurements = None
 
             total_orders = Order.objects.filter(
                 customer=existing_user, tailor=request.user
@@ -146,8 +197,11 @@ class TailorCreateCustomerView(APIView):
             is_active=True,
         )
 
-        # Create empty customer profile
-        CustomerProfile.objects.create(user=user)
+        # Create customer profile and tag it with the tailor who created it
+        CustomerProfile.objects.create(
+            user=user,
+            pos_created_by=request.user,  # track which tailor created this customer
+        )
 
         return api_response(
             success=True,
