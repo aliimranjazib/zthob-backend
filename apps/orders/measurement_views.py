@@ -42,15 +42,24 @@ class MeasurementEligibilityView(APIView):
                 user=request.user
             )
             
-            # Check if already used
-            if profile.first_free_measurement_used:
+            # Check if already used or already has measurements
+            has_measurements = bool(profile.measurements and len(profile.measurements) > 0)
+            
+            if profile.first_free_measurement_used or has_measurements:
+                if profile.first_free_measurement_used:
+                    message = 'Your account has already used the free measurement service.'
+                    reason = 'already_used'
+                else:
+                    message = 'Your profile already contains measurements.'
+                    reason = 'has_measurements'
+                    
                 return api_response(
                     success=True,
-                    message='Your account has already used the free measurement service.',
+                    message=message,
                     data={
                         'is_eligible': False,
                         'used_date': profile.free_measurement_date.isoformat() if profile.free_measurement_date else None,
-                        'reason': 'already_used'
+                        'reason': reason
                     },
                     status_code=status.HTTP_200_OK
                 )
