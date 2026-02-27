@@ -29,6 +29,8 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             'review_status', 'submitted_at', 'reviewed_at', 
             'rejection_reason', 'service_areas',
             'phone_verified',
+            'avg_stitching_quality', 'avg_on_time_delivery',
+            'avg_overall_satisfaction', 'rating_count',
         ]
     
     def get_shop_image_url(self, obj):
@@ -55,7 +57,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
                     'id': address.id,
                     'latitude': address.latitude,
                     'longitude': address.longitude,
-                    'address': address.street,  # Map street to address for consistency
+                    'address': address.address or '',
                     'extra_info': address.extra_info,
                     'is_default': address.is_default,
                     'address_tag': address.address_tag

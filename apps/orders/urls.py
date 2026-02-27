@@ -11,7 +11,10 @@ from .views import (
     TailorPaidOrdersView,
     TailorOrderDetailView,
     OrderPaymentStatusUpdateView,
+    OrderMeasurementsDetailView,
+    WorkOrderPDFView,
 )
+from .measurement_views import MeasurementEligibilityView
 
 app_name = 'orders'
 
@@ -23,6 +26,10 @@ urlpatterns = [
     path('<int:order_id>/status/', OrderStatusUpdateView.as_view(), name='order-status-update'),
     path('<int:order_id>/history/', OrderHistoryView.as_view(), name='order-history'),
     path('<int:order_id>/payment-status/', OrderPaymentStatusUpdateView.as_view(), name='order-payment-status-update'),
+    path('<int:order_id>/measurements/', OrderMeasurementsDetailView.as_view(), name='order-measurements'),
+    
+    # Measurement service endpoints
+    path('measurement-eligibility/', MeasurementEligibilityView.as_view(), name='measurement-eligibility'),
     
     # Customer endpoints
     path('customer/my-orders/', CustomerOrderListView.as_view(), name='customer-orders'),
@@ -32,4 +39,7 @@ urlpatterns = [
     path('tailor/my-orders/', TailorOrderListView.as_view(), name='tailor-orders'),
     path('tailor/paid-orders/', TailorPaidOrdersView.as_view(), name='tailor-paid-orders'),
     path('tailor/<int:order_id>/', TailorOrderDetailView.as_view(), name='tailor-order-detail'),
+    
+    # PDF endpoints
+    path('<int:order_id>/work-order-pdf/', WorkOrderPDFView.as_view(), name='work-order-pdf'),
 ]

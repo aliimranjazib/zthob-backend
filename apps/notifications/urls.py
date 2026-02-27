@@ -1,26 +1,21 @@
 from django.urls import path
-from .views import (
-    RegisterFCMTokenView,
-    UnregisterFCMTokenView,
-    NotificationLogListView,
-    MarkNotificationReadView,
-    MarkAllNotificationsReadView,
-    UnreadCountView,
-    TestNotificationView,
-    RiderTestNotificationView,
-)
-
-app_name = 'notifications'
+from . import views
 
 urlpatterns = [
-    path('fcm-token/register/', RegisterFCMTokenView.as_view(), name='register-fcm-token'),
-    path('fcm-token/update/', RegisterFCMTokenView.as_view(), name='update-fcm-token'),
-    path('fcm-token/unregister/', UnregisterFCMTokenView.as_view(), name='unregister-fcm-token'),
-    path('logs/', NotificationLogListView.as_view(), name='notification-logs'),
-    path('<int:notification_id>/read/', MarkNotificationReadView.as_view(), name='mark-notification-read'),
-    path('mark-all-read/', MarkAllNotificationsReadView.as_view(), name='mark-all-read'),
-    path('unread-count/', UnreadCountView.as_view(), name='unread-count'),
-    path('test/', TestNotificationView.as_view(), name='test-notification'),
-    path('test-rider/', RiderTestNotificationView.as_view(), name='test-notification-rider'),
+    # Role-based notification lists
+    path('customer/', views.CustomerNotificationListView.as_view(), name='customer-notifications'),
+    path('tailor/', views.TailorNotificationListView.as_view(), name='tailor-notifications'),
+    path('rider/', views.RiderNotificationListView.as_view(), name='rider-notifications'),
+    
+    # Read status actions
+    path('<int:pk>/read/', views.MarkNotificationReadView.as_view(), name='mark-notification-read'),
+    path('read-all/', views.MarkAllReadView.as_view(), name='mark-all-read'),
+    
+    # FCM Token registration
+    path('fcm-token/register/', views.FCMTokenRegisterView.as_view(), name='fcm-token-register'),
+    
+    # Test notification endpoints
+    path('test-customer/', views.TestCustomerNotificationView.as_view(), name='test-customer-notification'),
+    path('test-tailor/', views.TestTailorNotificationView.as_view(), name='test-tailor-notification'),
+    path('test-rider/', views.TestRiderNotificationView.as_view(), name='test-rider-notification'),
 ]
-

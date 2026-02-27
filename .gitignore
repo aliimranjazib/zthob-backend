@@ -5,6 +5,7 @@ __pycache__/
 
 # C extensions
 *.so
+.github/workflows/deploy.yml
 
 # Distribution / packaging
 .Python
@@ -137,7 +138,7 @@ venv.bak/
 
 # mkdocs documentation
 /site
-
+.env
 # mypy
 .mypy_cache/
 .dmypy.json
@@ -167,7 +168,8 @@ cython_debug/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
-media/
+media/*
+!media/custom_styles/
 staticfiles/
 static_collected/
 
@@ -233,3 +235,4 @@ magsk_venv/
 rollback.sh
 udo systemctl restart gunicorn
 config/firebase-credentials.json
+zthob-backend.code-workspace

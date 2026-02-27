@@ -23,22 +23,27 @@ try:
     from dotenv import load_dotenv
     load_dotenv(BASE_DIR / '.env')
 except ImportError:
+    print("file not found")
     # python-dotenv not installed, skip .env loading
     pass
 
-# Environment variables
-ENVIRONMENT = os.getenv('DJANGO_ENVIRONMENT', 'development')
+# Environment Detection
+# APP_ENV can be: development, staging, production
+APP_ENV = os.getenv('APP_ENV', 'development')
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-vv#!hz_y7dae4soqei&61+5l-5@(cr@kaz#($@5-nyb5jsku1=')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-if ENVIRONMENT == 'production':
+if APP_ENV == 'production':
     DEBUG = False
+elif APP_ENV == 'staging':
+    # Allow debug in staging for easier troubleshooting
+    DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
 # ALLOWED_HOSTS configuration - ensure production IP is always included
-default_hosts = ['localhost', '127.0.0.1', '0.0.0.0', '69.62.126.95', 'mgask.net', 'www.mgask.net']
+default_hosts = ['localhost', '127.0.0.1', '0.0.0.0', '69.62.126.95', 'mgask.net', 'www.mgask.net', 'app.mgask.net', 'prod.mgask.net']
 env_hosts = os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',')
 # Filter out empty strings from split
 env_hosts = [h.strip() for h in env_hosts if h.strip()]
@@ -70,6 +75,7 @@ INSTALLED_APPS = [
     "apps.riders",
     "apps.notifications",
     "apps.deliveries",
+    "apps.customization",
 ]
     
 MIDDLEWARE = [
@@ -106,22 +112,36 @@ TEMPLATES = [
 WSGI_APPLICATION = "zthob.wsgi.application"
 
 
-# Database
+# Database Configuration
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-if ENVIRONMENT == 'production':
-    # Use PostgreSQL in production
+if APP_ENV == 'production':
+    # Production: Use PostgreSQL
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('DB_NAME', 'zthob'),
-            'USER': os.getenv('DB_USER', 'postgres'),
+            'NAME': os.getenv('DB_NAME', 'mgask'),
+            'USER': os.getenv('DB_USER', 'mgask_user'),
             'PASSWORD': os.getenv('DB_PASSWORD', ''),
             'HOST': os.getenv('DB_HOST', 'localhost'),
             'PORT': os.getenv('DB_PORT', '5432'),
+            'CONN_MAX_AGE': 600,  # Connection pooling
+        }
+    }
+elif APP_ENV == 'staging':
+    # Staging: Use PostgreSQL
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'mgask_staging'),
+            'USER': os.getenv('DB_USER', 'mgask_staging_user'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+            'CONN_MAX_AGE': 600,  # Connection pooling
         }
     }
 else:
-    # Use SQLite for local development
+    # Development: Use SQLite for local development
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -163,6 +183,10 @@ USE_I18N = True
 
 USE_TZ = True
 
+# Currency settings for Saudi Arabia
+CURRENCY_CODE = 'SAR'  # Saudi Riyal
+CURRENCY_SYMBOL = 'SAR'  # Display as 'SAR' instead of 'ر.س'
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -187,7 +211,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Security Settings
-if ENVIRONMENT == 'production':
+if APP_ENV in ['production', 'staging']:
     # HTTPS settings
     SECURE_SSL_REDIRECT = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -208,6 +232,15 @@ if ENVIRONMENT == 'production':
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     CSRF_COOKIE_HTTPONLY = True
+    
+    # CSRF trusted origins for HTTPS
+    CSRF_TRUSTED_ORIGINS = [
+        'https://69.62.126.95',
+        'https://mgask.net',
+        'https://www.mgask.net',
+        'https://app.mgask.net',
+        'https://prod.mgask.net',
+    ]
 
 # Logging Configuration
 LOGGING = {
@@ -257,8 +290,8 @@ CACHES = {
     }
 }
 
-# Email settings (for production)
-if ENVIRONMENT == 'production':
+# Email settings (for production and staging)
+if APP_ENV in ['production', 'staging']:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
     EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
@@ -294,6 +327,11 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS=[
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "https://69.62.126.95",
+    "https://mgask.net",
+    "https://www.mgask.net",
+    "https://app.mgask.net",
+    "https://prod.mgask.net",
 ]
 
 CORS_ALLOW_CREDENTIALS=True
@@ -333,6 +371,7 @@ FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID', 'mgask-2025')
 TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID', None)
 TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN', None)
 TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER', None)
+TWILIO_VERIFY_SERVICE_SID = os.getenv('TWILIO_VERIFY_SERVICE_SID', None)
 
 # Jazzmin Admin UI Configuration - Simplified
 JAZZMIN_SETTINGS = {
@@ -349,6 +388,7 @@ JAZZMIN_SETTINGS = {
     # Clean top menu - only essential links
     "topmenu_links": [
         {"name": "Dashboard", "url": "admin:index"},
+        {"name": "Analytics", "url": "admin:orders-analytics", "icon": "fas fa-chart-line"},
         {"name": "Users", "model": "accounts.CustomUser"},
     ],
 

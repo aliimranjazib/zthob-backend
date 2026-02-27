@@ -10,14 +10,15 @@ from apps.accounts.models import CustomUser
 from apps.orders.models import Order
 from apps.core.services import PhoneVerificationService
 from apps.core.serializers import PhoneVerificationSerializer, OTPVerificationSerializer
-from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
+from ..models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
 # Import serializers from serializers.py file directly
 import importlib.util
 import sys
 from pathlib import Path
 
 # Load serializers.py as a module with proper package context
-_serializers_file = Path(__file__).parent / 'serializers.py'
+# Load serializers.py from the parent directory
+_serializers_file = Path(__file__).parent.parent / 'serializers.py'
 _spec = importlib.util.spec_from_file_location("riders_serializers_file", _serializers_file)
 _serializers_module = importlib.util.module_from_spec(_spec)
 
@@ -224,21 +225,28 @@ class RiderProfileView(APIView):
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
-        try:
-            rider_profile = request.user.rider_profile
-            serializer = RiderProfileSerializer(rider_profile, context={'request': request})
-            return api_response(
-                success=True,
-                message="Profile retrieved successfully",
-                data=serializer.data,
-                status_code=status.HTTP_200_OK
+        rider_profile, created = RiderProfile.objects.get_or_create(
+            user=request.user,
+            defaults={
+                'is_active': True,
+                'is_available': True,
+            }
+        )
+        
+        # Create review record if it doesn't exist
+        if created:
+            RiderProfileReview.objects.get_or_create(
+                profile=rider_profile,
+                defaults={'review_status': 'draft'}
             )
-        except RiderProfile.DoesNotExist:
-            return api_response(
-                success=False,
-                message="Rider profile not found. Please contact support.",
-                status_code=status.HTTP_404_NOT_FOUND
-            )
+        
+        serializer = RiderProfileSerializer(rider_profile, context={'request': request})
+        return api_response(
+            success=True,
+            message="Profile retrieved successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
     
     @extend_schema(
         request=RiderProfileUpdateSerializer,
@@ -255,30 +263,37 @@ class RiderProfileView(APIView):
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
-        try:
-            rider_profile = request.user.rider_profile
-            serializer = RiderProfileUpdateSerializer(rider_profile, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                response_serializer = RiderProfileSerializer(rider_profile, context={'request': request})
-                return api_response(
-                    success=True,
-                    message="Profile updated successfully",
-                    data=response_serializer.data,
-                    status_code=status.HTTP_200_OK
-                )
-            return api_response(
-                success=False,
-                message="Profile update failed",
-                errors=serializer.errors,
-                status_code=status.HTTP_400_BAD_REQUEST
+        rider_profile, created = RiderProfile.objects.get_or_create(
+            user=request.user,
+            defaults={
+                'is_active': True,
+                'is_available': True,
+            }
+        )
+        
+        # Create review record if it doesn't exist
+        if created:
+            RiderProfileReview.objects.get_or_create(
+                profile=rider_profile,
+                defaults={'review_status': 'draft'}
             )
-        except RiderProfile.DoesNotExist:
+        
+        serializer = RiderProfileUpdateSerializer(rider_profile, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            response_serializer = RiderProfileSerializer(rider_profile, context={'request': request})
             return api_response(
-                success=False,
-                message="Rider profile not found. Please contact support.",
-                status_code=status.HTTP_404_NOT_FOUND
+                success=True,
+                message="Profile updated successfully",
+                data=response_serializer.data,
+                status_code=status.HTTP_200_OK
             )
+        return api_response(
+            success=False,
+            message="Profile update failed",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
 
 
 class RiderProfileSubmissionView(APIView):
@@ -549,13 +564,20 @@ class RiderAvailableOrdersView(APIView):
             )
         
         # Get orders that are paid, don't have a rider assigned, and tailor has confirmed
-        # Riders should only see orders after tailor has accepted them (status != 'pending')
-        # AND rider_status must be 'none' (not yet accepted by any rider)
+        # If assigned_rider is set, only that rider can see it
         orders = Order.objects.filter(
             payment_status='paid',
             rider__isnull=True,
-            rider_status='none',  # Only show orders not yet accepted by any rider
-            status__in=['confirmed', 'in_progress', 'ready_for_delivery']
+            rider_status='none',
+        ).filter(
+            Q(assigned_rider__isnull=True) | Q(assigned_rider=request.user)
+        ).filter(
+            # Show if:
+            # 1. Main status is confirmed/in_progress OR tailor has accepted it (regular orders)
+            # 2. OR it's a measurement_service order with home_delivery (no tailor needed)
+            Q(status__in=['confirmed', 'in_progress', 'ready_for_delivery']) | 
+            Q(tailor_status__in=['accepted', 'in_progress', 'stitching_started', 'stitched']) |
+            Q(order_type='measurement_service', service_mode='home_delivery')
         ).select_related(
             'customer',
             'tailor',
@@ -647,10 +669,12 @@ class RiderOrderDetailView(APIView):
                 'customer',
                 'tailor',
                 'delivery_address',
-                'rider'
+                'rider',
+                'family_member'  # Prefetch family_member for order_recipient
             ).prefetch_related(
                 'order_items__fabric',
-                'order_items__fabric__gallery'  # Prefetch gallery images for fabric images
+                'order_items__fabric__gallery',  # Prefetch gallery images for fabric images
+                'tailor__addresses'  # Prefetch tailor addresses for structured address
             ),
             id=order_id
         )
@@ -665,12 +689,14 @@ class RiderOrderDetailView(APIView):
         
         # Riders should not see orders that are still pending (not yet accepted by tailor)
         # Unless the rider is already assigned to it (shouldn't happen normally)
-        if order.status == 'pending' and order.rider != request.user:
-            return api_response(
-                success=False,
-                message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        # Exception: measurement_service orders don't require tailor acceptance for home_delivery
+        if order.tailor_status == 'none' and order.rider != request.user:
+            if order.order_type != 'measurement_service' or order.service_mode != 'home_delivery':
+                return api_response(
+                    success=False,
+                    message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
         
         serializer = RiderOrderDetailSerializer(order, context={'request': request})
         return api_response(
@@ -738,12 +764,14 @@ class RiderAcceptOrderView(APIView):
             )
         
         # Riders should not accept orders that are still pending (not yet accepted by tailor)
-        if order.status == 'pending':
-            return api_response(
-                success=False,
-                message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
+        # Exception: measurement_service orders don't require tailor acceptance for home_delivery
+        if order.tailor_status == 'none':
+            if order.order_type != 'measurement_service' or order.service_mode != 'home_delivery':
+                return api_response(
+                    success=False,
+                    message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
         
         if order.rider is not None:
             return api_response(
@@ -839,7 +867,10 @@ class RiderAddMeasurementsView(APIView):
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
-        order = get_object_or_404(Order, id=order_id)
+        order = get_object_or_404(
+            Order.objects.select_related('family_member', 'customer'),
+            id=order_id
+        )
         
         # Verify rider has access
         if order.rider != request.user:
@@ -850,61 +881,135 @@ class RiderAddMeasurementsView(APIView):
             )
         
         # Verify order type
-        if order.order_type != 'fabric_with_stitching':
+        if order.order_type not in ['fabric_with_stitching', 'measurement_service']:
             return api_response(
                 success=False,
-                message="Measurements can only be added for fabric_with_stitching orders",
+                message="Measurements can only be added for fabric_with_stitching and measurement_service orders",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
         
         serializer = RiderAddMeasurementsSerializer(data=request.data)
         if serializer.is_valid():
-            # Add measurements to order
-            order.rider_measurements = serializer.validated_data['measurements']
+            measurements_data = serializer.validated_data['measurements']
+            family_member_id = serializer.validated_data.get('family_member')
+            title = serializer.validated_data.get('title')
+            
+            # Add title to measurements if provided
+            if title:
+                measurements_data['title'] = title
+            
+            # Add measurements to order level (deprecated but kept for compatibility)
+            order.rider_measurements = measurements_data
             order.measurement_taken_at = timezone.now()
             
-            # Use transition service to update rider status to 'measurement_taken'
-            from apps.orders.services import OrderStatusTransitionService
+            # Identify the recipient and update profiles/items
+            recipient_name = None
+            if family_member_id:
+                from apps.customers.models import FamilyMember
+                family_member = get_object_or_404(FamilyMember, id=family_member_id, user=order.customer)
+                family_member.measurements = measurements_data
+                family_member.save()
+                recipient_name = family_member.name
+                
+                # Update all items for this family member in this order
+                order.order_items.filter(family_member=family_member).update(measurements=measurements_data)
+            else:
+                # Update customer profile measurements
+                from apps.customers.models import CustomerProfile
+                profile, created = CustomerProfile.objects.get_or_create(user=order.customer)
+                profile.measurements = measurements_data
+                profile.save()
+                
+                # Update all items for the customer in this order
+                order.order_items.filter(family_member__isnull=True).update(measurements=measurements_data)
+                recipient_name = order.customer.get_full_name() or order.customer.username if order.customer else 'Customer'
             
-            notes_text = f"Measurements taken by rider. {serializer.validated_data.get('notes', '')}"
-            
-            success, error_msg, updated_order = OrderStatusTransitionService.transition(
-                order=order,
-                new_rider_status='measurement_taken',
-                user_role='RIDER',
-                user=request.user,
-                notes=notes_text
-            )
-            
-            if not success:
-                return api_response(
-                    success=False,
-                    message=error_msg,
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
-            
-            order = updated_order
-            
-            # Update assignment status
-            try:
-                assignment = order.rider_assignment
-                assignment.status = 'in_progress'
-                assignment.started_at = timezone.now()
-                if serializer.validated_data.get('notes'):
-                    assignment.notes = serializer.validated_data['notes']
-                assignment.save()
-            except RiderOrderAssignment.DoesNotExist:
-                pass
-            
+            # Save order first to persist measurements
             order.save()
             
-            response_serializer = RiderOrderDetailSerializer(order)
-            return api_response(
-                success=True,
-                message="Measurements added successfully. Tailor can now proceed with cutting.",
-                data=response_serializer.data,
-                status_code=status.HTTP_200_OK
-            )
+            # Check if all items now have measurements
+            all_measured = order.all_items_have_measurements
+            from apps.orders.services import OrderStatusTransitionService
+            
+            title_text = f" ({title})" if title else ""
+            notes_text = f"Measurements taken by rider for {recipient_name}{title_text}. {serializer.validated_data.get('notes', '')}"
+            
+            if all_measured:
+                # All items have measurements - can transition to measurement_taken
+                success, error_msg, updated_order = OrderStatusTransitionService.transition(
+                    order=order,
+                    new_rider_status='measurement_taken',
+                    user_role='RIDER',
+                    user=request.user,
+                    notes=notes_text
+                )
+                
+                if not success:
+                    return api_response(
+                        success=False,
+                        message=error_msg,
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                order = updated_order
+                
+                # Update assignment status
+                try:
+                    assignment = order.rider_assignment
+                    assignment.status = 'in_progress'
+                    assignment.started_at = timezone.now()
+                    if serializer.validated_data.get('notes'):
+                        assignment.notes = serializer.validated_data['notes']
+                    assignment.save()
+                except RiderOrderAssignment.DoesNotExist:
+                    pass
+                
+                # Send notification that all measurements are taken
+                try:
+                    from apps.notifications.services import NotificationService
+                    NotificationService.send_measurement_taken_notification(
+                        order=order,
+                        rider=request.user
+                    )
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Failed to send measurement taken notification: {str(e)}")
+                
+                response_serializer = RiderOrderDetailSerializer(order, context={'request': request})
+                return api_response(
+                    success=True,
+                    message=f"All measurements completed for {recipient_name}. Tailor can now proceed.",
+                    data=response_serializer.data,
+                    status_code=status.HTTP_200_OK
+                )
+            else:
+                # Not all items measured yet - save measurements but don't change status
+                # Count how many items still need measurements
+                from django.db.models import Q
+                items_without_measurements = order.order_items.filter(
+                    Q(measurements__isnull=True) | Q(measurements={})
+                ).count()
+                
+                # Update assignment status to in_progress if not already
+                try:
+                    assignment = order.rider_assignment
+                    if assignment.status != 'in_progress':
+                        assignment.status = 'in_progress'
+                        assignment.started_at = timezone.now()
+                    if serializer.validated_data.get('notes'):
+                        assignment.notes = serializer.validated_data['notes']
+                    assignment.save()
+                except RiderOrderAssignment.DoesNotExist:
+                    pass
+                
+                response_serializer = RiderOrderDetailSerializer(order, context={'request': request})
+                return api_response(
+                    success=True,
+                    message=f"Measurements saved for {recipient_name}. {items_without_measurements} item(s) still need measurements.",
+                    data=response_serializer.data,
+                    status_code=status.HTTP_200_OK
+                )
         
         return api_response(
             success=False,
@@ -935,38 +1040,72 @@ class RiderUpdateOrderStatusView(APIView):
         
         order = get_object_or_404(Order, id=order_id)
         
-        # Verify rider has access
-        if order.rider != request.user:
+        serializer = RiderUpdateOrderStatusSerializer(data=request.data)
+        if not serializer.is_valid():
             return api_response(
                 success=False,
-                message="You don't have access to this order",
-                status_code=status.HTTP_403_FORBIDDEN
+                message="Failed to update order status",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
             )
         
-        serializer = RiderUpdateOrderStatusSerializer(data=request.data)
-        if serializer.is_valid():
-            new_rider_status = serializer.validated_data['rider_status']
-            notes = serializer.validated_data.get('notes', '')
-            
-            # Security check: For fabric_with_stitching orders, prevent setting measurement_taken
-            # without actually adding measurements via the /measurements/ endpoint
-            if new_rider_status == 'measurement_taken' and order.order_type == 'fabric_with_stitching':
-                if not order.rider_measurements or not order.measurement_taken_at:
+        new_rider_status = serializer.validated_data['rider_status']
+        notes = serializer.validated_data.get('notes', '')
+        
+        # If unassigned and rider wants to accept, allow assignment here
+        if order.rider is None and new_rider_status == 'accepted':
+            # Check rider profile approval
+            try:
+                rider_profile = request.user.rider_profile
+                if not rider_profile.is_approved:
                     return api_response(
                         success=False,
-                        message="Cannot mark measurements as taken without adding measurements",
+                        message="Your profile must be approved by admin before you can accept orders. Current status: " + rider_profile.review_status,
+                        status_code=status.HTTP_403_FORBIDDEN
+                    )
+            except RiderProfile.DoesNotExist:
+                return api_response(
+                    success=False,
+                    message="Rider profile not found. Please contact support.",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            if order.payment_status != 'paid':
+                return api_response(
+                    success=False,
+                    message="Order payment must be paid before rider can accept it",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Rider can only accept if tailor has already accepted
+            # Exception: measurement_service orders don't require tailor acceptance for home_delivery
+            if order.tailor_status == 'none':
+                if order.order_type != 'measurement_service' or order.service_mode != 'home_delivery':
+                    return api_response(
+                        success=False,
+                        message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
                         status_code=status.HTTP_400_BAD_REQUEST
                     )
             
-            # Use transition service
-            from apps.orders.services import OrderStatusTransitionService
+            # Assign rider and create assignment
+            order.rider = request.user
+            order.save()
+            assignment = RiderOrderAssignment.objects.create(
+                order=order,
+                rider=request.user,
+                status='accepted',
+                accepted_at=timezone.now(),
+                notes=notes
+            )
             
+            # Use transition service to set rider_status=accepted
+            from apps.orders.services import OrderStatusTransitionService
             success, error_msg, updated_order = OrderStatusTransitionService.transition(
                 order=order,
-                new_rider_status=new_rider_status,
+                new_rider_status='accepted',
                 user_role='RIDER',
                 user=request.user,
-                notes=notes
+                notes=notes or 'Rider accepted the order'
             )
             
             if not success:
@@ -978,60 +1117,133 @@ class RiderUpdateOrderStatusView(APIView):
             
             order = updated_order
             
-            # If delivered, update assignment and rider stats
-            if order.rider_status == 'delivered':
-                order.actual_delivery_date = timezone.now().date()
-                order.save()
-                
-                # Update assignment
-                try:
-                    assignment = order.rider_assignment
-                    assignment.status = 'completed'
-                    assignment.completed_at = timezone.now()
-                    if notes:
-                        assignment.notes = notes
-                    assignment.save()
-                except RiderOrderAssignment.DoesNotExist:
-                    pass
-                
-                # Update rider statistics
-                try:
-                    rider_profile = request.user.rider_profile
-                    rider_profile.total_deliveries += 1
-                    rider_profile.save()
-                except RiderProfile.DoesNotExist:
-                    pass
-            
-            # Send push notification for order status change
-            try:
-                from apps.notifications.services import NotificationService
-                NotificationService.send_order_status_notification(
+            # If all items already have measurements (customer provided them), automatically transition to measurement_taken
+            if order.order_type == 'fabric_with_stitching' and order.all_items_have_measurements:
+                success, error_msg, updated_order = OrderStatusTransitionService.transition(
                     order=order,
-                    old_status=order.status,  # History will have the old status
-                    new_status=order.status,
-                    changed_by=request.user
+                    new_rider_status='measurement_taken',
+                    user_role='RIDER',
+                    user=request.user,
+                    notes='Measurements already provided by customer - automatically confirmed'
                 )
-            except Exception as e:
-                # Log error but don't fail the update
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Failed to send order status notification: {str(e)}")
+                if success:
+                    order = updated_order
             
             # Use lightweight response serializer for status updates
             from apps.orders.serializers import OrderStatusUpdateResponseSerializer
             response_serializer = OrderStatusUpdateResponseSerializer(order, context={'request': request})
             return api_response(
                 success=True,
-                message=f"Order rider status updated to {order.get_rider_status_display()}",
+                message="Order accepted successfully",
                 data=response_serializer.data,
                 status_code=status.HTTP_200_OK
             )
         
+        # Verify rider has access for subsequent updates
+        if order.rider != request.user:
+            return api_response(
+                success=False,
+                message="You don't have access to this order",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Security check: For fabric_with_stitching orders, prevent setting measurement_taken
+        # without actually adding measurements via the /measurements/ endpoint
+        if new_rider_status == 'measurement_taken' and order.order_type == 'fabric_with_stitching':
+            # Check if all items have measurements
+            if not order.all_items_have_measurements:
+                return api_response(
+                    success=False,
+                    message="Cannot mark measurements as complete. Some items still need measurements.",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            # Also check legacy fields for backward compatibility
+            if not order.rider_measurements or not order.measurement_taken_at:
+                return api_response(
+                    success=False,
+                    message="Cannot mark measurements as taken without adding measurements",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Use transition service
+        from apps.orders.services import OrderStatusTransitionService
+        
+        success, error_msg, updated_order = OrderStatusTransitionService.transition(
+            order=order,
+            new_rider_status=new_rider_status,
+            user_role='RIDER',
+            user=request.user,
+            notes=notes
+        )
+        
+        if not success:
+            return api_response(
+                success=False,
+                message=error_msg,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        order = updated_order
+        
+        # If delivered, update assignment and rider stats
+        if order.rider_status == 'delivered':
+            order.actual_delivery_date = timezone.now().date()
+            order.save()
+            
+            # Update assignment
+            try:
+                assignment = order.rider_assignment
+                assignment.status = 'completed'
+                assignment.completed_at = timezone.now()
+                if notes:
+                    assignment.notes = notes
+                assignment.save()
+            except RiderOrderAssignment.DoesNotExist:
+                pass
+            
+            # Update rider statistics
+            try:
+                rider_profile = request.user.rider_profile
+                rider_profile.total_deliveries += 1
+                rider_profile.save()
+            except RiderProfile.DoesNotExist:
+                pass
+        else:
+            # Update assignment for other statuses if it exists
+            try:
+                assignment = order.rider_assignment
+                assignment.status = 'in_progress'
+                if new_rider_status == 'accepted':
+                    assignment.accepted_at = timezone.now()
+                if notes:
+                    assignment.notes = notes
+                assignment.save()
+            except RiderOrderAssignment.DoesNotExist:
+                pass
+        
+        # Send push notification for order status change
+        try:
+            from apps.notifications.services import NotificationService
+            NotificationService.send_order_status_notification(
+                order=order,
+                old_status=order.status,  # History will have the old status
+                new_status=order.status,
+                changed_by=request.user
+            )
+        except Exception as e:
+            # Log error but don't fail the update
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to send order status notification: {str(e)}")
+        
+        # Use lightweight response serializer for status updates
+        from apps.orders.serializers import OrderStatusUpdateResponseSerializer
+        response_serializer = OrderStatusUpdateResponseSerializer(order, context={'request': request})
         return api_response(
-            success=False,
-            message="Failed to update order status",
-            errors=serializer.errors,
-            status_code=status.HTTP_400_BAD_REQUEST
+            success=True,
+            message=f"Order rider status updated to {order.get_rider_status_display()}",
+            data=response_serializer.data,
+            status_code=status.HTTP_200_OK
         )
 
 

@@ -36,6 +36,20 @@ from .address import (
 from .analytics import (
     TailorAnalyticsView
 )
+from .orders import (
+    TailorAcceptOrderView,
+    TailorUpdateOrderStatusView,
+    TailorAddMeasurementsView
+)
+from .config import TailorConfigView
+from .tailor_pos import (
+    TailorCustomerListView,
+    TailorCreateCustomerView
+)
+from .rating import (
+    SubmitTailorRatingView,
+    TailorRatingListView
+)
 
 # Export all views
 __all__ = [
@@ -75,4 +89,17 @@ __all__ = [
     
     # Analytics views
     'TailorAnalyticsView',
+    
+    'TailorAcceptOrderView',
+    'TailorUpdateOrderStatusView',
+    'TailorAddMeasurementsView',
+    'TailorConfigView',
+    
+    # POS views
+    'TailorCustomerListView',
+    'TailorCreateCustomerView',
+
+    # Rating views
+    'SubmitTailorRatingView',
+    'TailorRatingListView',
 ]

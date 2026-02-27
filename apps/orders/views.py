@@ -72,7 +72,10 @@ class OrderCreateView(APIView):
     def post(self,request):
 
         data=request.data.copy()
-        data['customer'] = request.user.id
+        if request.user.role == 'USER':
+            data['customer'] = request.user.id
+        # For TAILOR and ADMIN, we respect the 'customer' ID passed in the request.
+        # This ensures that when a tailor/admin creates an order, the correct customer is linked.
         serializer = OrderCreateSerializer(data=data, context={'request':request})
         if serializer.is_valid():
             try:
@@ -172,18 +175,28 @@ class OrderDetailView(APIView):
             new_status = request.data.get('status')
             if new_status:
                 if request.user.role == 'USER':
-                    # Customers can only cancel orders (pending -> cancelled)
-                    if new_status != 'cancelled':
-                        raise PermissionError("Customers can only cancel orders. Only tailors can update order status.")
-                    
-                    # Only allow cancellation when status is pending
-                    if new_status == 'cancelled' and order.status != 'pending':
-                        raise PermissionError("Orders can only be cancelled when status is pending")
+                    # Customers can cancel orders OR mark walk-in orders as collected
+                    if new_status == 'cancelled':
+                        # Only allow cancellation when status is pending
+                        if order.status != 'pending':
+                            raise PermissionError("Orders can only be cancelled when status is pending")
+                    elif new_status == 'collected':
+                        # Allow customers to mark walk-in orders as collected
+                        if order.service_mode != 'walk_in':
+                            raise PermissionError("Only walk-in orders can be marked as collected by customers")
+                        if order.status != 'ready_for_pickup':
+                            raise PermissionError("Order must be ready for pickup before marking as collected")
+                    else:
+                        # Any other status change is not allowed
+                        raise PermissionError("Customers can only cancel orders or mark walk-in orders as collected")
                         
                 elif request.user.role == 'TAILOR':
                     # Tailors cannot cancel orders (only customers can cancel)
                     if new_status == 'cancelled':
                         raise PermissionError("Tailors cannot cancel orders. Only customers can cancel their orders.")
+                    # Tailors cannot mark as collected (only customers can)
+                    elif new_status == 'collected':
+                        raise PermissionError("Only customers can mark walk-in orders as collected")
                         
                 elif request.user.role == 'ADMIN':
                     # Admins can do everything - no restrictions
@@ -270,14 +283,22 @@ class OrderStatusUpdateView(APIView):
                 if order.customer != request.user:
                     raise PermissionError("You can only update your own orders")
                 
-                # Customers can only cancel orders (pending -> cancelled)
+                # Customers can cancel orders OR mark walk-in orders as collected
                 new_status = request.data.get('status')
-                if new_status and new_status != 'cancelled':
-                    raise PermissionError("Customers can only cancel orders. Only tailors can update order status.")
-                
-                # Only allow cancellation when status is pending
-                if new_status == 'cancelled' and order.status != 'pending':
-                    raise PermissionError("Orders can only be cancelled when status is pending")
+                if new_status:
+                    if new_status == 'cancelled':
+                        # Only allow cancellation when status is pending
+                        if order.status != 'pending':
+                            raise PermissionError("Orders can only be cancelled when status is pending")
+                    elif new_status == 'collected':
+                        # Allow customers to mark walk-in orders as collected
+                        if order.service_mode != 'walk_in':
+                            raise PermissionError("Only walk-in orders can be marked as collected by customers")
+                        if order.status != 'ready_for_pickup':
+                            raise PermissionError("Order must be ready for pickup before marking as collected")
+                    else:
+                        # Any other status change is not allowed
+                        raise PermissionError("Customers can only cancel orders or mark walk-in orders as collected")
                     
             elif request.user.role == 'TAILOR':
                 # Tailors can only update orders assigned to them
@@ -288,6 +309,9 @@ class OrderStatusUpdateView(APIView):
                 new_status = request.data.get('status')
                 if new_status and new_status == 'cancelled':
                     raise PermissionError("Tailors cannot cancel orders. Only customers can cancel their orders.")
+                # Tailors cannot mark as collected (only customers can)
+                elif new_status == 'collected':
+                    raise PermissionError("Only customers can mark walk-in orders as collected")
                     
             elif request.user.role == 'ADMIN':
                 # Admins can do everything - no restrictions
@@ -550,16 +574,10 @@ class TailorOrderDetailView(APIView):
             
             serializer = OrderSerializer(order, context={'request': request})
             
-            # Add rider measurements info if available
-            data = serializer.data
-            if order.rider_measurements:
-                data['rider_measurements'] = order.rider_measurements
-                data['measurement_taken_at'] = order.measurement_taken_at.isoformat() if order.measurement_taken_at else None
-            
             return api_response(
                 success=True,
                 message="Order details retrieved successfully",
-                data=data,
+                data=serializer.data,
                 status_code=status.HTTP_200_OK
             )
         except TailorProfile.DoesNotExist:
@@ -673,7 +691,154 @@ class OrderPaymentStatusUpdateView(APIView):
             )
 
 
+class OrderMeasurementsDetailView(APIView):
+    """Get measurements for a specific order"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Get order measurements",
+        description="Retrieve measurements for a specific order. Only available when rider_status is 'measurement_taken'.",
+        tags=["Customer Measurements"]
+    )
+    def get(self, request, order_id):
+        if request.user.role != 'USER':
+            return api_response(
+                success=False,
+                message="Only customers can access this endpoint",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get order and verify it belongs to customer
+        order = get_object_or_404(Order, id=order_id)
+        
+        if order.customer != request.user:
+            return api_response(
+                success=False,
+                message="You can only view measurements for your own orders",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if measurements are available
+        if order.rider_status != 'measurement_taken' or not order.rider_measurements:
+            return api_response(
+                success=False,
+                message="No measurements available for this order. Measurements are only available when rider_status is 'measurement_taken'.",
+                data={
+                    'order_id': order.id,
+                    'order_number': order.order_number,
+                    'rider_status': order.rider_status,
+                    'has_measurements': False
+                },
+                status_code=status.HTTP_200_OK
+            )
+        
+        # Build recipient data (consistent with order detail API)
+        if order.family_member:
+            recipient = {
+                'type': 'family_member',
+                'id': order.family_member.id,
+                'name': order.family_member.name,
+                'relationship': order.family_member.relationship,
+                'gender': order.family_member.gender,
+                'measurements': order.rider_measurements,
+            }
+        else:
+            recipient = {
+                'type': 'customer',
+                'id': request.user.id,
+                'name': request.user.get_full_name() or request.user.username,
+                'phone': request.user.phone,
+                'email': request.user.email,
+                'measurements': order.rider_measurements,
+            }
+        
+        # Get rider info
+        measurement_taken_by = None
+        if order.rider:
+            try:
+                if hasattr(order.rider, 'rider_profile') and order.rider.rider_profile:
+                    measurement_taken_by = {
+                        'rider_id': order.rider.id,
+                        'rider_name': order.rider.rider_profile.full_name or order.rider.username,
+                    }
+                else:
+                    measurement_taken_by = {
+                        'rider_id': order.rider.id,
+                        'rider_name': order.rider.username,
+                    }
+            except:
+                measurement_taken_by = {
+                    'rider_id': order.rider.id,
+                    'rider_name': order.rider.username if order.rider else None,
+                }
+        
+        response_data = {
+            'order_id': order.id,
+            'order_number': order.order_number,
+            'order_type': order.order_type,
+            'order_status': order.status,
+            'rider_status': order.rider_status,
+            'recipient': recipient,
+            'measurement_taken_at': order.measurement_taken_at.isoformat() if order.measurement_taken_at else None,
+            'measurement_taken_by': measurement_taken_by,
+            'has_measurements': True,
+        }
+        
+        return api_response(
+            success=True,
+            message="Order measurements retrieved successfully",
+            data=response_data,
+            status_code=status.HTTP_200_OK
+        )
 
 
 
 
+
+
+
+class WorkOrderPDFView(APIView):
+    """Generate and download work order PDF for tailors"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, order_id):
+        from django.http import HttpResponse
+        from .pdf_service import WorkOrderPDFService
+        
+        try:
+            order = Order.objects.select_related('customer', 'tailor').prefetch_related(
+                'order_items__fabric',
+                'order_items__customization',
+                'order_items__customization__collar_style',
+                'order_items__customization__cuff_style',
+                'order_items__customization__pocket_style',
+            ).get(id=order_id)
+        except Order.DoesNotExist:
+            return api_response(success=False, message='Order not found',
+                              status_code=status.HTTP_404_NOT_FOUND, request=request)
+        
+        if request.user.role != 'TAILOR' or order.tailor != request.user:
+            return api_response(success=False,
+                              message='You do not have permission to access this work order',
+                              status_code=status.HTTP_403_FORBIDDEN, request=request)
+        
+        language = request.GET.get('lang', 'ar')
+        if language not in ['ar', 'en']:
+            language = 'ar'
+        
+        try:
+            pdf_service = WorkOrderPDFService(order, language=language)
+            pdf_bytes = pdf_service.generate()
+            
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            filename = f'work_order_{order.order_number}_{language}.pdf'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error generating PDF: {str(e)}")
+            return api_response(success=False, message='Error generating work order PDF',
+                              errors=str(e), status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                              request=request)

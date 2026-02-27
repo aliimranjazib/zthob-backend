@@ -49,6 +49,30 @@ class TailorProfile(models.Model):
         default=True,
         help_text="Whether the shop is currently open"
     )
+
+    # Rating aggregate fields (auto-updated via signals)
+    avg_stitching_quality = models.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        default=0.00,
+        help_text="Average stitching quality rating (cached from TailorRating)"
+    )
+    avg_on_time_delivery = models.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        default=0.00,
+        help_text="Average on-time delivery rating (cached from TailorRating)"
+    )
+    avg_overall_satisfaction = models.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        default=0.00,
+        help_text="Average overall satisfaction rating (cached from TailorRating)"
+    )
+    rating_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Total number of ratings received"
+    )
     shop_image = models.ImageField(
         upload_to='tailor_profiles/shop_images/',
         null=True,

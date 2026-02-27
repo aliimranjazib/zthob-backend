@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from django.contrib.auth import authenticate
 from django.db.models import Q
 from rest_framework import status
+import logging
 
 from apps.accounts.models import CustomUser
 from .serializers import (
@@ -13,7 +14,11 @@ from .serializers import (
     UserProfileSerializer,
     UserLoginSerializer,
     ChangePasswordSerializer,
+    PhoneLoginSerializer,
+    PhoneVerifySerializer,
     )
+from apps.core.services import PhoneVerificationService
+from apps.core.models import PhoneVerification
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from zthob.utils import api_response
@@ -179,6 +184,514 @@ class UserLogoutView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
+class DeleteAccountView(APIView):
+    """Delete user account - soft delete (default) or hard delete"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        tags=["Profile"],
+        summary="Delete user account",
+        description="Delete the authenticated user's account. By default performs soft delete (can be restored). Use hard_delete=true for complete removal. No password required since phone authentication is used.",
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'hard_delete': {
+                        'type': 'boolean',
+                        'description': 'If true, permanently delete account. If false (default), soft delete (can be restored).',
+                        'default': False
+                    }
+                }
+            }
+        }
+    )
+    def delete(self, request):
+        """
+        Delete user account
+        
+        - Soft delete (default): Marks account as deleted, keeps data
+        - Hard delete: Permanently removes account and related data
+        
+        Note: Since phone authentication doesn't use passwords, 
+        hard delete only requires authentication (no password confirmation needed).
+        """
+        user = request.user
+        hard_delete = request.data.get('hard_delete', False)
+        
+        try:
+            if hard_delete:
+                # Hard delete - permanently remove account
+                # Note: Related data will be handled by CASCADE or SET_NULL based on model definitions
+                user_id = user.id
+                username = user.username
+                
+                # Delete the user (this will cascade to related models)
+                user.delete()
+                
+                return api_response(
+                    success=True,
+                    message="Account permanently deleted. All your data has been removed.",
+                    status_code=status.HTTP_200_OK,
+                    request=request
+                )
+            else:
+                # Soft delete - mark as deleted but keep data
+                user.soft_delete()
+                
+                return api_response(
+                    success=True,
+                    message="Account deleted successfully. Your data has been preserved and can be restored by contacting support.",
+                    status_code=status.HTTP_200_OK,
+                    request=request
+                )
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error deleting account for user {user.id}: {str(e)}")
+            return api_response(
+                success=False,
+                message="Failed to delete account",
+                errors=str(e),
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                request=request
+            )
+
 @api_view(['GET'])
 def test_deployment(request):
     return api_response(success=True, message="Deployment test successful")
+
+class PhoneLoginView(APIView):
+    """Send OTP to phone number for login/registration"""
+    permission_classes = [AllowAny]
+    
+    @extend_schema(
+        request=PhoneLoginSerializer,
+        responses={200: PhoneLoginSerializer},
+        tags=["Authentication"],
+        summary="Send OTP to phone number",
+        description="Send OTP code to phone number for phone-based authentication. Works for both new and existing users."
+    )
+    def post(self, request):
+        serializer = PhoneLoginSerializer(data=request.data)
+        if serializer.is_valid():
+            phone = serializer.validated_data['phone']
+            
+            # Create verification and send OTP
+            try:
+                verification, otp_code, sms_success, sms_message, user = PhoneVerificationService.create_verification_for_phone(
+                    phone_number=phone
+                )
+                
+                response_data = {
+                    "phone": phone,
+                    "sms_sent": sms_success,
+                    "expires_in": 300  # 5 minutes
+                }
+                
+                if sms_success:
+                    return api_response(
+                        success=True,
+                        message=f"OTP sent to {phone}",
+                        data=response_data,
+                        status_code=status.HTTP_200_OK,
+                        request=request
+                    )
+                else:
+                    # SMS failed - return error with details
+                    # Include the error message from Twilio for debugging
+                    error_details = sms_message if sms_message else "Unknown error"
+                    return api_response(
+                        success=False,
+                        message=f"Failed to send OTP to {phone}",
+                        errors=error_details,
+                        data=response_data,
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        request=request
+                    )
+            except Exception as e:
+                return api_response(
+                    success=False,
+                    message="Failed to send OTP",
+                    errors=str(e),
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    request=request
+                )
+        
+        return api_response(
+            success=False,
+            message="Invalid phone number",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            request=request
+        )
+
+class PhoneVerifyView(APIView):
+    """Verify OTP and complete login/registration"""
+    permission_classes = [AllowAny]
+    
+    @extend_schema(
+        request=PhoneVerifySerializer,
+        responses={200: PhoneVerifySerializer},
+        tags=["Authentication"],
+        summary="Verify OTP and login/register",
+        description="Verify OTP code and complete phone-based authentication. Creates new user if doesn't exist."
+    )
+    def post(self, request):
+        serializer = PhoneVerifySerializer(data=request.data)
+        if serializer.is_valid():
+            phone = serializer.validated_data['phone']
+            otp_code = serializer.validated_data['otp_code']
+            name = serializer.validated_data.get('name', '')
+            role = serializer.validated_data.get('role', 'USER')
+            date_of_birth = serializer.validated_data.get('date_of_birth', None)
+            
+            # Check if user exists and was already verified (before verification)
+            # This determines if they're a new or returning user
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            
+            local_phone = PhoneVerificationService.normalize_phone_to_local(phone)
+            user_before_verify = User.objects.filter(phone=local_phone).first()
+            
+            # Check if user was already verified before this verification
+            # If phone_verified is True, they've logged in before
+            was_already_verified = user_before_verify and user_before_verify.phone_verified
+            
+            # Also check if there are any previous verified verifications
+            has_previous_verification = False
+            if user_before_verify:
+                has_previous_verification = PhoneVerification.objects.filter(
+                    user=user_before_verify,
+                    is_verified=True
+                ).exclude(otp_code=otp_code).exists()
+            
+            # User is new if they were never verified before
+            is_new_user = not was_already_verified and not has_previous_verification
+            
+            # Verify OTP
+            is_valid, message, user = PhoneVerificationService.verify_otp_for_phone(
+                phone_number=phone,
+                otp_code=otp_code
+            )
+            
+            if not is_valid or not user:
+                return api_response(
+                    success=False,
+                    message=message or "Invalid or expired OTP",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    request=request
+                )
+            
+            # Update user with provided information if this is a new user
+            if is_new_user:
+                if name:
+                    name_parts = name.strip().split(' ', 1)
+                    user.first_name = name_parts[0]
+                    user.last_name = name_parts[1] if len(name_parts) > 1 else ''
+                if role:
+                    user.role = role
+                if date_of_birth:
+                    user.date_of_birth = date_of_birth
+                user.save()
+            
+            # Generate JWT tokens
+            refresh = RefreshToken.for_user(user)
+            
+            # Prepare user data
+            user_data = {
+                'id': user.id,
+                'phone': user.phone,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'email': user.email,
+                'role': user.role,
+                'phone_verified': user.phone_verified,
+                'date_of_birth': user.date_of_birth.isoformat() if user.date_of_birth else None
+            }
+            
+            response_data = {
+                'tokens': {
+                    'access_token': str(refresh.access_token),
+                    'refresh_token': str(refresh)
+                },
+                'user': user_data,
+                'is_new_user': is_new_user
+            }
+            
+            status_code = status.HTTP_201_CREATED if is_new_user else status.HTTP_200_OK
+            success_message = "Registration and login successful" if is_new_user else "Login successful"
+            
+            return api_response(
+                success=True,
+                message=success_message,
+                data=response_data,
+                status_code=status_code,
+                request=request
+            )
+        
+        return api_response(
+            success=False,
+            message="OTP verification failed",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            request=request
+        )
+
+class PhoneResendOTPView(APIView):
+    """Resend OTP to phone number"""
+    permission_classes = [AllowAny]
+    
+    @extend_schema(
+        request=PhoneLoginSerializer,
+        responses={200: PhoneLoginSerializer},
+        tags=["Authentication"],
+        summary="Resend OTP to phone number",
+        description="Resend OTP code to phone number if user didn't receive it or it expired."
+    )
+    def post(self, request):
+        serializer = PhoneLoginSerializer(data=request.data)
+        if serializer.is_valid():
+            phone = serializer.validated_data['phone']
+            
+            # Create verification and send OTP
+            try:
+                verification, otp_code, sms_success, sms_message, user = PhoneVerificationService.create_verification_for_phone(
+                    phone_number=phone
+                )
+                
+                response_data = {
+                    "phone": phone,
+                    "sms_sent": sms_success,
+                    "expires_in": 300  # 5 minutes
+                }
+                
+                if sms_success:
+                    return api_response(
+                        success=True,
+                        message=f"OTP resent to {phone}",
+                        data=response_data,
+                        status_code=status.HTTP_200_OK,
+                        request=request
+                    )
+                else:
+                    return api_response(
+                        success=True,
+                        message=f"OTP generated for {phone}, but SMS sending failed. Please check server logs.",
+                        data=response_data,
+                        status_code=status.HTTP_200_OK,
+                        request=request
+                    )
+            except Exception as e:
+                return api_response(
+                    success=False,
+                    message="Failed to resend OTP",
+                    errors=str(e),
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    request=request
+                )
+        
+        return api_response(
+            success=False,
+            message="Invalid phone number",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            request=request
+        )
+
+
+class PublicDeleteAccountRequestView(APIView):
+    """
+    Public view for account deletion request (Google Play compliance).
+    No authentication required - users can request account deletion via web form.
+    """
+    permission_classes = [AllowAny]
+    
+    @extend_schema(
+        tags=["Account Deletion"],
+        summary="Public Account Deletion Request Form",
+        description="Public web form for users to request account deletion. No authentication required. "
+                    "This endpoint serves the HTML form for Google Play compliance.",
+        responses={200: {'description': 'HTML form for account deletion'}}
+    )
+    def get(self, request):
+        """Display the account deletion request form"""
+        from django.shortcuts import render
+        return render(request, 'accounts/delete_account_request.html', {
+            'app_name': 'Mgask',
+            'developer_name': 'Mgask'
+        })
+    
+    @extend_schema(
+        tags=["Account Deletion"],
+        summary="Submit Account Deletion Request",
+        description="Process account deletion request after OTP verification. "
+                    "This endpoint handles form submission from the public form.",
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'phone': {'type': 'string', 'description': 'Phone number or email'},
+                    'otp_code': {'type': 'string', 'description': 'OTP verification code'},
+                    'confirm_deletion': {'type': 'boolean', 'description': 'User confirmation'}
+                },
+                'required': ['phone', 'otp_code', 'confirm_deletion']
+            }
+        }
+    )
+    def post(self, request):
+        """Process account deletion request"""
+        from apps.accounts.services.account_deletion import AccountDeletionService
+        from apps.core.services import PhoneVerificationService
+        from django.shortcuts import render
+        
+        phone = request.data.get('phone') or request.POST.get('phone')
+        otp_code = request.data.get('otp_code') or request.POST.get('otp_code')
+        confirm_deletion = request.data.get('confirm_deletion') or request.POST.get('confirm_deletion')
+        
+        # Validate inputs
+        if not phone:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': 'Phone number is required',
+                'app_name': 'Mgask',
+                'developer_name': 'Mgask'
+            }, status=400)
+        
+        if not otp_code:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': 'OTP code is required',
+                'phone': phone,
+                'app_name': 'Mgask',
+                'developer_name': 'Mgask'
+            }, status=400)
+        
+        if not confirm_deletion or str(confirm_deletion).lower() not in ['true', '1', 'on', 'yes']:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': 'Please confirm that you want to delete your account',
+                'phone': phone,
+                'app_name': 'Mgask',
+                'developer_name': 'Mgask'
+            }, status=400)
+        
+        # Find user
+        user = AccountDeletionService.find_user_by_phone_or_email(phone)
+        if not user:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': 'No account found with this phone number or email',
+                'phone': phone,
+                'app_name': 'Mgask',
+                'developer_name': 'Mgask'
+            }, status=404)
+        
+        # Verify OTP
+        is_valid, message = AccountDeletionService.verify_user_identity(
+            user=user,
+            phone_number=phone,
+            otp_code=otp_code
+        )
+        
+        if not is_valid:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': message or 'Invalid or expired OTP code',
+                'phone': phone,
+                'app_name': 'Mgask',
+                'developer_name': 'Mgask'
+            }, status=400)
+        
+        # Delete account
+        result = AccountDeletionService.delete_user_account(user)
+        
+        if result['success']:
+            return render(request, 'accounts/delete_account_request.html', {
+                'success': True,
+                'message': 'Your account and all associated data have been permanently deleted.',
+                'app_name': 'Mgask',
+                'developer_name': 'Mgask'
+            })
+        else:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': result.get('message', 'Failed to delete account. Please contact support.'),
+                'phone': phone,
+                'app_name': 'Mgask',
+                'developer_name': 'Mgask'
+            }, status=500)
+
+
+class PublicDeleteAccountSendOTPView(APIView):
+    """
+    Send OTP for account deletion verification (public endpoint).
+    No authentication required.
+    """
+    permission_classes = [AllowAny]
+    
+    @extend_schema(
+        tags=["Account Deletion"],
+        summary="Send OTP for Account Deletion",
+        description="Send OTP code to user's phone number for account deletion verification. "
+                    "This is used by the public deletion form.",
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'phone': {'type': 'string', 'description': 'Phone number'}
+                },
+                'required': ['phone']
+            }
+        }
+    )
+    def post(self, request):
+        """Send OTP for account deletion"""
+        from apps.accounts.services.account_deletion import AccountDeletionService
+        from apps.core.services import PhoneVerificationService
+        from django.shortcuts import render
+        
+        phone = request.data.get('phone') or request.POST.get('phone')
+        
+        if not phone:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': 'Phone number is required',
+                'app_name': 'Mgask',
+                'developer_name': 'Mgask'
+            }, status=400)
+        
+        # Find user by phone only
+        from apps.core.services import PhoneVerificationService
+        local_phone = PhoneVerificationService.normalize_phone_to_local(phone)
+        user = AccountDeletionService.find_user_by_phone_or_email(local_phone)
+        if not user:
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': 'No account found with this phone number',
+                'phone': phone,
+                'app_name': 'Mgask',
+                'developer_name': 'Mgask'
+            }, status=404)
+        
+        # Send OTP
+        try:
+            verification, otp_code, sms_success, sms_message, _ = PhoneVerificationService.create_verification_for_phone(
+                phone_number=phone,
+                user=user
+            )
+            
+            if sms_success:
+                return render(request, 'accounts/delete_account_request.html', {
+                    'success_otp': True,
+                    'message': f'OTP sent to {phone}. Please check your phone and enter the code below.',
+                    'phone': phone,
+                    'app_name': 'Mgask',
+                    'developer_name': 'Mgask'
+                })
+            else:
+                return render(request, 'accounts/delete_account_request.html', {
+                    'error': f'Failed to send OTP: {sms_message}. Please try again or contact support.',
+                    'phone': phone,
+                    'app_name': 'Mgask',
+                    'developer_name': 'Mgask'
+                }, status=400)
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error sending OTP for account deletion: {str(e)}")
+            return render(request, 'accounts/delete_account_request.html', {
+                'error': 'Failed to send OTP. Please try again or contact support.',
+                'phone': phone,
+                'app_name': 'Mgask',
+                'developer_name': 'Mgask'
+            }, status=500)

@@ -19,7 +19,8 @@ class PhoneVerification(models.Model):
         related_name='phone_verifications'
     )
     phone_number = models.CharField(max_length=20)
-    otp_code = models.CharField(max_length=6)
+    otp_code = models.CharField(max_length=6, blank=True, null=True, help_text="OTP code (for manual OTP) or empty if using Twilio Verify")
+    verification_sid = models.CharField(max_length=100, blank=True, null=True, help_text="Twilio Verify verification SID")
     is_verified = models.BooleanField(default=False)
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -94,6 +95,14 @@ class SystemSettings(models.Model):
         decimal_places=2,
         default=Decimal('500.00'),
         help_text="Order subtotal threshold for free delivery (SAR). Set to 0 to disable free delivery."
+    )
+    
+    # System Fees
+    system_fee_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('3.00'),
+        help_text="Fixed system fee (SAR) applied to fabric_with_stitching orders (non-walk-in)."
     )
     
     # Metadata

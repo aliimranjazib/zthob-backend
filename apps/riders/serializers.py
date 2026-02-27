@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from apps.core.services import PhoneVerificationService
+from . import models
 from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
 from apps.orders.models import Order
 from apps.orders.serializers import OrderItemSerializer
@@ -100,6 +101,7 @@ class RiderProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
     is_phone_verified = serializers.BooleanField(source='user.phone_verified', read_only=True)
+    phone_number = serializers.SerializerMethodField()  # Get from user.phone (verified phone)
     is_approved = serializers.BooleanField(read_only=True)
     review_status = serializers.CharField(read_only=True)
     documents = RiderDocumentSerializer(many=True, read_only=True)
@@ -162,8 +164,12 @@ class RiderProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id', 'total_deliveries', 'rating', 'created_at', 'updated_at',
-            'is_approved', 'review_status', 'is_phone_verified', 'documents'
+            'is_approved', 'review_status', 'is_phone_verified', 'documents', 'phone_number'
         ]
+    
+    def get_phone_number(self, obj):
+        """Get verified phone number from user.phone"""
+        return obj.user.phone if obj.user else None
     
     def to_representation(self, instance):
         """Add request context to nested serializers"""
@@ -180,13 +186,15 @@ class RiderProfileSerializer(serializers.ModelSerializer):
 
 class RiderProfileUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating rider profile"""
+    # phone_number is read-only - it comes from verified user.phone
+    phone_number = serializers.SerializerMethodField()
     
     class Meta:
         model = RiderProfile
         fields = [
             # Basic Info
             'full_name',
-            'phone_number',
+            'phone_number',  # Read-only - cannot be updated via profile API (only through phone-verify)
             'emergency_contact',
             
             # National Identity / Iqama
@@ -219,6 +227,10 @@ class RiderProfileUpdateSerializer(serializers.ModelSerializer):
             'current_latitude',
             'current_longitude',
         ]
+    
+    def get_phone_number(self, obj):
+        """Get verified phone number from user.phone"""
+        return obj.user.phone if obj.user else None
 
 
 class RiderProfileSubmissionSerializer(serializers.ModelSerializer):
@@ -263,7 +275,6 @@ class RiderProfileSubmissionSerializer(serializers.ModelSerializer):
         required_fields = [
             'full_name',
             'iqama_number',
-            'phone_number',
             'license_number',
             'vehicle_type',
             'vehicle_plate_number_english',
@@ -376,9 +387,10 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
     items_count = serializers.SerializerMethodField()
     custom_styles = serializers.SerializerMethodField()
     items = OrderItemSerializer(source='order_items', many=True, read_only=True)
-    rider_status = serializers.CharField(read_only=True)
     tailor_status = serializers.CharField(read_only=True)
     status_info = serializers.SerializerMethodField()
+    pricing_summary = serializers.SerializerMethodField()
+    rider_status = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -391,6 +403,7 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'tailor_status',
             'payment_status',
             'total_amount',
+            'pricing_summary',
             'customer_name',
             'customer_phone',
             'tailor_name',
@@ -407,8 +420,34 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'created_at',
         ]
     
+    def get_pricing_summary(self, obj):
+        """Return grouped pricing summary for consistency"""
+        return {
+            'subtotal': str(obj.subtotal),
+            'stitching_price': str(obj.stitching_price),
+            'tax_amount': str(obj.tax_amount),
+            'delivery_fee': str(obj.delivery_fee),
+            'total_amount': str(obj.total_amount),
+        }
+    
+    def get_rider_status(self, obj):
+        """Get translated rider status display name"""
+        request = self.context.get('request')
+        language = get_language_from_request(request) if request else 'en'
+        
+        status_key = obj.rider_status
+        if status_key == 'none' or status_key is None:
+            display_name = "New"
+        else:
+            display_name = obj.get_rider_status_display()
+            
+        return translate_message(display_name, language)
+    
     def get_customer_name(self, obj):
-        return obj.customer.get_full_name() if obj.customer else obj.customer.username if obj.customer else 'Unknown'
+        if not obj.customer:
+            return 'Unknown'
+        full_name = obj.customer.get_full_name().strip()
+        return full_name if full_name else obj.customer.username
     
     def get_customer_phone(self, obj):
         return obj.customer.phone if obj.customer else None
@@ -422,25 +461,33 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
         return obj.tailor.username if obj.tailor else 'Unknown'
     
     def get_tailor_phone(self, obj):
-        try:
-            if hasattr(obj.tailor, 'tailor_profile') and obj.tailor.tailor_profile:
-                return obj.tailor.tailor_profile.contact_number
-        except:
-            pass
-        return None
+        """Get tailor phone (verified phone from user account)"""
+        return obj.tailor.phone if obj.tailor else None
     
     def get_delivery_address(self, obj):
+        """Return delivery address matching customer address structure."""
         if obj.delivery_address:
-            parts = []
-            if obj.delivery_address.street:
-                parts.append(obj.delivery_address.street)
-            if obj.delivery_address.city:
-                parts.append(obj.delivery_address.city)
-            if obj.delivery_address.state_province:
-                parts.append(obj.delivery_address.state_province)
-            if obj.delivery_address.country:
-                parts.append(obj.delivery_address.country)
-            return ', '.join(parts) if parts else None
+            return {
+                'id': obj.delivery_address.id,
+                'latitude': obj.delivery_address.latitude,
+                'longitude': obj.delivery_address.longitude,
+                'address': obj.delivery_address.address or '',
+                'extra_info': obj.delivery_address.extra_info or '',
+                'is_default': obj.delivery_address.is_default,
+                'address_tag': obj.delivery_address.address_tag,
+            }
+        
+        # Fallback to coordinate fields if it was a "current location" order
+        elif obj.delivery_latitude and obj.delivery_longitude:
+            return {
+                'id': None,
+                'latitude': obj.delivery_latitude,
+                'longitude': obj.delivery_longitude,
+                'address': obj.delivery_formatted_address or '',
+                'extra_info': obj.delivery_extra_info or '',
+                'is_default': False,
+                'address_tag': 'Current Location',
+            }
         return None
     
     def get_items_count(self, obj):
@@ -465,23 +512,46 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
         # Build next available actions
         next_actions = []
         
+        # Track values to avoid duplicates (prefer more specific status types)
+        seen_values = set()
+        
         # Add status actions
         for status_value in allowed_transitions.get('status', []):
+            # Skip if already at this status
+            if status_value == obj.status:
+                continue
             action = self._build_status_action('status', status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(status_value)
         
-        # Add rider_status actions
+        # Add rider_status actions (prefer over status if same value)
         for rider_status_value in allowed_transitions.get('rider_status', []):
+            # Skip if already at this status
+            if rider_status_value == obj.rider_status:
+                continue
+            # If this value already exists as a status action, remove the status action and use this one
+            if rider_status_value in seen_values:
+                # Remove the duplicate status action
+                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == rider_status_value)]
             action = self._build_status_action('rider_status', rider_status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(rider_status_value)
         
-        # Add tailor_status actions
+        # Add tailor_status actions (prefer over status if same value)
         for tailor_status_value in allowed_transitions.get('tailor_status', []):
+            # Skip if already at this status
+            if tailor_status_value == obj.tailor_status:
+                continue
+            # If this value already exists as a status action, remove the status action and use this one
+            if tailor_status_value in seen_values:
+                # Remove the duplicate status action
+                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == tailor_status_value)]
             action = self._build_status_action('tailor_status', tailor_status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(tailor_status_value)
         
         # Check if order can be cancelled
         can_cancel = False
@@ -498,6 +568,23 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
         # Calculate status progress
         status_progress = self._calculate_status_progress(obj)
         
+        # Add measurement tracking for fabric_with_stitching orders
+        measurement_status = None
+        if obj.order_type == 'fabric_with_stitching' and obj.rider_status in ['on_way_to_measurement', 'measurement_taken']:
+            from django.db.models import Q
+            total_items = obj.order_items.count()
+            items_with_measurements = obj.order_items.exclude(
+                Q(measurements__isnull=True) | Q(measurements={})
+            ).count()
+            items_without_measurements = total_items - items_with_measurements
+            
+            measurement_status = {
+                'all_measured': obj.all_items_have_measurements,
+                'total_items': total_items,
+                'measured_items': items_with_measurements,
+                'remaining_items': items_without_measurements,
+            }
+        
         return {
             'current_status': obj.status,
             'current_rider_status': obj.rider_status,
@@ -506,6 +593,7 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'can_cancel': can_cancel,
             'cancel_reason': cancel_reason,
             'status_progress': status_progress,
+            'measurement_status': measurement_status,
         }
     
     def _build_status_action(self, action_type, value, user_role):
@@ -524,14 +612,16 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
 class RiderOrderDetailSerializer(serializers.ModelSerializer):
     """Serializer for order details for riders"""
     customer_info = serializers.SerializerMethodField()
+    order_recipient = serializers.SerializerMethodField()
+    all_recipients = serializers.SerializerMethodField()
     tailor_info = serializers.SerializerMethodField()
     delivery_address = serializers.SerializerMethodField()
     items = serializers.SerializerMethodField()
     assignment_status = serializers.SerializerMethodField()
     custom_styles = serializers.SerializerMethodField()
     status_info = serializers.SerializerMethodField()
-    rider_status = serializers.CharField(read_only=True)
-    tailor_status = serializers.CharField(read_only=True)
+    pricing_summary = serializers.SerializerMethodField()
+    rider_status = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -548,7 +638,10 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'subtotal',
             'tax_amount',
             'delivery_fee',
+            'pricing_summary',
             'customer_info',
+            'order_recipient',
+            'all_recipients',
             'tailor_info',
             'delivery_address',
             'items',
@@ -559,33 +652,133 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'appointment_time',
             'custom_styles',
             'special_instructions',
-            'rider_measurements',
             'measurement_taken_at',
             'status_info',
             'created_at',
         ]
     
+    def get_pricing_summary(self, obj):
+        """Return grouped pricing summary for consistency"""
+        return {
+            'subtotal': str(obj.subtotal),
+            'stitching_price': str(obj.stitching_price),
+            'tax_amount': str(obj.tax_amount),
+            'delivery_fee': str(obj.delivery_fee),
+            'total_amount': str(obj.total_amount),
+        }
+    
+    def get_rider_status(self, obj):
+        """Get translated rider status display name"""
+        request = self.context.get('request')
+        language = get_language_from_request(request) if request else 'en'
+        
+        status_key = obj.rider_status
+        if status_key == 'none' or status_key is None:
+            display_name = "New"
+        else:
+            display_name = obj.get_rider_status_display()
+            
+        return translate_message(display_name, language)
+    
     def get_customer_info(self, obj):
         if obj.customer:
+            full_name = obj.customer.get_full_name().strip()
             return {
                 'id': obj.customer.id,
                 'username': obj.customer.username,
-                'full_name': obj.customer.get_full_name(),
+                'full_name': full_name if full_name else obj.customer.username,
                 'email': obj.customer.email,
                 'phone': obj.customer.phone,
             }
         return None
     
+    def get_all_recipients(self, obj):
+        """Get all recipients for this order as an array."""
+        return self._collect_recipients(obj)
+
+    def get_order_recipient(self, obj):
+        """Get primary order recipient (for backward compatibility)."""
+        recipients = self._collect_recipients(obj)
+        return recipients[0] if recipients else None
+
+    def _collect_recipients(self, obj):
+        """Helper to collect unique recipients from order items."""
+        include_measurements = obj.rider_status == 'measurement_taken' and obj.rider_measurements
+        recipients = []
+        seen_recipients = set()
+        
+        # Add order-level family member if exists
+        if obj.family_member:
+            recipients.append({
+                'type': 'family_member',
+                'id': obj.family_member.id,
+                'name': obj.family_member.name,
+            })
+            seen_recipients.add(f"family_{obj.family_member.id}")
+        
+        # Add recipients from items
+        for item in obj.order_items.all():
+            if item.family_member:
+                key = f"family_{item.family_member.id}"
+                if key not in seen_recipients:
+                    recipients.append({
+                        'type': 'family_member',
+                        'id': item.family_member.id,
+                        'name': item.family_member.name,
+                    })
+                    seen_recipients.add(key)
+            else:
+                key = "customer"
+                if key not in seen_recipients:
+                    if obj.customer:
+                        recipients.append({
+                            'type': 'customer',
+                            'id': obj.customer.id,
+                            'name': obj.customer.get_full_name() or obj.customer.username,
+                            'phone': obj.customer.phone,
+                            'email': obj.customer.email,
+                        })
+                        seen_recipients.add(key)
+
+        if include_measurements:
+            for recipient in recipients:
+                recipient['measurements'] = obj.rider_measurements
+        
+        return recipients
+
     def get_tailor_info(self, obj):
+        """Return tailor info with structured address from Address model."""
         if obj.tailor:
             try:
                 tailor_profile = obj.tailor.tailor_profile
+                
+                # Get structured address from Address model (same format as delivery_address)
+                from apps.customers.models import Address
+                tailor_address = None
+                # Get address from user's addresses (will use prefetched data if available)
+                # First try to get the default address
+                address = next((addr for addr in obj.tailor.addresses.all() if addr.is_default), None)
+                # If no default address, get the first address
+                if not address:
+                    address = next(iter(obj.tailor.addresses.all()), None)
+                
+                if address:
+                    tailor_address = {
+                        'id': address.id,
+                        'latitude': address.latitude,
+                        'longitude': address.longitude,
+                        'address': address.address or '',
+                        'extra_info': address.extra_info or '',
+                        'is_default': address.is_default,
+                        'address_tag': address.address_tag,
+                    }
+                
                 return {
                     'id': obj.tailor.id,
                     'username': obj.tailor.username,
                     'shop_name': tailor_profile.shop_name if tailor_profile else None,
-                    'contact_number': tailor_profile.contact_number if tailor_profile else None,
-                    'address': tailor_profile.address if tailor_profile else None,
+                    'contact_number': obj.tailor.phone,
+                    'address': tailor_address,  # Structured address matching delivery_address format
                 }
             except:
                 return {
@@ -595,17 +788,28 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
         return None
     
     def get_delivery_address(self, obj):
+        """Return delivery address matching customer address structure."""
         if obj.delivery_address:
             return {
                 'id': obj.delivery_address.id,
-                'street': obj.delivery_address.street,
-                'city': obj.delivery_address.city,
-                'state_province': obj.delivery_address.state_province,
-                'zip_code': obj.delivery_address.zip_code,
-                'country': obj.delivery_address.country,
-                'formatted_address': obj.delivery_address.formatted_address,
-                'latitude': float(obj.delivery_address.latitude) if obj.delivery_address.latitude else None,
-                'longitude': float(obj.delivery_address.longitude) if obj.delivery_address.longitude else None,
+                'latitude': obj.delivery_address.latitude,
+                'longitude': obj.delivery_address.longitude,
+                'address': obj.delivery_address.address or '',
+                'extra_info': obj.delivery_address.extra_info or '',
+                'is_default': obj.delivery_address.is_default,
+                'address_tag': obj.delivery_address.address_tag,
+            }
+        
+        # Fallback to coordinate fields if it was a "current location" order
+        elif obj.delivery_latitude and obj.delivery_longitude:
+            return {
+                'id': None,
+                'latitude': obj.delivery_latitude,
+                'longitude': obj.delivery_longitude,
+                'address': obj.delivery_formatted_address or '',
+                'extra_info': obj.delivery_extra_info or '',
+                'is_default': False,
+                'address_tag': 'Current Location',
             }
         return None
     
@@ -631,8 +835,23 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
                 'quantity': item.quantity,
                 'unit_price': str(item.unit_price),
                 'total_price': str(item.total_price),
+                'family_member': item.family_member.id if item.family_member else None,
+                'family_member_name': self._get_item_recipient_name(item),
+                'custom_styles': OrderItemSerializer(item, context=self.context).data.get('custom_styles', []),
             })
         return items
+
+    def _get_item_recipient_name(self, item):
+        if item.family_member:
+            return item.family_member.name
+        
+        # If no family member, return customer name with (Self) tag
+        try:
+            customer = item.order.customer
+            name = customer.get_full_name() or customer.username
+            return f"{name} (Self)"
+        except:
+            return "Customer (Self)"
     
     def get_assignment_status(self, obj):
         try:
@@ -666,23 +885,46 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
         # Build next available actions
         next_actions = []
         
+        # Track values to avoid duplicates (prefer more specific status types)
+        seen_values = set()
+        
         # Add status actions
         for status_value in allowed_transitions.get('status', []):
+            # Skip if already at this status
+            if status_value == obj.status:
+                continue
             action = self._build_status_action('status', status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(status_value)
         
-        # Add rider_status actions
+        # Add rider_status actions (prefer over status if same value)
         for rider_status_value in allowed_transitions.get('rider_status', []):
+            # Skip if already at this status
+            if rider_status_value == obj.rider_status:
+                continue
+            # If this value already exists as a status action, remove the status action and use this one
+            if rider_status_value in seen_values:
+                # Remove the duplicate status action
+                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == rider_status_value)]
             action = self._build_status_action('rider_status', rider_status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(rider_status_value)
         
-        # Add tailor_status actions
+        # Add tailor_status actions (prefer over status if same value)
         for tailor_status_value in allowed_transitions.get('tailor_status', []):
+            # Skip if already at this status
+            if tailor_status_value == obj.tailor_status:
+                continue
+            # If this value already exists as a status action, remove the status action and use this one
+            if tailor_status_value in seen_values:
+                # Remove the duplicate status action
+                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == tailor_status_value)]
             action = self._build_status_action('tailor_status', tailor_status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(tailor_status_value)
         
         # Check if order can be cancelled
         can_cancel = False
@@ -699,6 +941,23 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
         # Calculate status progress
         status_progress = self._calculate_status_progress(obj)
         
+        # Add measurement tracking for fabric_with_stitching orders
+        measurement_status = None
+        if obj.order_type == 'fabric_with_stitching' and obj.rider_status in ['on_way_to_measurement', 'measurement_taken']:
+            from django.db.models import Q
+            total_items = obj.order_items.count()
+            items_with_measurements = obj.order_items.exclude(
+                Q(measurements__isnull=True) | Q(measurements={})
+            ).count()
+            items_without_measurements = total_items - items_with_measurements
+            
+            measurement_status = {
+                'all_measured': obj.all_items_have_measurements,
+                'total_items': total_items,
+                'measured_items': items_with_measurements,
+                'remaining_items': items_without_measurements,
+            }
+        
         return {
             'current_status': obj.status,
             'current_rider_status': obj.rider_status,
@@ -707,6 +966,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'can_cancel': can_cancel,
             'cancel_reason': cancel_reason,
             'status_progress': status_progress,
+            'measurement_status': measurement_status,
         }
     
     def _build_status_action(self, action_type, value, user_role):
@@ -740,6 +1000,8 @@ class RiderAcceptOrderSerializer(serializers.Serializer):
 
 class RiderAddMeasurementsSerializer(serializers.Serializer):
     """Serializer for rider adding measurements"""
+    family_member = serializers.IntegerField(required=False, allow_null=True, help_text="ID of family member being measured. Null means customer.")
+    title = serializers.CharField(required=False, allow_blank=True, help_text="Title for measurements (e.g. 'Wedding Thobe')")
     measurements = serializers.JSONField(required=True)
     notes = serializers.CharField(required=False, allow_blank=True)
     
@@ -760,9 +1022,234 @@ class RiderUpdateOrderStatusSerializer(serializers.Serializer):
             'picked_up',  # Rider picked up
             'on_way_to_delivery',  # Rider on way to delivery
             'on_way_to_measurement',  # Rider on way to take measurements (stitching only)
+            'measuring',  # Rider is taking measurements (stitching only)
             'measurement_taken',  # Rider took measurements (stitching only)
             'delivered',  # Rider delivered
         ],
         required=True
     )
     notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class TailorInvitationCodeSerializer(serializers.ModelSerializer):
+    """Serializer for tailor invitation codes"""
+    can_be_used = serializers.SerializerMethodField()
+    status_message = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = models.TailorInvitationCode
+        fields = [
+            'id',
+            'code',
+            'is_active',
+            'max_uses',
+            'times_used',
+            'expires_at',
+            'can_be_used',
+            'status_message',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'code', 'times_used', 'created_at']
+    
+    def get_can_be_used(self, obj):
+        """Check if code can still be used"""
+        can_use, _ = obj.can_be_used()
+        return can_use
+    
+    def get_status_message(self, obj):
+        """Get status message"""
+        _, message = obj.can_be_used()
+        return message
+
+
+class CreateInvitationCodeSerializer(serializers.Serializer):
+    """Serializer for creating invitation codes"""
+    max_uses = serializers.IntegerField(default=0, min_value=0)
+    expires_in_days = serializers.IntegerField(required=False, min_value=1)
+    
+    def create(self, validated_data):
+        """Create a new invitation code"""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        tailor = self.context['request'].user
+        code = models.TailorInvitationCode.generate_unique_code(tailor.id)
+        
+        expires_at = None
+        if 'expires_in_days' in validated_data:
+            expires_at = timezone.now() + timedelta(days=validated_data['expires_in_days'])
+        
+        invitation_code = models.TailorInvitationCode.objects.create(
+            tailor=tailor,
+            code=code,
+            max_uses=validated_data.get('max_uses', 0),
+            expires_at=expires_at
+        )
+        
+        return invitation_code
+
+
+class RiderBasicInfoSerializer(serializers.ModelSerializer):
+    """Basic rider information for association listing"""
+    full_name = serializers.SerializerMethodField()
+    phone_number = serializers.SerializerMethodField()
+    vehicle_type = serializers.SerializerMethodField()
+    rating = serializers.SerializerMethodField()
+    is_available = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'full_name', 'phone_number', 'vehicle_type', 'rating', 'is_available']
+
+    def get_full_name(self, obj):
+        profile = getattr(obj, 'rider_profile', None)
+        return getattr(profile, 'full_name', obj.username)
+
+    def get_phone_number(self, obj):
+        profile = getattr(obj, 'rider_profile', None)
+        return getattr(profile, 'phone_number', getattr(obj, 'phone', ''))
+
+    def get_vehicle_type(self, obj):
+        profile = getattr(obj, 'rider_profile', None)
+        return getattr(profile, 'vehicle_type', '')
+
+    def get_rating(self, obj):
+        profile = getattr(obj, 'rider_profile', None)
+        return float(getattr(profile, 'rating', 0.0))
+
+    def get_is_available(self, obj):
+        profile = getattr(obj, 'rider_profile', None)
+        return getattr(profile, 'is_available', False)
+
+
+class TailorRiderAssociationSerializer(serializers.ModelSerializer):
+    """Serializer for tailor-rider associations with statistics"""
+    rider_info = RiderBasicInfoSerializer(source='rider', read_only=True)
+    statistics = serializers.SerializerMethodField()
+    joined_via_code_display = serializers.CharField(source='joined_via_code.code', read_only=True)
+    
+    class Meta:
+        model = models.TailorRiderAssociation
+        fields = [
+            'id',
+            'rider_info',
+            'is_active',
+            'nickname',
+            'priority',
+            'joined_via_code_display',
+            'statistics',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+    
+    def get_statistics(self, obj):
+        """Calculate rider statistics for this tailor"""
+        from django.db.models import Q, Max
+        
+        tailor = obj.tailor
+        rider = obj.rider
+        
+        # Orders completed for this specific tailor
+        orders_for_tailor = Order.objects.filter(
+            tailor=tailor,
+            rider=rider,
+            status='delivered'
+        ).count()
+        
+        # Total orders across all tailors (from rider profile)
+        total_orders = rider.rider_profile.total_deliveries if hasattr(rider, 'rider_profile') else 0
+        
+        # Last delivery date for this tailor
+        last_delivery = Order.objects.filter(
+            tailor=tailor,
+            rider=rider,
+            status='delivered'
+        ).aggregate(last=Max('updated_at'))['last']
+        
+        # Acceptance rate - orders assigned vs accepted
+        assigned_count = Order.objects.filter(
+            tailor=tailor,
+            assigned_rider=rider
+        ).count()
+        
+        accepted_count = Order.objects.filter(
+            tailor=tailor,
+            assigned_rider=rider,
+            rider=rider  # Rider actually accepted
+        ).count()
+        
+        acceptance_rate = (accepted_count / assigned_count * 100) if assigned_count > 0 else 100.0
+        
+        return {
+            'orders_for_this_tailor': orders_for_tailor,
+            'total_orders_all_tailors': total_orders,
+            'last_delivery_date': last_delivery,
+            'acceptance_rate': round(acceptance_rate, 1)
+        }
+
+
+class JoinTailorTeamSerializer(serializers.Serializer):
+    """Serializer for riders joining a tailor's team using code"""
+    code = serializers.CharField(max_length=20)
+    
+    def validate_code(self, value):
+        """Validate that the code exists and is valid"""
+        try:
+            code_obj = models.TailorInvitationCode.objects.get(code=value.upper())
+            can_use, message = code_obj.can_be_used()
+            if not can_use:
+                raise serializers.ValidationError(message)
+            return value.upper()
+        except models.TailorInvitationCode.DoesNotExist:
+            raise serializers.ValidationError('Invalid invitation code')
+    
+    def create(self, validated_data):
+        """Create association between rider and tailor"""
+        rider = self.context['request'].user
+        code = validated_data['code']
+        
+        code_obj = models.TailorInvitationCode.objects.get(code=code)
+        tailor = code_obj.tailor
+        
+        # Check if association already exists
+        association, created = models.TailorRiderAssociation.objects.get_or_create(
+            tailor=tailor,
+            rider=rider,
+            defaults={
+                'joined_via_code': code_obj,
+                'is_active': True
+            }
+        )
+        
+        if not created and not association.is_active:
+            # Reactivate if it was previously deactivated
+            association.is_active = True
+            association.save()
+        
+        # Increment code usage
+        code_obj.times_used += 1
+        code_obj.save()
+        
+        return {
+            'association': association,
+            'tailor': tailor,
+            'created': created
+        }
+
+
+class TailorBasicInfoSerializer(serializers.ModelSerializer):
+    """Basic tailor information for rider's associated tailors list"""
+    shop_name = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'shop_name', 'phone']
+
+    def get_shop_name(self, obj):
+        profile = getattr(obj, 'tailor_profile', None)
+        return getattr(profile, 'shop_name', obj.username)
+
+    def get_phone(self, obj):
+        profile = getattr(obj, 'tailor_profile', None)
+        return getattr(profile, 'contact_number', getattr(obj, 'phone', ''))

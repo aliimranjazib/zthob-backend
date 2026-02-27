@@ -1,0 +1,40 @@
+    @staticmethod
+    def _get_measurement_service_transitions(order, user_role):
+        """
+        Get allowed transitions for measurement_service orders.
+        Walk-in: Tailor takes measurements
+        Home delivery: Rider takes measurements
+        """
+        transitions = {'status': [], 'rider_status': [], 'tailor_status': [], 'custom_actions': []}
+        
+        if user_role == OrderStatusTransitionService.ROLE_TAILOR:
+            if order.service_mode == 'walk_in':
+                # Walk-in measurement flow for tailor
+                if order.tailor_status == 'none' and order.status == 'pending':
+                    transitions['tailor_status'] = ['accepted']
+                
+                elif order.tailor_status == 'accepted' and order.status == 'confirmed':
+                    # After accepting, tailor can mark as ready for pickup (measurements done)
+                    transitions['status'] = ['ready_for_pickup']
+                
+        elif user_role == OrderStatusTransitionService.ROLE_RIDER:
+            if order.service_mode == 'home_delivery':
+                # Home delivery measurement flow for rider
+                if order.rider_status == 'none' and order.status == 'pending':
+                    transitions['rider_status'] = ['accepted']
+                
+                elif order.rider_status == 'accepted':
+                    transitions['rider_status'] = ['on_way_to_measurement'']
+                
+                elif order.rider_status == 'on_way_to_measurement':
+                    transitions['rider_status'] = ['measuring']
+                
+                elif order.rider_status == 'measuring':
+                    transitions['rider_status'] = ['measurement_taken']
+        
+        elif user_role == OrderStatusTransitionService.ROLE_USER:
+            # Customer can mark walk-in measurements as collected
+            if order.service_mode == 'walk_in' and order.status == 'ready_for_pickup':
+                transitions['status'] = ['collected']
+        
+        return transitions

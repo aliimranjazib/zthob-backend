@@ -184,7 +184,7 @@ class DeliveryTrackingService:
             if order.delivery_address:
                 tracking.delivery_latitude = order.delivery_address.latitude
                 tracking.delivery_longitude = order.delivery_address.longitude
-                tracking.delivery_address = order.delivery_address.formatted_address or str(order.delivery_address)
+                tracking.delivery_address = order.delivery_address.address or str(order.delivery_address)
             
             # Try to get tailor location (if available in tailor profile)
             try:

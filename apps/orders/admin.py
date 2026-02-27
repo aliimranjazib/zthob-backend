@@ -562,6 +562,128 @@ class OrderAdmin(admin.ModelAdmin):
         )
     recalculate_totals.short_description = 'Recalculate totals for selected orders'
     
+    # =========================================================================
+    # CUSTOM ANALYTICS URLS AND VIEWS (Phase 1)
+    # =========================================================================
+    
+    def get_urls(self):
+        """Add custom analytics URLs to admin"""
+        from django.urls import path
+        urls = super().get_urls()
+        custom_urls = [
+            path('analytics/', self.admin_site.admin_view(self.analytics_dashboard), name='orders-analytics'),
+            path('analytics/tailors/', self.admin_site.admin_view(self.tailor_earnings), name='orders-analytics-tailors'),
+            path('analytics/riders/', self.admin_site.admin_view(self.rider_earnings), name='orders-analytics-riders'),
+            path('analytics/products/', self.admin_site.admin_view(self.top_products), name='orders-analytics-products'),
+            path('analytics/customers/', self.admin_site.admin_view(self.top_customers_view), name='orders-analytics-customers'),
+        ]
+        return custom_urls + urls
+    
+    def analytics_dashboard(self, request):
+        """Main analytics dashboard view"""
+        from django.template.response import TemplateResponse
+        from apps.orders.services import AdminAnalyticsService
+        
+        # Get days from request (default 30)
+        days = int(request.GET.get('days', 30))
+        
+        # Get analytics data
+        revenue_data = AdminAnalyticsService.get_revenue_summary(days=days)
+        
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'Analytics Dashboard (Last {days} days)',
+            'revenue_data': revenue_data,
+            'days': days,
+            'opts': self.model._meta,
+        }
+        
+        return TemplateResponse(request, 'admin/orders/analytics_dashboard.html', context)
+    
+    def tailor_earnings(self, request):
+        """Tailor earnings view"""
+        from django.template.response import TemplateResponse
+        from apps.orders.services import AdminAnalyticsService
+        
+        days = int(request.GET.get('days', 30))
+        tailors_data = AdminAnalyticsService.get_tailor_earnings_summary(days=days)
+        
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'Tailor Earnings (Last {days} days)',
+            'tailors_data': tailors_data,
+            'days': days,
+            'opts': self.model._meta,
+        }
+        
+        return TemplateResponse(request, 'admin/orders/analytics_tailors.html', context)
+    
+    def rider_earnings(self, request):
+        """Rider earnings view"""
+        from django.template.response import TemplateResponse
+        from apps.orders.services import AdminAnalyticsService
+        
+        days = int(request.GET.get('days', 30))
+        riders_data = AdminAnalyticsService.get_rider_earnings_summary(days=days)
+        
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'Rider Earnings (Last {days} days)',
+            'riders_data': riders_data,
+            'days': days,
+            'opts': self.model._meta,
+        }
+        
+        return TemplateResponse(request, 'admin/orders/analytics_riders.html', context)
+    
+    def top_products(self, request):
+        """Top products view"""
+        from django.template.response import TemplateResponse
+        from apps.orders.services import AdminAnalyticsService
+        
+        days = int(request.GET.get('days', 30))
+        limit = int(request.GET.get('limit', 10))
+        
+        fabrics_data = AdminAnalyticsService.get_top_fabrics(days=days, limit=limit)
+        tags_data = AdminAnalyticsService.get_top_tags(days=days, limit=limit)
+        
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'Top Products (Last {days} days)',
+            'fabrics_data': fabrics_data,
+            'tags_data': tags_data,
+            'days': days,
+            'limit': limit,
+            'opts': self.model._meta,
+        }
+        
+        return TemplateResponse(request, 'admin/orders/analytics_products.html', context)
+    
+    def top_customers_view(self, request):
+        """Top customers view"""
+        from django.template.response import TemplateResponse
+        from apps.orders.services import AdminAnalyticsService
+        
+        days = int(request.GET.get('days', 30))
+        limit = int(request.GET.get('limit', 10))
+        
+        customers_data = AdminAnalyticsService.get_top_customers(days=days, limit=limit)
+        
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'Top Customers (Last {days} days)',
+            'customers_data': customers_data,
+            'days': days,
+            'limit': limit,
+            'opts': self.model._meta,
+        }
+        
+        return TemplateResponse(request, 'admin/orders/analytics_customers.html', context)
+    
+    # =========================================================================
+    # END ANALYTICS VIEWS
+    # =========================================================================
+    
     # Override save method
     def save_model(self, request, obj, form, change):
         """Set created_by when creating new orders"""

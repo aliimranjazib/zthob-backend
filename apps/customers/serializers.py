@@ -5,7 +5,7 @@ from apps.accounts.serializers import UserProfileSerializer
 from apps.tailors.models import Fabric
 from apps.tailors.serializers import FabricCategorySerializer, FabricImageSerializer, TailorProfileSerializer
 from apps.tailors.serializers.catalog import FabricTypeBasicSerializer,FabricTagBasicSerializer
-from apps.customers.models import Address, CustomerProfile, FamilyMember
+from apps.customers.models import Address, CustomerProfile, FamilyMember, FabricFavorite
 
 
 class FabricCatalogSerializer(serializers.ModelSerializer):
@@ -15,6 +15,9 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
     fabric_type=FabricTypeBasicSerializer(read_only=True)
     tags=FabricTagBasicSerializer(many=True, read_only=True)
     tailor = TailorProfileSerializer(read_only=True)
+    is_favorited = serializers.SerializerMethodField()
+    favorite_count = serializers.SerializerMethodField()
+    
     class Meta:
         model=Fabric
         fields = [
@@ -33,6 +36,8 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
             "gallery",
             "category",
             "tailor",
+            "is_favorited",
+            "favorite_count",
         ]
     
 
@@ -41,6 +46,17 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
         if request:
             return request.build_absolute_uri(obj.fabric_image.url) if obj.fabric_image else None
         return obj.fabric_image.url if obj.fabric_image else None
+    
+    def get_is_favorited(self, obj) -> bool:
+        """Check if the current user has favorited this fabric."""
+        request = self.context.get("request", None)
+        if request and request.user.is_authenticated:
+            return FabricFavorite.objects.filter(user=request.user, fabric=obj).exists()
+        return False
+    
+    def get_favorite_count(self, obj) -> int:
+        """Get the total number of users who favorited this fabric."""
+        return obj.favorites.count()
     
 
 class AddressSerializer(serializers.ModelSerializer):
@@ -77,14 +93,15 @@ class AddressCreateSerializer(serializers.ModelSerializer):
         """Create address with simplified data structure."""
         user = self.context.get('request').user
         
-        # Map the 'address' field to 'street' field in the model
-        address_text = validated_data.pop('address')
+        # Get address text and save it to address field
+        address_text = validated_data.get('address', '')
         is_default = validated_data.pop('is_default', False)
         
         # Set default values for required fields
         validated_data.update({
             'user': user,
-            'street': address_text,
+            'address': address_text,  # Save to address field
+            'street': address_text,  # Also save to street for backward compatibility
             'city': 'Riyadh',  # Default city, can be updated later
             'country': 'Saudi Arabia',
             'is_default': is_default,
@@ -98,32 +115,10 @@ class AddressCreateSerializer(serializers.ModelSerializer):
 
 class AddressResponseSerializer(serializers.ModelSerializer):
     """Simplified response serializer for addresses."""
-    address = serializers.SerializerMethodField()
     
     class Meta:
         model = Address
         fields = ['id', 'latitude', 'longitude', 'address', 'extra_info', 'is_default', 'address_tag']
-    
-    def get_address(self, obj):
-        """Return the street field as 'address' for consistency."""
-        # If street is empty, try to construct from other fields
-        if obj.street:
-            return obj.street
-        
-        # Fallback: construct address from available fields
-        address_parts = []
-        if obj.city:
-            address_parts.append(obj.city)
-        if obj.state_province:
-            address_parts.append(obj.state_province)
-        if obj.country:
-            address_parts.append(obj.country)
-        
-        if address_parts:
-            return ', '.join(address_parts)
-        
-        # If no address components available, return a default message
-        return 'Address not specified'
     
     
 class FamilyMemberCreateSerializer(serializers.ModelSerializer):
@@ -155,7 +150,7 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
     
     class Meta:
         model=FamilyMember
-        fields = ['id', 'name', 'gender', 'relationship', 'measurements', 'address', 'address_response']
+        fields = ['id', 'name', 'measurements', 'address', 'address_response']
         read_only_fields = ['user']
         
     def to_representation(self, instance):
@@ -211,9 +206,10 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
                 address_serializer = AddressCreateSerializer(data=address_data, context={'request': mock_request})
                 if address_serializer.is_valid():
                     address_data_validated = address_serializer.validated_data
-                    address_text = address_data_validated.pop('address')
+                    address_text = address_data_validated.get('address', instance.address.address)
                     
-                    instance.address.street = address_text
+                    instance.address.address = address_text
+                    instance.address.street = address_text  # Also update street for backward compatibility
                     instance.address.latitude = address_data_validated.get('latitude', instance.address.latitude)
                     instance.address.longitude = address_data_validated.get('longitude', instance.address.longitude)
                     instance.address.extra_info = address_data_validated.get('extra_info', instance.address.extra_info)
@@ -234,10 +230,136 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
     default_address = AddressResponseSerializer(read_only=True)
     addresses = AddressResponseSerializer(source='user.addresses', many=True, read_only=True)
     phone_verified = serializers.SerializerMethodField()
+    dob = serializers.DateField(source='date_of_birth', required=False, allow_null=True)
     class Meta:
         model=CustomerProfile
-        fields = ['user', 'default_address','addresses','phone_verified',]
+        fields = ['user', 'default_address','addresses','phone_verified', 'dob', 'gender', 'measurements']
 
     def get_phone_verified(self, obj):
         """Get phone verification status from user"""
         return obj.user.phone_verified
+
+
+class FabricFavoriteSerializer(serializers.ModelSerializer):
+    """Serializer for FabricFavorite model."""
+    fabric = FabricCatalogSerializer(read_only=True)
+    fabric_id = serializers.IntegerField(write_only=True, required=False)
+    
+    class Meta:
+        model = FabricFavorite
+        fields = ['id', 'fabric', 'fabric_id', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+# ============================================================================
+# MEASUREMENT SERIALIZERS
+# ============================================================================
+
+class OrderMeasurementItemSerializer(serializers.Serializer):
+    """Serializer for a single order measurement entry"""
+    order_id = serializers.IntegerField()
+    order_number = serializers.CharField()
+    order_type = serializers.CharField()
+    measurements = serializers.DictField()
+    measurement_taken_at = serializers.DateTimeField()
+    order_status = serializers.CharField()
+    rider_status = serializers.CharField()
+    order_created_at = serializers.DateTimeField()
+    tailor_name = serializers.CharField(required=False, allow_null=True)
+    appointment_date = serializers.DateField(required=False, allow_null=True)
+    appointment_time = serializers.TimeField(required=False, allow_null=True)
+
+
+class CustomerMeasurementSerializer(serializers.Serializer):
+    """Serializer for customer's own measurements"""
+    order_id = serializers.IntegerField()
+    order_number = serializers.CharField()
+    order_type = serializers.CharField()
+    recipient_type = serializers.CharField()
+    recipient_id = serializers.IntegerField()
+    recipient_name = serializers.CharField()
+    measurements = serializers.DictField()
+    measurement_taken_at = serializers.DateTimeField()
+    order_status = serializers.CharField()
+    rider_status = serializers.CharField()
+    order_created_at = serializers.DateTimeField()
+
+
+class FamilyMemberMeasurementSerializer(serializers.Serializer):
+    """Serializer for family member measurements"""
+    order_id = serializers.IntegerField()
+    order_number = serializers.CharField()
+    order_type = serializers.CharField()
+    recipient_type = serializers.CharField()
+    recipient_id = serializers.IntegerField()
+    recipient_name = serializers.CharField()
+    measurements = serializers.DictField()
+    measurement_taken_at = serializers.DateTimeField()
+    order_status = serializers.CharField()
+    rider_status = serializers.CharField()
+    order_created_at = serializers.DateTimeField()
+
+
+class FamilyMemberSummarySerializer(serializers.Serializer):
+    """Serializer for family member summary in list view"""
+    family_member_id = serializers.IntegerField()
+    family_member_name = serializers.CharField()
+    total_measurements = serializers.IntegerField()
+    latest_measurement_date = serializers.DateTimeField(required=False, allow_null=True)
+    has_stored_measurements = serializers.BooleanField()
+
+
+class StoredProfileMeasurementSerializer(serializers.Serializer):
+    """Serializer for stored profile measurements"""
+    recipient_type = serializers.CharField()
+    recipient_id = serializers.IntegerField()
+    recipient_name = serializers.CharField()
+    measurements = serializers.DictField()
+    last_updated = serializers.DateTimeField(required=False, allow_null=True)
+    note = serializers.CharField()
+
+
+class CustomerMeasurementsListSerializer(serializers.Serializer):
+    """Serializer for the complete measurements list response"""
+    customer_measurements = CustomerMeasurementSerializer(many=True, required=False)
+    family_member_measurements = FamilyMemberMeasurementSerializer(many=True, required=False)
+    family_members_summary = FamilyMemberSummarySerializer(many=True, required=False)
+    stored_profile_measurements = StoredProfileMeasurementSerializer(many=True, required=False)
+    summary = serializers.DictField()
+
+
+class FamilyMemberMeasurementsDetailSerializer(serializers.Serializer):
+    """Serializer for family member specific measurements detail"""
+    family_member = serializers.DictField()
+    order_measurements = OrderMeasurementItemSerializer(many=True)
+    stored_profile_measurements = serializers.DictField(required=False, allow_null=True)
+
+class RecipientMeasurementStatsSerializer(serializers.Serializer):
+    """Statistics for a recipient's measurements"""
+    total_orders = serializers.IntegerField()
+    last_measured_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class RecipientMeasurementProfileSerializer(serializers.Serializer):
+    """Complete measurement profile for a single recipient"""
+    recipient_type = serializers.ChoiceField(choices=['customer', 'family_member'])
+    recipient_id = serializers.IntegerField()
+    recipient_name = serializers.CharField()
+    recipient_relationship = serializers.CharField(required=False, allow_null=True)
+    recipient_gender = serializers.CharField(required=False, allow_null=True)
+    
+    # The current active/stored measurements (from profile)
+    current_measurements = serializers.DictField(required=False, allow_null=True)
+    current_measurements_note = serializers.CharField(required=False, allow_null=True)
+    
+    # History of measurements from orders
+    order_history = OrderMeasurementItemSerializer(many=True)
+    
+    # Summary stats
+    stats = RecipientMeasurementStatsSerializer()
+
+
+class RecipientMeasurementsResponseSerializer(serializers.Serializer):
+    """New top-level response serializer"""
+    recipients = RecipientMeasurementProfileSerializer(many=True)
+    global_summary = serializers.DictField()

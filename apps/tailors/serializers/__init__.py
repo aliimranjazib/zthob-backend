@@ -37,6 +37,13 @@ from .analytics import (
     WeeklyTrendSerializer,
     AnalyticsPeriodSerializer
 )
+from .orders import (
+    TailorUpdateOrderStatusSerializer
+)
+from .tailor_pos import (
+    TailorCustomerSerializer,
+    CreateCustomerSerializer
+)
 
 # Export all serializers
 __all__ = [
@@ -79,4 +86,11 @@ __all__ = [
     'DailyEarningsSerializer',
     'WeeklyTrendSerializer',
     'AnalyticsPeriodSerializer',
+    
+    # Order serializers
+    'TailorUpdateOrderStatusSerializer',
+    
+    # POS serializers
+    'TailorCustomerSerializer',
+    'CreateCustomerSerializer',
 ]

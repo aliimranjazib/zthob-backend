@@ -1,10 +1,12 @@
 from django.shortcuts import render
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.template.context_processors import request
 from django.contrib.auth.models import User
 from rest_framework import serializers, status
-from apps.customers.models import Address, CustomerProfile, FamilyMember
-from apps.customers.serializers import AddressSerializer, AddressCreateSerializer, AddressResponseSerializer, CustomerProfileSerializer, FabricCatalogSerializer, FamilyMemberSerializer, FamilyMemberCreateSerializer, FamilyMemberSimpleResponseSerializer
+from apps.customers.models import Address, CustomerProfile, FamilyMember, FabricFavorite
+from apps.customers.serializers import AddressSerializer, AddressCreateSerializer, AddressResponseSerializer, CustomerProfileSerializer, FabricCatalogSerializer, FamilyMemberSerializer, FamilyMemberCreateSerializer, FamilyMemberSimpleResponseSerializer, FabricFavoriteSerializer, CustomerMeasurementsListSerializer, FamilyMemberMeasurementsDetailSerializer
+from apps.orders.models import Order
 from apps.tailors.models import Fabric
 from zthob.utils import api_response
 from drf_spectacular.utils import extend_schema, OpenApiExample
@@ -14,15 +16,32 @@ from apps.tailors.serializers import TailorProfileSerializer
 
 
 # Create your views here.
+@extend_schema(
+    tags=["Fabric Catalog"],
+    description="Get all active fabrics (No authentication required)",
+    responses={200: FabricCatalogSerializer(many=True)}
+)
 class FabricCatalogAPIView(APIView):
     serializer_class = FabricCatalogSerializer
-    def get(self,request):
-        fabrics=Fabric.objects.select_related('category','fabric_type','tailor'
-        ).prefetch_related('tags','gallery').all()
-        serializers=FabricCatalogSerializer(fabrics, many=True,context={"request": request})
-        return api_response(success=True, message="Fabrics fetched successfully",
-                            data=serializers.data,
-                            status_code=status.HTTP_200_OK)
+    permission_classes = [AllowAny]  # Allow unauthenticated users to browse fabrics
+    
+    def get(self, request):
+        """Get all active fabrics without authentication."""
+        fabrics = Fabric.objects.filter(
+            is_active=True
+        ).select_related(
+            'category', 'fabric_type', 'tailor'
+        ).prefetch_related(
+            'tags', 'gallery'
+        ).order_by('-created_at')
+        
+        serializer = FabricCatalogSerializer(fabrics, many=True, context={"request": request})
+        return api_response(
+            success=True, 
+            message="Fabrics fetched successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
  
  
 
@@ -279,12 +298,18 @@ class CustomerProfileAPIView(APIView):
                             )
          
          
+@extend_schema(
+    tags=["Tailor Profile"],
+    description="Get all tailors (No authentication required)",
+    responses={200: TailorProfileSerializer(many=True)}
+)
 class TailorListAPIView(APIView):
-
-    serializer_class=TailorProfileSerializer
+    serializer_class = TailorProfileSerializer
+    permission_classes = [AllowAny]  # Allow unauthenticated users to browse tailors
 
     @extend_schema(operation_id="customers_tailor_list")
     def get(self, request):
+        """Get all tailors without authentication."""
         # Fetch all tailor profiles with related data
         tailors = TailorProfile.objects.select_related('user').prefetch_related('review').all()
         
@@ -298,14 +323,20 @@ class TailorListAPIView(APIView):
             status_code=status.HTTP_200_OK
         )
 
+@extend_schema(
+    tags=["Fabric Catalog"],
+    description="Get all active fabrics for a specific tailor (No authentication required)",
+    responses={200: FabricCatalogSerializer(many=True), 404: {"description": "Tailor not found"}}
+)
 class TailorFabricsAPIView(APIView):
     """API view to fetch fabrics of a specific tailor for customers"""
     serializer_class = FabricCatalogSerializer
+    permission_classes = [AllowAny]  # Allow unauthenticated users to browse tailor fabrics
     
     @extend_schema(operation_id="customers_tailor_fabrics")
     def get(self, request, tailor_id):
         """
-        Fetch all fabrics of a specific tailor
+        Fetch all active fabrics of a specific tailor without authentication.
         URL: /api/customers/tailors/{tailor_id}/fabrics/
         """
         try:
@@ -347,3 +378,582 @@ class TailorFabricsAPIView(APIView):
                 data=None,
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+@extend_schema(
+    tags=["Tailor Profile"],
+    description="Get a single tailor's profile details (No authentication required)",
+    responses={200: TailorProfileSerializer, 404: {"description": "Tailor not found"}}
+)
+class TailorDetailAPIView(APIView):
+    """API view to fetch a single tailor's profile details"""
+    serializer_class = TailorProfileSerializer
+    permission_classes = [AllowAny]  # Allow unauthenticated users to view tailor details
+    
+    @extend_schema(operation_id="customers_tailor_detail")
+    def get(self, request, tailor_id):
+        """
+        Get a single tailor's profile details without authentication.
+        URL: /api/customers/tailors/{tailor_id}/
+        """
+        try:
+            # Get the tailor profile
+            from apps.tailors.models import TailorProfile
+            tailor = TailorProfile.objects.select_related('user').prefetch_related('review').get(user__id=tailor_id)
+            
+            # Serialize the data
+            serializer = TailorProfileSerializer(tailor, context={'request': request})
+            
+            return api_response(
+                success=True, 
+                message="Tailor details fetched successfully",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+            
+        except TailorProfile.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Tailor not found",
+                data=None,
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return api_response(
+                success=False,
+                message="Error fetching tailor details",
+                data=None,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+@extend_schema(
+    tags=["Fabric Catalog"],
+    description="Get a single fabric's details (No authentication required)",
+    responses={200: FabricCatalogSerializer, 404: {"description": "Fabric not found"}}
+)
+class FabricDetailAPIView(APIView):
+    """API view to fetch a single fabric's details"""
+    serializer_class = FabricCatalogSerializer
+    permission_classes = [AllowAny]  # Allow unauthenticated users to view fabric details
+    
+    @extend_schema(operation_id="customers_fabric_detail")
+    def get(self, request, fabric_id):
+        """
+        Get a single fabric's details without authentication.
+        URL: /api/customers/fabrics/{fabric_id}/
+        """
+        try:
+            # Get the fabric - only show active fabrics
+            fabric = Fabric.objects.filter(
+                id=fabric_id,
+                is_active=True
+            ).select_related(
+                'category', 'fabric_type', 'tailor'
+            ).prefetch_related(
+                'tags', 'gallery'
+            ).first()
+            
+            if not fabric:
+                return api_response(
+                    success=False,
+                    message="Fabric not found or not available",
+                    data=None,
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Serialize the data
+            serializer = FabricCatalogSerializer(fabric, context={'request': request})
+            
+            return api_response(
+                success=True, 
+                message="Fabric details fetched successfully",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            return api_response(
+                success=False,
+                message="Error fetching fabric details",
+                data=None,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class FabricFavoriteToggleView(APIView):
+    """API view to toggle favorite status for a fabric."""
+    permission_classes = [IsAuthenticated]
+    serializer_class = FabricFavoriteSerializer
+    
+    @extend_schema(
+        operation_id="customers_fabric_favorite_toggle",
+        description="Toggle favorite status for a fabric. If fabric is not favorited, it will be added to favorites. If already favorited, it will be removed.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "message": {"type": "string"},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "fabric_id": {"type": "integer"},
+                            "is_favorited": {"type": "boolean"},
+                            "favorited_at": {"type": "string", "format": "date-time"}
+                        }
+                    }
+                }
+            },
+            404: {"description": "Fabric not found"},
+        },
+        tags=["Fabric Favorites"]
+    )
+    def post(self, request, fabric_id):
+        """
+        Toggle favorite status for a fabric.
+        URL: /api/customers/fabrics/{fabric_id}/favorite/
+        """
+        try:
+            fabric = Fabric.objects.get(pk=fabric_id, is_active=True)
+        except Fabric.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Fabric not found or not available",
+                data=None,
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if already favorited
+        favorite, created = FabricFavorite.objects.get_or_create(
+            user=request.user,
+            fabric=fabric
+        )
+        
+        if not created:
+            # Already favorited, remove it
+            favorite.delete()
+            is_favorited = False
+            message = "Fabric removed from favorites"
+            favorited_at = None
+        else:
+            # Newly favorited
+            is_favorited = True
+            message = "Fabric added to favorites"
+            favorited_at = favorite.created_at
+        
+        return api_response(
+            success=True,
+            message=message,
+            data={
+                "fabric_id": fabric.id,
+                "is_favorited": is_favorited,
+                "favorited_at": favorited_at.isoformat() if favorited_at else None
+            },
+            status_code=status.HTTP_200_OK
+        )
+
+
+class FabricFavoriteListView(APIView):
+    """API view to list all favorite fabrics for the authenticated user."""
+    permission_classes = [IsAuthenticated]
+    serializer_class = FabricFavoriteSerializer
+    
+    @extend_schema(
+        operation_id="customers_favorites_list",
+        description="Get all favorite fabrics for the authenticated user",
+        responses={200: FabricFavoriteSerializer(many=True)},
+        tags=["Fabric Favorites"]
+    )
+    def get(self, request):
+        """
+        Get all favorite fabrics for the authenticated user.
+        URL: /api/customers/favorites/
+        """
+        favorites = FabricFavorite.objects.filter(
+            user=request.user
+        ).select_related(
+            'fabric',
+            'fabric__category',
+            'fabric__fabric_type',
+            'fabric__tailor',
+            'fabric__tailor__user'
+        ).prefetch_related(
+            'fabric__tags',
+            'fabric__gallery'
+        ).order_by('-created_at')
+        
+        serializer = FabricFavoriteSerializer(favorites, many=True, context={'request': request})
+        
+        return api_response(
+            success=True,
+            message="Favorite fabrics fetched successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+# ============================================================================
+# MEASUREMENT VIEWS
+# ============================================================================
+
+class CustomerMeasurementsListView(APIView):
+    """List all measurements for customer and their family members"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Get all measurements",
+        description="Retrieve all measurements grouped by recipient (Customer and Family Members). Supports filtering by family_member_id, recipient_type, and order_id.",
+        tags=["Customer Measurements"],
+        parameters=[
+            {
+                'name': 'family_member_id',
+                'in': 'query',
+                'description': 'Filter by specific family member ID',
+                'required': False,
+                'schema': {'type': 'integer'}
+            },
+            {
+                'name': 'recipient_type',
+                'in': 'query',
+                'description': 'Filter by recipient type: customer or family_member',
+                'required': False,
+                'schema': {'type': 'string', 'enum': ['customer', 'family_member']}
+            },
+            {
+                'name': 'order_id',
+                'in': 'query',
+                'description': 'Filter by specific order ID',
+                'required': False,
+                'schema': {'type': 'integer'}
+            },
+        ]
+    )
+    def get(self, request):
+        if request.user.role != 'USER':
+            return api_response(
+                success=False,
+                message="Only customers can access this endpoint",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get query parameters
+        family_member_id = request.query_params.get('family_member_id')
+        recipient_type_filter = request.query_params.get('recipient_type')
+        order_id = request.query_params.get('order_id')
+        
+        # 1. Initialize Recipients map (key: string "type_id")
+        recipients_map = {}
+        
+        # Add Customer (Self)
+        if not recipient_type_filter or recipient_type_filter == 'customer':
+            customer_key = f"customer_{request.user.id}"
+            recipients_map[customer_key] = {
+                'recipient_type': 'customer',
+                'recipient_id': request.user.id,
+                'recipient_name': request.user.get_full_name() or request.user.username,
+                'recipient_relationship': None,
+                'recipient_gender': getattr(request.user, 'customer_profile', None).gender if hasattr(request.user, 'customer_profile') else None,
+                'current_measurements': None,
+                'current_measurements_note': None,
+                'order_history': [],
+                'stats': {'total_orders': 0, 'last_measured_at': None}
+            }
+            
+            # Populate stored measurements for customer
+            if hasattr(request.user, 'customer_profile') and request.user.customer_profile.measurements:
+                recipients_map[customer_key]['current_measurements'] = request.user.customer_profile.measurements
+                recipients_map[customer_key]['current_measurements_note'] = 'Stored customer profile measurements'
+
+        # Add Family Members
+        if not recipient_type_filter or recipient_type_filter == 'family_member':
+            family_members = FamilyMember.objects.filter(user=request.user)
+            if family_member_id:
+                family_members = family_members.filter(id=family_member_id)
+                
+            for fm in family_members:
+                fm_key = f"family_member_{fm.id}"
+                recipients_map[fm_key] = {
+                    'recipient_type': 'family_member',
+                    'recipient_id': fm.id,
+                    'recipient_name': fm.name,
+                    'recipient_relationship': fm.relationship,
+                    'recipient_gender': fm.gender,
+                    'current_measurements': None,
+                    'current_measurements_note': None,
+                    'order_history': [],
+                    'stats': {'total_orders': 0, 'last_measured_at': None}
+                }
+                
+                # Populate stored measurements for family member
+                if fm.measurements:
+                    recipients_map[fm_key]['current_measurements'] = fm.measurements
+                    recipients_map[fm_key]['current_measurements_note'] = 'Stored profile measurements'
+
+        # 2. Fetch Order Measurements
+        orders_query = Order.objects.filter(
+            customer=request.user,
+            rider_status='measurement_taken',
+            rider_measurements__isnull=False
+        ).select_related(
+            'customer', 'tailor', 'rider'
+        ).prefetch_related(
+            'order_items__family_member', 
+            'tailor__tailor_profile'
+        )
+        
+        # Apply filters
+        if order_id:
+            orders_query = orders_query.filter(id=order_id)
+        
+        if family_member_id:
+             orders_query = orders_query.filter(order_items__family_member_id=family_member_id).distinct()
+        
+        orders = orders_query.order_by('-measurement_taken_at', '-created_at')
+        
+        for order in orders:
+            # Helper to add measurement to map
+            def add_measurement_to_recipient(r_type, r_id, order_obj, measurements):
+                key = f"{r_type}_{r_id}"
+                
+                # If filtered out, skip
+                if key not in recipients_map:
+                    return
+
+                # Create history entry
+                entry = {
+                    'order_id': order_obj.id,
+                    'order_number': order_obj.order_number,
+                    'order_type': order_obj.order_type,
+                    'measurements': measurements,
+                    'measurement_taken_at': order_obj.measurement_taken_at,
+                    'order_status': order_obj.status,
+                    'rider_status': order_obj.rider_status,
+                    'order_created_at': order_obj.created_at,
+                    'tailor_name': None
+                }
+                
+                # Get tailor name
+                try:
+                    if order_obj.tailor and hasattr(order_obj.tailor, 'tailor_profile'):
+                        entry['tailor_name'] = order_obj.tailor.tailor_profile.shop_name
+                    else:
+                        entry['tailor_name'] = order_obj.tailor.username if order_obj.tailor else None
+                except:
+                    pass
+                
+                recipients_map[key]['order_history'].append(entry)
+                
+                # Update stats
+                recipients_map[key]['stats']['total_orders'] += 1
+                current_last = recipients_map[key]['stats']['last_measured_at']
+                if not current_last or (order_obj.measurement_taken_at and order_obj.measurement_taken_at > current_last):
+                     recipients_map[key]['stats']['last_measured_at'] = order_obj.measurement_taken_at
+
+
+            # Strategy: Iterate fully distinct items in order
+            processed_in_order = set()
+            
+            for item in order.order_items.all():
+                # Determine recipient for this item
+                if item.family_member:
+                    r_type, r_id = 'family_member', item.family_member.id
+                else:
+                    r_type, r_id = 'customer', request.user.id
+                    
+                unique_key = (r_type, r_id)
+                if unique_key in processed_in_order:
+                    continue
+                
+                measurements = item.measurements or order.rider_measurements
+                
+                if measurements:
+                    add_measurement_to_recipient(r_type, r_id, order, measurements)
+                    processed_in_order.add(unique_key)
+            
+            # Edge case: Order has measurements but NO items -> Assign to Customer
+            if not processed_in_order and order.rider_measurements:
+                 add_measurement_to_recipient('customer', request.user.id, order, order.rider_measurements)
+
+        # 3. Format Response
+        recipients_list = list(recipients_map.values())
+        
+        # Calculate global summary
+        total_recipients = len(recipients_list)
+        active_recipients = sum(1 for r in recipients_list if r['current_measurements'] is not None or r['stats']['total_orders'] > 0)
+        
+        response_data = {
+            'recipients': recipients_list,
+            'global_summary': {
+                'total_recipients': total_recipients,
+                'active_recipients_with_data': active_recipients
+            }
+        }
+        
+        from apps.customers.serializers import RecipientMeasurementsResponseSerializer
+        return api_response(
+            success=True,
+            message="Measurements retrieved successfully",
+            data=RecipientMeasurementsResponseSerializer(response_data).data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+class FamilyMemberMeasurementsView(APIView):
+    """Get all measurements for a specific family member"""
+    permission_classes = [IsAuthenticated]
+    
+    @extend_schema(
+        summary="Get family member measurements",
+        description="Retrieve all measurements for a specific family member across all orders",
+        tags=["Customer Measurements"]
+    )
+    def get(self, request, family_member_id):
+        if request.user.role != 'USER':
+            return api_response(
+                success=False,
+                message="Only customers can access this endpoint",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Verify family member belongs to customer
+        try:
+            family_member = FamilyMember.objects.get(id=family_member_id, user=request.user)
+        except FamilyMember.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Family member not found or you don't have access to this family member",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get all orders with measurements for this family member
+        # Search in both order-level family_member and item-level family_member
+        from django.db.models import Q
+        orders = Order.objects.filter(
+            Q(family_member=family_member) | Q(order_items__family_member=family_member),
+            customer=request.user,
+            rider_status='measurement_taken'
+        ).select_related(
+            'customer',
+            'family_member',
+            'tailor',
+            'rider'
+        ).prefetch_related('tailor__tailor_profile', 'order_items__family_member').distinct().order_by('-measurement_taken_at', '-created_at')
+        
+        # Build order measurements list
+        order_measurements = []
+        for order in orders:
+            # Look for measurements in items for this family member
+            item_measurements = None
+            for item in order.order_items.all():
+                if item.family_member == family_member and item.measurements:
+                    item_measurements = item.measurements
+                    break
+            
+            # Fallback to order-level measurements
+            measurements = item_measurements or order.rider_measurements
+            
+            if measurements:
+                measurement_data = {
+                    'order_id': order.id,
+                    'order_number': order.order_number,
+                    'order_type': order.order_type,
+                    'measurements': measurements,
+                    'measurement_taken_at': order.measurement_taken_at.isoformat() if order.measurement_taken_at else None,
+                    'order_status': order.status,
+                    'rider_status': order.rider_status,
+                    'order_created_at': order.created_at.isoformat() if order.created_at else None,
+                    'appointment_date': order.appointment_date.isoformat() if order.appointment_date else None,
+                    'appointment_time': order.appointment_time.isoformat() if order.appointment_time else None,
+                }
+                
+                # Get tailor name
+                try:
+                    if order.tailor and hasattr(order.tailor, 'tailor_profile'):
+                        measurement_data['tailor_name'] = order.tailor.tailor_profile.shop_name
+                    else:
+                        measurement_data['tailor_name'] = order.tailor.username if order.tailor else None
+                except:
+                    measurement_data['tailor_name'] = None
+                
+                order_measurements.append(measurement_data)
+        
+        # Get stored profile measurements
+        stored_profile_measurements = None
+        if family_member.measurements:
+            stored_profile_measurements = {
+                'measurements': family_member.measurements,
+                'last_updated': None,
+                'note': 'Stored profile measurements (most recent from orders)'
+            }
+        
+        # Build summary
+        latest_date = None
+        oldest_date = None
+        if order_measurements:
+            dates = [m['measurement_taken_at'] for m in order_measurements if m['measurement_taken_at']]
+            if dates:
+                latest_date = max(dates)
+                oldest_date = min(dates)
+        
+        summary = {
+            'total_order_measurements': len(order_measurements),
+            'has_stored_measurements': bool(family_member.measurements),
+            'latest_measurement_date': latest_date,
+            'oldest_measurement_date': oldest_date,
+            'measurement_history_count': len(order_measurements),
+        }
+        
+        response_data = {
+            'family_member': {
+                'id': family_member.id,
+                'name': family_member.name,
+                'relationship': family_member.relationship,
+                'gender': family_member.gender,
+            },
+            'order_measurements': order_measurements,
+            'stored_profile_measurements': stored_profile_measurements,
+            'summary': summary,
+        }
+        
+        return api_response(
+            success=True,
+            message="Family member measurements retrieved successfully",
+            data=response_data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+class CustomerPreviousTailorsView(APIView):
+    """
+    API view to get all unique tailors previously ordered from by the customer.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Tailor Profile"],
+        operation_id="customers_previous_tailors",
+        description="Get all previous ordered tailors for the customer",
+        responses={200: TailorProfileSerializer(many=True)}
+    )
+    def get(self, request):
+        # 1. Get unique tailor ids from user's orders, ignoring null tailors
+        ordered_tailor_ids = Order.objects.filter(
+            customer=request.user,
+            tailor__isnull=False
+        ).values_list('tailor_id', flat=True).distinct()
+
+        # 2. Get tailor profiles for those tailors
+        tailors = TailorProfile.objects.filter(
+            user_id__in=ordered_tailor_ids
+        ).select_related('user').prefetch_related('review')
+
+        # 3. Serialize
+        serializer = TailorProfileSerializer(tailors, many=True, context={'request': request})
+        
+        return api_response(
+            success=True,
+            message="Previous ordered tailors fetched successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )

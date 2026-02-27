@@ -73,6 +73,7 @@ class NotificationLog(BaseModel):
         ('PROFILE', 'Profile'),
         ('APPOINTMENT', 'Appointment'),
         ('SYSTEM', 'System'),
+        ('PROMOTION', 'Promotion'),
     )
     
     STATUS_CHOICES = (

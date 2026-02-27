@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from .models import Order, OrderItem, OrderStatusHistory
 from apps.tailors.models import TailorProfile,Fabric
 from apps.customers.models import Address
+from apps.customization.models import CustomStyle
 from decimal import Decimal
 from django.db import transaction
 from apps.orders.services import OrderCalculationService
@@ -17,28 +18,79 @@ class OrderItemSerializer(serializers.ModelSerializer):
     fabric_sku = serializers.CharField(source='fabric.sku', read_only=True)
     fabric_stitching_price = serializers.DecimalField(source='fabric.stitching_price', max_digits=10, decimal_places=2, read_only=True)
     fabric_image = serializers.SerializerMethodField()
+    family_member_name = serializers.SerializerMethodField()
+    custom_styles = serializers.SerializerMethodField()
+    
     class Meta:
         model = OrderItem
         fields = [
             'id','fabric','fabric_name','fabric_sku', 'fabric_stitching_price', 'fabric_image','quantity',
             'unit_price','total_price','measurements','custom_instructions',
-            'is_ready','created_at'
+            'is_ready','family_member','family_member_name','custom_styles','created_at'
         ]
         read_only_fields = ['id', 'total_price', 'created_at']
 
+    def get_family_member_name(self, obj):
+        if obj.family_member:
+            return obj.family_member.name
+        
+        # If no family member, return customer name with (Self) tag
+        try:
+            # For OrderItem, order is accessible via obj.order
+            customer = obj.order.customer
+            name = customer.get_full_name() or customer.username
+            return f"{name} (Self)"
+        except AttributeError:
+            # Fallback for unexpected object structures
+            return None
+
     def get_fabric_image(self,obj):
+        # Handle measurement orders where fabric is None
+        if not obj.fabric:
+            return None
+        
         if obj.fabric.primary_image:
             request=self.context.get('request')
             if request:
                 return request.build_absolute_uri(obj.fabric.primary_image.url)
             return obj.fabric.primary_image.url
         return None
+    
+    def get_custom_styles(self, obj):
+        """Return custom_styles with absolute URLs for images"""
+        styles = obj.custom_styles if obj.custom_styles is not None else []
+        if not styles:
+            return []
+            
+        request = self.context.get('request')
+        if not request:
+            return styles
+            
+        import copy
+        processed_styles = copy.deepcopy(styles)
+        
+        from django.conf import settings
+        media_url = getattr(settings, 'MEDIA_URL', '/media/')
+        
+        for style in processed_styles:
+            asset_path = style.get('asset_path')
+            if asset_path and not (asset_path.startswith('http://') or asset_path.startswith('https://')):
+                if not asset_path.startswith(media_url) and not asset_path.startswith('/'):
+                    full_path = media_url + asset_path
+                else:
+                    full_path = asset_path
+                style['asset_path'] = request.build_absolute_uri(full_path)
+                
+        return processed_styles
 
 class OrderItemCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model=OrderItem
-        fields=['fabric','quantity','measurements','custom_instructions']
+        fields=['fabric','quantity','measurements','custom_instructions','family_member','custom_styles']
+        extra_kwargs = {
+            'fabric': {'required': False, 'allow_null': True}
+        }
 
     def validate_quantity(self,value):
         if value<=0:
@@ -55,21 +107,28 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
 
-    customer_name=serializers.CharField(source='customer.username',read_only=True)
+    customer_name=serializers.SerializerMethodField()
     customer_email=serializers.CharField(source='customer.email',read_only=True)
+    customer_phone=serializers.CharField(source='customer.phone',read_only=True)
     tailor_name=serializers.SerializerMethodField()
     tailor_contact=serializers.SerializerMethodField()
     rider_name=serializers.SerializerMethodField()
     rider_phone=serializers.SerializerMethodField()
     family_member_name=serializers.SerializerMethodField()
+    order_recipient=serializers.SerializerMethodField()
+    all_recipients=serializers.SerializerMethodField()
     delivery_address_text=serializers.SerializerMethodField()
     items=OrderItemSerializer(source='order_items',many=True,read_only=True)
     items_count=serializers.IntegerField(read_only=True)
     can_be_cancelled=serializers.BooleanField(read_only=True)
     custom_styles = serializers.SerializerMethodField()
     rider_status = serializers.CharField(read_only=True)
-    tailor_status = serializers.CharField(read_only=True)
+    tailor_status = serializers.SerializerMethodField()
     status_info = serializers.SerializerMethodField()
+    pricing_summary = serializers.SerializerMethodField()
+    delivery_address = serializers.SerializerMethodField()
+    has_rating = serializers.SerializerMethodField()
+    tailor_rating = serializers.SerializerMethodField()
 
     class Meta:
         model=Order
@@ -79,6 +138,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'customer',
             'customer_name',
             'customer_email',
+            'customer_phone',
             'tailor',
             'tailor_name',
             'tailor_contact',
@@ -86,51 +146,66 @@ class OrderSerializer(serializers.ModelSerializer):
             'rider_name',
             'rider_phone',
             'order_type',
+            'service_mode',
             'status',
             'rider_status',
             'tailor_status',
             'subtotal',
+            'stitching_price',
             'tax_amount',
             'delivery_fee',
+            'system_fee',
             'total_amount',
             'payment_status',
             'payment_method',
             'family_member',
             'family_member_name',
+            'order_recipient',
+            'all_recipients',
             'delivery_address',
             'delivery_address_text',
             'estimated_delivery_date',
             'actual_delivery_date',
             'special_instructions',
+            'stitching_completion_date',
+            'stitching_completion_time',
             'appointment_date',
             'appointment_time',
             'custom_styles',
             'notes',
-            'rider_measurements',
             'measurement_taken_at',
             'items',
             'items_count',
             'can_be_cancelled',
             'status_info',
+            'pricing_summary',
+            'has_rating',
+            'tailor_rating',
             'created_at',
             'updated_at'
         ]
         read_only_fields = [
-            'id', 'order_number', 'total_amount', 'items_count', 
+            'id', 'order_number', 'stitching_price', 'total_amount', 'items_count', 
             'can_be_cancelled', 'created_at', 'updated_at'
         ]
 
+    def get_customer_name(self, obj):
+        if not obj.customer:
+            return 'Unknown'
+        full_name = obj.customer.get_full_name().strip()
+        return full_name if full_name else obj.customer.username
+
     def get_tailor_name(self, obj):
+        if not obj.tailor:
+            return None
         try:
             return obj.tailor.tailor_profile.shop_name
         except TailorProfile.DoesNotExist:
             return obj.tailor.username
 
     def get_tailor_contact(self, obj):
-        try:
-            return obj.tailor.tailor_profile.contact_number
-        except TailorProfile.DoesNotExist:
-            return None
+        """Get tailor contact (verified phone from user account)"""
+        return obj.tailor.phone if obj.tailor else None
 
     def get_rider_name(self, obj):
         if obj.rider:
@@ -143,28 +218,146 @@ class OrderSerializer(serializers.ModelSerializer):
         return None
 
     def get_rider_phone(self, obj):
-        if obj.rider:
-            try:
-                if hasattr(obj.rider, 'rider_profile') and obj.rider.rider_profile:
-                    return obj.rider.rider_profile.phone_number
-            except:
-                pass
-            return obj.rider.phone
-        return None
+        """Get rider phone (verified phone from user account)"""
+        return obj.rider.phone if obj.rider else None
+
+    def get_tailor_status(self, obj):
+        """Get translated tailor status display name"""
+        request = self.context.get('request')
+        language = get_language_from_request(request) if request else 'en'
+        display_name = obj.get_tailor_status_display()
+        return translate_message(display_name, language)
 
     def get_family_member_name(self, obj):
         if obj.family_member:
-            return f"{obj.family_member.name} ({obj.family_member.relationship})"
+            return obj.family_member.name
+        
+        # If no family member, return customer name with (Self) tag
+        try:
+            name = obj.customer.get_full_name() or obj.customer.username
+            return f"{name} (Self)"
+        except AttributeError:
+            return None
+    
+    def get_all_recipients(self, obj):
+        """Get all recipients for this order as an array."""
+        recipients = self._collect_recipients(obj)
+        return recipients
+
+    def get_order_recipient(self, obj):
+        """Get primary order recipient (for backward compatibility)."""
+        recipients = self._collect_recipients(obj)
+        return recipients[0] if recipients else None
+
+    def _collect_recipients(self, obj):
+        """Helper to collect unique recipients from order items."""
+        include_measurements = obj.rider_status == 'measurement_taken' and obj.rider_measurements
+        recipients = []
+        seen_recipients = set()
+        
+        # Add order-level family member if exists
+        if obj.family_member:
+            recipients.append({
+                'type': 'family_member',
+                'id': obj.family_member.id,
+                'name': obj.family_member.name,
+            })
+            seen_recipients.add(f"family_{obj.family_member.id}")
+        
+        # Add recipients from items
+        for item in obj.order_items.all():
+            if item.family_member:
+                key = f"family_{item.family_member.id}"
+                if key not in seen_recipients:
+                    recipients.append({
+                        'type': 'family_member',
+                        'id': item.family_member.id,
+                        'name': item.family_member.name,
+                    })
+                    seen_recipients.add(key)
+            else:
+                key = "customer"
+                if key not in seen_recipients:
+                    recipients.append({
+                        'type': 'customer',
+                        'id': obj.customer.id,
+                        'name': obj.customer.get_full_name() or obj.customer.username,
+                        'phone': obj.customer.phone,
+                        'email': obj.customer.email,
+                    })
+                    seen_recipients.add(key)
+
+        if include_measurements:
+            for recipient in recipients:
+                recipient['measurements'] = obj.rider_measurements
+        
+        return recipients
+
+    def get_delivery_address(self, obj):
+        """Return structured delivery address with fallback for current location orders"""
+        if obj.delivery_address:
+            return {
+                'id': obj.delivery_address.id,
+                'latitude': obj.delivery_address.latitude,
+                'longitude': obj.delivery_address.longitude,
+                'address': obj.delivery_address.address or '',
+                'extra_info': obj.delivery_address.extra_info or '',
+                'is_default': obj.delivery_address.is_default,
+                'address_tag': obj.delivery_address.address_tag,
+            }
+        
+        # Fallback to coordinate fields if it was a "current location" order
+        elif obj.delivery_latitude and obj.delivery_longitude:
+            return {
+                'id': None,
+                'latitude': obj.delivery_latitude,
+                'longitude': obj.delivery_longitude,
+                'address': obj.delivery_formatted_address or '',
+                'extra_info': obj.delivery_extra_info or '',
+                'is_default': False,
+                'address_tag': 'Current Location',
+            }
         return None
 
-    def get_delivery_address_text(self,obj):
+    def get_delivery_address_text(self, obj):
         if obj.delivery_address:
-            return f"{obj.delivery_address.street}, {obj.delivery_address.city}, {obj.delivery_address.country}"
+            street = obj.delivery_address.street or ""
+            city = obj.delivery_address.city or ""
+            country = obj.delivery_address.country or ""
+            return f"{street}, {city}, {country}".strip(", ")
+            
+        # Fallback for current location
+        elif obj.delivery_formatted_address:
+            return obj.delivery_formatted_address
+            
         return None
     
     def get_custom_styles(self, obj):
-        """Return custom_styles, or empty array if None"""
-        return obj.custom_styles if obj.custom_styles is not None else []
+        """Return custom_styles with absolute URLs for images"""
+        styles = obj.custom_styles if obj.custom_styles is not None else []
+        if not styles:
+            return []
+            
+        request = self.context.get('request')
+        if not request:
+            return styles
+            
+        import copy
+        processed_styles = copy.deepcopy(styles)
+        
+        from django.conf import settings
+        media_url = getattr(settings, 'MEDIA_URL', '/media/')
+        
+        for style in processed_styles:
+            asset_path = style.get('asset_path')
+            if asset_path and not (asset_path.startswith('http://') or asset_path.startswith('https://')):
+                if not asset_path.startswith(media_url) and not asset_path.startswith('/'):
+                    full_path = media_url + asset_path
+                else:
+                    full_path = asset_path
+                style['asset_path'] = request.build_absolute_uri(full_path)
+                
+        return processed_styles
     
     def get_status_info(self, obj):
         """Get status information including next available actions"""
@@ -181,23 +374,50 @@ class OrderSerializer(serializers.ModelSerializer):
         # Build next available actions
         next_actions = []
         
+        # Track values to avoid duplicates (prefer more specific status types)
+        seen_values = set()
+        
         # Add status actions
         for status_value in allowed_transitions.get('status', []):
+            # Skip if already at this status
+            if status_value == obj.status:
+                continue
             action = self._build_status_action('status', status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(status_value)
         
-        # Add rider_status actions
+        # Add rider_status actions (prefer over status if same value)
         for rider_status_value in allowed_transitions.get('rider_status', []):
+            # Skip if already at this status
+            if rider_status_value == obj.rider_status:
+                continue
+            # If this value already exists as a status action, remove the status action and use this one
+            if rider_status_value in seen_values:
+                # Remove the duplicate status action
+                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == rider_status_value)]
             action = self._build_status_action('rider_status', rider_status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(rider_status_value)
         
-        # Add tailor_status actions
+        # Add tailor_status actions (prefer over status if same value)
         for tailor_status_value in allowed_transitions.get('tailor_status', []):
+            # Skip if already at this status
+            if tailor_status_value == obj.tailor_status:
+                continue
+            # If this value already exists as a status action, remove the status action and use this one
+            if tailor_status_value in seen_values:
+                # Remove the duplicate status action
+                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == tailor_status_value)]
             action = self._build_status_action('tailor_status', tailor_status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(tailor_status_value)
+        
+        # Add custom actions
+        for custom_action in allowed_transitions.get('custom_actions', []):
+            next_actions.append(custom_action)
         
         # Check if order can be cancelled
         can_cancel = False
@@ -214,14 +434,37 @@ class OrderSerializer(serializers.ModelSerializer):
         # Calculate status progress
         status_progress = self._calculate_status_progress(obj)
         
+        # Add measurement tracking for fabric_with_stitching orders
+        measurement_status = None
+        if obj.order_type == 'fabric_with_stitching':
+            is_rider_measuring = obj.rider_status in ['on_way_to_measurement', 'measurement_taken']
+            is_walk_in_measuring = obj.service_mode == 'walk_in' and obj.status in ['confirmed', 'in_progress']
+            
+            if is_rider_measuring or is_walk_in_measuring:
+                from django.db.models import Q
+                total_items = obj.order_items.count()
+                items_with_measurements = obj.order_items.exclude(
+                    Q(measurements__isnull=True) | Q(measurements={})
+                ).count()
+                items_without_measurements = total_items - items_with_measurements
+                
+                measurement_status = {
+                    'all_measured': obj.all_items_have_measurements,
+                    'total_items': total_items,
+                    'measured_items': items_with_measurements,
+                    'remaining_items': items_without_measurements,
+                }
+        
         return {
             'current_status': obj.status,
             'current_rider_status': obj.rider_status,
             'current_tailor_status': obj.tailor_status,
+            'current_tailor_status_display': self.get_tailor_status(obj),
             'next_available_actions': next_actions,
             'can_cancel': can_cancel,
             'cancel_reason': cancel_reason,
             'status_progress': status_progress,
+            'measurement_status': measurement_status,
         }
     
     def _build_status_action(self, action_type, value, user_role):
@@ -236,7 +479,9 @@ class OrderSerializer(serializers.ModelSerializer):
                 'confirmed': {'label': 'Accept Order', 'description': 'Accept this order'},
                 'in_progress': {'label': 'Mark In Progress', 'description': 'Start processing this order'},
                 'ready_for_delivery': {'label': 'Mark Ready for Delivery', 'description': 'Order is ready for pickup/delivery'},
+                'ready_for_pickup': {'label': 'Mark Ready for Pickup', 'description': 'Order is ready for customer pickup'},
                 'delivered': {'label': 'Mark Delivered', 'description': 'Mark order as delivered'},
+                'collected': {'label': 'Mark Collected', 'description': 'Order collected by customer'},
                 'cancelled': {'label': 'Cancel Order', 'description': 'Cancel this order'},
             },
             'rider_status': {
@@ -245,11 +490,13 @@ class OrderSerializer(serializers.ModelSerializer):
                 'picked_up': {'label': 'Mark Picked Up', 'description': 'Order picked up from tailor'},
                 'on_way_to_delivery': {'label': 'Start Delivery', 'description': 'On way to deliver order to customer'},
                 'on_way_to_measurement': {'label': 'Start Measurement', 'description': 'On way to take customer measurements'},
+                'measuring': {'label': 'Taking Measurements', 'description': 'Currently taking customer measurements'},
                 'measurement_taken': {'label': 'Complete Measurement', 'description': 'Measurements taken successfully'},
                 'delivered': {'label': 'Mark Delivered', 'description': 'Order delivered to customer'},
             },
             'tailor_status': {
                 'accepted': {'label': 'Accept Order', 'description': 'Accept this order'},
+                'in_progress': {'label': 'Mark In Progress', 'description': 'Mark order as in progress'},
                 'stitching_started': {'label': 'Start Stitching', 'description': 'Start stitching the garment'},
                 'stitched': {'label': 'Finish Stitching', 'description': 'Stitching completed'},
             }
@@ -298,6 +545,15 @@ class OrderSerializer(serializers.ModelSerializer):
                 'delivered': 5,
                 'cancelled': 0
             }
+            if obj.service_mode == 'walk_in':
+                steps = {
+                    'pending': 1,
+                    'confirmed': 2,
+                    'in_progress': 3,
+                    'ready_for_pickup': 4,
+                    'collected': 5,
+                    'cancelled': 0
+                }
             current_step = steps.get(obj.status, 0)
             total_steps = 5
         else:  # fabric_with_stitching
@@ -311,6 +567,15 @@ class OrderSerializer(serializers.ModelSerializer):
                 'delivered': 5,
                 'cancelled': 0
             }
+            if obj.service_mode == 'walk_in':
+                steps = {
+                    'pending': 1,
+                    'confirmed': 2,
+                    'in_progress': 3,
+                    'ready_for_pickup': 4,
+                    'collected': 5,
+                    'cancelled': 0
+                }
             current_step = steps.get(obj.status, 0)
             total_steps = 5
         
@@ -322,9 +587,48 @@ class OrderSerializer(serializers.ModelSerializer):
             'percentage': percentage
         }
 
+    def get_pricing_summary(self, obj):
+        """Return grouped pricing information"""
+        return {
+            'subtotal': obj.subtotal,
+            'stitching_price': obj.stitching_price,
+            'tax_amount': obj.tax_amount,
+            'delivery_fee': obj.delivery_fee,
+            'system_fee': obj.system_fee,
+            'total_amount': obj.total_amount
+        }
+
+    def get_has_rating(self, obj):
+        """Return True if the customer has already submitted a rating for this order."""
+        from apps.tailors.models.rating import TailorRating
+        return TailorRating.objects.filter(order=obj).exists()
+
+    def get_tailor_rating(self, obj):
+        """Return the submitted rating details if the customer has rated this order, else None."""
+        from apps.tailors.models.rating import TailorRating
+        try:
+            rating = TailorRating.objects.get(order=obj)
+            return {
+                'stitching_quality': rating.stitching_quality,
+                'on_time_delivery': rating.on_time_delivery,
+                'overall_satisfaction': rating.overall_satisfaction,
+                'review': rating.review,
+                'created_at': rating.created_at,
+            }
+        except TailorRating.DoesNotExist:
+            return None
+
 class OrderCreateSerializer(serializers.ModelSerializer):
 
     items=OrderItemCreateSerializer(many=True)
+    
+    # Allow passing either an Address ID (int) or an Address Object (dict)
+    delivery_address = serializers.JSONField(
+        required=False,
+        allow_null=True,
+        help_text="Either an address ID (int) or complete address object"
+    )
+
     distance_km = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -340,6 +644,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'customer',
             'tailor',
             'order_type',
+            'service_mode',
             'payment_method',
             'family_member',
             'delivery_address',
@@ -351,18 +656,60 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'items',
             'distance_km'
         ]
+        extra_kwargs = {
+            'tailor': {'required': False, 'allow_null': True}
+        }
 
     def validate_items(self,value):
+        # Get order_type from initial_data
+        order_type = self.initial_data.get('order_type', 'fabric_only')
+        
+        # For measurement_service orders, allow items without fabric
+        if order_type == 'measurement_service':
+            if not value or len(value)==0:
+                raise serializers.ValidationError(
+                    "Measurement orders must specify at least one person to measure"
+                )
+            
+            customer = self.context.get('request').user
+            validated_items = []
+            
+            for item_data in value:
+                family_member = item_data.get('family_member')
+                
+                # Validate family member belongs to customer if specified
+                if family_member and family_member.user != customer:
+                    raise serializers.ValidationError(
+                        f"Family member {family_member.name} must belong to the authenticated customer"
+                    )
+                
+                # For measurement orders, set default values
+                item_data['fabric'] = None
+                item_data['quantity'] = 1
+                item_data['unit_price'] = Decimal('0.00')
+                validated_items.append(item_data)
+            
+            return validated_items
+        
+        # For regular orders (fabric_only, fabric_with_stitching), existing logic
         if not value or len(value)==0:
             raise serializers.ValidationError("Order must have at least one item")
         
         tailor =self.context.get('tailor')
+        customer = self.context.get('request').user
         validated_items=[]
         for item_data in value:
             fabric = item_data.get('fabric')
             quantity=item_data.get('quantity',1)
+            family_member = item_data.get('family_member')
+            
             if fabric is None:
                 raise serializers.ValidationError("Each item must have a fabric")
+            
+            # Validate family member belongs to customer
+            if family_member and family_member.user != customer:
+                raise serializers.ValidationError(f"Family member {family_member.name} must belong to the authenticated customer")
+                
             try:
                 if isinstance(fabric,int):
                     fabric =Fabric.objects.select_for_update().get(id=fabric)
@@ -388,8 +735,19 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         return validated_items
 
     def validate_tailor(self,value):
+        order_type = self.initial_data.get('order_type', 'fabric_only')
+        service_mode = self.initial_data.get('service_mode', 'home_delivery')
+        
+        # For home_delivery measurement orders, tailor is optional (rider handles it)
+        if order_type == 'measurement_service' and service_mode == 'home_delivery':
+            if value is None:
+                return None  # Allow null tailor for home delivery measurements
+            # If tailor is provided, still validate it (fall through to validation below)
+        
+        # For all other cases, tailor is required
         if value is None:
             raise serializers.ValidationError('Tailor is required')
+        
         if value.role!='TAILOR':
             raise serializers.ValidationError('Selected user is not a tailor')
         try:
@@ -410,107 +768,171 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         return value
     
     def validate_delivery_address(self, value):
-        if value:
-            # Get the customer from context (set in the view)
-            customer = self.context.get('request').user
-            if value.user != customer:
-                raise serializers.ValidationError('Delivery address must belong to the authenticated customer')
-        return value
+        if value is None:
+            return None
+            
+        customer = self.context.get('request').user
+        
+        # Case 1: Integer ID (Saved Address)
+        if isinstance(value, int):
+            try:
+                address = Address.objects.get(id=value, user=customer)
+                self.context['using_saved_address'] = True
+                self.context['saved_address'] = address
+                return address # Return actual Address object for the ForeignKey
+            except Address.DoesNotExist:
+                raise serializers.ValidationError('Selected address does not exist')
+                
+        # Case 2: Dict/Object (Current Location)
+        elif isinstance(value, dict):
+            if 'latitude' not in value or 'longitude' not in value:
+                raise serializers.ValidationError('Address must contain latitude and longitude')
+            
+            try:
+                lat = float(value['latitude'])
+                lng = float(value['longitude'])
+            except (ValueError, TypeError):
+                raise serializers.ValidationError('Invalid latitude or longitude')
+                
+            # Basic validation for Saudi Arabia bounds (approximate)
+            if not (16 <= lat <= 32):
+                raise serializers.ValidationError('Latitude must be within Saudi Arabia bounds')
+            if not (34 <= lng <= 56):
+                raise serializers.ValidationError('Longitude must be within Saudi Arabia bounds')
+                
+            self.context['using_current_location'] = True
+            self.context['current_location_data'] = value
+            return None # Return None for the ForeignKey field
+            
+        else:
+            raise serializers.ValidationError('Invalid delivery address format. Must be an ID (int) or Address object (dict).')
     
     def validate_custom_styles(self, value):
-        """Validate custom_styles array structure"""
+        """Validate custom_styles and enrich ID-only format with full details"""
         if value is None:
             return None
         
         if not isinstance(value, list):
             raise serializers.ValidationError("custom_styles must be an array")
         
-        required_fields = ['style_type', 'index', 'label', 'asset_path']
-        
+        enriched_styles = []
         for idx, style in enumerate(value):
             if not isinstance(style, dict):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}] must be an object"
-                )
+                raise serializers.ValidationError(f"custom_styles[{idx}] must be an object")
             
-            # Check required fields
-            for field in required_fields:
-                if field not in style:
-                    raise serializers.ValidationError(
-                        f"custom_styles[{idx}] is missing required field: {field}"
-                    )
+            # Scenario 1: ID-only format {"style_id": 8, "category": "collar"}
+            if 'style_id' in style:
+                style_id = style.get('style_id')
+                try:
+                    style_obj = CustomStyle.objects.select_related('category').get(id=style_id, is_active=True)
+                    enriched_styles.append({
+                        "style_type": style_obj.category.name,
+                        "index": style_obj.display_order,
+                        "label": style_obj.name,
+                        "asset_path": style_obj.image.name if style_obj.image else ""
+                    })
+                except CustomStyle.DoesNotExist:
+                    raise serializers.ValidationError(f"Custom style with ID {style_id} not found or inactive")
             
-            # Validate field types
-            if not isinstance(style['style_type'], str):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].style_type must be a string"
-                )
-            
-            if not isinstance(style['index'], int):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].index must be an integer"
-                )
-            
-            if not isinstance(style['label'], str):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].label must be a string"
-                )
-            
-            if not isinstance(style['asset_path'], str):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].asset_path must be a string"
-                )
-            
-            # Validate index is non-negative
-            if style['index'] < 0:
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].index must be a non-negative integer"
-                )
+            # Scenario 2: Traditional format (for backward compatibility)
+            else:
+                required_fields = ['style_type', 'index', 'label', 'asset_path']
+                for field in required_fields:
+                    if field not in style:
+                        raise serializers.ValidationError(
+                            f"custom_styles[{idx}] must contain either 'style_id' or '{field}'"
+                        )
+                enriched_styles.append(style)
         
-        return value
+        return enriched_styles
+
+    def validate(self, data):
+        """Cross-field validation for service_mode and delivery_address"""
+        service_mode = data.get('service_mode', 'home_delivery')
+        delivery_address = data.get('delivery_address')
+        
+        # Check context for one-time address (current location)
+        using_current_location = self.context.get('using_current_location', False)
+        
+        # Also check for flat location fields (delivery_latitude, delivery_longitude)
+        has_flat_location = ('delivery_latitude' in self.initial_data and 
+                            'delivery_longitude' in self.initial_data)
+        
+        if service_mode == 'home_delivery' and not delivery_address and not using_current_location and not has_flat_location:
+            raise serializers.ValidationError({
+                'delivery_address': 'Delivery address or location coordinates are required for home delivery orders.'
+            })
+            
+        return data
 
     @transaction.atomic
     def create(self,validated_data):
         items_data=validated_data.pop('items')
         tailor=validated_data.get('tailor')  # Use .get() method
-        delivery_address=validated_data.get('delivery_address')
+        validated_data.pop('delivery_address',None)
+        using_current_location=self.context.get('using_current_location',False)
+        saved_address=self.context.get('saved_address',None)
+        current_location_data=self.context.get('current_location_data',None)
         items_with_fabrics=[]
         fabric_ids=[]
         # order=Order.objects.create(**validated_data)
         for item_data in items_data:
-            fabric=item_data['fabric']
-            fabric_ids.append(fabric.id)
+            fabric=item_data.get('fabric')
+            # Skip fabric processing for measurement orders (fabric is None)
+            if fabric is not None:
+                fabric_ids.append(fabric.id)
 
-        #lock fabric to prevent race conditions
-        locked_fabrics=Fabric.objects.select_for_update().filter(
-            id__in=fabric_ids
-        )
-        fabric_dict={f.id:f for f in locked_fabrics}
-        for item_data in items_data:
-            fabric=item_data['fabric']
-            quantity=item_data.get('quantity',1)
+        # Only lock fabrics if there are any (not for measurement orders)
+        if fabric_ids:
+            #lock fabric to prevent race conditions
+            locked_fabrics=Fabric.objects.select_for_update().filter(
+                id__in=fabric_ids
+            )
+            fabric_dict={f.id:f for f in locked_fabrics}
+            for item_data in items_data:
+                fabric=item_data.get('fabric')
+                if fabric is None:
+                    # Measurement order item - no fabric
+                    continue
+                    
+                quantity=item_data.get('quantity',1)
 
-            locked_fabric=fabric_dict.get(fabric.id)
-            if not locked_fabric:
-               raise serializers.ValidationError(
-                f"Fabric {fabric.name} not found or locked"
-            )
-            if locked_fabric.stock<quantity:
-               raise serializers.ValidationError(
-                f"Insufficient stock for {locked_fabric.name}. "
-                f"Available: {locked_fabric.stock}, Requested: {quantity}"
-            )
-            if not locked_fabric.is_active:
-                raise serializers.ValidationError(
-                f"{locked_fabric.name} is no longer available"
-            )
+                locked_fabric=fabric_dict.get(fabric.id)
+                if not locked_fabric:
+                   raise serializers.ValidationError(
+                    f"Fabric {fabric.name} not found or locked"
+                )
+                if locked_fabric.stock<quantity:
+                   raise serializers.ValidationError(
+                    f"Insufficient stock for {locked_fabric.name}. "
+                    f"Available: {locked_fabric.stock}, Requested: {quantity}"
+                )
+                if not locked_fabric.is_active:
+                    raise serializers.ValidationError(
+                    f"{locked_fabric.name} is no longer available"
+                )
             items_with_fabrics.append({
-            'fabric': locked_fabric,
-            'quantity': quantity,
-            'unit_price': locked_fabric.price,  # ALWAYS use current DB price
-            'measurements': item_data.get('measurements', {}),
-            'custom_instructions': item_data.get('custom_instructions', ''),
-        })
+                'fabric': locked_fabric,
+                'quantity': quantity,
+                'unit_price': locked_fabric.price,  # ALWAYS use current DB price
+                'measurements': item_data.get('measurements', {}),
+                'custom_instructions': item_data.get('custom_instructions', ''),
+                'family_member': item_data.get('family_member'),
+                'custom_styles': item_data.get('custom_styles'),  # Item-level custom styles
+            })
+        else:
+            # Measurement orders - no fabric validation needed
+            for item_data in items_data:
+                items_with_fabrics.append({
+                    'fabric': None,
+                    'quantity': 1,
+                    'unit_price': Decimal('0.00'),
+                    'measurements': item_data.get('measurements', {}),
+                    'custom_instructions': item_data.get('custom_instructions', ''),
+                    'family_member': item_data.get('family_member'),
+                    'custom_styles': item_data.get('custom_styles'),  # Item-level custom styles
+                })
+        # Get distance_km from validated_data if provided
         # Get distance_km from validated_data if provided
         distance_km = validated_data.pop('distance_km', None)
         if distance_km is not None:
@@ -518,40 +940,106 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         
         # Get order_type to pass to calculation service
         order_type = validated_data.get('order_type', 'fabric_only')
+        service_mode = validated_data.get('service_mode', 'home_delivery')
         
+        # Prepare delivery coordinates based on delivery type
+        delivery_lat = None
+        delivery_lng = None
+        
+        if using_current_location and current_location_data:
+            
+            validated_data['delivery_address'] = None
+            validated_data['delivery_latitude'] = current_location_data['latitude']
+            validated_data['delivery_longitude'] = current_location_data['longitude']
+            validated_data['delivery_formatted_address'] = current_location_data.get('formatted_address', '')
+            validated_data['delivery_street'] = current_location_data.get('street', '')
+            validated_data['delivery_city'] = current_location_data.get('city', '')
+            validated_data['delivery_extra_info'] = current_location_data.get('extra_info', '')
+            
+            delivery_lat = current_location_data['latitude']
+            delivery_lng = current_location_data['longitude']
+        else:
+            # Using saved address (or None)
+            validated_data['delivery_address'] = saved_address
+            validated_data['delivery_latitude'] = None
+            validated_data['delivery_longitude'] = None
+            validated_data['delivery_formatted_address'] = None
+            validated_data['delivery_street'] = None
+            validated_data['delivery_city'] = None
+            validated_data['delivery_extra_info'] = None
+            
+            if saved_address:
+                delivery_lat = saved_address.latitude
+                delivery_lng = saved_address.longitude
+        
+        # Calculate totals with coordinates
         totals = OrderCalculationService.calculate_all_totals(
             items_data=items_with_fabrics,
             distance_km=distance_km,
-            delivery_address=delivery_address,
+            delivery_latitude=delivery_lat,
+            delivery_longitude=delivery_lng,
             tailor=tailor,
-            order_type=order_type
+            order_type=order_type,
+            service_mode=service_mode
         )
         
-        # Remove stitching_price from totals if it exists (Order model doesn't have this field yet)
-        # It's already included in total_amount
-        totals.pop('stitching_price', None)
-        
+        # Update validated_data with calculated totals (including stitching_price)
         validated_data.update(totals)
+
+        # Requirement: Automatically set payment status to 'paid' for walk-in orders created by tailors
+        request = self.context.get('request')
+        if request and request.user.role == 'TAILOR' and service_mode == 'walk_in':
+            validated_data['payment_status'] = 'paid'
+
         order = Order.objects.create(**validated_data)
-        for item_data in items_with_fabrics:
-            fabric = item_data['fabric']
-            quantity = item_data['quantity']
+        
+        # Handle measurement service orders differently
+        if order_type == 'measurement_service':
+            # Auto-mark as paid (free)
+            order.is_free_measurement = True
+            order.payment_status = 'paid'
+            order.payment_method = 'cod'
+            order.total_amount = Decimal('0.00')
+            order.subtotal = Decimal('0.00')
+            order.delivery_fee = Decimal('0.00')
+            order.system_fee = Decimal('0.00')
+            order.save()
             
-            # Create order item
-            OrderItem.objects.create(
-                order=order,
-                fabric=fabric,
-                quantity=quantity,
-                unit_price=item_data['unit_price'],  # Snapshot of price at order time
-                measurements=item_data['measurements'],
-                custom_instructions=item_data['custom_instructions'],
-            )
-            fabric.stock -= quantity
-            if fabric.stock < 0:
-                raise serializers.ValidationError(
-                    f"Stock cannot be negative for {fabric.name}"
+            # Create order items (each represents a person to measure)
+            for item_data in items_with_fabrics:
+                OrderItem.objects.create(
+                    order=order,
+                    fabric=None,  # No fabric for measurement orders
+                    quantity=1,
+                    unit_price=Decimal('0.00'),
+                    measurements=item_data.get('measurements', {}),
+                    custom_instructions=item_data.get('custom_instructions', ''),
+                    family_member=item_data.get('family_member'),
+                    custom_styles=item_data.get('custom_styles'),  # Item-level custom styles
                 )
-            fabric.save(update_fields=['stock'])
+        else:
+            # Regular orders - create items with fabric and reduce stock
+            for item_data in items_with_fabrics:
+                fabric = item_data['fabric']
+                quantity = item_data['quantity']
+                
+                # Create order item
+                OrderItem.objects.create(
+                    order=order,
+                    fabric=fabric,
+                    quantity=quantity,
+                    unit_price=item_data['unit_price'],  # Snapshot of price at order time
+                    measurements=item_data['measurements'],
+                    custom_instructions=item_data['custom_instructions'],
+                    family_member=item_data['family_member'],
+                    custom_styles=item_data.get('custom_styles'),  # Item-level custom styles
+                )
+                fabric.stock -= quantity
+                if fabric.stock < 0:
+                    raise serializers.ValidationError(
+                        f"Stock cannot be negative for {fabric.name}"
+                    )
+                fabric.save(update_fields=['stock'])
         try:
             OrderStatusHistory.objects.create(
                 order=order,
@@ -581,63 +1069,67 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
+    stitching_completion_date = serializers.DateField(
+        required=False,
+        allow_null=True,
+        help_text="Date when tailor expects to complete stitching"
+    )
+    stitching_completion_time = serializers.TimeField(
+        required=False,
+        allow_null=True,
+        help_text="Time when tailor expects to complete stitching (optional)"
+    )
     
     class Meta:
         model=Order
-        fields=['status', 'rider_status', 'tailor_status', 'notes', 'appointment_date', 'appointment_time', 'custom_styles']
+        fields=['status', 'rider_status', 'tailor_status', 'notes', 'appointment_date', 'appointment_time', 'custom_styles', 'stitching_completion_date', 'stitching_completion_time']
     
     def validate_custom_styles(self, value):
-        """Validate custom_styles array structure"""
+        """Validate custom_styles and enrich ID-only format with full details"""
         if value is None:
             return None
         
         if not isinstance(value, list):
             raise serializers.ValidationError("custom_styles must be an array")
         
-        required_fields = ['style_type', 'index', 'label', 'asset_path']
-        
+        enriched_styles = []
         for idx, style in enumerate(value):
             if not isinstance(style, dict):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}] must be an object"
-                )
+                raise serializers.ValidationError(f"custom_styles[{idx}] must be an object")
             
-            # Check required fields
-            for field in required_fields:
-                if field not in style:
-                    raise serializers.ValidationError(
-                        f"custom_styles[{idx}] is missing required field: {field}"
-                    )
+            # Scenario 1: ID-only format {"style_id": 8, "category": "collar"}
+            if 'style_id' in style:
+                style_id = style.get('style_id')
+                try:
+                    style_obj = CustomStyle.objects.select_related('category').get(id=style_id, is_active=True)
+                    enriched_styles.append({
+                        "style_type": style_obj.category.name,
+                        "index": style_obj.display_order,
+                        "label": style_obj.name,
+                        "asset_path": style_obj.image.name if style_obj.image else ""
+                    })
+                except CustomStyle.DoesNotExist:
+                    raise serializers.ValidationError(f"Custom style with ID {style_id} not found or inactive")
             
-            # Validate field types
-            if not isinstance(style['style_type'], str):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].style_type must be a string"
-                )
-            
-            if not isinstance(style['index'], int):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].index must be an integer"
-                )
-            
-            if not isinstance(style['label'], str):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].label must be a string"
-                )
-            
-            if not isinstance(style['asset_path'], str):
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].asset_path must be a string"
-                )
-            
-            # Validate index is non-negative
-            if style['index'] < 0:
-                raise serializers.ValidationError(
-                    f"custom_styles[{idx}].index must be a non-negative integer"
-                )
+            # Scenario 2: Traditional format (for backward compatibility)
+            else:
+                required_fields = ['style_type', 'index', 'label', 'asset_path']
+                for field in required_fields:
+                    if field not in style:
+                        raise serializers.ValidationError(
+                            f"custom_styles[{idx}] must contain either 'style_id' or '{field}'"
+                        )
+                enriched_styles.append(style)
         
+        return enriched_styles
+    def validate_stitching_completion_date(self, value):
+        """Validate stitching completion date is in the future"""
+        if value:
+            from django.utils import timezone
+            today = timezone.now().date()
+            if value < today:
+                raise serializers.ValidationError("Stitching completion date must be today or in the future")
         return value
-    
     def validate(self, attrs):
         """Validate status transitions using OrderStatusTransitionService"""
         instance = self.instance
@@ -703,16 +1195,82 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'status': error_msg})
             
             instance = updated_order
+        else:
+            # No status change, but other fields may have been updated
+            # Save the instance to persist changes like stitching_completion_date
+            instance.save()
         
-        # Send push notification for order status change
+        
+        # Send push notifications for status changes
+        # Track which status fields changed and call the appropriate notification methods
         try:
             from apps.notifications.services import NotificationService
-            NotificationService.send_order_status_notification(
-                order=instance,
-                old_status=instance.status,  # This will be handled by history
-                new_status=instance.status,
-                changed_by=user
-            )
+            
+            # Get old values before transition (from history if available, or use current values)
+            # Note: The transition service already saved the order, so we need to get old values from before
+            # We'll use the new_* variables we extracted earlier to determine what changed
+            
+            if new_rider_status is not None:
+                # Rider status changed - notify customer, tailor, and rider
+                # Get the old rider_status from history or use the current value
+                from apps.orders.models import OrderHistory
+                try:
+                    latest_history = instance.history.filter(
+                        rider_status__isnull=False
+                    ).exclude(
+                        rider_status=instance.rider_status
+                    ).order_by('-created_at').first()
+                    old_rider_status = latest_history.rider_status if latest_history else 'none'
+                except:
+                    old_rider_status = 'none'
+                
+                NotificationService.send_rider_status_notification(
+                    order=instance,
+                    old_rider_status=old_rider_status,
+                    new_rider_status=instance.rider_status,
+                    changed_by=user
+                )
+            
+            if new_tailor_status is not None:
+                # Tailor status changed - notify customer, tailor, and rider
+                from apps.orders.models import OrderHistory
+                try:
+                    latest_history = instance.history.filter(
+                        tailor_status__isnull=False
+                    ).exclude(
+                        tailor_status=instance.tailor_status
+                    ).order_by('-created_at').first()
+                    old_tailor_status = latest_history.tailor_status if latest_history else 'none'
+                except:
+                    old_tailor_status = 'none'
+                
+                NotificationService.send_tailor_status_notification(
+                    order=instance,
+                    old_tailor_status=old_tailor_status,
+                    new_tailor_status=instance.tailor_status,
+                    changed_by=user
+                )
+            
+            if new_status is not None:
+                # Main status changed - notify relevant parties
+                from apps.orders.models import OrderHistory
+                try:
+                    latest_history = instance.history.filter(
+                        status__isnull=False
+                    ).exclude(
+                        status=instance.status
+                    ).order_by('-created_at').first()
+                    old_status = latest_history.status if latest_history else 'pending'
+                except:
+                    old_status = 'pending'
+                
+                NotificationService.send_order_status_notification(
+                    order=instance,
+                    old_status=old_status,
+                    new_status=instance.status,
+                    changed_by=user
+                )
+                
         except Exception as e:
             # Log error but don't fail the update
             import logging
@@ -721,15 +1279,19 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         
         return instance
 
+
 class OrderListSerializer(serializers.ModelSerializer):
-    customer_name=serializers.CharField(source='customer.username',read_only=True)
+    customer_name=serializers.SerializerMethodField()
     tailor_name = serializers.SerializerMethodField()
     items_count = serializers.IntegerField(read_only=True)
     custom_styles = serializers.SerializerMethodField()
     items = OrderItemSerializer(source='order_items', many=True, read_only=True)
     rider_status = serializers.CharField(read_only=True)
-    tailor_status = serializers.CharField(read_only=True)
+    tailor_status = serializers.SerializerMethodField()
     status_info = serializers.SerializerMethodField()
+    pricing_summary = serializers.SerializerMethodField()
+    has_rating = serializers.SerializerMethodField()
+    tailor_rating = serializers.SerializerMethodField()
 
     class Meta:
         model=Order
@@ -739,31 +1301,106 @@ class OrderListSerializer(serializers.ModelSerializer):
             'customer_name',
             'tailor_name',
             'order_type',
+            'service_mode',
             'status',
             'rider_status',
             'tailor_status',
+            'stitching_price',
             'total_amount',
+            'pricing_summary',
             'payment_status',
             'appointment_date',
             'appointment_time',
+            'stitching_completion_date',
+            'stitching_completion_time',
             'custom_styles',
             'rider_measurements',
             'measurement_taken_at',
             'items_count',
             'items',
             'status_info',
+            'has_rating',
+            'tailor_rating',
             'created_at'
         ]
 
+    def get_customer_name(self, obj):
+        if not obj.customer:
+            return 'Unknown'
+        full_name = obj.customer.get_full_name().strip()
+        return full_name if full_name else obj.customer.username
+
+    def get_tailor_status(self, obj):
+        """Get translated tailor status display name"""
+        request = self.context.get('request')
+        language = get_language_from_request(request) if request else 'en'
+        display_name = obj.get_tailor_status_display()
+        return translate_message(display_name, language)
+
     def get_tailor_name(self, obj):
+        if not obj.tailor:
+            return None
         try:
             return obj.tailor.tailor_profile.shop_name
         except TailorProfile.DoesNotExist:
             return obj.tailor.username
     
+    def get_pricing_summary(self, obj):
+        """Return grouped pricing summary for consistency with detail view"""
+        return {
+            'subtotal': str(obj.subtotal),
+            'stitching_price': str(obj.stitching_price),
+            'tax_amount': str(obj.tax_amount),
+            'delivery_fee': str(obj.delivery_fee),
+            'total_amount': str(obj.total_amount),
+        }
+
+    def get_has_rating(self, obj):
+        """Return True if the customer has already submitted a rating for this order."""
+        from apps.tailors.models.rating import TailorRating
+        return TailorRating.objects.filter(order=obj).exists()
+
+    def get_tailor_rating(self, obj):
+        """Return the submitted rating details if this order has been rated, else None."""
+        from apps.tailors.models.rating import TailorRating
+        try:
+            rating = TailorRating.objects.get(order=obj)
+            return {
+                'stitching_quality': rating.stitching_quality,
+                'on_time_delivery': rating.on_time_delivery,
+                'overall_satisfaction': rating.overall_satisfaction,
+                'review': rating.review,
+                'created_at': rating.created_at,
+            }
+        except TailorRating.DoesNotExist:
+            return None
+    
     def get_custom_styles(self, obj):
-        """Return custom_styles, or empty array if None"""
-        return obj.custom_styles if obj.custom_styles is not None else []
+        """Return custom_styles with absolute URLs for images"""
+        styles = obj.custom_styles if obj.custom_styles is not None else []
+        if not styles:
+            return []
+            
+        request = self.context.get('request')
+        if not request:
+            return styles
+            
+        import copy
+        processed_styles = copy.deepcopy(styles)
+        
+        from django.conf import settings
+        media_url = getattr(settings, 'MEDIA_URL', '/media/')
+        
+        for style in processed_styles:
+            asset_path = style.get('asset_path')
+            if asset_path and not (asset_path.startswith('http://') or asset_path.startswith('https://')):
+                if not asset_path.startswith(media_url) and not asset_path.startswith('/'):
+                    full_path = media_url + asset_path
+                else:
+                    full_path = asset_path
+                style['asset_path'] = request.build_absolute_uri(full_path)
+                
+        return processed_styles
     
     def get_status_info(self, obj):
         """Get status information including next available actions - reuse from OrderSerializer"""
@@ -781,23 +1418,50 @@ class OrderListSerializer(serializers.ModelSerializer):
         # Build next available actions
         next_actions = []
         
+        # Track values to avoid duplicates (prefer more specific status types)
+        seen_values = set()
+        
         # Add status actions
         for status_value in allowed_transitions.get('status', []):
+            # Skip if already at this status
+            if status_value == obj.status:
+                continue
             action = OrderSerializer._build_status_action(self, 'status', status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(status_value)
         
-        # Add rider_status actions
+        # Add rider_status actions (prefer over status if same value)
         for rider_status_value in allowed_transitions.get('rider_status', []):
+            # Skip if already at this status
+            if rider_status_value == obj.rider_status:
+                continue
+            # If this value already exists as a status action, remove the status action and use this one
+            if rider_status_value in seen_values:
+                # Remove the duplicate status action
+                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == rider_status_value)]
             action = OrderSerializer._build_status_action(self, 'rider_status', rider_status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(rider_status_value)
         
-        # Add tailor_status actions
+        # Add tailor_status actions (prefer over status if same value)
         for tailor_status_value in allowed_transitions.get('tailor_status', []):
+            # Skip if already at this status
+            if tailor_status_value == obj.tailor_status:
+                continue
+            # If this value already exists as a status action, remove the status action and use this one
+            if tailor_status_value in seen_values:
+                # Remove the duplicate status action
+                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == tailor_status_value)]
             action = OrderSerializer._build_status_action(self, 'tailor_status', tailor_status_value, user_role)
             if action:
                 next_actions.append(action)
+                seen_values.add(tailor_status_value)
+        
+        # Add custom actions
+        for custom_action in allowed_transitions.get('custom_actions', []):
+            next_actions.append(custom_action)
         
         # Check if order can be cancelled
         can_cancel = False
@@ -814,14 +1478,37 @@ class OrderListSerializer(serializers.ModelSerializer):
         # Calculate status progress
         status_progress = OrderSerializer._calculate_status_progress(self, obj)
         
+        # Add measurement tracking for fabric_with_stitching orders
+        measurement_status = None
+        if obj.order_type == 'fabric_with_stitching':
+            is_rider_measuring = obj.rider_status in ['on_way_to_measurement', 'measurement_taken']
+            is_walk_in_measuring = obj.service_mode == 'walk_in' and obj.status in ['confirmed', 'in_progress']
+            
+            if is_rider_measuring or is_walk_in_measuring:
+                from django.db.models import Q
+                total_items = obj.order_items.count()
+                items_with_measurements = obj.order_items.exclude(
+                    Q(measurements__isnull=True) | Q(measurements={})
+                ).count()
+                items_without_measurements = total_items - items_with_measurements
+                
+                measurement_status = {
+                    'all_measured': obj.all_items_have_measurements,
+                    'total_items': total_items,
+                    'measured_items': items_with_measurements,
+                    'remaining_items': items_without_measurements,
+                }
+        
         return {
             'current_status': obj.status,
             'current_rider_status': obj.rider_status,
             'current_tailor_status': obj.tailor_status,
+            'current_tailor_status_display': self.get_tailor_status(obj),
             'next_available_actions': next_actions,
             'can_cancel': can_cancel,
             'cancel_reason': cancel_reason,
             'status_progress': status_progress,
+            'measurement_status': measurement_status,
         }
 
 class OrderStatusUpdateResponseSerializer(OrderSerializer):
@@ -835,6 +1522,8 @@ class OrderStatusUpdateResponseSerializer(OrderSerializer):
             'status',
             'rider_status',
             'tailor_status',
+            'stitching_completion_date',
+            'stitching_completion_time',
             'status_info',
             'updated_at'
         ]

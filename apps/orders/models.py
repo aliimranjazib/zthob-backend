@@ -1,7 +1,12 @@
 from django.db import models
+from django.db.models import Q
 from django.conf import settings
+from django.utils import timezone
+from django.dispatch import receiver
 from apps.core.models import BaseModel
 from decimal import Decimal
+from django_fsm import FSMField, transition
+from django_fsm.signals import post_transition
 
 # Create your models here.
 class Order(BaseModel):
@@ -48,16 +53,22 @@ class Order(BaseModel):
     ORDER_TYPE_CHOICES = (
         ('fabric_only', 'Fabric Purchase Only'),
         ('fabric_with_stitching', 'Fabric + Stitching'),
+        ('measurement_service', 'Measurement Service Only'),
     )
-    
+    SERVICE_MODE_CHOICES = (
+        ('home_delivery', 'Home Delivery'),
+        ('walk_in', 'Walk-In Service'),
+    )
     # Main order status (simplified)
     ORDER_STATUS_CHOICES=(
-        ("pending", "Pending"),                    # Initial state - waiting for tailor
-        ("confirmed", "Confirmed"),                # Tailor accepted the order
-        ("in_progress", "In Progress"),           # Order being processed
-        ("ready_for_delivery", "Ready for Delivery"), # Order ready for delivery
-        ("delivered", "Delivered"),                # Order completed (final state)
-        ("cancelled", "Cancelled"),                # Order cancelled (final state)
+        ("pending", "Pending"),                    # Initial state
+        ("confirmed", "Confirmed"),                # Tailor accepted
+        ("in_progress", "In Progress"),            # Being processed
+        ("ready_for_delivery", "Ready for Delivery"), # For Home Delivery
+        ("ready_for_pickup", "Ready for Pickup"),   # NEW: For Walk-In orders
+        ("delivered", "Delivered"),                # Completed (Home Delivery)
+        ("collected", "Collected"),                # NEW: Completed (Walk-In)
+        ("cancelled", "Cancelled"),                # Order cancelled
     )
     
     # Rider activity status
@@ -68,16 +79,19 @@ class Order(BaseModel):
         ("picked_up", "Picked Up"),               # Rider picked up order from tailor
         ("on_way_to_delivery", "On Way to Delivery"), # Rider en route to customer
         ("on_way_to_measurement", "On Way to Measurement"), # Rider en route to take measurements (stitching only)
+        ("measuring", "Measuring"), # Rider is taking measurements
         ("measurement_taken", "Measurement Taken"), # Rider took measurements (stitching only)
         ("delivered", "Delivered"),                # Rider delivered to customer
     )
     
     # Tailor activity status
     TAILOR_STATUS_CHOICES = (
-        ("none", "None"),                          # No tailor activity
+        ("none", "New"),                          # No tailor activity
         ("accepted", "Accepted Order"),           # Tailor accepted the order
+        ("in_progress", "In Progress"),           # Tailor is working on the order
         ("stitching_started", "Started Stitching"), # Tailor started stitching (stitching only)
         ("stitched", "Finished Stitching"),       # Tailor finished stitching (stitching only)
+        ("measurements_complete", "Measurements Complete"),  # Measurement service complete
     )
     PAYMENT_STATUS_CHOICES = (
         ("pending", "Pending"),
@@ -99,6 +113,8 @@ class Order(BaseModel):
     tailor=models.ForeignKey(
     settings.AUTH_USER_MODEL,
     on_delete=models.CASCADE,
+    null=True,  # Allow null for home delivery measurement orders
+    blank=True,
     related_name='tailor_orders',
     help_text='Tailor assigned to this order'
     )
@@ -110,11 +126,26 @@ class Order(BaseModel):
         related_name='rider_orders',
         help_text='Rider assigned to this order for delivery'
     )
+    assigned_rider=models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_deliveries',
+        limit_choices_to={'role': 'RIDER'},
+        help_text='Rider specifically assigned by tailor when accepting the order (used for targeted notifications)'
+    )
     order_type=models.CharField(
         max_length=25,
         choices=ORDER_TYPE_CHOICES,
         default='fabric_with_stitching',
         help_text="Type of order - fabric only or fabric with stitching"
+    )
+    service_mode = models.CharField(
+        max_length=20,
+        choices=SERVICE_MODE_CHOICES,
+        default='home_delivery',
+        help_text="Service mode - Home Delivery or Walk-In"
     )
     order_number=models.CharField(
     max_length=20,
@@ -130,17 +161,19 @@ class Order(BaseModel):
     help_text="Main status of the order"
     )
     
-    rider_status=models.CharField(
+    rider_status=FSMField(
         max_length=30,
         choices=RIDER_STATUS_CHOICES,
         default="none",
+        protected=False,  # Allow direct assignment for backward compatibility
         help_text="Current rider activity status"
     )
     
-    tailor_status=models.CharField(
+    tailor_status=FSMField(
         max_length=30,
         choices=TAILOR_STATUS_CHOICES,
         default="none",
+        protected=False,  # Allow direct assignment for backward compatibility
         help_text="Current tailor activity status"
     )
 
@@ -149,6 +182,13 @@ class Order(BaseModel):
     decimal_places=2,
     default=Decimal('0.00'),
     help_text="sub total before taxes and fees"
+    )
+
+    stitching_price=models.DecimalField(
+    max_digits=10,
+    decimal_places=2,
+    default=Decimal('0.00'),
+    help_text="Total stitching price for order (only for fabric_with_stitching orders)"
     )
 
     tax_amount=models.DecimalField(
@@ -164,6 +204,14 @@ class Order(BaseModel):
     default=Decimal('0.00'),
     help_text="delivery fee"
     )
+
+    system_fee=models.DecimalField(
+    max_digits=10,
+    decimal_places=2,
+    default=Decimal('0.00'),
+    help_text="Fixed system fee (SAR)"
+    )
+
 
     total_amount=models.DecimalField(
     max_digits=10,
@@ -199,6 +247,46 @@ class Order(BaseModel):
     related_name='delivery_orders',
     help_text="Delivery address for this order"
     )
+
+    delivery_latitude=models.DecimalField(
+    max_digits=9,
+    decimal_places=6,
+    null=True,
+    blank=True,
+    help_text="Delivery latitude"
+    )
+
+    delivery_longitude=models.DecimalField(
+    max_digits=9,
+    decimal_places=6,
+    null=True,
+    blank=True,
+    help_text="Delivery longitude"
+    )
+    delivery_formatted_address=models.TextField(
+    null=True,
+    blank=True,
+    help_text="Formatted address from geocoding (current location)"
+    )
+    delivery_street=models.CharField(
+    max_length=100,
+    null=True,
+    blank=True,
+    help_text="Delivery street"
+    )
+    delivery_city=models.CharField(
+    max_length=100,
+    null=True,
+    blank=True,
+    help_text="Delivery city"
+    )
+    delivery_extra_info=models.TextField(
+    null=True,
+    blank=True,
+    help_text="Delivery extra info"
+    )
+   
+
 
     estimated_delivery_date=models.DateField(
     null=True,
@@ -246,6 +334,17 @@ class Order(BaseModel):
         blank=True,
         help_text="Appointment time for customer (optional)"
     )
+    stitching_completion_date=models.DateField(
+        null=True,
+        blank=True,
+        help_text="Stitching completion date"
+    )
+    stitching_completion_time=models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Stitching completion time"
+    )
+
     
     # Custom styles for the order
     custom_styles = models.JSONField(
@@ -253,6 +352,12 @@ class Order(BaseModel):
         blank=True,
         null=True,
         help_text="Array of custom style selections (optional). Format: [{'style_type': 'collar', 'index': 0, 'label': 'Collar Style 1', 'asset_path': 'assets/thobs/collar/collar1.png'}]"
+    )
+    
+    # Free measurement tracking
+    is_free_measurement = models.BooleanField(
+        default=False,
+        help_text="Whether this is a free first-time measurement order"
     )
 
     class Meta:
@@ -270,9 +375,169 @@ class Order(BaseModel):
            import uuid
            self.order_number = f"ORD-{uuid.uuid4().hex[:8].upper()}"
         if not self.total_amount:
-            self.total_amount=self.subtotal+self.tax_amount+self.delivery_fee
+            self.total_amount=self.subtotal+self.stitching_price+self.tax_amount+self.delivery_fee
+
+        # Auto-sync main status based on rider_status and tailor_status
+        # This preserves the existing auto-sync logic from OrderStatusTransitionService
+        self._sync_main_status()
 
         super().save(*args, **kwargs)
+    
+    def _sync_main_status(self):
+        """
+        Automatically sync main status based on rider_status and tailor_status.
+        This ensures the main status reflects the current state of the order.
+        """
+        # If collected (Walk-In final state)
+        if self.status == 'collected':
+            return
+
+        # If delivered by rider, main status should be delivered
+        if self.rider_status == 'delivered':
+            self.status = 'delivered'
+            return
+        
+        # If cancelled, keep cancelled
+        if self.status == 'cancelled':
+            return
+
+        # NEW: For Walk-In flow
+        if self.service_mode == 'walk_in':
+            if self.status == 'pending':
+                if self.tailor_status != 'none':
+                    self.status = 'confirmed'
+                else:
+                    return
+            elif self.status == 'confirmed' and self.tailor_status in ['in_progress', 'stitching_started']:
+                 self.status = 'in_progress'
+            elif self.tailor_status == 'stitched' and self.status != 'collected':
+                self.status = 'ready_for_pickup'
+            elif self.tailor_status == 'measurements_complete' and self.status != 'collected':
+                # For measurement service walk-in orders - measurements are done, ready for pickup
+                self.status = 'ready_for_pickup'
+            return
+
+        # For measurement_service flow (Home Delivery)
+        if self.order_type == 'measurement_service':
+            if self.service_mode == 'home_delivery':
+                # Home delivery measurement: rider-driven flow (no tailor confirmation needed)
+                if self.status == 'pending' and self.rider_status == 'accepted':
+                    self.status = 'confirmed'
+                elif self.status == 'confirmed' and self.rider_status in ['on_way_to_measurement', 'measuring']:
+                    self.status = 'in_progress'
+                elif self.rider_status == 'delivered':
+                    self.status = 'delivered'
+            # Walk-in measurement handled in walk_in flow above
+            return
+
+        # For fabric_only flow (Home Delivery)
+        if self.order_type == 'fabric_only':
+            if self.status == 'pending':
+                if self.tailor_status != 'none':
+                    self.status = 'confirmed'
+                else:
+                    return
+            elif self.status == 'confirmed' and self.rider_status in ['accepted', 'on_way_to_pickup', 'picked_up', 'on_way_to_delivery']:
+                self.status = 'in_progress'
+            elif self.rider_status == 'picked_up' and self.status == 'in_progress':
+                self.status = 'ready_for_delivery'
+        
+        # For fabric_with_stitching flow (Home Delivery)
+        else:  # fabric_with_stitching
+            if self.status == 'pending':
+                if self.tailor_status != 'none':
+                    self.status = 'confirmed'
+                else:
+                    return
+            elif self.status == 'confirmed' and self.rider_status in ['accepted', 'on_way_to_measurement', 'measurement_taken']:
+                self.status = 'in_progress'
+            elif self.tailor_status == 'stitched' and self.rider_status in ['on_way_to_pickup', 'picked_up', 'on_way_to_delivery']:
+                self.status = 'ready_for_delivery'
+
+    # ============================================================================
+    # RIDER FSM TRANSITIONS
+    # ============================================================================
+    
+    @transition(field=rider_status, source='none', target='accepted')
+    def rider_accept_order(self, user=None):
+        """Rider accepts the order"""
+        pass
+    
+    @transition(field=rider_status, source='accepted', target='on_way_to_pickup')
+    def rider_start_pickup(self):
+        """Rider starts going to pickup location (fabric_only)"""
+        pass
+    
+    @transition(field=rider_status, source='accepted', target='on_way_to_measurement')
+    def rider_start_measurement(self):
+        """Rider starts going to take measurements (fabric_with_stitching)"""
+        pass
+    
+    @transition(field=rider_status, source='on_way_to_measurement', target='measuring')
+    def rider_start_measuring(self):
+        """Rider starts taking measurements"""
+        pass
+    
+    @transition(field=rider_status, source='measuring', target='measurement_taken')
+    def rider_complete_measurements(self):
+        """Rider completes measurements"""
+        pass
+    
+    @transition(field=rider_status, source='measurement_taken', target='on_way_to_pickup')
+    def rider_start_pickup_after_measurement(self):
+        """Rider starts going to pickup after measurements (fabric_with_stitching)"""
+        pass
+    
+    @transition(field=rider_status, source='on_way_to_pickup', target='picked_up')
+    def rider_mark_picked_up(self):
+        """Rider picks up order from tailor"""
+        pass
+    
+    @transition(field=rider_status, source='picked_up', target='on_way_to_delivery')
+    def rider_start_delivery(self):
+        """Rider starts delivery to customer"""
+        pass
+    
+    @transition(field=rider_status, source='on_way_to_delivery', target='delivered')
+    def rider_mark_delivered(self):
+        """Rider delivers order to customer"""
+        self.actual_delivery_date = timezone.now().date()
+    
+    # ============================================================================
+    # TAILOR FSM TRANSITIONS
+    # ============================================================================
+    
+    @transition(field=tailor_status, source='none', target='accepted')
+    def tailor_accept_order(self, user=None):
+        """Tailor accepts the order"""
+        pass
+    
+    @transition(field=tailor_status, source='accepted', target='in_progress')
+    def tailor_start_work(self):
+        """Tailor starts working on order"""
+        pass
+    
+    @transition(field=tailor_status, source=['accepted', 'in_progress'], target='stitching_started')
+    def tailor_start_stitching(self):
+        """Tailor starts stitching (fabric_with_stitching only)"""
+        pass
+    
+    @transition(field=tailor_status, source='stitching_started', target='stitched')
+    def tailor_finish_stitching(self):
+        """Tailor finishes stitching"""
+        pass
+
+    # ============================================================================
+    # CUSTOMER ACTIONS
+    # ============================================================================
+    def mark_as_collected(self):
+        """Allow customer to mark the order as collected (for Walk-In Mode)"""
+        if self.service_mode == 'walk_in' and self.status == 'ready_for_pickup':
+            self.status = 'collected'
+            self.save()
+            return True, "Order marked as collected"
+        return False, "Order is not ready for pickup or not a walk-in order"
+
 
     def recalculate_totals(self):
         from apps.orders.services import OrderCalculationService
@@ -286,15 +551,16 @@ class Order(BaseModel):
                 items_data,
                 delivery_address=self.delivery_address,
                 tailor=self.tailor,
-                order_type=self.order_type
+                order_type=self.order_type,
+                service_mode=self.service_mode
         )
         self.subtotal = totals['subtotal']
+        self.stitching_price = totals.get('stitching_price', Decimal('0.00'))
         self.tax_amount = totals['tax_amount']
         self.delivery_fee = totals['delivery_fee']
-        # Remove stitching_price from totals if it exists (Order model doesn't have this field yet)
-        totals.pop('stitching_price', None)
+        self.system_fee = totals.get('system_fee', Decimal('0.00'))
         self.total_amount = totals['total_amount']
-        self.save(update_fields=['subtotal', 'tax_amount', 'delivery_fee', 'total_amount'])
+        self.save(update_fields=['subtotal', 'stitching_price', 'tax_amount', 'delivery_fee', 'system_fee', 'total_amount'])
 
     def __str__(self):
         # Get tailor name from profile if available
@@ -310,7 +576,15 @@ class Order(BaseModel):
         if self.family_member and self.family_member.name:
             recipient = self.family_member.name
         else:
-            recipient = self.customer.username if self.customer else 'Unknown'
+            # Check items for recipients
+            item_recipients = self.order_items.filter(family_member__isnull=False).values_list('family_member__name', flat=True).distinct()
+            if item_recipients.exists():
+                recipient = f"Family ({', '.join(item_recipients)})"
+                # If customer is also a recipient
+                if self.order_items.filter(family_member__isnull=True).exists():
+                    recipient = f"{self.customer.username} & {recipient}"
+            else:
+                recipient = self.customer.username if self.customer else 'Unknown'
         
         # Get customer username
         customer_name = self.customer.username if self.customer else 'Unknown'
@@ -326,6 +600,20 @@ class Order(BaseModel):
     def can_be_cancelled(self):
         """Check if order can still be cancelled"""
         return self.status in ['pending','confirmed']
+    
+    @property
+    def all_items_have_measurements(self):
+        """Check if all order items have measurements"""
+        # For fabric_only orders, measurements not required
+        if self.order_type == 'fabric_only':
+            return True
+        
+        # For measurement_service and fabric_with_stitching, check measurements
+        items_without_measurements = self.order_items.filter(
+            Q(measurements__isnull=True) | Q(measurements={})
+        )
+        
+        return items_without_measurements.count() == 0
     
     def get_allowed_status_transitions(self, user_role=None):
         """
@@ -379,6 +667,8 @@ class OrderItem(BaseModel):
     fabric=models.ForeignKey(
     'tailors.Fabric',
     on_delete=models.CASCADE,
+    null=True,  # Allow null for measurement orders
+    blank=True,  # Not required
     help_text='Fabric beginf ordered'
 
     )
@@ -406,6 +696,13 @@ class OrderItem(BaseModel):
         help_text="Customer measurements for this item"
     )
 
+    custom_styles = models.JSONField(
+        default=None,
+        blank=True,
+        null=True,
+        help_text="Custom style selections for this item. Format: [{'style_type': 'collar', 'index': 0, 'label': 'Collar Style 1', 'asset_path': 'assets/thobs/collar/collar1.png'}]"
+    )
+
     custom_instructions=models.TextField(
     null=True,
     blank=True,
@@ -415,6 +712,14 @@ class OrderItem(BaseModel):
     is_ready=models.BooleanField(
     default=False,
     help_text="Whether this item is ready for delivery"
+    )
+
+    family_member=models.ForeignKey(
+    'customers.FamilyMember',
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True,
+    help_text="Family member this item is for (optional - if not specified, item is for the customer)"
     )
 
     class Meta:
@@ -466,10 +771,63 @@ class OrderStatusHistory(BaseModel):
     )
     
     class Meta:
-        ordering = ['-created_at']
-        verbose_name = "Order Status History"
-        verbose_name_plural = "Order Status Histories"
-    
-    def __str__(self):
-        return f"{self.order.order_number}: {self.previous_status} → {self.status}"
+        ordering=['-created_at']
+        verbose_name='Order Status History'
+        verbose_name_plural='Order Status Histories'
 
+    def __str__(self):
+        return f"{self.order.order_number} - {self.status} (changed by {self.changed_by.username})"
+
+
+# ============================================================================
+# FSM SIGNAL HANDLERS FOR AUTOMATIC NOTIFICATIONS
+# ============================================================================
+
+@receiver(post_transition, sender=Order)
+def send_notification_on_status_transition(sender, instance, name, source, target, **kwargs):
+    """
+    Automatically send notifications when order status transitions occur.
+    This fixes the bug where old_status and new_status were the same.
+    
+    Args:
+        sender: Order model class
+        instance: The order instance
+        name: Name of the transition method (e.g., 'rider_accept_order')
+        source: Previous status value
+        target: New status value
+        **kwargs: Additional arguments including method_kwargs
+    """
+    from apps.notifications.services import NotificationService
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    # Get the user who made the change from method arguments
+    method_kwargs = kwargs.get('method_kwargs', {})
+    user = method_kwargs.get('user')
+    
+    try:
+        # Determine which field changed based on transition method name
+        if name.startswith('rider_'):
+            # Rider status transition - send rider status notification
+            NotificationService.send_rider_status_notification(
+                order=instance,
+                old_rider_status=source,  # ✅ Correct old value from FSM
+                new_rider_status=target,  # ✅ Correct new value from FSM
+                changed_by=user
+            )
+            logger.info(f"Sent rider status notification: {source} → {target} for order {instance.order_number}")
+            
+        elif name.startswith('tailor_'):
+            # Tailor status transition - send tailor status notification
+            NotificationService.send_tailor_status_notification(
+                order=instance,
+                old_tailor_status=source,  # ✅ Correct old value from FSM
+                new_tailor_status=target,  # ✅ Correct new value from FSM
+                changed_by=user
+            )
+            logger.info(f"Sent tailor status notification: {source} → {target} for order {instance.order_number}")
+            
+    except Exception as e:
+        # Log error but don't fail the transition
+        logger.error(f"Failed to send notification for {name}: {str(e)}")

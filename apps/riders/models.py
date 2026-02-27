@@ -435,3 +435,167 @@ class RiderOrderAssignment(BaseModel):
     def __str__(self):
         return f"{self.rider.username} - {self.order.order_number} - {self.status}"
 
+
+class TailorInvitationCode(BaseModel):
+    """
+    Invitation codes for riders to join a tailor's delivery team.
+    Tailors generate unique codes that riders can enter to associate themselves.
+    """
+    tailor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='rider_invitation_codes',
+        limit_choices_to={'role': 'TAILOR'},
+        help_text="Tailor who created this invitation code"
+    )
+    
+    code = models.CharField(
+        max_length=20,
+        unique=True,
+        db_index=True,
+        help_text="Unique invitation code (e.g., TAL-42-X7K9P)"
+    )
+    
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this code can still be used"
+    )
+    
+    max_uses = models.PositiveIntegerField(
+        default=0,
+        help_text="Maximum number of times this code can be used (0 = unlimited)"
+    )
+    
+    times_used = models.PositiveIntegerField(
+        default=0,
+        help_text="How many times this code has been used"
+    )
+    
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this code expires (null = never)"
+    )
+    
+    class Meta:
+        verbose_name = "Tailor Invitation Code"
+        verbose_name_plural = "Tailor Invitation Codes"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['code']),
+            models.Index(fields=['tailor', 'is_active']),
+        ]
+    
+    def __str__(self):
+        tailor_name = self.tailor.username
+        if hasattr(self.tailor, 'tailor_profile') and self.tailor.tailor_profile:
+            tailor_name = self.tailor.tailor_profile.shop_name or tailor_name
+        return f"{tailor_name} - {self.code}"
+    
+    def can_be_used(self):
+        """
+        Check if code is still valid.
+        Returns: (bool, str) - (is_valid, error_message)
+        """
+        from django.utils import timezone
+        
+        if not self.is_active:
+            return False, "Code is inactive"
+        
+        if self.expires_at and timezone.now() > self.expires_at:
+            return False, "Code has expired"
+        
+        if self.max_uses > 0 and self.times_used >= self.max_uses:
+            return False, "Code has reached maximum uses"
+        
+        return True, "Valid"
+    
+    @staticmethod
+    def generate_unique_code(tailor_id):
+        """
+        Generate a unique invitation code for a tailor.
+        Format: TAL-{TAILOR_ID}-{RANDOM}
+        Example: TAL-42-X7K9P
+        """
+        import random
+        import string
+        
+        # Generate random 5-character string
+        random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+        code = f"TAL-{tailor_id}-{random_part}"
+        
+        # Ensure uniqueness (very unlikely to collide, but check anyway)
+        while TailorInvitationCode.objects.filter(code=code).exists():
+            random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+            code = f"TAL-{tailor_id}-{random_part}"
+        
+        return code
+
+
+class TailorRiderAssociation(BaseModel):
+    """
+    Represents the relationship between a tailor and a rider.
+    Created when a rider uses a tailor's invitation code.
+    """
+    tailor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='associated_riders',
+        limit_choices_to={'role': 'TAILOR'},
+        help_text="Tailor in this association"
+    )
+    
+    rider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='associated_tailors',
+        limit_choices_to={'role': 'RIDER'},
+        help_text="Rider in this association"
+    )
+    
+    joined_via_code = models.ForeignKey(
+        TailorInvitationCode,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='associations',
+        help_text="The invitation code used to join (for tracking)"
+    )
+    
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this association is currently active"
+    )
+    
+    nickname = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Optional friendly name/nickname for this rider (set by tailor)"
+    )
+    
+    priority = models.PositiveIntegerField(
+        default=0,
+        help_text="Priority/ranking for this rider (higher = more preferred)"
+    )
+    
+    class Meta:
+        verbose_name = "Tailor-Rider Association"
+        verbose_name_plural = "Tailor-Rider Associations"
+        ordering = ['-priority', '-created_at']
+        unique_together = [['tailor', 'rider']]
+        indexes = [
+            models.Index(fields=['tailor', 'is_active']),
+            models.Index(fields=['rider', 'is_active']),
+        ]
+    
+    def __str__(self):
+        tailor_name = self.tailor.username
+        if hasattr(self.tailor, 'tailor_profile') and self.tailor.tailor_profile:
+            tailor_name = self.tailor.tailor_profile.shop_name or tailor_name
+        
+        rider_name = self.rider.username
+        if hasattr(self.rider, 'rider_profile') and self.rider.rider_profile:
+            rider_name = self.rider.rider_profile.full_name or rider_name
+        
+        return f"{tailor_name} ↔ {rider_name}"
+

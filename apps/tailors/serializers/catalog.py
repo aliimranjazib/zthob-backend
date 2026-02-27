@@ -61,7 +61,7 @@ class FabricSerializer(serializers.ModelSerializer):
     gallery = FabricImageSerializer(many=True, read_only=True)
     category = FabricCategoryBasicSerializer(read_only=True)
     fabric_type = FabricTypeBasicSerializer(read_only=True)
-    fabric_tag = FabricTagBasicSerializer(read_only=True)
+    tags = FabricTagBasicSerializer(many=True, read_only=True)
     is_low_stock = serializers.ReadOnlyField()
     is_out_of_stock = serializers.ReadOnlyField()
     
@@ -69,7 +69,7 @@ class FabricSerializer(serializers.ModelSerializer):
         model = Fabric
         fields = [
             "id", "category", "name", "description", "seasons",
-            "fabric_type", "fabric_tag", "sku", "price", "stitching_price", "stock",
+            "fabric_type", "tags", "sku", "price", "stitching_price", "stock",
             "is_low_stock", "is_out_of_stock", "is_active", 
             "created_at", "updated_at", "gallery",
         ]

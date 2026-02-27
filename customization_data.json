@@ -1,0 +1,1449 @@
+[
+{
+  "model": "customization.customstylecategory",
+  "pk": 1,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.205Z",
+    "updated_at": "2025-12-31T08:36:17.205Z",
+    "created_by": null,
+    "name": "collar",
+    "display_name": "Collar Styles",
+    "display_order": 1,
+    "is_active": true
+  }
+},
+{
+  "model": "customization.customstylecategory",
+  "pk": 2,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.234Z",
+    "updated_at": "2025-12-31T08:36:17.234Z",
+    "created_by": null,
+    "name": "cuff",
+    "display_name": "Cuff Styles",
+    "display_order": 2,
+    "is_active": true
+  }
+},
+{
+  "model": "customization.customstylecategory",
+  "pk": 3,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.255Z",
+    "updated_at": "2025-12-31T08:36:17.255Z",
+    "created_by": null,
+    "name": "placket",
+    "display_name": "Placket Styles",
+    "display_order": 3,
+    "is_active": true
+  }
+},
+{
+  "model": "customization.customstylecategory",
+  "pk": 4,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.275Z",
+    "updated_at": "2025-12-31T08:36:17.275Z",
+    "created_by": null,
+    "name": "front_single_pocket",
+    "display_name": "Front Single Pocket",
+    "display_order": 4,
+    "is_active": true
+  }
+},
+{
+  "model": "customization.customstylecategory",
+  "pk": 5,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.290Z",
+    "updated_at": "2025-12-31T08:36:17.290Z",
+    "created_by": null,
+    "name": "front_double_pocket",
+    "display_name": "Front Double Pocket",
+    "display_order": 5,
+    "is_active": true
+  }
+},
+{
+  "model": "customization.customstylecategory",
+  "pk": 6,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.303Z",
+    "updated_at": "2025-12-31T08:36:17.303Z",
+    "created_by": null,
+    "name": "side_pocket",
+    "display_name": "Side Pocket",
+    "display_order": 6,
+    "is_active": true
+  }
+},
+{
+  "model": "customization.customstylecategory",
+  "pk": 7,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.308Z",
+    "updated_at": "2025-12-31T08:36:17.308Z",
+    "created_by": null,
+    "name": "buttons",
+    "display_name": "Button Colors",
+    "display_order": 7,
+    "is_active": true
+  }
+},
+{
+  "model": "customization.customstylecategory",
+  "pk": 8,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.339Z",
+    "updated_at": "2025-12-31T08:36:17.339Z",
+    "created_by": null,
+    "name": "yoke",
+    "display_name": "Yoke Styles",
+    "display_order": 8,
+    "is_active": true
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 1,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.207Z",
+    "updated_at": "2025-12-31T08:36:17.208Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Business",
+    "code": "collar_10_Business",
+    "image": "custom_styles/2025/12/collar_10_Business.png",
+    "description": null,
+    "display_order": 0,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 2,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.209Z",
+    "updated_at": "2025-12-31T08:36:17.210Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Bottomdown",
+    "code": "collar_11_BottomDown",
+    "image": "custom_styles/2025/12/collar_11_BottomDown.png",
+    "description": null,
+    "display_order": 1,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 3,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.210Z",
+    "updated_at": "2025-12-31T08:36:17.211Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Longpoint",
+    "code": "collar_12_LongPoint",
+    "image": "custom_styles/2025/12/collar_12_LongPoint.png",
+    "description": null,
+    "display_order": 2,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 4,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.212Z",
+    "updated_at": "2025-12-31T08:36:17.213Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Narrowspread",
+    "code": "collar_13_NarrowSpread",
+    "image": "custom_styles/2025/12/collar_13_NarrowSpread.png",
+    "description": null,
+    "display_order": 3,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 5,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.214Z",
+    "updated_at": "2025-12-31T08:36:17.215Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Simple",
+    "code": "collar_14_Simple",
+    "image": "custom_styles/2025/12/collar_14_Simple.png",
+    "description": null,
+    "display_order": 4,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 6,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.215Z",
+    "updated_at": "2025-12-31T08:36:17.216Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Polo",
+    "code": "collar_15_Polo",
+    "image": "custom_styles/2025/12/collar_15_Polo.png",
+    "description": null,
+    "display_order": 5,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 7,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.217Z",
+    "updated_at": "2025-12-31T08:36:17.218Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Hoodie",
+    "code": "collar_16_Hoodie",
+    "image": "custom_styles/2025/12/collar_16_Hoodie.png",
+    "description": null,
+    "display_order": 6,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 8,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.219Z",
+    "updated_at": "2025-12-31T08:36:17.220Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Standard",
+    "code": "collar_1_Standard",
+    "image": "custom_styles/2025/12/collar_1_Standard.png",
+    "description": null,
+    "display_order": 7,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 9,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.220Z",
+    "updated_at": "2025-12-31T08:36:17.221Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Mandarin",
+    "code": "collar_2_Mandarin",
+    "image": "custom_styles/2025/12/collar_2_Mandarin.png",
+    "description": null,
+    "display_order": 8,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 10,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.222Z",
+    "updated_at": "2025-12-31T08:36:17.223Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Square",
+    "code": "collar_3_Square",
+    "image": "custom_styles/2025/12/collar_3_Square.png",
+    "description": null,
+    "display_order": 9,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 11,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.223Z",
+    "updated_at": "2025-12-31T08:36:17.224Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Curved",
+    "code": "collar_4_Curved",
+    "image": "custom_styles/2025/12/collar_4_Curved.png",
+    "description": null,
+    "display_order": 10,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 12,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.225Z",
+    "updated_at": "2025-12-31T08:36:17.226Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Band",
+    "code": "collar_5_Band",
+    "image": "custom_styles/2025/12/collar_5_Band.png",
+    "description": null,
+    "display_order": 11,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 13,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.227Z",
+    "updated_at": "2025-12-31T08:36:17.227Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Club",
+    "code": "collar_6_Club",
+    "image": "custom_styles/2025/12/collar_6_Club.png",
+    "description": null,
+    "display_order": 12,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 14,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.228Z",
+    "updated_at": "2025-12-31T08:36:17.229Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Businessround",
+    "code": "collar_7_BusinessRound",
+    "image": "custom_styles/2025/12/collar_7_BusinessRound.png",
+    "description": null,
+    "display_order": 13,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 15,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.230Z",
+    "updated_at": "2025-12-31T08:36:17.231Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Cutaway",
+    "code": "collar_8_Cutaway",
+    "image": "custom_styles/2025/12/collar_8_Cutaway.png",
+    "description": null,
+    "display_order": 14,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 16,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.232Z",
+    "updated_at": "2025-12-31T08:36:17.233Z",
+    "created_by": null,
+    "category": 1,
+    "name": "Modernbusiness",
+    "code": "collar_9_ModernBusiness",
+    "image": "custom_styles/2025/12/collar_9_ModernBusiness.png",
+    "description": null,
+    "display_order": 15,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 17,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.235Z",
+    "updated_at": "2025-12-31T08:36:17.235Z",
+    "created_by": null,
+    "category": 2,
+    "name": "Strap",
+    "code": "cuff_10_Strap",
+    "image": "custom_styles/2025/12/cuff_10_Strap.png",
+    "description": null,
+    "display_order": 0,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 18,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.236Z",
+    "updated_at": "2025-12-31T08:36:17.237Z",
+    "created_by": null,
+    "category": 2,
+    "name": "Zip",
+    "code": "cuff_11_Zip",
+    "image": "custom_styles/2025/12/cuff_11_Zip.png",
+    "description": null,
+    "display_order": 1,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 19,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.238Z",
+    "updated_at": "2025-12-31T08:36:17.239Z",
+    "created_by": null,
+    "category": 2,
+    "name": "Urban",
+    "code": "cuff_12_Urban",
+    "image": "custom_styles/2025/12/cuff_12_Urban.png",
+    "description": null,
+    "display_order": 2,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 20,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.240Z",
+    "updated_at": "2025-12-31T08:36:17.240Z",
+    "created_by": null,
+    "category": 2,
+    "name": "Triplebuttons",
+    "code": "cuff_13_TripleButtons",
+    "image": "custom_styles/2025/12/cuff_13_TripleButtons.png",
+    "description": null,
+    "display_order": 3,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 21,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.241Z",
+    "updated_at": "2025-12-31T08:36:17.242Z",
+    "created_by": null,
+    "category": 2,
+    "name": "Singlebutton",
+    "code": "cuff_1_SingleButton",
+    "image": "custom_styles/2025/12/cuff_1_SingleButton.png",
+    "description": null,
+    "display_order": 4,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 22,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.243Z",
+    "updated_at": "2025-12-31T08:36:17.243Z",
+    "created_by": null,
+    "category": 2,
+    "name": "Singlebutton",
+    "code": "cuff_2_SingleButton",
+    "image": "custom_styles/2025/12/cuff_2_SingleButton.png",
+    "description": null,
+    "display_order": 5,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 23,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.244Z",
+    "updated_at": "2025-12-31T08:36:17.245Z",
+    "created_by": null,
+    "category": 2,
+    "name": "Simple",
+    "code": "cuff_3_Simple",
+    "image": "custom_styles/2025/12/cuff_3_Simple.png",
+    "description": null,
+    "display_order": 6,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 24,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.246Z",
+    "updated_at": "2025-12-31T08:36:17.247Z",
+    "created_by": null,
+    "category": 2,
+    "name": "Simplekuwaiti",
+    "code": "cuff_4_SimpleKuwaiti",
+    "image": "custom_styles/2025/12/cuff_4_SimpleKuwaiti.png",
+    "description": null,
+    "display_order": 7,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 25,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.247Z",
+    "updated_at": "2025-12-31T08:36:17.248Z",
+    "created_by": null,
+    "category": 2,
+    "name": "Modern",
+    "code": "cuff_5_Modern",
+    "image": "custom_styles/2025/12/cuff_5_Modern.png",
+    "description": null,
+    "display_order": 8,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 26,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.249Z",
+    "updated_at": "2025-12-31T08:36:17.250Z",
+    "created_by": null,
+    "category": 2,
+    "name": "Anglefrench",
+    "code": "cuff_6_AngleFrench",
+    "image": "custom_styles/2025/12/cuff_6_AngleFrench.png",
+    "description": null,
+    "display_order": 9,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 27,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.251Z",
+    "updated_at": "2025-12-31T08:36:17.251Z",
+    "created_by": null,
+    "category": 2,
+    "name": "Link",
+    "code": "cuff_7_Link",
+    "image": "custom_styles/2025/12/cuff_7_Link.png",
+    "description": null,
+    "display_order": 10,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 28,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.252Z",
+    "updated_at": "2025-12-31T08:36:17.253Z",
+    "created_by": null,
+    "category": 2,
+    "name": "Napolean",
+    "code": "cuff_8_Napolean",
+    "image": "custom_styles/2025/12/cuff_8_Napolean.png",
+    "description": null,
+    "display_order": 11,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 29,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.253Z",
+    "updated_at": "2025-12-31T08:36:17.255Z",
+    "created_by": null,
+    "category": 2,
+    "name": "Snap",
+    "code": "cuff_9_Snap",
+    "image": "custom_styles/2025/12/cuff_9_Snap.png",
+    "description": null,
+    "display_order": 12,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 30,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.256Z",
+    "updated_at": "2025-12-31T08:36:17.257Z",
+    "created_by": null,
+    "category": 3,
+    "name": "Polo",
+    "code": "placket_10_Polo",
+    "image": "custom_styles/2025/12/placket_10_Polo.png",
+    "description": null,
+    "display_order": 0,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 31,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.258Z",
+    "updated_at": "2025-12-31T08:36:17.259Z",
+    "created_by": null,
+    "category": 3,
+    "name": "Doublehole",
+    "code": "placket_11_DoubleHole",
+    "image": "custom_styles/2025/12/placket_11_DoubleHole.png",
+    "description": null,
+    "display_order": 1,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 32,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.260Z",
+    "updated_at": "2025-12-31T08:36:17.260Z",
+    "created_by": null,
+    "category": 3,
+    "name": "Standard",
+    "code": "placket_1_Standard",
+    "image": "custom_styles/2025/12/placket_1_Standard.png",
+    "description": null,
+    "display_order": 2,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 33,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.261Z",
+    "updated_at": "2025-12-31T08:36:17.263Z",
+    "created_by": null,
+    "category": 3,
+    "name": "Standardhidden",
+    "code": "placket_2_StandardHidden",
+    "image": "custom_styles/2025/12/placket_2_StandardHidden.png",
+    "description": null,
+    "display_order": 3,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 34,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.264Z",
+    "updated_at": "2025-12-31T08:36:17.264Z",
+    "created_by": null,
+    "category": 3,
+    "name": "Narrow",
+    "code": "placket_3_Narrow",
+    "image": "custom_styles/2025/12/placket_3_Narrow.png",
+    "description": null,
+    "display_order": 4,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 35,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.265Z",
+    "updated_at": "2025-12-31T08:36:17.266Z",
+    "created_by": null,
+    "category": 3,
+    "name": "Narrowhidden",
+    "code": "placket_4_NarrowHidden",
+    "image": "custom_styles/2025/12/placket_4_NarrowHidden.png",
+    "description": null,
+    "display_order": 5,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 36,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.267Z",
+    "updated_at": "2025-12-31T08:36:17.267Z",
+    "created_by": null,
+    "category": 3,
+    "name": "Zip",
+    "code": "placket_5_Zip",
+    "image": "custom_styles/2025/12/placket_5_Zip.png",
+    "description": null,
+    "display_order": 6,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 37,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.268Z",
+    "updated_at": "2025-12-31T08:36:17.269Z",
+    "created_by": null,
+    "category": 3,
+    "name": "Simple",
+    "code": "placket_6_Simple",
+    "image": "custom_styles/2025/12/placket_6_Simple.png",
+    "description": null,
+    "display_order": 7,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 38,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.270Z",
+    "updated_at": "2025-12-31T08:36:17.271Z",
+    "created_by": null,
+    "category": 3,
+    "name": "Reversehidden",
+    "code": "placket_7_ReverseHidden",
+    "image": "custom_styles/2025/12/placket_7_ReverseHidden.png",
+    "description": null,
+    "display_order": 8,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 39,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.272Z",
+    "updated_at": "2025-12-31T08:36:17.272Z",
+    "created_by": null,
+    "category": 3,
+    "name": "Hiddenzipsoft",
+    "code": "placket_8_HiddenZipSoft",
+    "image": "custom_styles/2025/12/placket_8_HiddenZipSoft.png",
+    "description": null,
+    "display_order": 9,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 40,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.273Z",
+    "updated_at": "2025-12-31T08:36:17.274Z",
+    "created_by": null,
+    "category": 3,
+    "name": "Hiddenbuttons",
+    "code": "placket_9_Hiddenbuttons",
+    "image": "custom_styles/2025/12/placket_9_Hiddenbuttons.png",
+    "description": null,
+    "display_order": 10,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 41,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.276Z",
+    "updated_at": "2025-12-31T08:36:17.277Z",
+    "created_by": null,
+    "category": 4,
+    "name": "1 Point",
+    "code": "front_pocket_1_Point",
+    "image": "custom_styles/2025/12/front_pocket_1_Point.png",
+    "description": null,
+    "display_order": 0,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 42,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.278Z",
+    "updated_at": "2025-12-31T08:36:17.279Z",
+    "created_by": null,
+    "category": 4,
+    "name": "2 Square",
+    "code": "front_pocket_2_Square",
+    "image": "custom_styles/2025/12/front_pocket_2_Square.png",
+    "description": null,
+    "display_order": 1,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 43,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.280Z",
+    "updated_at": "2025-12-31T08:36:17.281Z",
+    "created_by": null,
+    "category": 4,
+    "name": "3 Round",
+    "code": "front_pocket_3_Round",
+    "image": "custom_styles/2025/12/front_pocket_3_Round.png",
+    "description": null,
+    "display_order": 2,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 44,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.281Z",
+    "updated_at": "2025-12-31T08:36:17.282Z",
+    "created_by": null,
+    "category": 4,
+    "name": "4 Angle",
+    "code": "front_pocket_4_Angle",
+    "image": "custom_styles/2025/12/front_pocket_4_Angle.png",
+    "description": null,
+    "display_order": 3,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 45,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.283Z",
+    "updated_at": "2025-12-31T08:36:17.284Z",
+    "created_by": null,
+    "category": 4,
+    "name": "5 Inclined",
+    "code": "front_pocket_5_Inclined",
+    "image": "custom_styles/2025/12/front_pocket_5_Inclined.png",
+    "description": null,
+    "display_order": 4,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 46,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.285Z",
+    "updated_at": "2025-12-31T08:36:17.286Z",
+    "created_by": null,
+    "category": 4,
+    "name": "6 Wallet",
+    "code": "front_pocket_6_Wallet",
+    "image": "custom_styles/2025/12/front_pocket_6_Wallet.png",
+    "description": null,
+    "display_order": 5,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 47,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.287Z",
+    "updated_at": "2025-12-31T08:36:17.287Z",
+    "created_by": null,
+    "category": 4,
+    "name": "7 Threelines",
+    "code": "front_pocket_7_threeLines",
+    "image": "custom_styles/2025/12/front_pocket_7_threeLines.png",
+    "description": null,
+    "display_order": 6,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 48,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.288Z",
+    "updated_at": "2025-12-31T08:36:17.289Z",
+    "created_by": null,
+    "category": 4,
+    "name": "8 Threelinesdiagonal",
+    "code": "front_pocket_8_threeLinesDiagonal",
+    "image": "custom_styles/2025/12/front_pocket_8_threeLinesDiagonal.png",
+    "description": null,
+    "display_order": 7,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 49,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.290Z",
+    "updated_at": "2025-12-31T08:36:17.291Z",
+    "created_by": null,
+    "category": 5,
+    "name": "Double 3Lines",
+    "code": "front_pocket_double_3Lines",
+    "image": "custom_styles/2025/12/front_pocket_double_3Lines.png",
+    "description": null,
+    "display_order": 0,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 50,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.292Z",
+    "updated_at": "2025-12-31T08:36:17.293Z",
+    "created_by": null,
+    "category": 5,
+    "name": "Double 3Linesdiagonal",
+    "code": "front_pocket_double_3LinesDiagonal",
+    "image": "custom_styles/2025/12/front_pocket_double_3LinesDiagonal.png",
+    "description": null,
+    "display_order": 1,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 51,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.293Z",
+    "updated_at": "2025-12-31T08:36:17.294Z",
+    "created_by": null,
+    "category": 5,
+    "name": "Double Angle",
+    "code": "front_pocket_double_Angle",
+    "image": "custom_styles/2025/12/front_pocket_double_Angle.png",
+    "description": null,
+    "display_order": 2,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 52,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.295Z",
+    "updated_at": "2025-12-31T08:36:17.296Z",
+    "created_by": null,
+    "category": 5,
+    "name": "Double Inclined",
+    "code": "front_pocket_double_Inclined",
+    "image": "custom_styles/2025/12/front_pocket_double_Inclined.png",
+    "description": null,
+    "display_order": 3,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 53,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.297Z",
+    "updated_at": "2025-12-31T08:36:17.298Z",
+    "created_by": null,
+    "category": 5,
+    "name": "Double Point",
+    "code": "front_pocket_double_Point",
+    "image": "custom_styles/2025/12/front_pocket_double_Point.png",
+    "description": null,
+    "display_order": 4,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 54,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.298Z",
+    "updated_at": "2025-12-31T08:36:17.299Z",
+    "created_by": null,
+    "category": 5,
+    "name": "Double Round",
+    "code": "front_pocket_double_Round",
+    "image": "custom_styles/2025/12/front_pocket_double_Round.png",
+    "description": null,
+    "display_order": 5,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 55,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.300Z",
+    "updated_at": "2025-12-31T08:36:17.301Z",
+    "created_by": null,
+    "category": 5,
+    "name": "Double Square",
+    "code": "front_pocket_double_Square",
+    "image": "custom_styles/2025/12/front_pocket_double_Square.png",
+    "description": null,
+    "display_order": 6,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 56,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.302Z",
+    "updated_at": "2025-12-31T08:36:17.302Z",
+    "created_by": null,
+    "category": 5,
+    "name": "Double Wallet",
+    "code": "front_pocket_double_Wallet",
+    "image": "custom_styles/2025/12/front_pocket_double_Wallet.png",
+    "description": null,
+    "display_order": 7,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 57,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.304Z",
+    "updated_at": "2025-12-31T08:36:17.305Z",
+    "created_by": null,
+    "category": 6,
+    "name": "Leftside",
+    "code": "pocket_1_leftside",
+    "image": "custom_styles/2025/12/pocket_1_leftside.png",
+    "description": null,
+    "display_order": 0,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 58,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.306Z",
+    "updated_at": "2025-12-31T08:36:17.306Z",
+    "created_by": null,
+    "category": 6,
+    "name": "Rightside",
+    "code": "pocket_2_rightside",
+    "image": "custom_styles/2025/12/pocket_2_rightside.png",
+    "description": null,
+    "display_order": 1,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 59,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.307Z",
+    "updated_at": "2025-12-31T08:36:17.308Z",
+    "created_by": null,
+    "category": 6,
+    "name": "Doubleside",
+    "code": "pocket_3_doubleside",
+    "image": "custom_styles/2025/12/pocket_3_doubleside.png",
+    "description": null,
+    "display_order": 2,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 60,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.309Z",
+    "updated_at": "2025-12-31T08:36:17.310Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Red",
+    "code": "button_10_RED",
+    "image": "custom_styles/2025/12/button_10_RED.jpg",
+    "description": null,
+    "display_order": 0,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 61,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.311Z",
+    "updated_at": "2025-12-31T08:36:17.312Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Gray",
+    "code": "button_11_GRAY",
+    "image": "custom_styles/2025/12/button_11_GRAY.jpg",
+    "description": null,
+    "display_order": 1,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 62,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.313Z",
+    "updated_at": "2025-12-31T08:36:17.313Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Grayish Brown",
+    "code": "button_12_GRAYISH BROWN",
+    "image": "custom_styles/2025/12/button_12_GRAYISH_BROWN.jpg",
+    "description": null,
+    "display_order": 2,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 63,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.314Z",
+    "updated_at": "2025-12-31T08:36:17.315Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Maroon",
+    "code": "button_13_MAROON",
+    "image": "custom_styles/2025/12/button_13_MAROON.jpg",
+    "description": null,
+    "display_order": 3,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 64,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.316Z",
+    "updated_at": "2025-12-31T08:36:17.317Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Antiquegold",
+    "code": "button_14_ANTIQUEGOLD",
+    "image": "custom_styles/2025/12/button_14_ANTIQUEGOLD.jpg",
+    "description": null,
+    "display_order": 4,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 65,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.318Z",
+    "updated_at": "2025-12-31T08:36:17.319Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Deepgreen",
+    "code": "button_15_DEEPGREEN",
+    "image": "custom_styles/2025/12/button_15_DEEPGREEN.jpg",
+    "description": null,
+    "display_order": 5,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 66,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.320Z",
+    "updated_at": "2025-12-31T08:36:17.321Z",
+    "created_by": null,
+    "category": 7,
+    "name": "White",
+    "code": "button_16_WHITE",
+    "image": "custom_styles/2025/12/button_16_WHITE.jpg",
+    "description": null,
+    "display_order": 6,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 67,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.321Z",
+    "updated_at": "2025-12-31T08:36:17.322Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Black",
+    "code": "button_17_black",
+    "image": "custom_styles/2025/12/button_17_black.jpg",
+    "description": null,
+    "display_order": 7,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 68,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.323Z",
+    "updated_at": "2025-12-31T08:36:17.324Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Lavender",
+    "code": "button_1_LAVENDER",
+    "image": "custom_styles/2025/12/button_1_LAVENDER.jpg",
+    "description": null,
+    "display_order": 8,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 69,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.325Z",
+    "updated_at": "2025-12-31T08:36:17.325Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Pink",
+    "code": "button_2_PINK",
+    "image": "custom_styles/2025/12/button_2_PINK.jpg",
+    "description": null,
+    "display_order": 9,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 70,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.326Z",
+    "updated_at": "2025-12-31T08:36:17.327Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Mint",
+    "code": "button_3_MINT",
+    "image": "custom_styles/2025/12/button_3_MINT.jpg",
+    "description": null,
+    "display_order": 10,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 71,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.328Z",
+    "updated_at": "2025-12-31T08:36:17.329Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Rustybrown",
+    "code": "button_4_RUSTYBROWN",
+    "image": "custom_styles/2025/12/button_4_RUSTYBROWN.jpg",
+    "description": null,
+    "display_order": 11,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 72,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.330Z",
+    "updated_at": "2025-12-31T08:36:17.332Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Orange",
+    "code": "button_5_ORANGE",
+    "image": "custom_styles/2025/12/button_5_ORANGE.jpg",
+    "description": null,
+    "display_order": 12,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 73,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.332Z",
+    "updated_at": "2025-12-31T08:36:17.333Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Skyblue",
+    "code": "button_6_SKYBLUE",
+    "image": "custom_styles/2025/12/button_6_SKYBLUE.jpg",
+    "description": null,
+    "display_order": 13,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 74,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.334Z",
+    "updated_at": "2025-12-31T08:36:17.335Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Evergreen",
+    "code": "button_7_EVERGREEN",
+    "image": "custom_styles/2025/12/button_7_EVERGREEN.jpg",
+    "description": null,
+    "display_order": 14,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 75,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.336Z",
+    "updated_at": "2025-12-31T08:36:17.336Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Plumurple",
+    "code": "button_8_PLUMURPLE",
+    "image": "custom_styles/2025/12/button_8_PLUMURPLE.jpg",
+    "description": null,
+    "display_order": 15,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 76,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.337Z",
+    "updated_at": "2025-12-31T08:36:17.338Z",
+    "created_by": null,
+    "category": 7,
+    "name": "Chromeblue",
+    "code": "button_9_CHROMEBLUE",
+    "image": "custom_styles/2025/12/button_9_CHROMEBLUE.jpg",
+    "description": null,
+    "display_order": 16,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 77,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.339Z",
+    "updated_at": "2025-12-31T08:36:17.340Z",
+    "created_by": null,
+    "category": 8,
+    "name": "Back",
+    "code": "arrow_back",
+    "image": "custom_styles/2025/12/arrow_back.png",
+    "description": null,
+    "display_order": 0,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 78,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.341Z",
+    "updated_at": "2025-12-31T08:36:17.342Z",
+    "created_by": null,
+    "category": 8,
+    "name": "Back",
+    "code": "spilt_back",
+    "image": "custom_styles/2025/12/spilt_back.png",
+    "description": null,
+    "display_order": 1,
+    "is_active": true,
+    "extra_price": null
+  }
+},
+{
+  "model": "customization.customstyle",
+  "pk": 79,
+  "fields": {
+    "created_at": "2025-12-31T08:36:17.343Z",
+    "updated_at": "2025-12-31T08:36:17.343Z",
+    "created_by": null,
+    "category": 8,
+    "name": "Back",
+    "code": "standard_back",
+    "image": "custom_styles/2025/12/standard_back.png",
+    "description": null,
+    "display_order": 2,
+    "is_active": true,
+    "extra_price": null
+  }
+}
+]
