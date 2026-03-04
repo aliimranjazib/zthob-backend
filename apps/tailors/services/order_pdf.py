@@ -18,11 +18,13 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from django.utils import timezone
 
+from django.conf import settings
+import logging
+
+logger = logging.getLogger(__name__)
+
 # ─── Arabic font registration ─────────────────────────────────────────────────
-_FONTS_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))),
-    'fonts'
-)
+_FONTS_DIR = os.path.join(settings.BASE_DIR, 'fonts')
 _AR_FONT_REGULAR = 'Amiri'
 _AR_FONT_BOLD    = 'Amiri-Bold'
 
@@ -30,7 +32,8 @@ try:
     pdfmetrics.registerFont(TTFont(_AR_FONT_REGULAR, os.path.join(_FONTS_DIR, 'Amiri-Regular.ttf')))
     pdfmetrics.registerFont(TTFont(_AR_FONT_BOLD,    os.path.join(_FONTS_DIR, 'Amiri-Bold.ttf')))
     _ARABIC_FONT_AVAILABLE = True
-except Exception:
+except Exception as e:
+    logger.warning("Failed to load Arabic fonts: %s", e)
     _ARABIC_FONT_AVAILABLE = False
 
 
