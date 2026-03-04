@@ -324,17 +324,25 @@ def _kv_table(rows, col_widths=None, lang='en'):
     col_widths = col_widths or [page_w * 0.35, page_w * 0.65]
 
     if is_ar:
-        # Swap col widths and cell order for RTL
         col_widths = list(reversed(col_widths))
-        data = [
-            [Paragraph(_t(val, lang), s['value']), Paragraph(_t(lbl, lang), s['label'])]
-            for lbl, val in rows
-        ]
-    else:
-        data = [
-            [Paragraph(lbl, s['label']), Paragraph(str(val) if val else '—', s['value'])]
-            for lbl, val in rows
-        ]
+        
+    data = []
+    for row in rows:
+        lbl = row[0]
+        val = row[1]
+        skip_trans = row[2] if len(row) > 2 else False
+        
+        lbl_p = Paragraph(_t(lbl, lang) if is_ar else lbl, s['label'])
+        
+        if is_ar:
+            val_text = str(val) if skip_trans else _t(val, lang)
+            val_p = Paragraph(val_text if val else '—', s['value'])
+            data.append([val_p, lbl_p])
+        else:
+            val_text = str(val) if val else '—'
+            val_p = Paragraph(val_text, s['value'])
+            data.append([lbl_p, val_p])
+
     tbl = Table(data, colWidths=col_widths, hAlign='RIGHT' if is_ar else 'LEFT')
     tbl.setStyle(TableStyle([
         ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
@@ -581,7 +589,7 @@ def generate_order_pdf(order, lang='en') -> bytes:
     payment_method_display = order.get_payment_method_display()
 
     order_info_rows = [
-        ('Order Number',     order.order_number),
+        ('Order Number',     order.order_number, True),
         ('Order Type',       order_type_display),
         ('Service Mode',     service_mode_display),
         ('Payment Method',   payment_method_display),
@@ -620,9 +628,9 @@ def generate_order_pdf(order, lang='en') -> bytes:
 
     customer_rows = [
         ('Customer Name',  customer_name),
-        ('Phone',          customer_phone),
-        ('Email',          customer_email),
-        ('Delivery Addr.', addr_text),
+        ('Phone',          customer_phone, True),
+        ('Email',          customer_email, True),
+        ('Delivery Addr.', addr_text, True),  # True = skip shaping/translation for English address
     ]
     if order.delivery_extra_info:
         customer_rows.append(('Extra Info', order.delivery_extra_info))
@@ -682,7 +690,7 @@ def generate_order_pdf(order, lang='en') -> bytes:
         tailor_rows = [
             ('Shop Name',  shop_name),
             ('Tailor',     tailor_name),
-            ('Contact',    tailor_contact),
+            ('Contact',    tailor_contact, True),
         ]
         if order.assigned_rider:
             rider = order.assigned_rider
@@ -875,14 +883,20 @@ def generate_order_pdf(order, lang='en') -> bytes:
     price_rows = []
 
     def _price_row(label, amount, bold=False, accent=False):
+        font_b = _AR_FONT_BOLD if (is_ar and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
+        font_r = _AR_FONT_REGULAR if (is_ar and _ARABIC_FONT_AVAILABLE) else 'Helvetica'
+        
         lbl_style = ParagraphStyle('pl', parent=s['label'], alignment=TA_RIGHT,
-                                    fontName='Helvetica-Bold' if bold else 'Helvetica')
+                                    fontName=font_b if bold else font_r)
         val_style = ParagraphStyle('pv', parent=s['value'], alignment=TA_RIGHT,
                                     fontSize=10 if bold else 9,
                                     textColor=BRAND_ACCENT if accent else BRAND_TEXT,
-                                    fontName='Helvetica-Bold' if bold else 'Helvetica')
-        return [Paragraph('', s['label']), Paragraph(label, lbl_style),
-                Paragraph(_fmt_amount(amount), val_style)]
+                                    fontName=font_b if bold else font_r)
+        
+        # For pricing summary, layout is fixed [Empty padding, Label, Value]. No need to reverse columns
+        # because the numbers naturally stay on the right.
+        return [Paragraph('', s['label']), Paragraph(label, lbl_style), Paragraph(_fmt_amount(amount), val_style)]
+
 
     price_rows.append(_price_row(_t('Subtotal', lang), order.subtotal))
     if order.stitching_price:
