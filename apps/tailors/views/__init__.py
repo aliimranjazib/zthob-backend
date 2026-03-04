@@ -41,6 +41,7 @@ from .orders import (
     TailorUpdateOrderStatusView,
     TailorAddMeasurementsView
 )
+from .order_download import TailorOrderDownloadPDFView
 from .config import TailorConfigView
 from .tailor_pos import (
     TailorCustomerListView,
@@ -93,6 +94,7 @@ __all__ = [
     'TailorAcceptOrderView',
     'TailorUpdateOrderStatusView',
     'TailorAddMeasurementsView',
+    'TailorOrderDownloadPDFView',
     'TailorConfigView',
     
     # POS views
