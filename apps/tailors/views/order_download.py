@@ -95,9 +95,13 @@ class TailorOrderDownloadPDFView(APIView):
                 status_code=status.HTTP_403_FORBIDDEN,
             )
 
+        # Detect language from Accept-Language header (e.g. "ar", "ar-SA", "ar;q=0.9")
+        accept_lang = request.headers.get('Accept-Language', 'en')
+        lang = 'ar' if accept_lang.strip().lower().startswith('ar') else 'en'
+
         # Generate PDF
         try:
-            pdf_bytes = generate_order_pdf(order)
+            pdf_bytes = generate_order_pdf(order, lang=lang)
         except Exception as exc:
             logger.exception("PDF generation failed for order %s: %s", order_id, exc)
             return api_response(
