@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # ─── Arabic font registration ─────────────────────────────────────────────────
 _FONTS_DIR = os.path.join(settings.BASE_DIR, 'fonts')
-_AR_FONT_REGULAR = 'Amiri'
+_AR_FONT_REGULAR = 'Amiri-Regular'  # Corrected TTF names
 _AR_FONT_BOLD    = 'Amiri-Bold'
 
 try:
