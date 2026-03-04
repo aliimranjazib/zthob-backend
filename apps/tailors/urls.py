@@ -43,6 +43,7 @@ from apps.tailors.views import (
     TailorAcceptOrderView,
     TailorUpdateOrderStatusView,
     TailorAddMeasurementsView,
+    TailorOrderDownloadPDFView,
     TailorConfigView,
     
     # POS views
@@ -106,6 +107,7 @@ urlpatterns = [
     path('orders/<int:order_id>/accept/', TailorAcceptOrderView.as_view(), name='tailor-accept-order'),
     path('orders/<int:order_id>/update-status/', TailorUpdateOrderStatusView.as_view(), name='tailor-update-order-status'),
     path('orders/<int:order_id>/measurements/', TailorAddMeasurementsView.as_view(), name='tailor-add-measurements'),
+    path('orders/<int:order_id>/download-pdf/', TailorOrderDownloadPDFView.as_view(), name='tailor-order-download-pdf'),
     path('config/', TailorConfigView.as_view(), name='tailor-config'),
 
     # POS URLs
