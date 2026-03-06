@@ -240,6 +240,8 @@ if APP_ENV in ['production', 'staging']:
         'https://www.mgask.net',
         'https://app.mgask.net',
         'https://prod.mgask.net',
+        'https://tailor.mgask.net',
+        'https://www.tailor.mgask.net',
     ]
 
 # Logging Configuration
@@ -332,6 +334,8 @@ CORS_ALLOWED_ORIGINS=[
     "https://www.mgask.net",
     "https://app.mgask.net",
     "https://prod.mgask.net",
+    "https://tailor.mgask.net",
+    "https://www.tailor.mgask.net",
 ]
 
 CORS_ALLOW_CREDENTIALS=True
