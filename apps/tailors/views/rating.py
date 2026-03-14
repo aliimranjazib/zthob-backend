@@ -7,7 +7,7 @@ from drf_spectacular.utils import extend_schema
 from apps.orders.models import Order
 from apps.tailors.models import TailorProfile, TailorRating
 from apps.tailors.serializers.rating import TailorRatingCreateSerializer, TailorRatingSerializer
-from zthob.utils import api_response
+from zthob.utils import api_response, StandardResultsSetPagination
 
 
 class SubmitTailorRatingView(APIView):
@@ -111,7 +111,7 @@ class TailorRatingListView(APIView):
     Returns all ratings for a specific tailor. Public endpoint.
     """
     permission_classes = [AllowAny]
-    serializer_class = TailorRatingSerializer
+    pagination_class = StandardResultsSetPagination
 
     @extend_schema(
         tags=["Ratings"],
@@ -133,7 +133,9 @@ class TailorRatingListView(APIView):
             tailor=tailor_profile
         ).select_related('customer', 'order').order_by('-created_at')
 
-        serializer = TailorRatingSerializer(ratings, many=True)
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(ratings, request)
+        serializer = TailorRatingSerializer(page, many=True)
 
         return api_response(
             success=True,
@@ -143,7 +145,10 @@ class TailorRatingListView(APIView):
                 "avg_on_time_delivery": tailor_profile.avg_on_time_delivery,
                 "avg_overall_satisfaction": tailor_profile.avg_overall_satisfaction,
                 "rating_count": tailor_profile.rating_count,
-                "ratings": serializer.data,
+                'count': paginator.page.paginator.count,
+                'next': paginator.get_next_link(),
+                'previous': paginator.get_previous_link(),
+                'results': serializer.data
             },
             status_code=status.HTTP_200_OK
         )
