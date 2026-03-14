@@ -8,6 +8,7 @@ from .models import SystemSettings, Slider
 from .version import get_version, get_git_info
 from zthob.utils import api_response
 from rest_framework import status
+from django.core.cache import cache
 
 class BasePhoneVerificationView(APIView):
     """Base view for phone verification - can be used by any app"""
@@ -111,14 +112,32 @@ class SliderListView(APIView):
         tags=["Sliders"]
     )
     def get(self, request):
-        """Get all active sliders ordered by display order"""
+        """Get all active sliders ordered by display order with caching"""
+        # Cache key from signals
+        from .signals import SLIDER_LIST_CACHE_KEY
+        
+        # Try to get data from cache
+        cached_data = cache.get(SLIDER_LIST_CACHE_KEY)
+        if cached_data is not None:
+            return api_response(
+                success=True,
+                message="Sliders retrieved successfully (cached)",
+                data=cached_data,
+                status_code=status.HTTP_200_OK
+            )
+        
+        # If not cached, query DB
         sliders = Slider.objects.filter(is_active=True).order_by('order', '-created_at')
         serializer = SliderSerializer(sliders, many=True, context={'request': request})
+        data = serializer.data
+        
+        # Store in cache for 1 hour (though signals will clear it on change)
+        cache.set(SLIDER_LIST_CACHE_KEY, data, 3600)
         
         return api_response(
             success=True,
             message="Sliders retrieved successfully",
-            data=serializer.data,
+            data=data,
             status_code=status.HTTP_200_OK
         )
 

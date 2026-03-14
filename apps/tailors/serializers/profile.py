@@ -45,12 +45,21 @@ class TailorProfileSerializer(serializers.ModelSerializer):
     def get_address(self, obj):
         """Get the simplified address from the Address model."""
         try:
-            # First try to get the default address
-            address = Address.objects.filter(user=obj.user, is_default=True).first()
+            # Check if addresses were pre-fetched via related_name 'addresses' on user
+            user_addresses = getattr(obj.user, 'addresses', None)
             
-            # If no default address, get the first address
-            if not address:
-                address = Address.objects.filter(user=obj.user).first()
+            address = None
+            if user_addresses is not None and hasattr(user_addresses, 'all'):
+                # Handle both pre-fetched QuerySet and direct DB call
+                addresses = list(user_addresses.all())
+                address = next((a for a in addresses if a.is_default), None)
+                if not address and addresses:
+                    address = addresses[0]
+            else:
+                # Fallback to single query if not pre-fetched
+                address = Address.objects.filter(user=obj.user, is_default=True).first()
+                if not address:
+                    address = Address.objects.filter(user=obj.user).first()
             
             if address:
                 return {
@@ -97,11 +106,22 @@ class TailorProfileSerializer(serializers.ModelSerializer):
     def get_service_areas(self, obj):
         """Get the service area name from the related review object."""
         try:
-            service_areas = obj.review.service_areas
+            # Check if review is pre-fetched
+            review = getattr(obj, 'review', None)
+            if not review:
+                return None
+                
+            service_areas = review.service_areas
             if service_areas and len(service_areas) > 0:
                 # Get the first service area ID
                 service_area_id = service_areas[0]
-                # Fetch the service area object to get name
+                
+                # Use context to cache service area names to avoid N+1
+                service_area_names = self.context.get('service_area_names')
+                if service_area_names and service_area_id in service_area_names:
+                    return service_area_names[service_area_id]
+                
+                # Fetch the service area object to get name (fallback)
                 from ..models import ServiceArea
                 try:
                     service_area = ServiceArea.objects.get(id=service_area_id)

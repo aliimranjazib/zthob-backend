@@ -15,8 +15,8 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
     fabric_type=FabricTypeBasicSerializer(read_only=True)
     tags=FabricTagBasicSerializer(many=True, read_only=True)
     tailor = TailorProfileSerializer(read_only=True)
-    is_favorited = serializers.SerializerMethodField()
-    favorite_count = serializers.SerializerMethodField()
+    is_favorited = serializers.BooleanField(read_only=True, default=False)
+    favorite_count = serializers.IntegerField(read_only=True, default=0)
     
     class Meta:
         model=Fabric
@@ -43,20 +43,19 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
 
     def get_fabric_image(self, obj) -> str | None:
         request = self.context.get("request", None)
+        # Check if attribute already exists from prefetch/annotation
+        image_url = None
+        if hasattr(obj, 'primary_image_url') and obj.primary_image_url:
+            image_url = obj.primary_image_url
+        elif obj.fabric_image:
+            image_url = obj.fabric_image.url
+        
+        if not image_url:
+            return None
+            
         if request:
-            return request.build_absolute_uri(obj.fabric_image.url) if obj.fabric_image else None
-        return obj.fabric_image.url if obj.fabric_image else None
-    
-    def get_is_favorited(self, obj) -> bool:
-        """Check if the current user has favorited this fabric."""
-        request = self.context.get("request", None)
-        if request and request.user.is_authenticated:
-            return FabricFavorite.objects.filter(user=request.user, fabric=obj).exists()
-        return False
-    
-    def get_favorite_count(self, obj) -> int:
-        """Get the total number of users who favorited this fabric."""
-        return obj.favorites.count()
+            return request.build_absolute_uri(image_url)
+        return image_url
     
 
 class AddressSerializer(serializers.ModelSerializer):

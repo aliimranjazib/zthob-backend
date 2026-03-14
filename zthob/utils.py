@@ -8,6 +8,26 @@ from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated
 from .translations import get_language_from_request, translate_message, translate_errors
 from .middleware import get_current_request
 import re
+from rest_framework.pagination import PageNumberPagination
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+    def get_paginated_response(self, data, success=True, message="Data fetched successfully"):
+        return api_response(
+            success=success,
+            message=message,
+            data={
+                'count': self.page.paginator.count,
+                'next': self.get_next_link(),
+                'previous': self.get_previous_link(),
+                'results': data
+            },
+            status_code=200
+        )
+
 
 def api_response(*,success:bool, message:str, data:dict=None, errors:dict=None, status_code:int=200, request=None):
     """
