@@ -10,9 +10,10 @@ from apps.orders.models import Order
 from apps.tailors.models import Fabric
 from apps.tailors.models import TailorProfile, ServiceArea
 from apps.tailors.serializers import TailorProfileSerializer
-from zthob.utils import api_response, StandardResultsSetPagination
 from django.db.models import Count, Exists, OuterRef, Prefetch
-from apps.customers.models import Address
+from drf_spectacular.utils import extend_schema, OpenApiExample
+from drf_spectacular.types import OpenApiTypes
+from zthob.utils import api_response, StandardResultsSetPagination
 
 
 # Create your views here.
