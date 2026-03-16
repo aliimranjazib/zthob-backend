@@ -1252,4 +1252,4 @@ class TailorBasicInfoSerializer(serializers.ModelSerializer):
 
     def get_phone(self, obj):
         profile = getattr(obj, 'tailor_profile', None)
-        return getattr(profile, 'contact_number', getattr(obj, 'phone', ''))
+        return (profile.contact_number if profile and profile.contact_number else getattr(obj, 'phone', ''))

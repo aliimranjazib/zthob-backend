@@ -712,7 +712,7 @@ class OrderStatusTransitionService:
                     transitions['tailor_status'] = ['stitched']
                 # If measurements are already taken and complete, tailor can start stitching directly
                 elif (order.order_type == 'fabric_with_stitching' and 
-                      order.rider_status == 'measurement_taken' and 
+                      (order.rider_status == 'measurement_taken' or order.all_items_have_measurements) and 
                       order.all_items_have_measurements and 
                       order.tailor_status == 'accepted'):
                     transitions['tailor_status'] = ['stitching_started']
@@ -731,7 +731,7 @@ class OrderStatusTransitionService:
                 # For fabric_with_stitching, only allow progression if measurements are complete
                 if order.order_type == 'fabric_with_stitching':
                     # Check if measurements are complete
-                    measurements_complete = (order.rider_status == 'measurement_taken' and 
+                    measurements_complete = (order.rider_status == 'measurement_taken' or 
                                            order.all_items_have_measurements)
                     
                     if measurements_complete:
@@ -753,7 +753,7 @@ class OrderStatusTransitionService:
                 # For fabric_with_stitching, only allow progression if measurements are complete
                 if order.order_type == 'fabric_with_stitching':
                     # Check if measurements are complete
-                    measurements_complete = (order.rider_status == 'measurement_taken' and 
+                    measurements_complete = (order.rider_status == 'measurement_taken' or 
                                            order.all_items_have_measurements)
                     
                     if measurements_complete:
@@ -784,7 +784,9 @@ class OrderStatusTransitionService:
                 # Check if all items already have measurements (customer provided them during order creation)
                 if order.all_items_have_measurements:
                     # Measurements already provided - skip measurement step
-                    transitions['rider_status'] = ['measurement_taken']
+                    # If tailor has already finished stitching, allowed to start pickup
+                    if order.tailor_status == 'stitched':
+                        transitions['rider_status'] = ['on_way_to_pickup']
                 else:
                     # Need to take measurements - rider must go to customer location
                     transitions['rider_status'] = ['on_way_to_measurement']

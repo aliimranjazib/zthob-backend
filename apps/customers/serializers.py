@@ -32,7 +32,6 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
             "seasons",
             "fabric_type",  
             "tags", 
-            "fabric_image",
             "gallery",
             "category",
             "tailor",
