@@ -483,7 +483,7 @@ class Order(BaseModel):
         """Rider completes measurements"""
         pass
     
-    @transition(field=rider_status, source='measurement_taken', target='on_way_to_pickup')
+    @transition(field=rider_status, source=['accepted', 'measurement_taken'], target='on_way_to_pickup')
     def rider_start_pickup_after_measurement(self):
         """Rider starts going to pickup after measurements (fabric_with_stitching)"""
         pass

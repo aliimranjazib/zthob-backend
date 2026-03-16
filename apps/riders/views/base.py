@@ -1278,16 +1278,9 @@ class RiderAnalyticsView(APIView):
             {
                 'name': 'days',
                 'in': 'query',
-                'description': 'Number of days for daily deliveries breakdown (default: 30, max: 365)',
+                'description': 'Number of days for analytics (1, 7, 15, 30). Default is 30.',
                 'required': False,
-                'schema': {'type': 'integer', 'minimum': 1, 'maximum': 365, 'default': 30}
-            },
-            {
-                'name': 'weeks',
-                'in': 'query',
-                'description': 'Number of weeks for weekly trends (default: 12, max: 52)',
-                'required': False,
-                'schema': {'type': 'integer', 'minimum': 1, 'maximum': 52, 'default': 12}
+                'schema': {'type': 'integer', 'enum': [1, 7, 15, 30], 'default': 30}
             }
         ],
         responses={
@@ -1313,27 +1306,29 @@ class RiderAnalyticsView(APIView):
         
         # Get query parameters with defaults and validation
         try:
-            days = int(request.query_params.get('days', 30))
-            weeks = int(request.query_params.get('weeks', 12))
+            days_str = request.query_params.get('days', '30')
+            days = int(days_str)
             
-            # Validate ranges
-            if days < 1 or days > 365:
+            allowed_days = [1, 7, 15, 30]
+            if days not in allowed_days:
                 return api_response(
                     success=False,
-                    message="Days parameter must be between 1 and 365",
+                    message="Days parameter must be one of: 1, 7, 15, 30",
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
             
-            if weeks < 1 or weeks > 52:
-                return api_response(
-                    success=False,
-                    message="Weeks parameter must be between 1 and 52",
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
+            # Calculate weeks based on days for trends
+            if days == 30:
+                weeks = 4
+            elif days == 15:
+                weeks = 2
+            else:
+                weeks = 1
+                
         except ValueError:
             return api_response(
                 success=False,
-                message="Invalid query parameters. Days and weeks must be integers.",
+                message="Invalid query parameters. Days must be an integer (1, 7, 15, or 30).",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
         

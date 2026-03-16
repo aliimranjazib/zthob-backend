@@ -36,11 +36,13 @@ class TailorAnalyticsServiceTestCase(TestCase):
             role='USER'
         )
         
-        # Create tailor profile
-        self.tailor_profile = TailorProfile.objects.create(
+        # Get or create tailor profile (signal might have already created it)
+        self.tailor_profile, _ = TailorProfile.objects.get_or_create(
             user=self.tailor_user,
-            shop_name='Test Tailor Shop',
-            shop_status=True
+            defaults={
+                'shop_name': 'Test Tailor Shop',
+                'shop_status': True
+            }
         )
         
         # Create fabric category and type
@@ -71,7 +73,7 @@ class TailorAnalyticsServiceTestCase(TestCase):
             user=self.customer_user,
             street='123 Test St',
             city='Test City',
-            postal_code='12345'
+            zip_code='12345'
         )
     
     def test_calculate_total_revenue(self):
@@ -310,10 +312,10 @@ class TailorAnalyticsAPITestCase(TestCase):
             role='USER'
         )
         
-        # Create tailor profile
-        self.tailor_profile = TailorProfile.objects.create(
+        # Get or create tailor profile (signal might have already created it)
+        self.tailor_profile, _ = TailorProfile.objects.get_or_create(
             user=self.tailor_user,
-            shop_name='Test Tailor Shop'
+            defaults={'shop_name': 'Test Tailor Shop'}
         )
     
     def test_analytics_endpoint_requires_authentication(self):
@@ -345,24 +347,28 @@ class TailorAnalyticsAPITestCase(TestCase):
         self.assertIn('weekly_trends', analytics_data)
     
     def test_analytics_endpoint_with_custom_parameters(self):
-        """Test analytics endpoint with custom days and weeks parameters"""
+        """Test analytics endpoint with allowed custom days parameters"""
         self.client.force_authenticate(user=self.tailor_user)
-        response = self.client.get('/api/tailors/analytics/?days=60&weeks=24')
+        # Testing with 7 days (allowed)
+        response = self.client.get('/api/tailors/analytics/?days=7')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         analytics_data = response.data['data']
-        self.assertEqual(len(analytics_data['daily_earnings']), 60)
+        # 7 days will return 8 values including start and end date (7 intervals)
+        self.assertEqual(len(analytics_data['daily_earnings']), 8)
+        self.assertEqual(analytics_data['analytics_period']['daily_earnings_days'], 7)
+        self.assertEqual(analytics_data['analytics_period']['weekly_trends_weeks'], 1)
     
     def test_analytics_endpoint_invalid_parameters(self):
         """Test analytics endpoint with invalid parameters"""
         self.client.force_authenticate(user=self.tailor_user)
         
-        # Test invalid days parameter
-        response = self.client.get('/api/tailors/analytics/?days=500')
+        # Test invalid days parameter (outside of [1, 7, 15, 30])
+        response = self.client.get('/api/tailors/analytics/?days=14')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         
-        # Test invalid weeks parameter
-        response = self.client.get('/api/tailors/analytics/?weeks=100')
+        # Another invalid days parameter
+        response = self.client.get('/api/tailors/analytics/?days=500')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         
         # Test non-integer parameters

@@ -32,7 +32,7 @@ def join_tailor_team(request):
         tailor_info = {
             'id': tailor.id,
             'shop_name': getattr(tailor_profile, 'shop_name', tailor.username),
-            'phone': getattr(tailor_profile, 'contact_number', getattr(tailor, 'phone', '')),
+            'phone': (tailor_profile.contact_number if tailor_profile and tailor_profile.contact_number else getattr(tailor, 'phone', '')),
         }
         
         message = 'Successfully joined tailor\'s team' if created else 'You are already part of this tailor\'s team'
@@ -69,7 +69,7 @@ def rider_my_tailors(request):
         tailor_data = {
             'id': assoc.tailor.id,
             'shop_name': getattr(tailor_profile, 'shop_name', assoc.tailor.username),
-            'phone': getattr(tailor_profile, 'contact_number', getattr(assoc.tailor, 'phone', '')),
+            'phone': (tailor_profile.contact_number if tailor_profile and tailor_profile.contact_number else getattr(assoc.tailor, 'phone', '')),
             'joined_at': assoc.created_at
         }
         tailors_data.append(tailor_data)
