@@ -732,7 +732,8 @@ class OrderItem(BaseModel):
         super().save(*args,**kwargs)
 
     def __str__(self):
-        return f"{self.fabric.name} x{self.quantity} - {self.order.order_number}"
+        fabric_name = self.fabric.name if self.fabric else "No Fabric"
+        return f"{fabric_name} x{self.quantity} - {self.order.order_number}"
 
 class OrderStatusHistory(BaseModel):
     """
