@@ -10,6 +10,15 @@ logger = logging.getLogger(__name__)
 class PhoneVerificationService:
     """Reusable service for phone verification"""
     
+    # Test phone numbers for development/testing (bypass SMS, use fixed OTP)
+    TEST_PHONES = [
+        '0500000000', '0510000001', '0599999999', '0511111111', '0511111112', 
+        "0511111113", "0511111114", "0511111115", "0500000001", "0500000002", 
+        "0500000003", "0500000004", "0500000005", "0500000006", "0500000007", 
+        "0500000008", "0500000009",
+    ]
+    TEST_OTP = '123456'
+    
     @staticmethod
     def generate_otp():
         """Generate 6-digit OTP"""
@@ -150,14 +159,12 @@ class PhoneVerificationService:
         from .twilio_service import TwilioSMSService
         formatted_phone = TwilioSMSService.format_phone_number(phone_number)
         
-        # Test phone numbers for development/testing (bypass SMS, use fixed OTP)
-        TEST_PHONES = ['0500000000', '0510000001', '0599999999', '0511111111', '0511111112', "0511111113", "0511111114", "0511111115",
-        "0500000001","0500000002","0500000003","0500000004","0500000005","0500000006","0500000007","0500000008","0500000009",
-        ]
-        TEST_OTP = '123456'
+        # Test phone numbers for development/testing are now at class level
+        # PhoneVerificationService.TEST_PHONES
+        # PhoneVerificationService.TEST_OTP
         
         # Check if it's a test phone number
-        if local_phone in TEST_PHONES:
+        if local_phone in PhoneVerificationService.TEST_PHONES:
             # Find or create user
             if user is None:
                 user = User.objects.filter(phone=local_phone).first()
@@ -204,7 +211,7 @@ class PhoneVerificationService:
                             raise
             
             # Create verification with test OTP (no SMS sent)
-            otp_code = TEST_OTP
+            otp_code = PhoneVerificationService.TEST_OTP
             expires_at = timezone.now() + timedelta(minutes=5)
             
             verification = PhoneVerification.objects.create(
@@ -215,10 +222,10 @@ class PhoneVerificationService:
             )
             
             # Log test OTP for visibility
-            logger.info(f"🧪 TEST MODE: OTP for {local_phone} is {TEST_OTP}")
-            print(f"\n🧪 TEST MODE: OTP for {local_phone} is {TEST_OTP}\n")
+            logger.info(f"🧪 TEST MODE: OTP for {local_phone} is {PhoneVerificationService.TEST_OTP}")
+            print(f"\n🧪 TEST MODE: OTP for {local_phone} is {PhoneVerificationService.TEST_OTP}\n")
             
-            return verification, otp_code, True, f"Test mode - OTP: {TEST_OTP}", user
+            return verification, otp_code, True, f"Test mode - OTP: {PhoneVerificationService.TEST_OTP}", user
         
         # Find or create user for real phone numbers
         if user is None:
@@ -323,10 +330,9 @@ class PhoneVerificationService:
         from .twilio_service import TwilioSMSService
         formatted_phone = TwilioSMSService.format_phone_number(phone_number)
         
-        # Test phone numbers - use manual verification
-        TEST_PHONES = ['0500000000', '0510000001', '0599999999', '0511111111', '0511111112', "0511111113", "0511111114", "0511111115"]
+        # Test phone numbers - now handled by class constant PhoneVerificationService.TEST_PHONES
         
-        if local_phone in TEST_PHONES:
+        if local_phone in PhoneVerificationService.TEST_PHONES:
             # Manual verification for test phones
             user = User.objects.filter(phone=local_phone).first()
             if not user:
