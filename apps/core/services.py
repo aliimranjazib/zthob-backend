@@ -151,7 +151,9 @@ class PhoneVerificationService:
         formatted_phone = TwilioSMSService.format_phone_number(phone_number)
         
         # Test phone numbers for development/testing (bypass SMS, use fixed OTP)
-        TEST_PHONES = ['0500000000', '0510000001', '0599999999', '0511111111', '0511111112', "0511111113", "0511111114", "0511111115"]
+        TEST_PHONES = ['0500000000', '0510000001', '0599999999', '0511111111', '0511111112', "0511111113", "0511111114", "0511111115",
+        "0500000001","0500000002","0500000003","0500000004","0500000005","0500000006","0500000007","0500000008","0500000009",
+        ]
         TEST_OTP = '123456'
         
         # Check if it's a test phone number
