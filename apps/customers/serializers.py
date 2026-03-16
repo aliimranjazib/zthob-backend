@@ -9,7 +9,6 @@ from apps.customers.models import Address, CustomerProfile, FamilyMember, Fabric
 
 
 class FabricCatalogSerializer(serializers.ModelSerializer):
-    fabric_image = serializers.SerializerMethodField()
     gallery = FabricImageSerializer(many=True, read_only=True)
     category = FabricCategorySerializer(read_only=True)
     fabric_type=FabricTypeBasicSerializer(read_only=True)
@@ -38,23 +37,6 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
             "is_favorited",
             "favorite_count",
         ]
-    
-
-    def get_fabric_image(self, obj) -> str | None:
-        request = self.context.get("request", None)
-        # Check if attribute already exists from prefetch/annotation
-        image_url = None
-        if hasattr(obj, 'primary_image_url') and obj.primary_image_url:
-            image_url = obj.primary_image_url
-        elif obj.fabric_image:
-            image_url = obj.fabric_image.url
-        
-        if not image_url:
-            return None
-            
-        if request:
-            return request.build_absolute_uri(image_url)
-        return image_url
     
 
 class AddressSerializer(serializers.ModelSerializer):
