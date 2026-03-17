@@ -569,6 +569,7 @@ class RiderAvailableOrdersView(APIView):
             payment_status='paid',
             rider__isnull=True,
             rider_status='none',
+            service_mode='home_delivery',
         ).filter(
             Q(assigned_rider__isnull=True) | Q(assigned_rider=request.user)
         ).filter(
@@ -687,6 +688,14 @@ class RiderOrderDetailView(APIView):
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
+        # Don't show walk-in orders to riders who are not assigned to them
+        if order.service_mode != 'home_delivery' and order.rider != request.user:
+            return api_response(
+                success=False,
+                message="This is a walk-in order and is not available for riders.",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
         # Riders should not see orders that are still pending (not yet accepted by tailor)
         # Unless the rider is already assigned to it (shouldn't happen normally)
         # Exception: measurement_service orders don't require tailor acceptance for home_delivery
@@ -760,6 +769,14 @@ class RiderAcceptOrderView(APIView):
             return api_response(
                 success=False,
                 message="Order payment must be paid before rider can accept it",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Riders only handle home delivery orders
+        if order.service_mode != 'home_delivery':
+            return api_response(
+                success=False,
+                message="Riders can only accept home delivery orders. This is a walk-in order.",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
         

@@ -859,6 +859,12 @@ class NotificationService:
                 logger.warning(f"Assigned rider {assigned_rider_id} not found or not eligible. Falling back to broadcast.")
                 # Fall through to broadcast
         
+        # Determine if this order should be broadcasted to all riders
+        # We only broadcast home_delivery orders to all riders
+        if order.service_mode != 'home_delivery':
+            logger.info(f"Order {order.order_number} is {order.service_mode}, skipping broadcast to all riders.")
+            return
+            
         # No specific assignment or assigned rider not available - broadcast to all
         active_riders = CustomUser.objects.filter(
             role='RIDER',
