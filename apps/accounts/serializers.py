@@ -10,7 +10,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     
     class Meta:
         model=CustomUser
-        fields=['name','email','password','confirm_password','role']
+        fields=['name','email','password','confirm_password','role', 'language']
         extra_kwargs = {
             "email": {"help_text": "Valid email address required"},
             "phone": {"help_text": "Valid Saudi phone number (05xxxxxxxx)"},
@@ -57,6 +57,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'phone',
             'first_name',
             'last_name',
+            'language',
             'date_joined',
         ]
         read_only_fields = [

@@ -405,6 +405,7 @@ class PhoneVerifyView(APIView):
                 'email': user.email,
                 'role': user.role,
                 'phone_verified': user.phone_verified,
+                'language': user.language,
                 'date_of_birth': user.date_of_birth.isoformat() if user.date_of_birth else None
             }
             

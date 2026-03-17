@@ -100,10 +100,7 @@ class NotificationService:
         """
         try:
             # Detect user's language preference
-            # Check if user has language preference (you can add this to user model later)
-            user_language = 'ar'  # Default to Arabic
-            if hasattr(user, 'language_preference'):
-                user_language = user.language_preference
+            user_language = getattr(user, 'language', 'ar')
             
             # Translate title and body to user's language
             translated_title = translate_message(title, user_language, **data) if data else translate_message(title, user_language)

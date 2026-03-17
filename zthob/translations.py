@@ -363,12 +363,12 @@ def get_language_from_request(request):
         if primary_lang == 'ar':
             return 'ar'
     
-    # Check if user has language preference (if you add this to user model later)
-    # if hasattr(request, 'user') and request.user.is_authenticated:
-    #     if hasattr(request.user, 'language_preference'):
-    #         return request.user.language_preference
+    # Check if user has language preference
+    if hasattr(request, 'user') and request.user.is_authenticated:
+        if hasattr(request.user, 'language'):
+            return request.user.language
     
-    return 'en'  # Default to English
+    return 'ar'  # Default to Arabic (as per user request)
 
 
 def translate_message(message, language='en', **kwargs):

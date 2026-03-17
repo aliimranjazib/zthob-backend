@@ -16,6 +16,11 @@ class CustomUser(AbstractUser):
     is_deleted = models.BooleanField(default=False)
     phone_verified=models.BooleanField(default=False,help_text="Is phone number verified?")
     date_of_birth=models.DateField(blank=True,null=True,help_text="User's date of birth")
+    LANGUAGE_CHOICES = (
+        ('en', 'English'),
+        ('ar', 'Arabic'),
+    )
+    language = models.CharField(max_length=2, choices=LANGUAGE_CHOICES, default='ar')
     USERNAME_FIELD='username'
     REQUIRED_FIELDS=[]
     
