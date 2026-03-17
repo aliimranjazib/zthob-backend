@@ -448,6 +448,7 @@ class NotificationService:
                         'old_tailor_status': old_tailor_status,
                         'status': order.status,
                         'customer_name': customer_name,
+                        'tailor_name': getattr(order.tailor.tailor_profile, 'shop_name', order.tailor.username) if order.tailor else 'Tailor',
                     },
                     priority='high'
                 )
@@ -469,6 +470,7 @@ class NotificationService:
                         'old_tailor_status': old_tailor_status,
                         'status': order.status,
                         'customer_name': customer_name,
+                        'tailor_name': getattr(order.tailor.tailor_profile, 'shop_name', order.tailor.username) if order.tailor else 'Tailor',
                     },
                     priority='high'
                 )
@@ -494,6 +496,7 @@ class NotificationService:
                         'old_tailor_status': old_tailor_status,
                         'status': order.status,
                         'customer_name': customer_name,
+                        'tailor_name': getattr(order.tailor.tailor_profile, 'shop_name', order.tailor.username) if order.tailor else 'Tailor',
                     },
                     priority='high'
                 )
@@ -568,6 +571,8 @@ class NotificationService:
                         'rider_status': new_rider_status,
                         'old_rider_status': old_rider_status,
                         'status': order.status,
+                        'customer_name': customer_name,
+                        'rider_name': rider_name,
                     },
                     priority='high'
                 )
@@ -588,6 +593,8 @@ class NotificationService:
                         'rider_status': new_rider_status,
                         'old_rider_status': old_rider_status,
                         'status': order.status,
+                        'customer_name': customer_name,
+                        'rider_name': rider_name,
                     },
                     priority='high'
                 )
@@ -608,6 +615,8 @@ class NotificationService:
                         'rider_status': new_rider_status,
                         'old_rider_status': old_rider_status,
                         'status': order.status,
+                        'customer_name': customer_name,
+                        'rider_name': rider_name,
                     },
                     priority='high'
                 )

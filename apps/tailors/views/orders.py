@@ -90,21 +90,6 @@ class TailorAcceptOrderView(APIView):
         
         order = updated_order
         
-        # Send push notification for tailor acceptance
-        try:
-            from apps.notifications.services import NotificationService
-            NotificationService.send_tailor_status_notification(
-                order=order,
-                old_tailor_status=old_tailor_status,
-                new_tailor_status='accepted',
-                changed_by=request.user
-            )
-        except Exception as e:
-            # Log error but don't fail the assignment
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to send tailor acceptance notification: {str(e)}")
-        
         response_serializer = OrderSerializer(order, context={'request': request})
         return api_response(
             success=True,
@@ -197,21 +182,7 @@ class TailorUpdateOrderStatusView(APIView):
             
             order = updated_order
             
-            # Send push notification for tailor_status change if it changed
-            if new_tailor_status and new_tailor_status != old_tailor_status:
-                try:
-                    from apps.notifications.services import NotificationService
-                    NotificationService.send_tailor_status_notification(
-                        order=order,
-                        old_tailor_status=old_tailor_status,
-                        new_tailor_status=new_tailor_status,
-                        changed_by=request.user
-                    )
-                except Exception as e:
-                    # Log error but don't fail the update
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"Failed to send tailor status notification: {str(e)}")
+
             
             # Use lightweight response serializer for status updates
             response_serializer = OrderStatusUpdateResponseSerializer(order, context={'request': request})
