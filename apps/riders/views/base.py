@@ -828,33 +828,7 @@ class RiderAcceptOrderView(APIView):
         else:
             order = updated_order
         
-        # Send push notification for rider assignment
-        try:
-            from apps.notifications.services import NotificationService
-            NotificationService.send_rider_assignment_notification(
-                order=order,
-                rider=request.user
-            )
-        except Exception as e:
-            # Log error but don't fail the assignment
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to send rider assignment notification: {str(e)}")
-        
-        # Send push notification for order status change
-        try:
-            from apps.notifications.services import NotificationService
-            NotificationService.send_order_status_notification(
-                order=order,
-                old_status=order.status,  # History will track the actual change
-                new_status=order.status,
-                changed_by=request.user
-            )
-        except Exception as e:
-            # Log error but don't fail the assignment
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to send order status notification: {str(e)}")
+
         
         response_serializer = RiderOrderDetailSerializer(order)
         return api_response(
@@ -1238,20 +1212,7 @@ class RiderUpdateOrderStatusView(APIView):
             except RiderOrderAssignment.DoesNotExist:
                 pass
         
-        # Send push notification for order status change
-        try:
-            from apps.notifications.services import NotificationService
-            NotificationService.send_order_status_notification(
-                order=order,
-                old_status=order.status,  # History will have the old status
-                new_status=order.status,
-                changed_by=request.user
-            )
-        except Exception as e:
-            # Log error but don't fail the update
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to send order status notification: {str(e)}")
+
         
         # Use lightweight response serializer for status updates
         from apps.orders.serializers import OrderStatusUpdateResponseSerializer

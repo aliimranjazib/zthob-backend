@@ -1033,6 +1033,38 @@ class OrderStatusTransitionService:
                               f"Rider: {old_rider_status}→{order.rider_status}, "
                               f"Tailor: {old_tailor_status}→{order.tailor_status}"
             )
+            
+            # Send push notifications for all changes
+            try:
+                from apps.notifications.services import NotificationService
+                
+                if status_changed:
+                    NotificationService.send_order_status_notification(
+                        order=order,
+                        old_status=old_status,
+                        new_status=order.status,
+                        changed_by=user
+                    )
+                
+                if rider_status_changed:
+                    NotificationService.send_rider_status_notification(
+                        order=order,
+                        old_rider_status=old_rider_status,
+                        new_rider_status=order.rider_status,
+                        changed_by=user
+                    )
+                    
+                if tailor_status_changed:
+                    NotificationService.send_tailor_status_notification(
+                        order=order,
+                        old_tailor_status=old_tailor_status,
+                        new_tailor_status=order.tailor_status,
+                        changed_by=user
+                    )
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error sending notifications in transition: {str(e)}")
         
         return True, "Status updated successfully", order
     
