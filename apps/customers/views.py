@@ -11,15 +11,24 @@ from apps.tailors.models import Fabric
 from apps.tailors.models import TailorProfile, ServiceArea
 from apps.tailors.serializers import TailorProfileSerializer
 from django.db.models import Count, Exists, OuterRef, Prefetch
-from drf_spectacular.utils import extend_schema, OpenApiExample
+from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from zthob.utils import api_response, StandardResultsSetPagination
+from zthob.geo_utils import parse_geo_params, get_nearby_user_ids
 
 
 # Create your views here.
 @extend_schema(
     tags=["Fabric Catalog"],
-    description="Get all active fabrics (No authentication required)",
+    description="Get all active fabrics. Pass `lat`, `lng`, and `radius` (km) to filter fabrics by the tailor's proximity.",
+    parameters=[
+        OpenApiParameter('lat', OpenApiTypes.FLOAT, OpenApiParameter.QUERY,
+                         description='Latitude of the search centre', required=False),
+        OpenApiParameter('lng', OpenApiTypes.FLOAT, OpenApiParameter.QUERY,
+                         description='Longitude of the search centre', required=False),
+        OpenApiParameter('radius', OpenApiTypes.FLOAT, OpenApiParameter.QUERY,
+                         description='Search radius in kilometres (default 10, max 200)', required=False),
+    ],
     responses={200: FabricCatalogSerializer(many=True)}
 )
 class FabricCatalogAPIView(APIView):
@@ -29,7 +38,7 @@ class FabricCatalogAPIView(APIView):
     pagination_class = StandardResultsSetPagination
     
     def get(self, request):
-        """Get all active fabrics with pagination and optimized queries."""
+        """Get all active fabrics with optional geo-radius filtering."""
         fabrics = Fabric.objects.filter(
             is_active=True
         ).select_related(
@@ -46,6 +55,14 @@ class FabricCatalogAPIView(APIView):
             fabrics = fabrics.annotate(
                 is_favorited=Exists(FabricFavorite.objects.filter(user=request.user, fabric=OuterRef('pk')))
             )
+
+        # ── Geo filtering ────────────────────────────────────────────────────
+        # Filter fabrics via tailor's existing Address (no new model fields).
+        lat, lng, radius_km = parse_geo_params(request)
+        if lat is not None:
+            nearby_user_ids = get_nearby_user_ids(lat, lng, radius_km)
+            fabrics = fabrics.filter(tailor__user_id__in=nearby_user_ids)
+        # ────────────────────────────────────────────────────────────────────
         
         # Add service area names to context to avoid per-item lookups
         service_area_names = {sa.id: sa.name for sa in ServiceArea.objects.filter(is_active=True)}
@@ -320,7 +337,19 @@ class CustomerProfileAPIView(APIView):
          
 @extend_schema(
     tags=["Tailor Profile"],
-    description="Get all tailors (No authentication required)",
+    description=(
+        "Get all tailors. Pass `lat`, `lng`, and `radius` (km) to filter tailors "
+        "by proximity and sort nearest-first. Omit these params to get all tailors "
+        "(original behaviour, fully backward-compatible)."
+    ),
+    parameters=[
+        OpenApiParameter('lat', OpenApiTypes.FLOAT, OpenApiParameter.QUERY,
+                         description='Latitude of the search centre (WGS84)', required=False),
+        OpenApiParameter('lng', OpenApiTypes.FLOAT, OpenApiParameter.QUERY,
+                         description='Longitude of the search centre (WGS84)', required=False),
+        OpenApiParameter('radius', OpenApiTypes.FLOAT, OpenApiParameter.QUERY,
+                         description='Search radius in kilometres (default 10, max 200)', required=False),
+    ],
     responses={200: TailorProfileSerializer(many=True)}
 )
 class TailorListAPIView(APIView):
@@ -330,7 +359,7 @@ class TailorListAPIView(APIView):
 
     @extend_schema(operation_id="customers_tailor_list")
     def get(self, request):
-        """Get all tailors with pagination and optimized queries."""
+        """Get all tailors with optional geo-radius filtering and proximity sort."""
         # Fetch all tailor profiles with related data
         tailors = TailorProfile.objects.select_related(
             'user'
@@ -338,7 +367,15 @@ class TailorListAPIView(APIView):
             'review',
             Prefetch('user__addresses', queryset=Address.objects.filter(is_default=True)),
         ).all()
-        
+
+        # ── Geo filtering ────────────────────────────────────────────────────
+        # Filter tailors via their existing Address (no new model fields).
+        lat, lng, radius_km = parse_geo_params(request)
+        if lat is not None:
+            nearby_user_ids = get_nearby_user_ids(lat, lng, radius_km)
+            tailors = tailors.filter(user_id__in=nearby_user_ids)
+        # ────────────────────────────────────────────────────────────────────
+
         # Add service area names to context to avoid per-item lookups
         service_area_names = {sa.id: sa.name for sa in ServiceArea.objects.filter(is_active=True)}
         
