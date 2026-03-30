@@ -360,6 +360,17 @@ TRANSLATIONS = {
     "Can add, edit, and remove other employees. Only grant to trusted staff.": "يمكنه إضافة الموظفين وتعديلهم وإزالتهم. امنح هذه الصلاحية للموظفين الموثوقين فقط.",
     "Manage POS & Customers": "إدارة نقطة البيع والعملاء",
     "Can use the point-of-sale system and manage customer records.": "يمكنه استخدام نظام نقطة البيع وإدارة سجلات العملاء.",
+
+    # ========== EMPLOYEE MANAGEMENT MESSAGES ==========
+    "Employees retrieved successfully": "تم استرجاع الموظفين بنجاح",
+    "Employee retrieved successfully": "تم استرجاع الموظف بنجاح",
+    "Employee added successfully": "تم إضافة الموظف بنجاح",
+    "Employee updated successfully": "تم تحديث الموظف بنجاح",
+    "Employee removed successfully": "تم إزالة الموظف بنجاح",
+    "Failed to add employee": "فشل إضافة الموظف",
+    "Employee not found": "الموظف غير موجود",
+    "This phone number is already an employee at another shop": "رقم الهاتف هذا مسجل موظفاً في محل آخر",
+    "Tailor profile not found": "ملف الخياط غير موجود",
 }
 
 

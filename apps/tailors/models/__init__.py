@@ -10,6 +10,7 @@ from .catalog import (
 from .review import TailorProfileReview
 from .service_areas import ServiceArea
 from .rating import TailorRating
+from .employee import TailorEmployee
 
 __all__ = [
     'TailorProfile',
@@ -21,4 +22,5 @@ __all__ = [
     'TailorProfileReview',
     'ServiceArea',
     'TailorRating',
+    'TailorEmployee',
 ]

@@ -395,7 +395,6 @@ class PhoneVerifyView(APIView):
             
             # Generate JWT tokens
             refresh = RefreshToken.for_user(user)
-            
             # Prepare user data
             user_data = {
                 'id': user.id,
@@ -408,6 +407,30 @@ class PhoneVerifyView(APIView):
                 'language': user.language,
                 'date_of_birth': user.date_of_birth.isoformat() if user.date_of_birth else None
             }
+
+            
+            # --- Tailor Shop Context ---
+            tailor_context = {
+                'is_owner': False,
+                'is_employee': False,
+                'shop_id': None,
+                'roles': [],
+                'permissions': {}
+            }
+            
+            if user.role == 'TAILOR':
+                # Check if owner
+                if hasattr(user, 'tailor_profile'):
+                    tailor_context['is_owner'] = True
+                    tailor_context['shop_id'] = user.tailor_profile.id
+                
+                # Check if employee
+                if hasattr(user, 'tailor_employee'):
+                    emp = user.tailor_employee
+                    tailor_context['is_employee'] = True
+                    tailor_context['shop_id'] = emp.tailor_id
+                    tailor_context['roles'] = emp.roles
+                    tailor_context['permissions'] = emp.permissions_dict
             
             response_data = {
                 'tokens': {
@@ -415,6 +438,7 @@ class PhoneVerifyView(APIView):
                     'refresh_token': str(refresh)
                 },
                 'user': user_data,
+                'tailor_context': tailor_context,
                 'is_new_user': is_new_user
             }
             
