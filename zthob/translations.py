@@ -336,6 +336,30 @@ TRANSLATIONS = {
     # Test Notifications
     "Test Notification": "إشعار تجريبي",
     "Hello {username}! This is a test notification from Zthob.": "مرحباً {username}! هذا إشعار تجريبي من ثوب.",
+
+    # ========== EMPLOYEE ROLES ==========
+    "Manager": "مدير",
+    "Manages the shop on behalf of the owner. Has access to orders, catalog, and staff.": "يدير المحل نيابةً عن المالك. لديه صلاحية الوصول إلى الطلبات والكتالوج والموظفين.",
+    "Stitcher": "خياط",
+    "Responsible for stitching garments. Can view and update assigned orders.": "مسؤول عن خياطة الملابس. يمكنه عرض وتحديث الطلبات المُسندة إليه.",
+    "Cutter": "قاطع",
+    "Responsible for cutting fabric. Can view catalog and assigned orders.": "مسؤول عن قص الأقمشة. يمكنه عرض الكتالوج والطلبات المُسندة إليه.",
+    "Receptionist": "موظف استقبال",
+    "Handles customer interactions and POS. Can manage orders and customers.": "يتعامل مع العملاء ونقطة البيع. يمكنه إدارة الطلبات والعملاء.",
+    "Finisher": "مشطّب",
+    "Handles final touches and quality checks before delivery.": "مسؤول عن اللمسات الأخيرة وفحص الجودة قبل التسليم.",
+
+    # ========== EMPLOYEE PERMISSIONS ==========
+    "Manage Orders": "إدارة الطلبات",
+    "Can view, accept, and update order statuses.": "يمكنه عرض الطلبات وقبولها وتحديث حالاتها.",
+    "Manage Catalog": "إدارة الكتالوج",
+    "Can add, edit, and delete fabrics and categories.": "يمكنه إضافة الأقمشة والتصنيفات وتعديلها وحذفها.",
+    "View Analytics": "عرض الإحصائيات",
+    "Can view shop performance reports and statistics.": "يمكنه عرض تقارير وإحصائيات أداء المحل.",
+    "Manage Employees": "إدارة الموظفين",
+    "Can add, edit, and remove other employees. Only grant to trusted staff.": "يمكنه إضافة الموظفين وتعديلهم وإزالتهم. امنح هذه الصلاحية للموظفين الموثوقين فقط.",
+    "Manage POS & Customers": "إدارة نقطة البيع والعملاء",
+    "Can use the point-of-sale system and manage customer records.": "يمكنه استخدام نظام نقطة البيع وإدارة سجلات العملاء.",
 }
 
 
