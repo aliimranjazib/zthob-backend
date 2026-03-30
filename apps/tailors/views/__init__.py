@@ -51,6 +51,10 @@ from .rating import (
     SubmitTailorRatingView,
     TailorRatingListView
 )
+from .employee import (
+    TailorEmployeeListCreateView,
+    TailorEmployeeDetailView,
+)
 
 # Export all views
 __all__ = [
@@ -104,4 +108,8 @@ __all__ = [
     # Rating views
     'SubmitTailorRatingView',
     'TailorRatingListView',
+
+    # Employee views
+    'TailorEmployeeListCreateView',
+    'TailorEmployeeDetailView',
 ]

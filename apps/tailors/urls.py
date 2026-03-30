@@ -53,6 +53,10 @@ from apps.tailors.views import (
     # Rating views
     SubmitTailorRatingView,
     TailorRatingListView,
+
+    # Employee views
+    TailorEmployeeListCreateView,
+    TailorEmployeeDetailView,
 )
 
 urlpatterns = [
@@ -116,5 +120,9 @@ urlpatterns = [
 
     path('phone/send-otp/', SendOTPView.as_view(), name='customer-send-otp'),
     path('phone/verify-otp/', VerifyOTPView.as_view(), name='customer-verify-otp'),
+
+    # Employee URLs
+    path('employees/', TailorEmployeeListCreateView.as_view(), name='tailor-employees'),
+    path('employees/<int:pk>/', TailorEmployeeDetailView.as_view(), name='tailor-employee-detail'),
 ]
 

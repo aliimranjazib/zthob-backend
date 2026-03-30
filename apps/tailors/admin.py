@@ -12,8 +12,10 @@ from .models import (
     FabricTag,
     TailorProfileReview,
     ServiceArea,
-    TailorRating
+    TailorRating,
+    TailorEmployee
 )
+
 
 
 # ============================================================================
@@ -1767,3 +1769,125 @@ class TailorRatingAdmin(admin.ModelAdmin):
             return obj.review[:60] + ('...' if len(obj.review) > 60 else '')
         return format_html('<em style="color:#999">No review</em>')
     short_review.short_description = 'Review'
+
+
+# ============================================================================
+# TAILOR EMPLOYEE ADMIN
+# ============================================================================
+
+@admin.register(TailorEmployee)
+class TailorEmployeeAdmin(admin.ModelAdmin):
+    """
+    Professional Tailor Employee Admin Interface
+    """
+    list_display = [
+        'user_link',
+        'tailor_shop_link',
+        'roles_display',
+        'permissions_badge',
+        'is_active_badge',
+        'joined_at_formatted'
+    ]
+    
+    list_filter = [
+        'is_active',
+        'can_manage_orders',
+        'can_manage_catalog',
+        'can_view_analytics',
+        'can_manage_employees',
+        'can_manage_pos',
+        'joined_at',
+    ]
+    
+    search_fields = [
+        'user__username',
+        'user__phone',
+        'user__first_name',
+        'user__last_name',
+        'tailor__shop_name',
+    ]
+    
+    autocomplete_fields = ['user', 'tailor']
+    
+    readonly_fields = ['joined_at', 'updated_at', 'roles_display']
+    
+    fieldsets = (
+        ('Employee Information', {
+            'fields': ('user', 'tailor', 'is_active')
+        }),
+        ('Roles', {
+            'fields': ('roles', 'roles_display'),
+            'description': 'Roles assigned to this employee'
+        }),
+        ('Permissions', {
+            'fields': (
+                'can_manage_orders',
+                'can_manage_catalog',
+                'can_view_analytics',
+                'can_manage_employees',
+                'can_manage_pos',
+            ),
+            'description': 'Granular permissions for this employee'
+        }),
+        ('Timestamps', {
+            'fields': ('joined_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def user_link(self, obj):
+        if obj.user:
+            try:
+                url = reverse('admin:accounts_customuser_change', args=[obj.user.pk])
+                name = obj.user.get_full_name() or obj.user.username or obj.user.phone
+                return format_html('<a href="{}">{}</a>', url, name)
+            except:
+                return obj.user.phone
+        return "-"
+    user_link.short_description = 'Employee'
+    user_link.admin_order_field = 'user__first_name'
+
+    def tailor_shop_link(self, obj):
+        if obj.tailor:
+            try:
+                url = reverse('admin:tailors_tailorprofile_change', args=[obj.tailor.pk])
+                return format_html('<a href="{}">{}</a>', url, obj.tailor.shop_name)
+            except:
+                return obj.tailor.shop_name
+        return "-"
+    tailor_shop_link.short_description = 'Shop'
+    tailor_shop_link.admin_order_field = 'tailor__shop_name'
+
+    def roles_display(self, obj):
+        if not obj.roles:
+            return "-"
+        badges = []
+        for role in obj.roles:
+            badges.append(f'<span style="background: #e9ecef; color: #495057; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-right: 3px; border: 1px solid #ced4da;">{role.replace("_", " ").title()}</span>')
+        return format_html(" ".join(badges))
+    roles_display.short_description = 'Assigned Roles'
+
+    def permissions_badge(self, obj):
+        count = sum([
+            obj.can_manage_orders,
+            obj.can_manage_catalog,
+            obj.can_view_analytics,
+            obj.can_manage_employees,
+            obj.can_manage_pos
+        ])
+        color = "#28a745" if count > 0 else "#6c757d"
+        return format_html('<span style="background: {}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px;">{} Permissions</span>', color, count)
+    permissions_badge.short_description = 'Perms'
+
+    def is_active_badge(self, obj):
+        if obj.is_active:
+            return format_html('<span style="background-color: #28a745; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px;">Active</span>')
+        return format_html('<span style="background-color: #dc3545; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px;">Inactive</span>')
+    is_active_badge.short_description = 'Status'
+    is_active_badge.admin_order_field = 'is_active'
+
+    def joined_at_formatted(self, obj):
+        return obj.joined_at.strftime('%Y-%m-%d')
+    joined_at_formatted.short_description = 'Joined'
+    joined_at_formatted.admin_order_field = 'joined_at'
+
