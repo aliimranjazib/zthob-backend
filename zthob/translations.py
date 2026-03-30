@@ -395,15 +395,16 @@ def get_language_from_request(request):
     if accept_language:
         # Extract primary language (first 2 chars before comma or semicolon)
         primary_lang = accept_language.split(',')[0].split(';')[0].strip()[:2].lower()
-        if primary_lang == 'ar':
-            return 'ar'
+        if primary_lang in ['ar', 'en']:
+            return primary_lang
     
     # Check if user has language preference
     if hasattr(request, 'user') and request.user.is_authenticated:
-        if hasattr(request.user, 'language'):
+        if hasattr(request.user, 'language') and request.user.language in ['ar', 'en']:
             return request.user.language
     
-    return 'ar'  # Default to Arabic (as per user request)
+    return 'ar'  # Default to Arabic if still undecided
+
 
 
 def translate_message(message, language='en', **kwargs):
