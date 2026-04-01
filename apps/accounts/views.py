@@ -418,19 +418,19 @@ class PhoneVerifyView(APIView):
                 'permissions': {}
             }
             
-            if user.role == 'TAILOR':
-                # Check if owner
-                if hasattr(user, 'tailor_profile'):
-                    tailor_context['is_owner'] = True
-                    tailor_context['shop_id'] = user.tailor_profile.id
-                
-                # Check if employee
-                if hasattr(user, 'tailor_employee'):
-                    emp = user.tailor_employee
-                    tailor_context['is_employee'] = True
-                    tailor_context['shop_id'] = emp.tailor_id
-                    tailor_context['roles'] = emp.roles
-                    tailor_context['permissions'] = emp.permissions_dict
+            # Check if owner
+            if hasattr(user, 'tailor_profile'):
+                tailor_context['is_owner'] = True
+                tailor_context['shop_id'] = user.tailor_profile.id
+            
+            # Check if employee
+            if hasattr(user, 'tailor_employee'):
+                emp = user.tailor_employee
+                tailor_context['is_employee'] = True
+                tailor_context['shop_id'] = emp.tailor_id
+                tailor_context['roles'] = emp.roles
+                tailor_context['permissions'] = emp.permissions_dict
+
             
             response_data = {
                 'tokens': {
