@@ -47,6 +47,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         return user
         
 class UserProfileSerializer(serializers.ModelSerializer):
+    tailor_context = serializers.SerializerMethodField()
+
     class Meta:
         model=CustomUser
         fields = [
@@ -59,6 +61,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'last_name',
             'language',
             'date_joined',
+            'tailor_context',
         ]
         read_only_fields = [
             'id',
@@ -68,6 +71,34 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'phone',  # Phone can only be updated through phone-verify endpoint
             'date_joined',
         ]
+
+    def get_tailor_context(self, user):
+        """
+        Returns shop context if user is an owner or employee.
+        """
+        context = {
+            'is_owner': False,
+            'is_employee': False,
+            'shop_id': None,
+            'roles': [],
+            'permissions': {}
+        }
+        
+        # Check if owner
+        if hasattr(user, 'tailor_profile'):
+            context['is_owner'] = True
+            context['shop_id'] = user.tailor_profile.id
+        
+        # Check if employee
+        if hasattr(user, 'tailor_employee'):
+            emp = user.tailor_employee
+            context['is_employee'] = True
+            context['shop_id'] = emp.tailor_id
+            context['roles'] = emp.roles
+            context['permissions'] = emp.permissions_dict
+            
+        return context
+
 
 class UserLoginSerializer(serializers.Serializer):
     username=serializers.CharField()
