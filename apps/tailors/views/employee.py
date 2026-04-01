@@ -143,11 +143,17 @@ class TailorEmployeeListCreateView(APIView):
                         is_active=True,
                     )
                 else:
-                    # Update name if user exists
+                    # Update name and role if user exists
                     name_parts = name.split(' ', 1)
                     user.first_name = name_parts[0]
                     user.last_name  = name_parts[1] if len(name_parts) > 1 else ''
-                    user.save(update_fields=['first_name', 'last_name'])
+                    
+                    # Ensure user has TAILOR role (promote from USER, don't demote ADMIN)
+                    if user.role == 'USER':
+                        user.role = 'TAILOR'
+                    
+                    user.save(update_fields=['first_name', 'last_name', 'role'])
+
 
                 # Guard: user can't be an employee of another shop
                 existing = TailorEmployee.objects.filter(user=user).select_related('tailor').first()
