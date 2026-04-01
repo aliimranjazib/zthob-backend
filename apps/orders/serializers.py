@@ -795,10 +795,10 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError('Invalid latitude or longitude')
                 
             # Basic validation for Saudi Arabia bounds (approximate)
-            if not (16 <= lat <= 32):
-                raise serializers.ValidationError('Latitude must be within Saudi Arabia bounds')
-            if not (34 <= lng <= 56):
-                raise serializers.ValidationError('Longitude must be within Saudi Arabia bounds')
+            # if not (16 <= lat <= 32):
+            #     raise serializers.ValidationError('Latitude must be within Saudi Arabia bounds')
+            # if not (34 <= lng <= 56):
+            #     raise serializers.ValidationError('Longitude must be within Saudi Arabia bounds')
                 
             self.context['using_current_location'] = True
             self.context['current_location_data'] = value
