@@ -75,6 +75,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_tailor_context(self, user):
         """
         Returns shop context if user is an owner or employee.
+        Prioritizes employee context over owner context to avoid confusion for hired staff.
         """
         context = {
             'is_owner': False,
@@ -84,20 +85,23 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'permissions': {}
         }
         
-        # Check if owner
-        if hasattr(user, 'tailor_profile'):
-            context['is_owner'] = True
-            context['shop_id'] = user.tailor_profile.id
-        
-        # Check if employee
-        if hasattr(user, 'tailor_employee'):
+        # 1. First priority: Check if they are currently working as staff for a shop
+        if hasattr(user, 'tailor_employee') and user.tailor_employee.is_active:
             emp = user.tailor_employee
             context['is_employee'] = True
             context['shop_id'] = emp.tailor_id
             context['roles'] = emp.roles
             context['permissions'] = emp.permissions_dict
+            return context # If they are an employee, this is their primarily role in the app
+            
+        # 2. Second priority: Check if they are a shop owner
+        # We check for shop_name to ensure it's a real shop registration, not a stub profile
+        if hasattr(user, 'tailor_profile') and user.tailor_profile.shop_name:
+            context['is_owner'] = True
+            context['shop_id'] = user.tailor_profile.id
             
         return context
+
 
 
 class UserLoginSerializer(serializers.Serializer):
