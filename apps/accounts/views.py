@@ -395,41 +395,12 @@ class PhoneVerifyView(APIView):
             
             # Generate JWT tokens
             refresh = RefreshToken.for_user(user)
-            # Prepare user data
-            user_data = {
-                'id': user.id,
-                'phone': user.phone,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'email': user.email,
-                'role': user.role,
-                'phone_verified': user.phone_verified,
-                'language': user.language,
-                'date_of_birth': user.date_of_birth.isoformat() if user.date_of_birth else None
-            }
+            # Prepare serialized user data
+            user_data = UserProfileSerializer(user).data
+            
+            # Extract tailor_context from the serialized data
+            tailor_context = user_data.get('tailor_context', {})
 
-            
-            # --- Tailor Shop Context ---
-            tailor_context = {
-                'is_owner': False,
-                'is_employee': False,
-                'shop_id': None,
-                'roles': [],
-                'permissions': {}
-            }
-            
-            # Check if owner
-            if hasattr(user, 'tailor_profile'):
-                tailor_context['is_owner'] = True
-                tailor_context['shop_id'] = user.tailor_profile.id
-            
-            # Check if employee
-            if hasattr(user, 'tailor_employee'):
-                emp = user.tailor_employee
-                tailor_context['is_employee'] = True
-                tailor_context['shop_id'] = emp.tailor_id
-                tailor_context['roles'] = emp.roles
-                tailor_context['permissions'] = emp.permissions_dict
 
             
             response_data = {
