@@ -1,9 +1,10 @@
 # apps/tailors/views/employee.py
 import logging
 from django.db import transaction
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from apps.tailors.permissions import IsShopStaff
+from .base import BaseTailorAPIView
+
 from drf_spectacular.utils import extend_schema
 
 from apps.tailors.models.employee import TailorEmployee
@@ -27,16 +28,8 @@ PERMISSION_KEYS = [
 ]
 
 
-def _get_tailor_profile(user):
-    """
-    Returns (tailor_profile, error_response).
-    Checks the requesting user is a tailor owner (not an employee).
-    """
-    if not hasattr(user, 'tailor_profile'):
-        return None, 'Tailor profile not found'
-    # If the user is themselves an employee they cannot manage other employees
-    # unless they have can_manage_employees permission
-    return user.tailor_profile, None
+# Using BaseTailorAPIView.get_tailor_profile instead
+
 
 
 def _apply_permissions(employee, permissions_list):
@@ -45,12 +38,14 @@ def _apply_permissions(employee, permissions_list):
         setattr(employee, key, key in permissions_list)
 
 
-class TailorEmployeeListCreateView(APIView):
+class TailorEmployeeListCreateView(BaseTailorAPIView):
     """
     GET  /tailor/employees/  — list all employees of the authenticated tailor
     POST /tailor/employees/  — add a new employee
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_employees'
+
 
     @extend_schema(
         responses={200: TailorEmployeeResponseSerializer(many=True)},
@@ -59,13 +54,14 @@ class TailorEmployeeListCreateView(APIView):
     )
     def get(self, request):
         language = get_language_from_request(request)
-        tailor, err = _get_tailor_profile(request.user)
-        if err:
+        tailor = self.get_tailor_profile(request.user)
+        if not tailor:
             return api_response(
                 success=False,
-                message=translate_message(err, language),
+                message=translate_message("Tailor profile not found", language),
                 status_code=status.HTTP_403_FORBIDDEN
             )
+
 
         employees = (
             TailorEmployee.objects
@@ -93,13 +89,14 @@ class TailorEmployeeListCreateView(APIView):
     )
     def post(self, request):
         language = get_language_from_request(request)
-        tailor, err = _get_tailor_profile(request.user)
-        if err:
+        tailor = self.get_tailor_profile(request.user)
+        if not tailor:
             return api_response(
                 success=False,
-                message=translate_message(err, language),
+                message=translate_message("Tailor profile not found", language),
                 status_code=status.HTTP_403_FORBIDDEN
             )
+
 
         serializer = TailorEmployeeCreateSerializer(data=request.data)
         if not serializer.is_valid():
@@ -200,19 +197,22 @@ class TailorEmployeeListCreateView(APIView):
         )
 
 
-class TailorEmployeeDetailView(APIView):
+class TailorEmployeeDetailView(BaseTailorAPIView):
     """
     GET    /tailor/employees/<id>/  — get one employee
     PATCH  /tailor/employees/<id>/  — update roles / permissions / status
     DELETE /tailor/employees/<id>/  — remove employee from shop
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_employees'
+
 
     def _get_employee(self, request, pk):
-        """Fetch employee and verify it belongs to the requesting tailor."""
-        tailor, err = _get_tailor_profile(request.user)
-        if err:
-            return None, None, err
+        """Fetch employee and verify it belongs to the requesting tailor shop."""
+        tailor = self.get_tailor_profile(request.user)
+        if not tailor:
+            return None, None, "Tailor profile not found"
+
         try:
             employee = (
                 TailorEmployee.objects

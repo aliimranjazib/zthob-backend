@@ -12,9 +12,13 @@ from apps.orders.serializers import OrderStatusUpdateResponseSerializer, OrderSe
 from zthob.utils import api_response
 
 
+from apps.tailors.permissions import IsShopStaff
+
 class TailorAcceptOrderView(APIView):
     """Tailor accepts an order"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_orders'
+
     
     @extend_schema(
         request=TailorUpdateOrderStatusSerializer,  # Reuse the same serializer now
@@ -34,22 +38,11 @@ class TailorAcceptOrderView(APIView):
     )
     def post(self, request, order_id):
         """Accept order - order_id comes from URL path"""
-        if request.user.role != 'TAILOR':
-            return api_response(
-                success=False,
-                message="Only tailors can access this endpoint",
-                status_code=status.HTTP_403_FORBIDDEN
-            )
-        
         order = get_object_or_404(Order, id=order_id)
         
-        # Verify tailor has access
-        if order.tailor != request.user:
-            return api_response(
-                success=False,
-                message="You don't have access to this order",
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        # Check permissions for this specific order
+        self.check_object_permissions(request, order)
+
         
         # Handle assigned rider if provided in data
         assigned_rider_id = request.data.get('assigned_rider_id')
@@ -101,7 +94,9 @@ class TailorAcceptOrderView(APIView):
 
 class TailorUpdateOrderStatusView(APIView):
     """Tailor updates order status"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_orders'
+
     
     @extend_schema(
         request=TailorUpdateOrderStatusSerializer,
@@ -111,22 +106,11 @@ class TailorUpdateOrderStatusView(APIView):
         tags=["Tailor Orders"]
     )
     def patch(self, request, order_id):
-        if request.user.role != 'TAILOR':
-            return api_response(
-                success=False,
-                message="Only tailors can access this endpoint",
-                status_code=status.HTTP_403_FORBIDDEN
-            )
-        
         order = get_object_or_404(Order, id=order_id)
         
-        # Verify tailor has access
-        if order.tailor != request.user:
-            return api_response(
-                success=False,
-                message="You don't have access to this order",
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        # Check permissions
+        self.check_object_permissions(request, order)
+
         
         serializer = TailorUpdateOrderStatusSerializer(data=request.data)
         if serializer.is_valid():
@@ -212,7 +196,9 @@ class TailorUpdateOrderStatusView(APIView):
 
 class TailorAddMeasurementsView(APIView):
     """Tailor adds measurements for orders (especially Walk-In orders)"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_orders'
+
     
     @extend_schema(
         request=TailorAddMeasurementsSerializer,
@@ -222,25 +208,14 @@ class TailorAddMeasurementsView(APIView):
         tags=["Tailor Orders"]
     )
     def post(self, request, order_id):
-        if request.user.role != 'TAILOR':
-            return api_response(
-                success=False,
-                message="Only tailors can access this endpoint",
-                status_code=status.HTTP_403_FORBIDDEN
-            )
-        
         order = get_object_or_404(
             Order.objects.select_related('family_member', 'customer'),
             id=order_id
         )
         
-        # Verify tailor has access
-        if order.tailor != request.user:
-            return api_response(
-                success=False,
-                message="You don't have access to this order",
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        # Check permissions
+        self.check_object_permissions(request, order)
+
         
         # Verify order type
         if order.order_type not in ['fabric_with_stitching', 'measurement_service']:

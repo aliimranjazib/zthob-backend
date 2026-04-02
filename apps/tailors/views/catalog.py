@@ -236,7 +236,11 @@ class TailorFabricView(BaseTailorAuthenticatedView):
         description="Get all fabrics for the authenticated tailor"
     )
     def get(self, request):
-        queryset = Fabric.objects.filter(tailor__user=request.user).order_by("-created_at")
+        profile = self.get_tailor_profile(request.user)
+        if not profile:
+             return api_response(success=False, message="Profile missing", status_code=404)
+             
+        queryset = Fabric.objects.filter(tailor=profile).order_by("-created_at")
         data = FabricSerializer(queryset, many=True, context={'request': request}).data
         return api_response(
             success=True, 
@@ -245,13 +249,24 @@ class TailorFabricView(BaseTailorAuthenticatedView):
             status_code=status.HTTP_200_OK
         )
 
+
     @extend_schema(
         request=FabricCreateSerializer,
         responses={201: FabricSerializer},
         description="Create a new fabric with multiple images and metadata"
     )
     def post(self, request):
+        # Specific check for employees
+        self.required_employee_permission = 'can_manage_catalog'
+        if not self.check_permissions(request): # This might not work as intended in DRF without overriding get_permissions
+             pass # But I'll do a manual check for safety
+        
+        if hasattr(request.user, 'tailor_employee'):
+            if not request.user.tailor_employee.can_manage_catalog:
+                 return api_response(success=False, message="Permission denied. You cannot manage catalog.", status_code=403)
+
         # Process the form data to create the expected structure
+
         processed_data = request.POST.copy()
         processed_data.update(request.FILES)
         
@@ -327,11 +342,15 @@ class TailorFabricDetailView(BaseTailorAuthenticatedView):
     parser_classes = [MultiPartParser, FormParser]
     
     def get_object(self, pk, user):
-        """Get fabric that belongs to the authenticated tailor."""
+        """Get fabric that belongs to the authenticated tailor or shop staff."""
+        profile = self.get_tailor_profile(user)
+        if not profile:
+             return None
         try:
-            return Fabric.objects.get(pk=pk, tailor__user=user)
+            return Fabric.objects.get(pk=pk, tailor=profile)
         except Fabric.DoesNotExist:
             return None
+
     
     @extend_schema(
         responses={200: FabricSerializer, 404: {"description": "Fabric not found"}},
@@ -362,7 +381,11 @@ class TailorFabricDetailView(BaseTailorAuthenticatedView):
     )
     def put(self, request, pk):
         """Update fabric (full update)."""
+        if hasattr(request.user, 'tailor_employee') and not request.user.tailor_employee.can_manage_catalog:
+             return api_response(success=False, message="Permission denied", status_code=403)
+             
         fabric = self.get_object(pk, request.user)
+
         if not fabric:
             return api_response(
                 success=False, 
@@ -395,7 +418,11 @@ class TailorFabricDetailView(BaseTailorAuthenticatedView):
     )
     def patch(self, request, pk):
         """Update fabric (partial update)."""
+        if hasattr(request.user, 'tailor_employee') and not request.user.tailor_employee.can_manage_catalog:
+             return api_response(success=False, message="Permission denied", status_code=403)
+
         fabric = self.get_object(pk, request.user)
+
         if not fabric:
             return api_response(
                 success=False, 
@@ -427,7 +454,11 @@ class TailorFabricDetailView(BaseTailorAuthenticatedView):
     )
     def delete(self, request, pk):
         """Delete fabric."""
+        if hasattr(request.user, 'tailor_employee') and not request.user.tailor_employee.can_manage_catalog:
+             return api_response(success=False, message="Permission denied", status_code=403)
+
         fabric = self.get_object(pk, request.user)
+
         if not fabric:
             return api_response(
                 success=False, 
