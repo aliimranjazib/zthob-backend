@@ -11,6 +11,8 @@ from apps.tailors.serializers.analytics import TailorAnalyticsSerializer
 from zthob.utils import api_response
 
 
+from apps.tailors.permissions import IsShopStaff
+
 @extend_schema(
     tags=["Tailor Analytics"],
     description="Get comprehensive analytics for the authenticated tailor including revenue, orders, and trends"
@@ -18,19 +20,10 @@ from zthob.utils import api_response
 class TailorAnalyticsView(APIView):
     """
     API endpoint for tailor analytics dashboard.
-    
-    Provides:
-    - Total revenue from completed orders
-    - Daily earnings breakdown
-    - Total completed orders count
-    - Completion percentage
-    - Weekly order trends
-    
-    Query Parameters:
-    - days: Number of days for daily earnings (default: 30, max: 365)
-    - weeks: Number of weeks for trends (default: 12, max: 52)
     """
-    permission_classes = [IsAuthenticated, IsTailor]
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_view_analytics'
+
     
     @extend_schema(
         description="Get comprehensive tailor analytics",
@@ -85,13 +78,29 @@ class TailorAnalyticsView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
         
+        # Determine the target shop owner user
+        target_owner = None
+        if hasattr(request.user, 'tailor_profile'):
+            target_owner = request.user
+        elif hasattr(request.user, 'tailor_employee'):
+            # Use the owner of the shop the employee works for
+            target_owner = request.user.tailor_employee.tailor.user
+            
+        if not target_owner:
+            return api_response(
+                success=False,
+                message="Shop profile matching your account not found",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
         # Get analytics data
         try:
             analytics_data = TailorAnalyticsService.get_comprehensive_analytics(
-                tailor_user=request.user,
+                tailor_user=target_owner,
                 days=days,
                 weeks=weeks
             )
+
             
             # Serialize the data
             serializer = TailorAnalyticsSerializer(analytics_data)

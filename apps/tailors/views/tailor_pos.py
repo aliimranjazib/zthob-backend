@@ -16,19 +16,31 @@ from zthob.utils import api_response
 User = get_user_model()
 
 
-class TailorCustomerListView(APIView):
+from apps.tailors.permissions import IsShopStaff
+from .base import BaseTailorAPIView
+
+class TailorCustomerListView(BaseTailorAPIView):
     """
     GET /api/tailors/pos/customers/
     Returns all unique customers who have:
-      1. Previously ordered from this tailor, OR
-      2. Were created via this tailor's POS (even with no orders yet).
+      1. Previously ordered from this tailor shop, OR
+      2. Were created via this tailor shop's POS.
     """
-    permission_classes = [IsAuthenticated, IsTailor]
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_pos'
+
 
     def get(self, request):
-        # --- Source 1: Customers who placed orders with this tailor ---
+        profile = self.get_tailor_profile(request.user)
+        if not profile:
+             return api_response(success=False, message="Shop profile not found", status_code=404)
+        
+        owner_user = profile.user
+        
+        # --- Source 1: Customers who placed orders with this shop ---
         order_customer_data = (
-            Order.objects.filter(tailor=request.user)
+            Order.objects.filter(tailor=owner_user)
+
             .values('customer')
             .annotate(
                 total_orders=Count('id'),
@@ -45,11 +57,13 @@ class TailorCustomerListView(APIView):
         }
 
         # --- Source 2: Customers created via this tailor's POS with no orders yet ---
+        # Note: We filter by owner_user for consistency
         pos_profiles = CustomerProfile.objects.filter(
-            pos_created_by=request.user
+            pos_created_by=owner_user
         ).exclude(
             user_id__in=order_map.keys()  # skip those already in order_map
         ).select_related('user')
+
 
         # Collect all user IDs to fetch
         all_user_ids = set(order_map.keys()) | {p.user_id for p in pos_profiles}
@@ -111,14 +125,21 @@ class TailorCustomerListView(APIView):
         )
 
 
-class TailorCreateCustomerView(APIView):
+class TailorCreateCustomerView(BaseTailorAPIView):
     """
     POST /api/tailors/pos/customers/create/
-    Creates a new customer account (User + CustomerProfile) and tags it with this tailor.
+    Creates a new customer account (User + CustomerProfile) and tags it with this tailor shop.
     """
-    permission_classes = [IsAuthenticated, IsTailor]
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_pos'
+
 
     def post(self, request):
+        profile = self.get_tailor_profile(request.user)
+        if not profile:
+             return api_response(success=False, message="Shop profile not found", status_code=404)
+        owner_user = profile.user
+
         serializer = CreateCustomerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -141,6 +162,7 @@ class TailorCreateCustomerView(APIView):
             phone_variations.append('+' + intl)
 
         existing_user = User.objects.filter(phone__in=phone_variations).first()
+
         if existing_user:
             # Update name if provided
             name_parts = name.strip().split(' ', 1)
@@ -150,21 +172,22 @@ class TailorCreateCustomerView(APIView):
 
             # Tag with this tailor if not already tagged
             try:
-                profile = existing_user.customer_profile
-                if not profile.pos_created_by:
-                    profile.pos_created_by = request.user
-                    profile.save(update_fields=['pos_created_by'])
-                measurements = profile.measurements
+                cust_profile = existing_user.customer_profile
+                if not cust_profile.pos_created_by:
+                    cust_profile.pos_created_by = owner_user
+                    cust_profile.save(update_fields=['pos_created_by'])
+                measurements = cust_profile.measurements
             except CustomerProfile.DoesNotExist:
-                profile = CustomerProfile.objects.create(
+                cust_profile = CustomerProfile.objects.create(
                     user=existing_user,
-                    pos_created_by=request.user
+                    pos_created_by=owner_user
                 )
                 measurements = None
 
             total_orders = Order.objects.filter(
-                customer=existing_user, tailor=request.user
+                customer=existing_user, tailor=owner_user
             ).count()
+
 
             return api_response(
                 success=True,
@@ -197,10 +220,10 @@ class TailorCreateCustomerView(APIView):
             is_active=True,
         )
 
-        # Create customer profile and tag it with the tailor who created it
+        # Create customer profile and tag it with the tailor shop owner
         CustomerProfile.objects.create(
             user=user,
-            pos_created_by=request.user,  # track which tailor created this customer
+            pos_created_by=owner_user,  # track which shop owns this customer
         )
 
         return api_response(

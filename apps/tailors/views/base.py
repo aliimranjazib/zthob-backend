@@ -11,17 +11,22 @@ class BaseTailorAPIView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get_tailor_profile(self, user):
-        """Helper method to get tailor profile."""
+        """Helper method to get tailor profile (handles owners and employees)."""
         from ..models import TailorProfile
-        try:
-            return TailorProfile.objects.get(user=user)
-        except TailorProfile.DoesNotExist:
-            return None
+        # Check if owner
+        profile = TailorProfile.objects.filter(user=user).first()
+        if profile:
+            return profile
+        # Check if employee
+        if hasattr(user, 'tailor_employee'):
+            return user.tailor_employee.tailor
+        return None
 
 class BaseTailorAuthenticatedView(BaseTailorAPIView):
-    """Base view that requires tailor authentication."""
+    """Base view that requires tailor or shop staff authentication."""
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from ..permissions import IsTailor
-        self.permission_classes = [IsAuthenticated, IsTailor]
+        from ..permissions import IsShopStaff
+        self.permission_classes = [IsAuthenticated, IsShopStaff]
+
