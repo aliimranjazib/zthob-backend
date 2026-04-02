@@ -2,8 +2,10 @@
 import logging
 from django.db import transaction
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from apps.tailors.permissions import IsShopStaff
 from .base import BaseTailorAPIView
+
 
 from drf_spectacular.utils import extend_schema
 
