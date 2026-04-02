@@ -40,7 +40,10 @@ class FabricCatalogAPIView(APIView):
     def get(self, request):
         """Get all active fabrics with optional geo-radius filtering."""
         fabrics = Fabric.objects.filter(
-            is_active=True
+            is_active=True,
+            tailor__review__review_status='approved',
+            tailor__shop_status=True,
+            tailor__user__is_active=True
         ).select_related(
             'category', 'fabric_type', 'tailor', 'tailor__user'
         ).prefetch_related(
@@ -361,7 +364,11 @@ class TailorListAPIView(APIView):
     def get(self, request):
         """Get all tailors with optional geo-radius filtering and proximity sort."""
         # Fetch all tailor profiles with related data
-        tailors = TailorProfile.objects.select_related(
+        tailors = TailorProfile.objects.filter(
+            review__review_status='approved',
+            shop_status=True,
+            user__is_active=True
+        ).select_related(
             'user'
         ).prefetch_related(
             'review',
@@ -415,12 +422,20 @@ class TailorFabricsAPIView(APIView):
         """
         try:
             # Get the tailor profile
-            tailor = TailorProfile.objects.select_related('user').get(user__id=tailor_id)
+            tailor = TailorProfile.objects.select_related('user').get(
+                user__id=tailor_id,
+                review__review_status='approved',
+                shop_status=True,
+                user__is_active=True
+            )
             
             # Fetch all active fabrics for this tailor with optimized queries
             fabrics = Fabric.objects.filter(
                 tailor=tailor,
-                is_active=True
+                is_active=True,
+                tailor__review__review_status='approved',
+                tailor__shop_status=True,
+                tailor__user__is_active=True
             ).select_related(
                 'category', 'fabric_type', 'tailor', 'tailor__user'
             ).prefetch_related(
@@ -496,7 +511,12 @@ class TailorDetailAPIView(APIView):
             ).prefetch_related(
                 'review',
                 Prefetch('user__addresses', queryset=Address.objects.filter(is_default=True)),
-            ).get(user__id=tailor_id)
+            ).get(
+                user__id=tailor_id,
+                review__review_status='approved',
+                shop_status=True,
+                user__is_active=True
+            )
             
             # Add service area names to context
             service_area_names = {sa.id: sa.name for sa in ServiceArea.objects.filter(is_active=True)}
@@ -553,7 +573,10 @@ class FabricDetailAPIView(APIView):
             # Get the fabric - only show active fabrics with optimized queries
             fabric = Fabric.objects.filter(
                 id=fabric_id,
-                is_active=True
+                is_active=True,
+                tailor__review__review_status='approved',
+                tailor__shop_status=True,
+                tailor__user__is_active=True
             ).select_related(
                 'category', 'fabric_type', 'tailor', 'tailor__user'
             ).prefetch_related(
