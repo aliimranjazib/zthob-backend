@@ -74,6 +74,7 @@ class NotificationLog(BaseModel):
         ('APPOINTMENT', 'Appointment'),
         ('SYSTEM', 'System'),
         ('PROMOTION', 'Promotion'),
+        ('TEST', 'Test'),
     )
     
     STATUS_CHOICES = (

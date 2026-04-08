@@ -123,7 +123,7 @@ class TestCustomerNotificationView(APIView):
             return api_response(
                 success=False,
                 message="Failed to send test notification. Check your FCM token.",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 request=request
             )
 
@@ -166,7 +166,7 @@ class TestTailorNotificationView(APIView):
             return api_response(
                 success=False,
                 message="Failed to send test notification. Check your FCM token.",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 request=request
             )
 
@@ -209,7 +209,7 @@ class TestRiderNotificationView(APIView):
             return api_response(
                 success=False,
                 message="Failed to send test notification. Check your FCM token.",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 request=request
             )
 
