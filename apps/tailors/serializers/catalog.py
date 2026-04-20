@@ -22,7 +22,7 @@ class FabricTypeBasicSerializer(serializers.ModelSerializer):
 class FabricCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = FabricCategory
-        fields = ["id", "name", "slug", "is_active", "created_at", "updated_at"]
+        fields = ["id", "name", "slug", "image", "is_active", "created_at", "updated_at"]
 
 class FabricCategoryBasicSerializer(serializers.ModelSerializer):
     class Meta:
@@ -70,6 +70,8 @@ class FabricSerializer(serializers.ModelSerializer):
         fields = [
             "id", "category", "name", "description", "seasons",
             "fabric_type", "tags", "sku", "price", "stitching_price", "stock",
+            "is_on_sale", "discount_price", "sale_start", "sale_end",
+            "is_featured", "sales_count",
             "is_low_stock", "is_out_of_stock", "is_active", 
             "created_at", "updated_at", "gallery",
         ]
@@ -94,8 +96,31 @@ class FabricCreateSerializer(serializers.ModelSerializer):
         model = Fabric
         fields = [
             "category", "name", "seasons", "fabric_type",
-            "description", "price", "stitching_price", "stock", "is_active", "images", "tags",
+            "description", "price", "stitching_price", "stock", 
+            "is_active", "is_on_sale", "discount_price", "sale_start", "sale_end",
+            "is_featured", "images", "tags",
         ]
+
+    def validate(self, data):
+        """Validate that discount_price is less than regular price and dates are valid if on sale."""
+        price = data.get('price')
+        is_on_sale = data.get('is_on_sale', False)
+        discount_price = data.get('discount_price')
+        sale_start = data.get('sale_start')
+        sale_end = data.get('sale_end')
+
+        if is_on_sale:
+            if not discount_price:
+                raise serializers.ValidationError({"discount_price": "Discount price is required for flash sales."})
+            if price and discount_price >= price:
+                raise serializers.ValidationError({"discount_price": "Discount price must be less than the regular price."})
+            
+            if not sale_start or not sale_end:
+                raise serializers.ValidationError({"sale_start": "Start and end dates are required for flash sales."})
+            if sale_end <= sale_start:
+                raise serializers.ValidationError({"sale_end": "Sale end date must be after the start date."})
+        
+        return data
 
     def validate_images(self, images):
         # Check that we have at least one image
@@ -215,7 +240,9 @@ class FabricUpdateSerializer(serializers.ModelSerializer):
         model = Fabric
         fields = [
             "category", "fabric_type", "seasons", "name",
-            "description", "price", "stitching_price", "stock", "is_active", "tags",
+            "description", "price", "stitching_price", "stock", 
+            "is_active", "is_on_sale", "discount_price", "sale_start", "sale_end",
+            "is_featured", "tags",
         ]
     
     def validate_tags(self, tags):
@@ -236,6 +263,27 @@ class FabricUpdateSerializer(serializers.ModelSerializer):
         
         return tags
     
+    def validate(self, data):
+        """Validate that discount_price is less than regular price and dates are valid if on sale."""
+        price = data.get('price', getattr(self.instance, 'price', None))
+        is_on_sale = data.get('is_on_sale', getattr(self.instance, 'is_on_sale', False))
+        discount_price = data.get('discount_price', getattr(self.instance, 'discount_price', None))
+        sale_start = data.get('sale_start', getattr(self.instance, 'sale_start', None))
+        sale_end = data.get('sale_end', getattr(self.instance, 'sale_end', None))
+
+        if is_on_sale:
+            if not discount_price:
+                raise serializers.ValidationError({"discount_price": "Discount price is required for flash sales."})
+            if price and discount_price >= price:
+                raise serializers.ValidationError({"discount_price": "Discount price must be less than the regular price."})
+            
+            if not sale_start or not sale_end:
+                raise serializers.ValidationError({"sale_start": "Start and end dates are required for flash sales."})
+            if sale_end <= sale_start:
+                raise serializers.ValidationError({"sale_end": "Sale end date must be after the start date."})
+        
+        return data
+
     def update(self, instance, validated_data):
         """Update fabric instance with validated data."""
         # Extract tags data

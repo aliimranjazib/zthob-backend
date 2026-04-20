@@ -5,12 +5,20 @@ from django.template.context_processors import request
 from django.contrib.auth.models import User
 from rest_framework import serializers, status
 from apps.customers.models import Address, CustomerProfile, FamilyMember, FabricFavorite
-from apps.customers.serializers import AddressSerializer, AddressCreateSerializer, AddressResponseSerializer, CustomerProfileSerializer, FabricCatalogSerializer, FamilyMemberSerializer, FamilyMemberCreateSerializer, FamilyMemberSimpleResponseSerializer, FabricFavoriteSerializer, CustomerMeasurementsListSerializer, FamilyMemberMeasurementsDetailSerializer
+from apps.customers.serializers import (
+    AddressSerializer, AddressCreateSerializer, AddressResponseSerializer, 
+    CustomerProfileSerializer, FabricCatalogSerializer, FamilyMemberSerializer, 
+    FamilyMemberCreateSerializer, FamilyMemberSimpleResponseSerializer, 
+    FabricFavoriteSerializer, CustomerMeasurementsListSerializer, 
+    FamilyMemberMeasurementsDetailSerializer, CustomerHomeSerializer
+)
 from apps.orders.models import Order
-from apps.tailors.models import Fabric
+from apps.tailors.models import Fabric, FabricCategory
 from apps.tailors.models import TailorProfile, ServiceArea
 from apps.tailors.serializers import TailorProfileSerializer
-from django.db.models import Count, Exists, OuterRef, Prefetch
+from apps.core.models import Slider
+from apps.core.serializers import SliderSerializer
+from django.db.models import Count, Exists, OuterRef, Prefetch, Avg
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from zthob.utils import api_response, StandardResultsSetPagination

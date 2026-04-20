@@ -49,6 +49,14 @@ class TailorProfile(models.Model):
         default=True,
         help_text="Whether the shop is currently open"
     )
+    is_featured = models.BooleanField(
+        default=False,
+        help_text="Whether this tailor should be featured on the home page"
+    )
+    is_verified = models.BooleanField(
+        default=False,
+        help_text="Whether this tailor is verified by the platform"
+    )
 
     # Rating aggregate fields (auto-updated via signals)
     avg_stitching_quality = models.DecimalField(

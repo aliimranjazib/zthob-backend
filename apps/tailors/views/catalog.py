@@ -15,7 +15,7 @@ from ..serializers import (
     FabricCategorySerializer, FabricTagSerializer, FabricTypeSerializer,
     FabricSerializer, FabricCreateSerializer, FabricUpdateSerializer
 )
-from ..permissions import IsTailor
+from ..permissions import IsTailor, IsAdmin
 from .base import BaseTailorAuthenticatedView
 
 # Fabric Type Views
@@ -175,7 +175,11 @@ class TailorFabricTagsRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAP
 )
 class TailorFabricCategoryListCreateView(APIView):
     serializer_class = FabricCategorySerializer
-    permission_classes = [AllowAny]
+    
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()]
+        return [IsAdmin()]
     
     def get(self, request):
         queryset = FabricCategory.objects.filter(is_active=True).order_by("-created_at")
@@ -210,7 +214,11 @@ class TailorFabricCategoryListCreateView(APIView):
 )
 class TailorFabricCategoryDetailView(APIView):
     serializer_class = FabricCategorySerializer
-    permission_classes = [AllowAny]
+    
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()]
+        return [IsAdmin()]
     
     def delete(self, request, pk):
         category = FabricCategory.objects.get(pk=pk)
