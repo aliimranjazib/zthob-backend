@@ -50,7 +50,10 @@ jobs:
           source magsk_venv/bin/activate
           
           echo "📥 Installing dependencies..."
-          pip3 install -r requirements.txt --quiet
+          pip3 install -r requirements.txt --ignore-installed --quiet || {
+            echo "❌ ERROR: Dependency installation failed!"
+            exit 1
+          }
           
           echo "🔧 Loading production environment..."
           export $(grep -v "^#" .env.production | xargs)
