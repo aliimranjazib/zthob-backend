@@ -10,6 +10,14 @@ class IsTailor(permissions.BasePermission):
         return bool(request.user and request.user.is_authenticated and request.user.role == 'TAILOR')
 
 
+class IsAdmin(permissions.BasePermission):
+    """
+    Allows access only to users with the role 'ADMIN'.
+    """
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.role == 'ADMIN')
+
+
 class IsShopStaff(permissions.BasePermission):
 
     """

@@ -6,6 +6,7 @@ from django.utils import timezone
 from .models import NotificationLog
 from .serializers import NotificationLogSerializer, FCMDeviceTokenSerializer
 from zthob.utils import api_response
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 # Base class to avoid code duplication
 class BaseNotificationListView(generics.ListAPIView):
@@ -17,6 +18,7 @@ class BaseNotificationListView(generics.ListAPIView):
         return NotificationLog.objects.filter(user=self.request.user)
 
 # 1. Customer Notifications
+@extend_schema(tags=["Notifications"])
 class CustomerNotificationListView(BaseNotificationListView):
     def get_queryset(self):
         # We might want to filter by category or just return all for this user
@@ -26,6 +28,7 @@ class CustomerNotificationListView(BaseNotificationListView):
         ).order_by('-created_at')
 
 # 2. Tailor Notifications
+@extend_schema(tags=["Notifications"])
 class TailorNotificationListView(BaseNotificationListView):
     def get_queryset(self):
         # If tailors are just users, logic is same. 
@@ -36,6 +39,7 @@ class TailorNotificationListView(BaseNotificationListView):
         ).order_by('-created_at')
 
 # 3. Rider Notifications
+@extend_schema(tags=["Notifications"])
 class RiderNotificationListView(BaseNotificationListView):
     def get_queryset(self):
         return NotificationLog.objects.filter(
@@ -44,6 +48,7 @@ class RiderNotificationListView(BaseNotificationListView):
         ).order_by('-created_at')
 
 # 4. Mark as Read Endpoint
+@extend_schema(tags=["Notifications"])
 class MarkNotificationReadView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -69,6 +74,7 @@ class MarkNotificationReadView(APIView):
             )
 
 # 5. Mark ALL as Read (Optional but standard)
+@extend_schema(tags=["Notifications"])
 class MarkAllReadView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -214,6 +220,7 @@ class TestRiderNotificationView(APIView):
             )
 
 
+@extend_schema(tags=["Notifications"])
 class FCMTokenRegisterView(generics.CreateAPIView):
     """
     Register or update an FCM device token for the current user.

@@ -56,6 +56,13 @@ class FabricCategory(SluggedModel):
         default=True,
         help_text="Whether this category is active"
     )
+    image = models.ImageField(
+        upload_to='categories/images/',
+        validators=IMAGE_VALIDATOR,
+        null=True,
+        blank=True,
+        help_text="Category icon/image for display on home page"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -148,6 +155,37 @@ class Fabric(BaseModel):
         help_text="Whether this fabric is available for sale"
     )
     
+    # Home Page & Sales Logic
+    is_featured = models.BooleanField(
+        default=False,
+        help_text="Whether this fabric should be featured on the home page"
+    )
+    is_on_sale = models.BooleanField(
+        default=False,
+        help_text="Whether this fabric is currently on flash sale"
+    )
+    discount_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Sale price if is_on_sale is True"
+    )
+    sale_start = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the flash sale begins"
+    )
+    sale_end = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the flash sale ends"
+    )
+    sales_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Total number of times this fabric has been ordered"
+    )
+    
     # Legacy field (deprecated)
     fabric_image = models.ImageField(
         upload_to='fabrics/images',
@@ -204,6 +242,15 @@ class Fabric(BaseModel):
     
     def __str__(self):
         return f"{self.name} ({self.sku})"
+    
+    @property
+    def is_sale_active(self):
+        """Check if the flash sale is currently active based on current time."""
+        from django.utils import timezone
+        if not self.is_on_sale or not self.sale_start or not self.sale_end:
+            return False
+        now = timezone.now()
+        return self.sale_start <= now <= self.sale_end
 
 
 class FabricImage(models.Model):

@@ -34,6 +34,13 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
             "gallery",
             "category",
             "tailor",
+            "is_on_sale",
+            "discount_price",
+            "sale_start",
+            "sale_end",
+            "is_sale_active",
+            "is_featured",
+            "sales_count",
             "is_favorited",
             "favorite_count",
         ]
@@ -343,3 +350,14 @@ class RecipientMeasurementsResponseSerializer(serializers.Serializer):
     """New top-level response serializer"""
     recipients = RecipientMeasurementProfileSerializer(many=True)
     global_summary = serializers.DictField()
+
+
+class CustomerHomeSerializer(serializers.Serializer):
+    banners = serializers.ListField(child=serializers.DictField())
+    categories = FabricCategorySerializer(many=True)
+    new_tailors = TailorProfileSerializer(many=True)
+    top_rated_tailors = TailorProfileSerializer(many=True)
+    most_popular_tailors = TailorProfileSerializer(many=True)
+    flash_sale_fabrics = FabricCatalogSerializer(many=True)
+    new_fabrics = FabricCatalogSerializer(many=True)
+    featured_tailors = TailorProfileSerializer(many=True)

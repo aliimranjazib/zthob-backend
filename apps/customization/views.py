@@ -1,6 +1,7 @@
 from rest_framework import generics, permissions, viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 from .models import CustomStyleCategory, CustomStyle, UserStylePreset, MeasurementTemplate
 from .serializers import (
     CustomStyleCategorySerializer,
@@ -11,6 +12,7 @@ from .serializers import (
 )
 
 
+@extend_schema(tags=["Customization"])
 class CustomStyleCategoryListView(generics.ListAPIView):
     """
     GET /api/customization/categories/
@@ -27,6 +29,7 @@ class CustomStyleCategoryListView(generics.ListAPIView):
         ).distinct().prefetch_related('styles')
 
 
+@extend_schema(tags=["Customization"])
 class CustomStyleListView(generics.ListAPIView):
     """
     GET /api/customization/styles/
@@ -48,6 +51,7 @@ class CustomStyleListView(generics.ListAPIView):
         return queryset.order_by('category__display_order', 'display_order', 'name')
 
 
+@extend_schema(tags=["Customization"])
 class UserStylePresetViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing user style presets
@@ -87,6 +91,7 @@ class UserStylePresetViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+@extend_schema(tags=["Customization"])
 class MeasurementTemplateListView(generics.ListAPIView):
     """
     GET /api/customization/measurement-templates/
