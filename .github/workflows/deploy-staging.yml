@@ -31,7 +31,13 @@ jobs:
           source .venv/bin/activate
           
           echo "📥 Installing dependencies..."
-          ./.venv/bin/python3 -m pip install -r requirements.txt --ignore-installed --quiet || {
+          # Try using uv first (since the venv is uv-based), fallback to system pip if needed
+          export PATH="$PATH:$HOME/.local/bin"
+          if command -v uv &> /dev/null; then
+            uv pip install -r requirements.txt
+          else
+            python3 -m pip install -r requirements.txt --ignore-installed --quiet
+          fi || {
             echo "❌ ERROR: Dependency installation failed!"
             exit 1
           }
