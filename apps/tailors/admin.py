@@ -140,6 +140,7 @@ class TailorProfileAdmin(admin.ModelAdmin):
         'shop_status_badge',
         'review_status_display',
         'fabric_count',
+        'is_featured',
         'revenue_display',
         'orders_count_display',
         'shop_image_preview',
@@ -151,6 +152,7 @@ class TailorProfileAdmin(admin.ModelAdmin):
     list_filter = [
         ShopStatusFilter,
         'shop_status',
+        'is_featured',
         'establishment_year',
         'created_at',
     ]
@@ -201,7 +203,7 @@ class TailorProfileAdmin(admin.ModelAdmin):
             'fields': ('shop_image', 'shop_image_preview')
         }),
         ('Status', {
-            'fields': ('shop_status',)
+            'fields': ('shop_status', 'is_featured')
         }),
         ('Statistics', {
             'fields': ('fabric_count_display',),
@@ -831,6 +833,7 @@ class FabricAdmin(admin.ModelAdmin):
         'stock_badge',
         'season_badge',
         'is_active_badge',
+        'is_on_sale',
         'image_count',
         'created_at_formatted'
     ]
@@ -842,6 +845,7 @@ class FabricAdmin(admin.ModelAdmin):
         'category',
         'fabric_type',
         'is_active',
+        'is_on_sale',
         'seasons',
         'created_at',
     ]
@@ -898,6 +902,16 @@ class FabricAdmin(admin.ModelAdmin):
                 'stock',
                 'is_active',
             )
+        }),
+        ('Flash Sale Settings', {
+            'fields': (
+                'is_on_sale',
+                'discount_price',
+                'sale_start',
+                'sale_end',
+            ),
+            'classes': ('collapse',),
+            'description': 'Configure limited-time flash sales and discounts.'
         }),
         ('Legacy Image', {
             'fields': ('fabric_image',),
