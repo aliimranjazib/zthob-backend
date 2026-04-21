@@ -2,10 +2,76 @@ from rest_framework.serializers import ModelSerializer
 from rest_framework import serializers
 
 from apps.accounts.serializers import UserProfileSerializer
-from apps.tailors.models import Fabric
-from apps.tailors.serializers import FabricCategorySerializer, FabricImageSerializer, TailorProfileSerializer
-from apps.tailors.serializers.catalog import FabricTypeBasicSerializer,FabricTagBasicSerializer
+from apps.tailors.models import Fabric, TailorProfile
+from apps.tailors.serializers import FabricCategorySerializer, FabricImageSerializer
+from apps.tailors.serializers.catalog import FabricTypeBasicSerializer, FabricTagBasicSerializer
 from apps.customers.models import Address, CustomerProfile, FamilyMember, FabricFavorite
+
+# ============================================================================
+# LIGHTWEIGHT HOME SERIALIZERS (OPTIMIZED FOR PERFORMANCE)
+# ============================================================================
+
+class SimplifiedAddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Address
+        fields = ['id', 'latitude', 'longitude', 'address', 'city']
+
+class TailorHomeSerializer(serializers.ModelSerializer):
+    """Super lightweight serializer for Home Page lists."""
+    shop_image_url = serializers.SerializerMethodField()
+    city = serializers.SerializerMethodField()
+
+    address = serializers.CharField(source='address', read_only=True)
+
+    class Meta:
+        model = TailorProfile
+        fields = [
+            'id', 'shop_name', 'shop_image_url', 
+            'avg_overall_satisfaction', 'rating_count', 'city', 'address'
+        ]
+
+    def get_shop_image_url(self, obj):
+        if obj.shop_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.shop_image.url)
+            return obj.shop_image.url
+        return None
+
+    def get_city(self, obj):
+        # Try pre-fetched addresses first
+        user_addresses = getattr(obj.user, 'addresses', None)
+        if user_addresses is not None and hasattr(user_addresses, 'all'):
+            address = next((a for a in user_addresses.all() if a.is_default), None)
+            if address: return address.city
+        
+        # Fallback
+        addr = Address.objects.filter(user=obj.user, is_default=True).first()
+        if addr:
+            return addr.city
+        return "Riyadh"
+
+class FabricHomeSerializer(serializers.ModelSerializer):
+    """Super lightweight serializer for Home Page lists."""
+    image_url = serializers.SerializerMethodField()
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    
+    class Meta:
+        model = Fabric
+        fields = [
+            'id', 'name', 'price', 'stitching_price', 
+            'image_url', 'category_name', 'is_on_sale', 
+            'discount_price', 'is_sale_active'
+        ]
+
+    def get_image_url(self, obj):
+        first_image = obj.gallery.first()
+        if first_image and first_image.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(first_image.image.url)
+            return first_image.image.url
+        return None
 
 
 class FabricCatalogSerializer(serializers.ModelSerializer):
@@ -13,7 +79,7 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
     category = FabricCategorySerializer(read_only=True)
     fabric_type=FabricTypeBasicSerializer(read_only=True)
     tags=FabricTagBasicSerializer(many=True, read_only=True)
-    tailor = TailorProfileSerializer(read_only=True)
+    tailor = TailorHomeSerializer(read_only=True)
     is_favorited = serializers.BooleanField(read_only=True, default=False)
     favorite_count = serializers.IntegerField(read_only=True, default=0)
     
@@ -355,9 +421,9 @@ class RecipientMeasurementsResponseSerializer(serializers.Serializer):
 class CustomerHomeSerializer(serializers.Serializer):
     banners = serializers.ListField(child=serializers.DictField())
     categories = FabricCategorySerializer(many=True)
-    new_tailors = TailorProfileSerializer(many=True)
-    top_rated_tailors = TailorProfileSerializer(many=True)
-    most_popular_tailors = TailorProfileSerializer(many=True)
-    flash_sale_fabrics = FabricCatalogSerializer(many=True)
-    new_fabrics = FabricCatalogSerializer(many=True)
-    featured_tailors = TailorProfileSerializer(many=True)
+    new_tailors = TailorHomeSerializer(many=True)
+    top_rated_tailors = TailorHomeSerializer(many=True)
+    most_popular_tailors = TailorHomeSerializer(many=True)
+    featured_tailors = TailorHomeSerializer(many=True)
+    flash_sale_fabrics = FabricHomeSerializer(many=True)
+    new_fabrics = FabricHomeSerializer(many=True)
