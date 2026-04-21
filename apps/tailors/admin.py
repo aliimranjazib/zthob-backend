@@ -607,6 +607,7 @@ class FabricCategoryAdmin(admin.ModelAdmin):
     list_display = [
         'name',
         'slug',
+        'image_preview',
         'is_active_badge',
         'fabric_count_badge',
         'created_at_formatted'
@@ -618,13 +619,13 @@ class FabricCategoryAdmin(admin.ModelAdmin):
     
     prepopulated_fields = {'slug': ('name',)}
     
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'image_preview']
     
     ordering = ['name']
     
     fieldsets = (
         ('Category Information', {
-            'fields': ('name', 'slug', 'is_active'),
+            'fields': ('name', 'slug', 'image', 'image_preview', 'is_active'),
             'description': 'Fabric category information'
         }),
         ('System Information', {
@@ -633,6 +634,19 @@ class FabricCategoryAdmin(admin.ModelAdmin):
             'description': 'System timestamps'
         }),
     )
+
+    def image_preview(self, obj):
+        """Display category image preview"""
+        if obj.image:
+            try:
+                return format_html(
+                    '<img src="{}" width="40" height="40" style="border-radius: 5px; object-fit: cover;" />',
+                    obj.image.url
+                )
+            except (ValueError, AttributeError):
+                return format_html('<em style="color: #999;">Invalid</em>')
+        return format_html('<em style="color: #999;">No image</em>')
+    image_preview.short_description = 'Preview'
     
     list_per_page = 50
     
