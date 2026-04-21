@@ -9,7 +9,7 @@ from rest_framework import status
 
 from apps.customers.models import Address
 from apps.customers.serializers import (
-    FabricCatalogSerializer, TailorProfileSerializer, 
+    FabricCatalogSerializer, TailorHomeSerializer, FabricHomeSerializer,
     FabricCategorySerializer, CustomerHomeSerializer
 )
 from apps.tailors.models import Fabric, FabricCategory, TailorProfile
@@ -106,11 +106,11 @@ class CustomerHomeAPIView(APIView):
             Prefetch('user__addresses', queryset=Address.objects.filter(is_default=True)),
         )
 
-        # Build Tailors Sections
-        new_tailors = TailorProfileSerializer(active_tailors.order_by('-created_at')[:8], many=True, context={'request': request}).data
-        top_rated_tailors = TailorProfileSerializer(active_tailors.order_by('-avg_overall_satisfaction', '-rating_count')[:8], many=True, context={'request': request}).data
-        featured_tailors = TailorProfileSerializer(active_tailors.filter(is_featured=True).order_by('?')[:8], many=True, context={'request': request}).data
-        most_popular_tailors = TailorProfileSerializer(active_tailors.annotate(order_count=Count('user__tailor_orders')).order_by('-order_count')[:8], many=True, context={'request': request}).data
+        # Build Tailors Sections using optimized serializers
+        new_tailors = TailorHomeSerializer(active_tailors.order_by('-created_at')[:8], many=True, context={'request': request}).data
+        top_rated_tailors = TailorHomeSerializer(active_tailors.order_by('-avg_overall_satisfaction', '-rating_count')[:8], many=True, context={'request': request}).data
+        featured_tailors = TailorHomeSerializer(active_tailors.filter(is_featured=True).order_by('?')[:8], many=True, context={'request': request}).data
+        most_popular_tailors = TailorHomeSerializer(active_tailors.annotate(order_count=Count('user__tailor_orders')).order_by('-order_count')[:8], many=True, context={'request': request}).data
 
         # 8. Fabrics Filtering (Active & Nearby)
         active_fabrics = Fabric.objects.filter(
@@ -123,13 +123,13 @@ class CustomerHomeAPIView(APIView):
             'category', 'fabric_type', 'tailor', 'tailor__user'
         ).prefetch_related('gallery', 'tags')
 
-        # Build Fabrics Sections
-        flash_sale_fabrics = FabricCatalogSerializer(
+        # Build Fabrics Sections using optimized serializers
+        flash_sale_fabrics = FabricHomeSerializer(
             active_fabrics.filter(is_on_sale=True, sale_start__lte=now, sale_end__gte=now).order_by('?')[:10], 
             many=True, context={'request': request}
         ).data
         
-        new_fabrics = FabricCatalogSerializer(active_fabrics.order_by('-created_at')[:10], many=True, context={'request': request}).data
+        new_fabrics = FabricHomeSerializer(active_fabrics.order_by('-created_at')[:10], many=True, context={'request': request}).data
 
         data = {
             "banners": banners,
