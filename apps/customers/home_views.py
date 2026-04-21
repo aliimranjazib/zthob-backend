@@ -1,4 +1,4 @@
-from django.db.models import Count, Prefetch, Q, F
+from django.db.models import Count, Prefetch, Q, F, ExpressionWrapper, FloatField
 from django.db.models.functions import ACos, Cos, Radians, Sin
 from django.utils import timezone
 from django.core.cache import cache
@@ -81,10 +81,13 @@ class CustomerHomeAPIView(APIView):
         # 5. Calculate Nearby Users
         # Filter addresses by distance using Haversine formula (6371 is Earth's KM radius)
         nearby_user_ids = Address.objects.annotate(
-            distance=6371 * ACos(
-                Cos(Radians(target_lat)) * Cos(Radians(F('latitude'))) *
-                Cos(Radians(F('longitude')) - Radians(target_lng)) +
-                Sin(Radians(target_lat)) * Sin(Radians(F('latitude')))
+            distance=ExpressionWrapper(
+                6371 * ACos(
+                    Cos(Radians(target_lat)) * Cos(Radians(F('latitude'))) *
+                    Cos(Radians(F('longitude')) - Radians(target_lng)) +
+                    Sin(Radians(target_lat)) * Sin(Radians(F('latitude')))
+                ),
+                output_field=FloatField()
             )
         ).filter(distance__lte=radius).values_list('user_id', flat=True)
 
