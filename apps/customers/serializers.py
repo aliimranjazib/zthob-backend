@@ -21,7 +21,7 @@ class TailorHomeSerializer(serializers.ModelSerializer):
     shop_image_url = serializers.SerializerMethodField()
     city = serializers.SerializerMethodField()
 
-    address = serializers.CharField(source='address', read_only=True)
+    address = serializers.CharField(read_only=True)
 
     class Meta:
         model = TailorProfile
