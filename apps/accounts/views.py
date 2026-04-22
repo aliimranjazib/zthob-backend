@@ -353,8 +353,8 @@ class PhoneVerifyView(APIView):
             user_before_verify = User.objects.filter(phone=local_phone).first()
             
             # Check if user was already verified before this verification
-            # If phone_verified is True, they've logged in before
-            was_already_verified = user_before_verify and user_before_verify.phone_verified
+            # Users that were soft-deleted are treated as new users
+            was_already_verified = user_before_verify and user_before_verify.phone_verified and not user_before_verify.is_deleted
             
             # Also check if there are any previous verified verifications
             has_previous_verification = False
@@ -364,8 +364,8 @@ class PhoneVerifyView(APIView):
                     is_verified=True
                 ).exclude(otp_code=otp_code).exists()
             
-            # User is new if they were never verified before
-            is_new_user = not was_already_verified and not has_previous_verification
+            # User is new if they were never verified before OR if they were previously deleted
+            is_new_user = (not was_already_verified and not has_previous_verification) or (user_before_verify and user_before_verify.is_deleted)
             
             # Verify OTP
             is_valid, message, user = PhoneVerificationService.verify_otp_for_phone(
@@ -391,6 +391,10 @@ class PhoneVerifyView(APIView):
                     user.role = role
                 if date_of_birth:
                     user.date_of_birth = date_of_birth
+                
+                # Restore soft-deleted account
+                user.is_active = True
+                user.is_deleted = False
                 user.save()
             
             # Generate JWT tokens
