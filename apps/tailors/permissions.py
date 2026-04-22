@@ -40,7 +40,8 @@ class IsShopStaff(permissions.BasePermission):
             return False
 
         # Allow if User is an Owner (has tailor_profile)
-        if hasattr(request.user, 'tailor_profile'):
+        # OR if the user has the TAILOR role (even if profile is not yet created, the view will handle it)
+        if hasattr(request.user, 'tailor_profile') or request.user.role == 'TAILOR':
             return True
 
         # Allow if User is an Employee (has tailor_employee)

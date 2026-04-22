@@ -7,7 +7,7 @@ from apps.tailors.models import TailorProfile
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def create_tailor_profile(sender, instance, created, **kwargs):
-    if created and getattr(instance, 'role', '') == 'TAILOR':
+    if getattr(instance, 'role', '') == 'TAILOR':
         TailorProfile.objects.get_or_create(user=instance)
 
 
