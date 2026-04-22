@@ -2,7 +2,7 @@ from rest_framework.serializers import ModelSerializer
 from rest_framework import serializers
 
 from apps.accounts.serializers import UserProfileSerializer
-from apps.tailors.models import Fabric, TailorProfile
+from apps.tailors.models import Fabric, TailorProfile, FabricCategory
 from apps.tailors.serializers import FabricCategorySerializer, FabricImageSerializer
 from apps.tailors.serializers.catalog import FabricTypeBasicSerializer, FabricTagBasicSerializer
 from apps.customers.models import Address, CustomerProfile, FamilyMember, FabricFavorite
@@ -50,6 +50,37 @@ class TailorHomeSerializer(serializers.ModelSerializer):
         if addr:
             return addr.city
         return "Riyadh"
+
+
+class FabricCategoryHomeSerializer(serializers.ModelSerializer):
+    """Category serializer for Home page that includes sample fabric images."""
+    fabric_images = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FabricCategory
+        fields = ["id", "name", "slug", "image", "fabric_images"]
+
+    def get_fabric_images(self, obj):
+        # Use pre-fetched sample_fabrics if available to avoid N+1 queries
+        request = self.context.get('request')
+        
+        sample_fabrics = getattr(obj, 'sample_fabrics', None)
+        if sample_fabrics is not None:
+            fabrics = sample_fabrics[:4]
+        else:
+            fabrics = obj.fabrics.filter(is_active=True).prefetch_related('gallery')[:4]
+        
+        images = []
+        for fabric in fabrics:
+            # Try to get primary image or first available
+            img = fabric.primary_image
+            if img:
+                image_url = img.url
+                if request:
+                    image_url = request.build_absolute_uri(image_url)
+                images.append(image_url)
+        
+        return images
 
 class FabricHomeSerializer(serializers.ModelSerializer):
     """Super lightweight serializer for Home Page lists."""
@@ -420,7 +451,7 @@ class RecipientMeasurementsResponseSerializer(serializers.Serializer):
 
 class CustomerHomeSerializer(serializers.Serializer):
     banners = serializers.ListField(child=serializers.DictField())
-    categories = FabricCategorySerializer(many=True)
+    categories = FabricCategoryHomeSerializer(many=True)
     new_tailors = TailorHomeSerializer(many=True)
     top_rated_tailors = TailorHomeSerializer(many=True)
     most_popular_tailors = TailorHomeSerializer(many=True)

@@ -10,7 +10,7 @@ from rest_framework import status
 from apps.customers.models import Address
 from apps.customers.serializers import (
     FabricCatalogSerializer, TailorHomeSerializer, FabricHomeSerializer,
-    FabricCategorySerializer, CustomerHomeSerializer
+    FabricCategorySerializer, FabricCategoryHomeSerializer, CustomerHomeSerializer
 )
 from apps.tailors.models import Fabric, FabricCategory, TailorProfile
 from apps.core.models import Slider
@@ -95,8 +95,14 @@ class CustomerHomeAPIView(APIView):
         sliders = Slider.objects.filter(is_active=True).order_by('order', '-created_at')[:5]
         banners = SliderSerializer(sliders, many=True, context={'request': request}).data
 
-        categories_qs = FabricCategory.objects.filter(is_active=True).order_by('name')
-        categories = FabricCategorySerializer(categories_qs, many=True, context={'request': request}).data
+        # Prefetch fabrics and their galleries to avoid N+1 queries for category images
+        fabrics_prefetch = Prefetch(
+            'fabrics',
+            queryset=Fabric.objects.filter(is_active=True).prefetch_related('gallery').order_by('-created_at'),
+            to_attr='sample_fabrics'
+        )
+        categories_qs = FabricCategory.objects.filter(is_active=True).prefetch_related(fabrics_prefetch).order_by('name')
+        categories = FabricCategoryHomeSerializer(categories_qs, many=True, context={'request': request}).data
 
         # 7. Tailors Filtering (Approved & Nearby)
         active_tailors = TailorProfile.objects.filter(
