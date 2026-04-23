@@ -20,8 +20,7 @@ class TailorHomeSerializer(serializers.ModelSerializer):
     """Super lightweight serializer for Home Page lists."""
     shop_image_url = serializers.SerializerMethodField()
     city = serializers.SerializerMethodField()
-
-    address = serializers.CharField(read_only=True)
+    address = serializers.SerializerMethodField()
 
     class Meta:
         model = TailorProfile
@@ -39,17 +38,39 @@ class TailorHomeSerializer(serializers.ModelSerializer):
         return None
 
     def get_city(self, obj):
-        # Try pre-fetched addresses first
+        """Get city from pre-fetched addresses to avoid N+1."""
+        # Try pre-fetched addresses first (populated via Prefetch in CustomerHomeAPIView)
         user_addresses = getattr(obj.user, 'addresses', None)
         if user_addresses is not None and hasattr(user_addresses, 'all'):
-            address = next((a for a in user_addresses.all() if a.is_default), None)
-            if address: return address.city
+            # Convert to list to use Python iteration on pre-fetched data
+            addresses = list(user_addresses.all())
+            addr = next((a for a in addresses if a.is_default), None)
+            if not addr and addresses:
+                addr = addresses[0]
+            if addr: 
+                return addr.city
         
-        # Fallback
-        addr = Address.objects.filter(user=obj.user, is_default=True).first()
-        if addr:
-            return addr.city
+        # Fallback only if pre-fetch failed (prevents N+1 in most cases)
         return "Riyadh"
+
+    def get_address(self, obj):
+        """Get formatted address from pre-fetched data, resolving 'Instance of Address' issue."""
+        user_addresses = getattr(obj.user, 'addresses', None)
+        if user_addresses is not None and hasattr(user_addresses, 'all'):
+            addresses = list(user_addresses.all())
+            addr = next((a for a in addresses if a.is_default), None)
+            if not addr and addresses:
+                addr = addresses[0]
+            
+            if addr:
+                # Prefer the full address text if available, otherwise format street/city
+                return addr.address or f"{addr.street}, {addr.city}"
+        
+        # Fallback to model field if it's not the corrupted 'Instance of' string
+        if obj.address and "Instance of" not in str(obj.address):
+            return obj.address
+            
+        return ""
 
 
 class FabricCategoryHomeSerializer(serializers.ModelSerializer):
