@@ -18,6 +18,7 @@ class SimplifiedAddressSerializer(serializers.ModelSerializer):
 
 class TailorHomeSerializer(serializers.ModelSerializer):
     """Super lightweight serializer for Home Page lists."""
+    user_id = serializers.ReadOnlyField(source='user.id')
     shop_image_url = serializers.SerializerMethodField()
     city = serializers.SerializerMethodField()
     address = serializers.SerializerMethodField()
@@ -25,7 +26,7 @@ class TailorHomeSerializer(serializers.ModelSerializer):
     class Meta:
         model = TailorProfile
         fields = [
-            'id', 'shop_name', 'shop_image_url', 
+            'id', 'user_id', 'shop_name', 'shop_image_url', 
             'avg_overall_satisfaction', 'rating_count', 'city', 'address'
         ]
 
