@@ -371,6 +371,10 @@ TRANSLATIONS = {
     "Employee not found": "الموظف غير موجود",
     "This phone number is already an employee at another shop": "رقم الهاتف هذا مسجل موظفاً في محل آخر",
     "Tailor profile not found": "ملف الخياط غير موجود",
+    
+    # Express Delivery
+    "Day": "يوم",
+    "Days": "أيام",
 }
 
 

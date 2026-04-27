@@ -119,8 +119,9 @@ class CustomerHomeAPIView(APIView):
         new_tailors = TailorHomeSerializer(active_tailors.order_by('-created_at')[:8], many=True, context={'request': request}).data
         top_rated_tailors = TailorHomeSerializer(active_tailors.order_by('-avg_overall_satisfaction', '-rating_count')[:8], many=True, context={'request': request}).data
         featured_tailors = TailorHomeSerializer(active_tailors.filter(is_featured=True).order_by('?')[:8], many=True, context={'request': request}).data
+        express_delivery_tailors = TailorHomeSerializer(active_tailors.filter(is_express_delivery_enabled=True).order_by('-avg_overall_satisfaction')[:8], many=True, context={'request': request}).data
         most_popular_tailors = TailorHomeSerializer(active_tailors.annotate(order_count=Count('user__tailor_orders')).order_by('-order_count')[:8], many=True, context={'request': request}).data
-
+        
         # 8. Fabrics Filtering (Active & Nearby)
         active_fabrics = Fabric.objects.filter(
             is_active=True,
@@ -147,6 +148,7 @@ class CustomerHomeAPIView(APIView):
             "top_rated_tailors": top_rated_tailors,
             "most_popular_tailors": most_popular_tailors,
             "featured_tailors": featured_tailors,
+            "express_delivery_tailors": express_delivery_tailors,
             "flash_sale_fabrics": flash_sale_fabrics,
             "new_fabrics": new_fabrics,
         }

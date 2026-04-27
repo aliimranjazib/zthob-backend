@@ -127,10 +127,24 @@ class TailorConfigView(APIView):
             },
         ]
 
+        # 4. Express Delivery Options
+        from apps.core.models import SystemSettings
+        system_settings = SystemSettings.get_active_settings()
+        max_days = system_settings.express_delivery_max_days
+        
+        express_delivery_options = []
+        for d in range(1, max_days + 1):
+            day_text = "Day" if d == 1 else "Days"
+            express_delivery_options.append({
+                "days": d,
+                "display_name": f"{d} {translate_message(day_text, language)}"
+            })
+
         config_data = {
             "statuses": statuses,
             "employee_roles": employee_roles,
             "employee_permissions": employee_permissions,
+            "express_delivery_options": express_delivery_options,
         }
         
         return api_response(

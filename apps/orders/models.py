@@ -219,6 +219,19 @@ class Order(BaseModel):
     default=Decimal('0.00'),
     help_text="Total amount including taxes and fees"
     )
+
+    # Express Delivery (Extra Fast Stitching)
+    is_express = models.BooleanField(
+        default=False,
+        help_text="Whether this order uses express delivery (extra fast stitching)"
+    )
+    express_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Extra fee for express delivery"
+    )
+
     payment_status=models.CharField(
     max_length=20,
     choices=PAYMENT_STATUS_CHOICES,
@@ -375,7 +388,7 @@ class Order(BaseModel):
            import uuid
            self.order_number = f"ORD-{uuid.uuid4().hex[:8].upper()}"
         if not self.total_amount:
-            self.total_amount=self.subtotal+self.stitching_price+self.tax_amount+self.delivery_fee
+            self.total_amount=self.subtotal+self.stitching_price+self.tax_amount+self.delivery_fee+self.express_fee
 
         # Auto-sync main status based on rider_status and tailor_status
         # This preserves the existing auto-sync logic from OrderStatusTransitionService
@@ -559,8 +572,9 @@ class Order(BaseModel):
         self.tax_amount = totals['tax_amount']
         self.delivery_fee = totals['delivery_fee']
         self.system_fee = totals.get('system_fee', Decimal('0.00'))
+        self.express_fee = totals.get('express_fee', Decimal('0.00'))
         self.total_amount = totals['total_amount']
-        self.save(update_fields=['subtotal', 'stitching_price', 'tax_amount', 'delivery_fee', 'system_fee', 'total_amount'])
+        self.save(update_fields=['subtotal', 'stitching_price', 'tax_amount', 'delivery_fee', 'system_fee', 'express_fee', 'total_amount'])
 
     def __str__(self):
         # Get tailor name from profile if available

@@ -97,12 +97,17 @@ class SystemSettings(models.Model):
         help_text="Order subtotal threshold for free delivery (SAR). Set to 0 to disable free delivery."
     )
     
-    # System Fees
     system_fee_amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=Decimal('3.00'),
         help_text="Fixed system fee (SAR) applied to fabric_with_stitching orders (non-walk-in)."
+    )
+
+    # Express Delivery Settings
+    express_delivery_max_days = models.PositiveIntegerField(
+        default=10,
+        help_text="Maximum number of days an admin allows for express delivery options (default: 10)."
     )
     
     # Metadata

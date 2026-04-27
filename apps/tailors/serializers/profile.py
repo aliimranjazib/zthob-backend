@@ -31,6 +31,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             'phone_verified',
             'avg_stitching_quality', 'avg_on_time_delivery',
             'avg_overall_satisfaction', 'rating_count',
+            'is_express_delivery_enabled', 'express_delivery_days', 'express_delivery_fee',
         ]
     
     def get_shop_image_url(self, obj):
@@ -143,7 +144,7 @@ class TailorProfileUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'shop_name', 'establishment_year', 'tailor_experience', 
             'working_hours', 'contact_number', 'address', 'shop_status',
-            'shop_image'
+            'shop_image', 'is_express_delivery_enabled', 'express_delivery_days', 'express_delivery_fee'
         ]
 
 class TailorProfileSubmissionSerializer(serializers.ModelSerializer):

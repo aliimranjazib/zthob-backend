@@ -478,5 +478,6 @@ class CustomerHomeSerializer(serializers.Serializer):
     top_rated_tailors = TailorHomeSerializer(many=True)
     most_popular_tailors = TailorHomeSerializer(many=True)
     featured_tailors = TailorHomeSerializer(many=True)
+    express_delivery_tailors = TailorHomeSerializer(many=True)
     flash_sale_fabrics = FabricHomeSerializer(many=True)
     new_fabrics = FabricHomeSerializer(many=True)
