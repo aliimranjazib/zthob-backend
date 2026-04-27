@@ -136,7 +136,24 @@ class OrderCalculationService:
         return stitching_total.quantize(Decimal('0.01'))
 
     @staticmethod
-    def calculate_all_totals(items_data, distance_km=None, delivery_address=None, tailor=None, tax_rate=None, order_type='fabric_only', service_mode='home_delivery', delivery_latitude=None, delivery_longitude=None):
+    def calculate_express_fee(tailor, is_express):
+        """
+        Calculate express delivery fee based on tailor profile.
+        """
+        if not is_express or not tailor:
+            return Decimal('0.00')
+        
+        try:
+            tailor_profile = tailor.tailor_profile
+            if tailor_profile.is_express_delivery_enabled and tailor_profile.express_delivery_fee:
+                return tailor_profile.express_delivery_fee
+        except TailorProfile.DoesNotExist:
+            pass
+            
+        return Decimal('0.00')
+
+    @staticmethod
+    def calculate_all_totals(items_data, distance_km=None, delivery_address=None, tailor=None, tax_rate=None, order_type='fabric_only', service_mode='home_delivery', delivery_latitude=None, delivery_longitude=None, is_express=False):
         """
         Calculate all order totals.
         
@@ -150,6 +167,7 @@ class OrderCalculationService:
             service_mode: Service mode ('home_delivery' or 'walk_in') - determines if delivery fee is charged
             delivery_latitude: Delivery latitude (optional)
             delivery_longitude: Delivery longitude (optional)
+            is_express: Whether this is an express delivery order (optional)
         """ 
         # For measurement service orders, all costs are zero
         if order_type == 'measurement_service':
@@ -191,8 +209,11 @@ class OrderCalculationService:
             system_settings = OrderCalculationService.get_system_settings()
             system_fee = system_settings.system_fee_amount
         
-        # Total includes: subtotal (fabric) + stitching_price + tax + delivery_fee + system_fee
-        total_amount = subtotal + stitching_price + tax_amount + delivery_fee + system_fee
+        # Calculate express delivery fee
+        express_fee = OrderCalculationService.calculate_express_fee(tailor, is_express)
+        
+        # Total includes: subtotal (fabric) + stitching_price + tax + delivery_fee + system_fee + express_fee
+        total_amount = subtotal + stitching_price + tax_amount + delivery_fee + system_fee + express_fee
         
         return {
             'subtotal': subtotal,
@@ -200,6 +221,7 @@ class OrderCalculationService:
             'tax_amount': tax_amount,
             'delivery_fee': delivery_fee,
             'system_fee': system_fee,
+            'express_fee': express_fee,
             'total_amount': total_amount.quantize(Decimal('0.01'))
         }
 

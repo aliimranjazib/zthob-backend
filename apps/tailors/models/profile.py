@@ -88,6 +88,25 @@ class TailorProfile(models.Model):
         validators=[FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png'])],
         help_text="Shop image (JPG, JPEG, PNG only)"
     )
+
+    # Express Delivery configuration
+    is_express_delivery_enabled = models.BooleanField(
+        default=False,
+        help_text="Whether this tailor provides express delivery (extra fast stitching)"
+    )
+    express_delivery_days = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="Number of days for express delivery (e.g. 4 days)"
+    )
+    express_delivery_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Extra fee for express delivery"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

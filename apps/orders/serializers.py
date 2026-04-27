@@ -181,6 +181,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'pricing_summary',
             'has_rating',
             'tailor_rating',
+            'is_express',
+            'express_fee',
             'created_at',
             'updated_at'
         ]
@@ -595,6 +597,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'tax_amount': obj.tax_amount,
             'delivery_fee': obj.delivery_fee,
             'system_fee': obj.system_fee,
+            'express_fee': obj.express_fee,
             'total_amount': obj.total_amount
         }
 
@@ -654,7 +657,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'appointment_time',
             'custom_styles',
             'items',
-            'distance_km'
+            'distance_km',
+            'is_express'
         ]
         extra_kwargs = {
             'tailor': {'required': False, 'allow_null': True}
@@ -938,9 +942,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         if distance_km is not None:
             distance_km = float(distance_km)
         
-        # Get order_type to pass to calculation service
         order_type = validated_data.get('order_type', 'fabric_only')
         service_mode = validated_data.get('service_mode', 'home_delivery')
+        is_express = validated_data.get('is_express', False)
         
         # Prepare delivery coordinates based on delivery type
         delivery_lat = None
@@ -980,7 +984,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             delivery_longitude=delivery_lng,
             tailor=tailor,
             order_type=order_type,
-            service_mode=service_mode
+            service_mode=service_mode,
+            is_express=is_express
         )
         
         # Update validated_data with calculated totals (including stitching_price)
@@ -1352,6 +1357,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'stitching_price': str(obj.stitching_price),
             'tax_amount': str(obj.tax_amount),
             'delivery_fee': str(obj.delivery_fee),
+            'express_fee': str(obj.express_fee),
             'total_amount': str(obj.total_amount),
         }
 
