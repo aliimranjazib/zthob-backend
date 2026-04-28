@@ -57,16 +57,19 @@ class TailorHomeService:
             profile = tailor_user.tailor_profile
             is_open = profile.shop_status
             
-            # Simple completeness calculation
-            fields_to_check = [
-                profile.shop_name, 
-                profile.contact_number, 
-                profile.address, 
-                profile.shop_image,
-                profile.working_hours
+            # Detailed completeness calculation with hints
+            checks = [
+                (profile.shop_name, "Shop Name"),
+                (profile.contact_number, "Contact Number"),
+                (profile.address, "Business Address"),
+                (profile.shop_image, "Shop Image"),
+                (profile.working_hours, "Working Hours"),
             ]
-            filled_fields = [f for f in fields_to_check if f]
-            profile_completeness = int((len(filled_fields) / len(fields_to_check)) * 100)
+            
+            missing_hints = [hint for val, hint in checks if not val]
+            total_checks = len(checks)
+            filled_count = total_checks - len(missing_hints)
+            profile_completeness = int((filled_count / total_checks) * 100)
             
         return {
             'counters': {
@@ -88,6 +91,7 @@ class TailorHomeService:
             'recent_orders': recent_orders,
             'shop_status': {
                 'is_open': is_open,
-                'profile_completeness': profile_completeness
-            }
+                'profile_completeness': profile_completeness,
+            },
+            'missing_hints': missing_hints
         }

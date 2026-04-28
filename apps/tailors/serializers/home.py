@@ -38,3 +38,4 @@ class TailorHomeSerializer(serializers.Serializer):
     express_orders = TailorOrderSummarySerializer(many=True)
     recent_orders = TailorOrderSummarySerializer(many=True)
     shop_status = serializers.DictField()
+    missing_hints = serializers.ListField(child=serializers.CharField(), required=False)
