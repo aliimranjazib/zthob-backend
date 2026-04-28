@@ -22,12 +22,14 @@ class TailorHomeSerializer(serializers.ModelSerializer):
     shop_image_url = serializers.SerializerMethodField()
     city = serializers.SerializerMethodField()
     address = serializers.SerializerMethodField()
+    is_express = serializers.BooleanField(source='is_express_delivery_enabled', read_only=True)
 
     class Meta:
         model = TailorProfile
         fields = [
             'id', 'shop_name', 'shop_image_url', 
-            'avg_overall_satisfaction', 'rating_count', 'city', 'address'
+            'avg_overall_satisfaction', 'rating_count', 'city', 'address',
+            'is_express', 'express_delivery_days', 'express_delivery_fee'
         ]
 
     def get_shop_image_url(self, obj):
