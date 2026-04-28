@@ -118,7 +118,7 @@ class CustomerHomeAPIView(APIView):
         # Build Tailors Sections using optimized serializers
         new_tailors = TailorHomeSerializer(active_tailors.order_by('-created_at')[:8], many=True, context={'request': request}).data
         top_rated_tailors = TailorHomeSerializer(active_tailors.order_by('-avg_overall_satisfaction', '-rating_count')[:8], many=True, context={'request': request}).data
-        featured_tailors = TailorHomeSerializer(active_tailors.filter(is_featured=True).order_by('?')[:8], many=True, context={'request': request}).data
+        featured_tailors = TailorHomeSerializer(active_tailors.filter(is_featured=True).order_by('-avg_overall_satisfaction')[:8], many=True, context={'request': request}).data
         express_delivery_tailors = TailorHomeSerializer(active_tailors.filter(is_express_delivery_enabled=True).order_by('-avg_overall_satisfaction')[:8], many=True, context={'request': request}).data
         most_popular_tailors = TailorHomeSerializer(active_tailors.annotate(order_count=Count('user__tailor_orders')).order_by('-order_count')[:8], many=True, context={'request': request}).data
         
@@ -135,7 +135,7 @@ class CustomerHomeAPIView(APIView):
 
         # Build Fabrics Sections using optimized serializers
         flash_sale_fabrics = FabricHomeSerializer(
-            active_fabrics.filter(is_on_sale=True, sale_start__lte=now, sale_end__gte=now).order_by('?')[:10], 
+            active_fabrics.filter(is_on_sale=True, sale_start__lte=now, sale_end__gte=now).order_by('sale_end')[:10], 
             many=True, context={'request': request}
         ).data
         

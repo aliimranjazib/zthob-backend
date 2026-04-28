@@ -203,6 +203,8 @@ class Fabric(BaseModel):
             models.Index(fields=['tailor', 'is_active']),
             models.Index(fields=['fabric_type', 'seasons']),
             models.Index(fields=['category', 'is_active']),
+            models.Index(fields=['is_featured']),
+            models.Index(fields=['is_on_sale', 'sale_start', 'sale_end']),
         ]
     
     def save(self, *args, **kwargs):

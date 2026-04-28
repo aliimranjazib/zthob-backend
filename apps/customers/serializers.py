@@ -96,8 +96,15 @@ class FabricCategoryHomeSerializer(serializers.ModelSerializer):
         
         images = []
         for fabric in fabrics:
-            # Try to get primary image or first available
-            img = fabric.primary_image
+            # Avoid using fabric.primary_image property here as it triggers queries
+            # Instead, access the prefetched gallery list
+            gallery = list(fabric.gallery.all())
+            img = None
+            if gallery:
+                # Try to find primary, otherwise first
+                primary = next((i for i in gallery if i.is_primary), gallery[0])
+                img = primary.image
+            
             if img:
                 image_url = img.url
                 if request:
@@ -121,12 +128,15 @@ class FabricHomeSerializer(serializers.ModelSerializer):
         ]
 
     def get_image_url(self, obj):
-        first_image = obj.gallery.first()
-        if first_image and first_image.image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(first_image.image.url)
-            return first_image.image.url
+        # Use prefetched gallery if available
+        gallery = list(obj.gallery.all())
+        if gallery:
+            first_image = gallery[0]
+            if first_image.image:
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(first_image.image.url)
+                return first_image.image.url
         return None
 
 
