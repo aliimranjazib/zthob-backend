@@ -463,24 +463,31 @@ class TailorOrderListView(APIView):
     def get(self,request):
         try:
             tailor_profile = TailorProfile.objects.get(user=request.user)
-            # Only show orders that tailor has accepted (tailor_status != 'none')
+            
+            # Base queryset: All orders for this tailor
             orders = Order.objects.filter(
-                tailor=request.user,
-                tailor_status__in=['accepted', 'stitching_started', 'stitched']
+                tailor=request.user
             ).select_related('customer', 'delivery_address', 'rider').prefetch_related('order_items__fabric').order_by('-created_at')
             
-            # Filter by payment status (default: show all, but can filter for paid only)
-            payment_status = request.query_params.get('payment_status')
-            if payment_status:
-                orders = orders.filter(payment_status=payment_status)
-            
-            # Filter by order status
+            # Filters
             status_filter = request.query_params.get('status')
+            tailor_status_filter = request.query_params.get('tailor_status')
+            payment_status = request.query_params.get('payment_status')
+            order_type = request.query_params.get('order_type')
+
             if status_filter:
                 orders = orders.filter(status=status_filter)
+            elif not tailor_status_filter:
+                # Default: Show active orders only (exclude completed/cancelled)
+                # unless a specific tailor_status is requested
+                orders = orders.exclude(status__in=['delivered', 'collected', 'cancelled'])
             
-            # Filter by order type
-            order_type = request.query_params.get('order_type')
+            if tailor_status_filter:
+                orders = orders.filter(tailor_status=tailor_status_filter)
+            
+            if payment_status:
+                orders = orders.filter(payment_status=payment_status)
+
             if order_type:
                 orders = orders.filter(order_type=order_type)
             

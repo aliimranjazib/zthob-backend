@@ -57,9 +57,15 @@ from apps.tailors.views import (
     # Employee views
     TailorEmployeeListCreateView,
     TailorEmployeeDetailView,
+
+    # Home/Dashboard
+    TailorHomeAPIView,
 )
 
 urlpatterns = [
+    # Dashboard Home
+    path('home/', TailorHomeAPIView.as_view(), name='tailor-home'),
+
     # Profile URLs
     path('profile/', TailorProfileView.as_view(), name='tailor-profile'),
     path('profile/submit/', TailorProfileSubmissionView.as_view(), name='tailor-profile-submit'),
