@@ -19,6 +19,8 @@ class TailorProfileSerializer(serializers.ModelSerializer):
     # Address field - show structured address from Address model
     address = serializers.SerializerMethodField()
     
+    is_express = serializers.BooleanField(source='is_express_delivery_enabled', read_only=True)
+    
     class Meta:
         model = TailorProfile
         fields = [
@@ -31,7 +33,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             'phone_verified',
             'avg_stitching_quality', 'avg_on_time_delivery',
             'avg_overall_satisfaction', 'rating_count',
-            'is_express_delivery_enabled', 'express_delivery_days', 'express_delivery_fee',
+            'is_express_delivery_enabled', 'is_express', 'express_delivery_days', 'express_delivery_fee',
         ]
     
     def get_shop_image_url(self, obj):
