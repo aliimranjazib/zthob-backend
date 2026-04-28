@@ -51,6 +51,7 @@ from .rating import (
     SubmitTailorRatingView,
     TailorRatingListView
 )
+from .home import TailorHomeAPIView
 from .employee import (
     TailorEmployeeListCreateView,
     TailorEmployeeDetailView,
@@ -58,6 +59,9 @@ from .employee import (
 
 # Export all views
 __all__ = [
+    # Home/Dashboard
+    'TailorHomeAPIView',
+    
     # Profile views
     'TailorProfileView',
     'TailorProfileSubmissionView',
