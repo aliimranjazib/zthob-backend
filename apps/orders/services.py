@@ -27,7 +27,13 @@ class OrderCalculationService:
         for item in items_data:
             fabric=item['fabric']
             quantity=Decimal(str(item.get('quantity',1)))
-            unit_price=fabric.price
+            
+            # Use discount price if flash sale is active
+            if fabric and fabric.is_on_sale and fabric.is_sale_active and fabric.discount_price is not None:
+                unit_price = fabric.discount_price
+            else:
+                unit_price = item.get('unit_price', fabric.price if fabric else Decimal('0.00'))
+                
             subtotal+=unit_price*quantity
         return subtotal.quantize(Decimal('0.01'))
     

@@ -591,8 +591,10 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_pricing_summary(self, obj):
         """Return grouped pricing information"""
+        discount = sum((item.fabric.price - item.unit_price) * item.quantity for item in obj.order_items.all() if item.fabric and item.fabric.price > item.unit_price)
         return {
             'subtotal': obj.subtotal,
+            'discount': discount,
             'stitching_price': obj.stitching_price,
             'tax_amount': obj.tax_amount,
             'delivery_fee': obj.delivery_fee,
@@ -915,10 +917,13 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError(
                     f"{locked_fabric.name} is no longer available"
                 )
+            # Use discount price if flash sale is active
+            unit_price = locked_fabric.discount_price if (locked_fabric.is_on_sale and locked_fabric.is_sale_active and locked_fabric.discount_price is not None) else locked_fabric.price
+
             items_with_fabrics.append({
                 'fabric': locked_fabric,
                 'quantity': quantity,
-                'unit_price': locked_fabric.price,  # ALWAYS use current DB price
+                'unit_price': unit_price,  # ALWAYS use current DB price, with discount if applicable
                 'measurements': item_data.get('measurements', {}),
                 'custom_instructions': item_data.get('custom_instructions', ''),
                 'family_member': item_data.get('family_member'),
@@ -1352,8 +1357,10 @@ class OrderListSerializer(serializers.ModelSerializer):
     
     def get_pricing_summary(self, obj):
         """Return grouped pricing summary for consistency with detail view"""
+        discount = sum((item.fabric.price - item.unit_price) * item.quantity for item in obj.order_items.all() if item.fabric and item.fabric.price > item.unit_price)
         return {
             'subtotal': str(obj.subtotal),
+            'discount': str(discount),
             'stitching_price': str(obj.stitching_price),
             'tax_amount': str(obj.tax_amount),
             'delivery_fee': str(obj.delivery_fee),
