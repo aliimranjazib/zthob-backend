@@ -116,7 +116,8 @@ class FabricHomeSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'price', 'stitching_price', 
             'image_url', 'category_name', 'is_on_sale', 
-            'discount_price', 'is_sale_active'
+            'discount_price', 'is_sale_active',
+            'sale_start', 'sale_end'
         ]
 
     def get_image_url(self, obj):
