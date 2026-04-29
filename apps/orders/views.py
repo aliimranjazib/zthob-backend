@@ -476,7 +476,10 @@ class TailorOrderListView(APIView):
             order_type = request.query_params.get('order_type')
 
             if status_filter:
-                orders = orders.filter(status=status_filter)
+                if status_filter == 'express':
+                    orders = orders.filter(is_express=True)
+                else:
+                    orders = orders.filter(status=status_filter)
             elif not tailor_status_filter:
                 # Default: Show active orders only (exclude completed/cancelled)
                 # unless a specific tailor_status is requested
