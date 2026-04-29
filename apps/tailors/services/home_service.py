@@ -61,7 +61,7 @@ class TailorHomeService:
             # Detailed completeness calculation with hints
             checks = [
                 (profile.shop_name, "Shop Name"),
-                (profile.contact_number or tailor_user.phone_number, "Contact Number"),
+                (profile.contact_number or tailor_user.phone, "Contact Number"),
                 (profile.address, "Business Address"),
                 (profile.shop_image, "Shop Image"),
                 (profile.working_hours, "Working Hours"),
