@@ -2,6 +2,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from apps.orders.models import Order
 from apps.tailors.models import TailorProfile
 from decimal import Decimal
@@ -31,44 +32,50 @@ class TailorHomeAPITest(APITestCase):
         
         self.client.force_authenticate(user=self.tailor_user)
         self.url = reverse('tailor-home')
+        self.today = timezone.now().date()
 
-    def test_get_home_data(self):
+    def test_get_home_data_new_structure(self):
         # 1. Create some orders
-        # New order
+        # Overdue order
         Order.objects.create(
             customer=self.customer_user,
             tailor=self.tailor_user,
             status='pending',
+            payment_status='paid',
+            estimated_delivery_date=self.today - timezone.timedelta(days=1),
             subtotal=Decimal('100.00'),
             total_amount=Decimal('100.00')
         )
         
-        # Express order + Stitching Started
+        # Due today + stitching started
         Order.objects.create(
             customer=self.customer_user,
             tailor=self.tailor_user,
             status='in_progress',
             tailor_status='stitching_started',
-            is_express=True,
+            payment_status='paid',
+            estimated_delivery_date=self.today,
             subtotal=Decimal('150.00'),
             total_amount=Decimal('150.00')
         )
         
-        # Stitched order
+        # Express order (paid)
         Order.objects.create(
             customer=self.customer_user,
             tailor=self.tailor_user,
-            status='in_progress',
-            tailor_status='stitched',
+            status='pending',
+            payment_status='paid',
+            is_express=True,
             subtotal=Decimal('120.00'),
             total_amount=Decimal('120.00')
         )
 
-        # Completed order today
+        # Completed order today (to verify revenue)
         Order.objects.create(
             customer=self.customer_user,
             tailor=self.tailor_user,
             status='delivered',
+            payment_status='paid',
             subtotal=Decimal('200.00'),
             total_amount=Decimal('200.00')
         )
@@ -78,56 +85,63 @@ class TailorHomeAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.data['data']
         
-        # Verify counters
-        self.assertEqual(data['counters']['new_orders'], 1)
-        self.assertEqual(data['counters']['in_progress'], 2)
-        self.assertEqual(data['counters']['express_orders'], 1)
-        self.assertEqual(float(data['counters']['revenue_today']), 200.0)
+        # Verify Financials
+        self.assertEqual(float(data['financials']['today_revenue']), 200.0)
         
-        # Verify pipeline breakdown
-        self.assertEqual(data['pipeline']['new'], 1)
-        self.assertEqual(data['pipeline']['stitching'], 1)
-        self.assertEqual(data['pipeline']['stitched'], 1)
+        # Verify Urgent Alerts
+        overdue_alert = next(a for a in data['urgent_alerts'] if a['type'] == 'overdue')
+        self.assertEqual(overdue_alert['count'], 1)
+        self.assertEqual(overdue_alert['filter_params']['is_overdue'], 'true')
         
-        # Verify lists
-        self.assertEqual(len(data['express_orders']), 1)
-        self.assertEqual(data['express_orders'][0]['order_number'].startswith('ORD-'), True)
+        due_today_alert = next(a for a in data['urgent_alerts'] if a['type'] == 'due_today')
+        self.assertEqual(due_today_alert['count'], 1)
+        self.assertEqual(due_today_alert['filter_params']['delivery_due'], 'today')
         
-        # Verify shop status
-        self.assertEqual(data['shop_status']['is_open'], True)
+        # Verify Task Summary
+        needs_acc = next(t for t in data['task_summary'] if t['label'] == 'Needs Acceptance')
+        self.assertEqual(needs_acc['count'], 2) # Both pending orders
+        
+        # Verify Express
+        self.assertEqual(data['express_orders']['total_count'], 1)
+        self.assertEqual(len(data['express_orders']['items']), 1)
 
-    def test_order_list_filtering(self):
-        # Create orders with different statuses
+    def test_order_list_new_filters(self):
+        # Create overdue order
         Order.objects.create(
             customer=self.customer_user,
             tailor=self.tailor_user,
             status='pending',
-            subtotal=Decimal('100.00'),
-            total_amount=Decimal('100.00')
+            payment_status='paid',
+            estimated_delivery_date=self.today - timezone.timedelta(days=2)
         )
+        # Create normal order
         Order.objects.create(
             customer=self.customer_user,
             tailor=self.tailor_user,
-            status='in_progress',
-            tailor_status='stitching_started',
-            subtotal=Decimal('100.00'),
-            total_amount=Decimal('100.00')
+            status='pending',
+            payment_status='paid',
+            estimated_delivery_date=self.today + timezone.timedelta(days=2)
         )
         
         list_url = reverse('orders:tailor-orders')
         
-        # Test pending filter
-        response = self.client.get(f"{list_url}?status=pending")
+        # Test overdue filter
+        response = self.client.get(f"{list_url}?is_overdue=true")
         self.assertEqual(len(response.data['data']), 1)
-        self.assertEqual(response.data['data'][0]['status'], 'pending')
         
-        # Test tailor_status filter
-        response = self.client.get(f"{list_url}?tailor_status=stitching_started")
+        # Test delivery_due filter
+        # Create one due today
+        Order.objects.create(
+            customer=self.customer_user,
+            tailor=self.tailor_user,
+            status='pending',
+            payment_status='paid',
+            estimated_delivery_date=self.today
+        )
+        response = self.client.get(f"{list_url}?delivery_due=today")
         self.assertEqual(len(response.data['data']), 1)
-        self.assertEqual(response.data['data'][0]['status'], 'in_progress')
 
     def test_unauthorized_access(self):
         self.client.force_authenticate(user=self.customer_user)
         response = self.client.get(self.url)
-        # Should be forbidden for non-tailors
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
