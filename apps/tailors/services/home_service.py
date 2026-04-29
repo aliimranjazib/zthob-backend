@@ -20,34 +20,35 @@ class TailorHomeService:
         # 1. Fetch counts in a single efficient aggregation query
         # Filter by tailor_user to keep it scoped to the authenticated tailor
         stats = Order.objects.filter(tailor=tailor_user).aggregate(
-            # Main Summary: Only show paid orders to the tailor
-            new_orders=Count('id', filter=Q(status='confirmed', payment_status='paid')),
-            in_progress=Count('id', filter=Q(status='in_progress', payment_status='paid')),
-            ready_orders=Count('id', filter=Q(status__in=['ready_for_delivery', 'ready_for_pickup'], payment_status='paid')),
-            express_orders=Count('id', filter=Q(is_express=True, status__in=['confirmed', 'in_progress'], payment_status='paid')),
-            revenue_today=Sum('total_amount', filter=Q(status__in=['delivered', 'collected'], payment_status='paid', updated_at__gte=today_start)),
+            # Main Summary: Any paid order is a valid order for the tailor
+            new_orders=Count('id', filter=Q(payment_status='paid', status__in=['pending', 'confirmed'])),
+            in_progress=Count('id', filter=Q(payment_status='paid', status='in_progress')),
+            ready_orders=Count('id', filter=Q(payment_status='paid', status__in=['ready_for_delivery', 'ready_for_pickup'])),
+            express_orders=Count('id', filter=Q(payment_status='paid', is_express=True).exclude(status__in=['delivered', 'collected', 'cancelled'])),
+            revenue_today=Sum('total_amount', filter=Q(payment_status='paid', status__in=['delivered', 'collected'], updated_at__gte=today_start)),
             
-            # Pipeline Breakdown (Granular)
-            waiting_to_start=Count('id', filter=Q(tailor_status='accepted', status='confirmed', payment_status='paid')),
-            stitching=Count('id', filter=Q(tailor_status='stitching_started', payment_status='paid')),
-            stitched=Count('id', filter=Q(tailor_status='stitched', payment_status='paid')),
-            waiting_for_pickup=Count('id', filter=Q(status='ready_for_pickup', payment_status='paid')),
-            waiting_for_delivery=Count('id', filter=Q(status='ready_for_delivery', payment_status='paid'))
+            # Pipeline Breakdown (Granular stages)
+            new_count=Count('id', filter=Q(payment_status='paid', status='pending')),
+            waiting_to_start=Count('id', filter=Q(payment_status='paid', tailor_status='accepted', status='confirmed')),
+            stitching=Count('id', filter=Q(payment_status='paid', tailor_status='stitching_started')),
+            stitched=Count('id', filter=Q(payment_status='paid', tailor_status='stitched')),
+            ready_for_pickup=Count('id', filter=Q(payment_status='paid', status='ready_for_pickup')),
+            ready_for_delivery=Count('id', filter=Q(payment_status='paid', status='ready_for_delivery'))
         )
         
-        # 2. Fetch High-Priority Express Orders
-        # Optimized with select_related for customer details (Avoid N+1)
+        # 2. Fetch High-Priority Express Orders (Only Paid)
         express_list = Order.objects.filter(
             tailor=tailor_user,
-            is_express=True, 
-            status__in=['confirmed', 'in_progress'],
+            is_express=True,
             payment_status='paid'
-        ).select_related('customer').order_by('created_at')[:5]
+        ).exclude(
+            status__in=['delivered', 'collected', 'cancelled']
+        ).select_related('customer').order_by('-created_at')[:5]
         
-        # 3. Fetch Recent Activity Orders
-        # Shows the last 10 orders that were updated
+        # 3. Recent Activity (Last 10 Paid Orders)
         recent_orders = Order.objects.filter(
-            tailor=tailor_user
+            tailor=tailor_user,
+            payment_status='paid'
         ).select_related('customer').order_by('-updated_at')[:10]
         
         # 4. Shop Status Info
