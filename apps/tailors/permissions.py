@@ -78,7 +78,8 @@ class IsShopStaff(permissions.BasePermission):
              target_tailor_id = obj.id
 
         # 1. Owner Check: Does this shop belong to the current user?
-        if hasattr(user, 'tailor_profile') and user.tailor_profile.id == target_tailor_id:
+        # We compare the user ID on the profile with the target tailor ID
+        if hasattr(user, 'tailor_profile') and user.id == target_tailor_id:
             return True
 
         # 2. Staff Check: Does this employee work for this specific shop?
