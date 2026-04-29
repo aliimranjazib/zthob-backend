@@ -24,7 +24,7 @@ class TailorHomeService:
             new_orders=Count('id', filter=Q(payment_status='paid', status__in=['pending', 'confirmed'])),
             in_progress=Count('id', filter=Q(payment_status='paid', status='in_progress')),
             ready_orders=Count('id', filter=Q(payment_status='paid', status__in=['ready_for_delivery', 'ready_for_pickup'])),
-            express_orders=Count('id', filter=Q(payment_status='paid', is_express=True).exclude(status__in=['delivered', 'collected', 'cancelled'])),
+            express_orders=Count('id', filter=Q(payment_status='paid', is_express=True) & ~Q(status__in=['delivered', 'collected', 'cancelled'])),
             revenue_today=Sum('total_amount', filter=Q(payment_status='paid', status__in=['delivered', 'collected'], updated_at__gte=today_start)),
             
             # Pipeline Breakdown (Granular stages)
