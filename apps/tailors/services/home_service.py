@@ -82,12 +82,12 @@ class TailorHomeService:
                 'revenue_today': str(stats['revenue_today'] or Decimal('0.00'))
             },
             'pipeline': {
-                'new': stats['new_orders'] or 0,
+                'new': stats['new_count'] or 0,
                 'waiting_to_start': stats['waiting_to_start'] or 0,
                 'stitching': stats['stitching'] or 0,
                 'stitched': stats['stitched'] or 0,
-                'ready_for_pickup': stats['waiting_for_pickup'] or 0,
-                'ready_for_delivery': stats['waiting_for_delivery'] or 0
+                'ready_for_pickup': stats['ready_for_pickup'] or 0,
+                'ready_for_delivery': stats['ready_for_delivery'] or 0
             },
             'express_orders': express_list,
             'recent_orders': recent_orders,
