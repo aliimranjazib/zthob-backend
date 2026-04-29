@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
@@ -493,6 +494,20 @@ class TailorOrderListView(APIView):
 
             if order_type:
                 orders = orders.filter(order_type=order_type)
+
+            # Date based filters for dashboard alerts
+            today = timezone.now().date()
+            is_overdue = request.query_params.get('is_overdue')
+            if is_overdue == 'true':
+                orders = orders.filter(
+                    estimated_delivery_date__lt=today
+                ).exclude(status__in=['delivered', 'collected', 'cancelled'])
+
+            delivery_due = request.query_params.get('delivery_due')
+            if delivery_due == 'today':
+                orders = orders.filter(
+                    estimated_delivery_date=today
+                ).exclude(status__in=['delivered', 'collected', 'cancelled'])
             
             serializer = OrderListSerializer(orders, many=True, context={'request': request})
             

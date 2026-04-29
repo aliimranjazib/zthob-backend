@@ -29,13 +29,20 @@ class TailorOrderSummarySerializer(serializers.ModelSerializer):
         full_name = obj.customer.get_full_name().strip()
         return full_name if full_name else obj.customer.username
 
+class ExpressOrdersListSerializer(serializers.Serializer):
+    """
+    Serializer for the express orders preview list on dashboard.
+    """
+    total_count = serializers.IntegerField()
+    filter_params = serializers.DictField()
+    items = TailorOrderSummarySerializer(many=True)
+
 class TailorHomeSerializer(serializers.Serializer):
     """
-    Serializer for the unified Tailor Home response.
+    Serializer for the refined Tailor Home dashboard response.
     """
-    counters = serializers.DictField()
-    pipeline = serializers.DictField()
-    express_orders = TailorOrderSummarySerializer(many=True)
+    financials = serializers.DictField()
+    urgent_alerts = serializers.ListField(child=serializers.DictField())
+    task_summary = serializers.ListField(child=serializers.DictField())
+    express_orders = ExpressOrdersListSerializer()
     recent_orders = TailorOrderSummarySerializer(many=True)
-    shop_status = serializers.DictField()
-    missing_hints = serializers.ListField(child=serializers.CharField(), required=False)
