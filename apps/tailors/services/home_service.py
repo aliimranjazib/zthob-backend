@@ -53,8 +53,8 @@ class TailorHomeService:
         )
         
         # Recent & Express lists
-        express_items = Order.objects.filter(active_filter & Q(is_express=True) & not_final_filter).select_related('customer').order_by('-created_at')[:5]
-        recent_items = Order.objects.filter(active_filter).select_related('customer').order_by('-updated_at')[:10]
+        express_list = Order.objects.filter(active_filter & Q(is_express=True) & not_final_filter).select_related('customer').order_by('-created_at')[:5]
+        recent_orders = Order.objects.filter(active_filter).select_related('customer').order_by('-updated_at')[:10]
         
         return {
             'financials': {
@@ -81,7 +81,7 @@ class TailorHomeService:
             'express_orders': {
                 'total_count': stats['exp_total'],
                 'filter_params': {'status': 'express'},
-                'items': express_items
+                'items': express_list
             },
-            'recent_orders': recent_items
+            'recent_orders': recent_orders
         }
