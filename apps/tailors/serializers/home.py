@@ -43,6 +43,7 @@ class TailorHomeSerializer(serializers.Serializer):
     """
     financials = serializers.DictField()
     urgent_alerts = serializers.ListField(child=serializers.DictField())
-    task_summary = serializers.ListField(child=serializers.DictField())
+    delivery_orders = serializers.ListField(child=serializers.DictField())
+    shop_orders = serializers.ListField(child=serializers.DictField())
     express_orders = ExpressOrdersListSerializer()
     recent_orders = TailorOrderSummarySerializer(many=True)

@@ -508,6 +508,28 @@ class TailorOrderListView(APIView):
                 orders = orders.filter(
                     estimated_delivery_date=today
                 ).exclude(status__in=['delivered', 'collected', 'cancelled'])
+            elif delivery_due == 'week':
+                week_end = today + timezone.timedelta(days=7)
+                orders = orders.filter(
+                    estimated_delivery_date__gte=today,
+                    estimated_delivery_date__lte=week_end
+                ).exclude(status__in=['delivered', 'collected', 'cancelled'])
+
+            # New filters for action buckets
+            service_mode_filter = request.query_params.get('service_mode')
+            if service_mode_filter:
+                orders = orders.filter(service_mode=service_mode_filter)
+            
+            exclude_ready = request.query_params.get('exclude_ready')
+            if exclude_ready == 'true':
+                orders = orders.exclude(status__in=['ready_for_delivery', 'ready_for_pickup', 'delivered', 'collected'])
+
+            # New in_stitching filter for dashboard buckets
+            in_stitching = request.query_params.get('in_stitching')
+            if in_stitching == 'true':
+                orders = orders.filter(
+                    tailor_status__in=['in_progress', 'stitching_started', 'stitched']
+                ).exclude(status__in=['ready_for_delivery', 'ready_for_pickup', 'delivered', 'collected'])
             
             serializer = OrderListSerializer(orders, many=True, context={'request': request})
             
