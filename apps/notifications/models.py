@@ -74,6 +74,7 @@ class NotificationLog(BaseModel):
         ('APPOINTMENT', 'Appointment'),
         ('SYSTEM', 'System'),
         ('PROMOTION', 'Promotion'),
+        ('STYLE_CONSENT', 'Style Consent'),
         ('TEST', 'Test'),
     )
     

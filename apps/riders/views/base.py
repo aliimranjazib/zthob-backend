@@ -5,6 +5,8 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema
+import random
+from django.core.cache import cache
 
 from apps.accounts.models import CustomUser
 from apps.orders.models import Order
@@ -48,6 +50,8 @@ try:
     RiderOrderDetailSerializer = _serializers_module.RiderOrderDetailSerializer
     RiderAddMeasurementsSerializer = _serializers_module.RiderAddMeasurementsSerializer
     RiderUpdateOrderStatusSerializer = _serializers_module.RiderUpdateOrderStatusSerializer
+    RiderStyleConsentRequestSerializer = _serializers_module.RiderStyleConsentRequestSerializer
+    RiderUpdateStyleSerializer = _serializers_module.RiderUpdateStyleSerializer
 finally:
     # Restore original module if it existed
     if _original_module:
@@ -55,6 +59,7 @@ finally:
 from rest_framework.parsers import MultiPartParser, FormParser
 from zthob.utils import api_response
 from rest_framework_simplejwt.tokens import RefreshToken
+from apps.notifications.services import NotificationService
 
 
 # ============================================================================
@@ -1005,6 +1010,163 @@ class RiderAddMeasurementsView(APIView):
         return api_response(
             success=False,
             message="Failed to add measurements",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class RiderRequestStyleConsentView(APIView):
+    """
+    Rider requests customer consent for style updates.
+    Generates a 4-digit code and sends it via Push Notification.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=RiderStyleConsentRequestSerializer,
+        summary="Request style update consent code",
+        description="Generates a 4-digit code and sends it to the customer via push notification."
+    )
+    def post(self, request, order_id):
+        # 1. Verify order exists and rider is assigned
+        order = get_object_or_404(Order, id=order_id)
+        
+        # Check if rider is assigned to this order
+        if order.rider != request.user:
+            return api_response(
+                success=False,
+                message="You are not authorized to request consent for this order",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 2. Generate 4-digit code
+        code = f"{random.randint(1000, 9999)}"
+        cache_key = f"style_consent_{order_id}"
+        cache.set(cache_key, code, timeout=600) # 10 minutes
+        
+        # 3. Send Push Notification to customer
+        if order.customer:
+            NotificationService.send_notification(
+                user=order.customer,
+                title="Style Update Consent",
+                body=f"Your rider is requesting a style update. Please provide this code: {code}",
+                notification_type="STYLE_CONSENT",
+                category="consent_code",
+                data={"consent_code": code, "order_id": order.id}
+            )
+            
+            return api_response(
+                success=True,
+                message="Consent code sent to customer successfully",
+                status_code=status.HTTP_200_OK
+            )
+        else:
+            return api_response(
+                success=False,
+                message="Customer not found for this order",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+
+class RiderUpdateStyleWithConsentView(APIView):
+    """
+    Rider updates styles for an order after verifying customer consent code.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=RiderUpdateStyleSerializer,
+        summary="Update order styles with consent code",
+        description="Verifies the 4-digit consent code and updates the order styles. Optionally saves as default."
+    )
+    def post(self, request, order_id):
+        serializer = RiderUpdateStyleSerializer(data=request.data)
+        if serializer.is_valid():
+            order = get_object_or_404(Order.objects.prefetch_related('order_items'), id=order_id)
+            
+            # 1. Verify rider authorization
+            if order.rider != request.user:
+                return api_response(
+                    success=False,
+                    message="You are not authorized to update styles for this order",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            # 2. Verify consent code
+            consent_code = serializer.validated_data['consent_code']
+            cache_key = f"style_consent_{order_id}"
+            saved_code = cache.get(cache_key)
+            
+            if not saved_code or consent_code != saved_code:
+                return api_response(
+                    success=False,
+                    message="Invalid or expired consent code",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 3. Update styles
+            styles_data = serializer.validated_data['styles']
+            
+            # Fetch CustomStyle objects in bulk to avoid N+1
+            style_ids = [s['style_id'] for s in styles_data]
+            styles_objs = {s.id: s for s in CustomStyle.objects.filter(id__in=style_ids).select_related('category')}
+            
+            # Build the custom_styles JSON for OrderItem (matching OrderCreateSerializer format)
+            detailed_styles = []
+            for s in styles_data:
+                style_obj = styles_objs.get(s['style_id'])
+                if style_obj:
+                    detailed_styles.append({
+                        "style_type": style_obj.category.name,
+                        "index": style_obj.display_order,
+                        "label": style_obj.name,
+                        "asset_path": style_obj.image.name if style_obj.image else ""
+                    })
+            
+            # Update Order items (Efficient bulk update)
+            order.order_items.all().update(custom_styles=detailed_styles)
+            
+            # Also update order-level custom_styles
+            order.custom_styles = detailed_styles
+            order.save(update_fields=['custom_styles', 'updated_at'])
+            
+            # 4. Handle "Save as Default" (Option 3)
+            profile_updated = False
+            from apps.customization.models import UserStylePreset
+            if serializer.validated_data.get('save_as_default') and order.customer:
+                # Update or create default UserStylePreset
+                # First, unset any other defaults for this user
+                UserStylePreset.objects.filter(user=order.customer).update(is_default=False)
+                
+                # Update/Create a preset named "My Style (Updated by Rider)" and make it default
+                # Use update_or_create to ensure we don't create multiple "Rider" presets
+                preset, created = UserStylePreset.objects.update_or_create(
+                    user=order.customer,
+                    name='My Style (Updated by Rider)',
+                    defaults={
+                        'styles': styles_data,
+                        'is_default': True
+                    }
+                )
+                profile_updated = True
+            
+            # Remove code from cache after success
+            cache.delete(cache_key)
+            
+            return api_response(
+                success=True,
+                message="Styles updated successfully",
+                data={
+                    "order_id": order.id,
+                    "profile_updated": profile_updated,
+                    "styles": detailed_styles
+                },
+                status_code=status.HTTP_200_OK
+            )
+            
+        return api_response(
+            success=False,
+            message="Validation failed",
             errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
         )
