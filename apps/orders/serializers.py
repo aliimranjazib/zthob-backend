@@ -467,6 +467,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'cancel_reason': cancel_reason,
             'status_progress': status_progress,
             'measurement_status': measurement_status,
+            'is_waiting_for_rider': (user_role == 'TAILOR' and obj.service_mode == 'home_delivery' and obj.tailor_status != 'none' and obj.rider_status == 'none'),
         }
     
     def _build_status_action(self, action_type, value, user_role):
@@ -1522,6 +1523,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'cancel_reason': cancel_reason,
             'status_progress': status_progress,
             'measurement_status': measurement_status,
+            'is_waiting_for_rider': (user_role == 'TAILOR' and obj.service_mode == 'home_delivery' and obj.tailor_status != 'none' and obj.rider_status == 'none'),
         }
 
 class OrderStatusUpdateResponseSerializer(OrderSerializer):
