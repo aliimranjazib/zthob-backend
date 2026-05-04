@@ -524,12 +524,37 @@ class TailorOrderListView(APIView):
             if exclude_ready == 'true':
                 orders = orders.exclude(status__in=['ready_for_delivery', 'ready_for_pickup', 'delivered', 'collected'])
 
+            # Filter for orders that need measurements (usually for Shop Orders)
+            needs_measurements = request.query_params.get('needs_measurements')
+            if needs_measurements == 'true':
+                orders = orders.filter(
+                    tailor_status='accepted'
+                ).filter(
+                    Q(order_items__measurements={}) | Q(order_items__measurements__isnull=True)
+                ).distinct()
+
             # New in_stitching filter for dashboard buckets
             in_stitching = request.query_params.get('in_stitching')
             if in_stitching == 'true':
-                orders = orders.filter(
-                    tailor_status__in=['in_progress', 'stitching_started', 'stitched']
-                ).exclude(status__in=['ready_for_delivery', 'ready_for_pickup', 'delivered', 'collected'])
+                # Determine which statuses to include based on service_mode to match dashboard
+                service_mode = request.query_params.get('service_mode')
+                if service_mode == 'walk_in':
+                    # Shop orders include 'accepted' in the stitching bucket
+                    # BUT ONLY if they already have measurements
+                    # Those missing measurements are in the 'To Measure' bucket
+                    orders = orders.filter(
+                        Q(tailor_status__in=['in_progress', 'stitching_started', 'stitched']) |
+                        Q(tailor_status='accepted', order_type='fabric_with_stitching')
+                    ).exclude(
+                        Q(tailor_status='accepted', order_items__measurements={}) |
+                        Q(tailor_status='accepted', order_items__measurements__isnull=True)
+                    ).distinct()
+                else:
+                    # Delivery orders separate 'accepted' into 'To Prepare' (Make Progress)
+                    stitching_statuses = ['in_progress', 'stitching_started', 'stitched']
+                    orders = orders.filter(tailor_status__in=stitching_statuses)
+                    
+                orders = orders.exclude(status__in=['ready_for_delivery', 'ready_for_pickup', 'delivered', 'collected', 'cancelled'])
             
             serializer = OrderListSerializer(orders, many=True, context={'request': request})
             
