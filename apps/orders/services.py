@@ -682,7 +682,8 @@ class OrderStatusTransitionService:
                             "type": "form_action", 
                             "value": "record_measurements",
                             "label": "Record Measurements",
-                            "description": "Open measurement form to record customer measurements"
+                            "description": "Open measurement form to record customer measurements",
+                            "role": "TAILOR"
                         }]
                 
         elif user_role == OrderStatusTransitionService.ROLE_RIDER:
@@ -872,7 +873,8 @@ class OrderStatusTransitionService:
                             "type": "form_action", 
                             "value": "record_measurements",
                             "label": "Record Measurements",
-                            "description": "Open measurement form for customer"
+                            "description": "Open measurement form for customer",
+                            "role": "TAILOR"
                         }]
                     else:
                         transitions['tailor_status'] = ['stitching_started']
@@ -891,7 +893,8 @@ class OrderStatusTransitionService:
                             "type": "form_action", 
                             "value": "record_measurements",
                             "label": "Record Measurements",
-                            "description": "Open measurement form for customer"
+                            "description": "Open measurement form for customer",
+                            "role": "TAILOR"
                         }]
                     else:
                         transitions['tailor_status'] = ['stitching_started']
@@ -902,7 +905,8 @@ class OrderStatusTransitionService:
                             "type": "form_action", 
                             "value": "record_measurements",
                             "label": "Record Measurements",
-                            "description": "Open measurement form for customer"
+                            "description": "Open measurement form for customer",
+                            "role": "TAILOR"
                         }]
                     else:
                         transitions['tailor_status'] = ['stitching_started']
