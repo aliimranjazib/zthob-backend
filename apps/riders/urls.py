@@ -15,6 +15,8 @@ from .views import (
     RiderAcceptOrderView,
     RiderAddMeasurementsView,
     RiderUpdateOrderStatusView,
+    RiderRequestStyleConsentView,
+    RiderUpdateStyleWithConsentView,
     RiderAnalyticsView,
 )
 from .views.config import RiderConfigView
@@ -61,6 +63,8 @@ urlpatterns = [
     path('orders/<int:order_id>/accept/', RiderAcceptOrderView.as_view(), name='accept-order'),
     path('orders/<int:order_id>/measurements/', RiderAddMeasurementsView.as_view(), name='add-measurements'),
     path('orders/<int:order_id>/update-status/', RiderUpdateOrderStatusView.as_view(), name='update-status'),
+    path('orders/<int:order_id>/request-style-consent/', RiderRequestStyleConsentView.as_view(), name='request-style-consent'),
+    path('orders/<int:order_id>/update-style/', RiderUpdateStyleWithConsentView.as_view(), name='update-style'),
     
     # Analytics
     path('analytics/', RiderAnalyticsView.as_view(), name='rider-analytics'),

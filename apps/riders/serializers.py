@@ -7,6 +7,9 @@ from apps.orders.models import Order
 from apps.orders.serializers import OrderItemSerializer
 from zthob.translations import get_language_from_request, translate_message
 
+from apps.customization.models import CustomStyle, UserStylePreset
+from apps.orders.models import Order, OrderItem
+
 User = get_user_model()
 
 
@@ -1253,3 +1256,30 @@ class TailorBasicInfoSerializer(serializers.ModelSerializer):
     def get_phone(self, obj):
         profile = getattr(obj, 'tailor_profile', None)
         return (profile.contact_number if profile and profile.contact_number else getattr(obj, 'phone', ''))
+
+class RiderStyleConsentRequestSerializer(serializers.Serializer):
+    """Empty serializer for requesting style consent OTP/Notification"""
+    pass
+
+
+class RiderStyleSelectionSerializer(serializers.Serializer):
+    """Individual style selection (category + style_id)"""
+    category = serializers.CharField(required=True)
+    style_id = serializers.IntegerField(required=True)
+
+    def validate_style_id(self, value):
+        if not CustomStyle.objects.filter(id=value, is_active=True).exists():
+            raise serializers.ValidationError("Invalid or inactive style ID")
+        return value
+
+
+class RiderUpdateStyleSerializer(serializers.Serializer):
+    """Serializer for rider updating styles with consent code"""
+    styles = RiderStyleSelectionSerializer(many=True, required=True)
+    consent_code = serializers.CharField(required=True, min_length=4, max_length=4)
+    save_as_default = serializers.BooleanField(default=False)
+
+    def validate_styles(self, value):
+        if not value:
+            raise serializers.ValidationError("Styles list cannot be empty")
+        return value
