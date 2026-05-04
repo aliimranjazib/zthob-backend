@@ -1080,6 +1080,7 @@ class RiderUpdateStyleWithConsentView(APIView):
         description="Verifies the 4-digit consent code and updates the order styles. Optionally saves as default."
     )
     def post(self, request, order_id):
+        from apps.customization.models import CustomStyle, UserStylePreset
         serializer = RiderUpdateStyleSerializer(data=request.data)
         if serializer.is_valid():
             order = get_object_or_404(Order.objects.prefetch_related('order_items'), id=order_id)
@@ -1132,7 +1133,6 @@ class RiderUpdateStyleWithConsentView(APIView):
             
             # 4. Handle "Save as Default" (Option 3)
             profile_updated = False
-            from apps.customization.models import UserStylePreset
             if serializer.validated_data.get('save_as_default') and order.customer:
                 # Update or create default UserStylePreset
                 # First, unset any other defaults for this user

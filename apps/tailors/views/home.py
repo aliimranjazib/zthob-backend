@@ -23,14 +23,18 @@ class TailorHomeAPIView(APIView):
         responses={200: TailorHomeSerializer}
     )
     def get(self, request):
+        from zthob.translations import get_language_from_request
         # Determine the target shop owner user (if staff member is logged in)
         target_owner = request.user
         if hasattr(request.user, 'tailor_employee'):
             target_owner = request.user.tailor_employee.tailor.user
             
         try:
+            # Detect language
+            language = get_language_from_request(request)
+            
             # 1. Fetch data via Service (Optimized Queries)
-            data = TailorHomeService.get_dashboard_data(target_owner)
+            data = TailorHomeService.get_dashboard_data(target_owner, language=language)
             
             # 2. Serialize response
             serializer = TailorHomeSerializer(data, context={'request': request})
