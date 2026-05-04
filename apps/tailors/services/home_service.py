@@ -1,7 +1,7 @@
 from decimal import Decimal
-from django.db.models import Count, Sum, Q
+from django.db.models import Count, Sum, Q, Exists, OuterRef
 from django.utils import timezone
-from apps.orders.models import Order
+from apps.orders.models import Order, OrderItem
 
 class TailorHomeService:
     """
@@ -27,8 +27,18 @@ class TailorHomeService:
         not_final_filter = ~Q(status__in=['delivered', 'collected', 'cancelled'])
         not_ready_filter = ~Q(status__in=['ready_for_delivery', 'ready_for_pickup', 'delivered', 'collected', 'cancelled'])
         
+        # Mark orders that need measurements
+        # (Where at least one item has empty or null measurements)
+        missing_measurements_subquery = OrderItem.objects.filter(
+            order=OuterRef('pk')
+        ).filter(
+            Q(measurements={}) | Q(measurements__isnull=True)
+        )
+        
         # Aggregate all stats in a single query
-        stats = Order.objects.filter(active_filter).aggregate(
+        stats = Order.objects.filter(active_filter).annotate(
+            has_missing_measurements=Exists(missing_measurements_subquery)
+        ).aggregate(
             # Financials
             rev_today=Sum('total_amount', filter=Q(status__in=['delivered', 'collected'], updated_at__gte=today_start)),
             rev_week=Sum('total_amount', filter=Q(status__in=['delivered', 'collected'], updated_at__gte=week_start)),
@@ -46,8 +56,11 @@ class TailorHomeService:
             
             # --- SHOP ORDERS ACTION BUCKETS ---
             shop_new=Count('id', filter=Q(service_mode='walk_in', tailor_status='none') & not_ready_filter),
-            shop_measure=Count('id', filter=Q(service_mode='walk_in', tailor_status='accepted', order_type='measurement_service') & not_ready_filter),
-            shop_stitch=Count('id', filter=Q(service_mode='walk_in', tailor_status__in=['accepted', 'in_progress', 'stitching_started', 'stitched'], order_type='fabric_with_stitching') & not_ready_filter),
+            shop_measure=Count('id', filter=Q(service_mode='walk_in', tailor_status='accepted') & (Q(order_type='measurement_service') | Q(has_missing_measurements=True)) & not_ready_filter, distinct=True),
+            shop_stitch=Count('id', filter=(
+                Q(service_mode='walk_in', tailor_status__in=['in_progress', 'stitching_started', 'stitched']) |
+                Q(service_mode='walk_in', tailor_status='accepted', order_type='fabric_with_stitching', has_missing_measurements=False)
+            ) & not_ready_filter, distinct=True),
             shop_ready=Count('id', filter=Q(service_mode='walk_in', status='ready_for_pickup')),
             
             # Express count
@@ -131,7 +144,7 @@ class TailorHomeService:
                     'label': translate_message("To Measure", language), 
                     'description': translate_message("Record shop measurements", language), 
                     'count': stats['shop_measure'], 
-                    'filter_params': {'service_mode': 'walk_in', 'order_type': 'measurement_service', 'tailor_status': 'accepted'}
+                    'filter_params': {'service_mode': 'walk_in', 'tailor_status': 'accepted', 'needs_measurements': 'true'}
                 },
                 {
                     'key': 'shop_stitch',
