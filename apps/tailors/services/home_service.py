@@ -10,10 +10,12 @@ class TailorHomeService:
     """
     
     @staticmethod
-    def get_dashboard_data(tailor_user):
+    def get_dashboard_data(tailor_user, language='ar'):
         """
         Get action-oriented dashboard data for a tailor.
         """
+        from zthob.translations import translate_message
+        
         now = timezone.now()
         today = now.date()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -59,24 +61,92 @@ class TailorHomeService:
         return {
             'financials': {
                 'today_revenue': str(stats['rev_today'] or Decimal('0.00')),
-                'weekly_revenue': str(stats['rev_week'] or Decimal('0.00'))
+                'today_label': translate_message("Today's Revenue", language),
+                'weekly_revenue': str(stats['rev_week'] or Decimal('0.00')),
+                'weekly_label': translate_message("Weekly Revenue", language),
             },
             'urgent_alerts': [
-                {'type': 'overdue', 'label': f"{stats['overdue']} Overdue", 'count': stats['overdue'], 'filter_params': {'is_overdue': 'true'}},
-                {'type': 'due_today', 'label': f"Due Today ({stats['due_today']})", 'count': stats['due_today'], 'filter_params': {'delivery_due': 'today'}},
-                {'type': 'due_week', 'label': f"Due this Week ({stats['due_week']})", 'count': stats['due_week'], 'filter_params': {'delivery_due': 'week'}}
+                {
+                    'key': 'overdue',
+                    'type': 'overdue', 
+                    'label': translate_message("{count} Overdue", language, count=stats['overdue']), 
+                    'count': stats['overdue'], 
+                    'filter_params': {'is_overdue': 'true'}
+                },
+                {
+                    'key': 'due_today',
+                    'type': 'due_today', 
+                    'label': translate_message("Due Today ({count})", language, count=stats['due_today']), 
+                    'count': stats['due_today'], 
+                    'filter_params': {'delivery_due': 'today'}
+                },
+                {
+                    'key': 'due_week',
+                    'type': 'due_week', 
+                    'label': translate_message("Due this Week ({count})", language, count=stats['due_week']), 
+                    'count': stats['due_week'], 
+                    'filter_params': {'delivery_due': 'week'}
+                }
             ],
             'delivery_orders': [
-                {'label': 'New Requests', 'description': 'Accept new delivery orders', 'count': stats['del_new'], 'filter_params': {'service_mode': 'home_delivery', 'tailor_status': 'none'}},
-                {'label': 'To Prepare', 'description': 'Ready for processing', 'count': stats['del_prepare'], 'filter_params': {'service_mode': 'home_delivery', 'tailor_status': 'accepted'}},
-                {'label': 'In Stitching', 'description': 'Sewing and finishing', 'count': stats['del_stitch'], 'filter_params': {'service_mode': 'home_delivery', 'in_stitching': 'true'}},
-                {'label': 'Ready for Rider', 'description': 'Waiting for rider handover', 'count': stats['del_ready'], 'filter_params': {'service_mode': 'home_delivery', 'status': 'ready_for_delivery'}}
+                {
+                    'key': 'del_new',
+                    'label': translate_message("New Requests", language), 
+                    'description': translate_message("Accept new delivery orders", language), 
+                    'count': stats['del_new'], 
+                    'filter_params': {'service_mode': 'home_delivery', 'tailor_status': 'none'}
+                },
+                {
+                    'key': 'del_prepare',
+                    'label': translate_message("Make Progress", language), 
+                    'description': translate_message("Ready for processing", language), 
+                    'count': stats['del_prepare'], 
+                    'filter_params': {'service_mode': 'home_delivery', 'tailor_status': 'accepted'}
+                },
+                {
+                    'key': 'del_stitch',
+                    'label': translate_message("Stitching", language), 
+                    'description': translate_message("Sewing and finishing", language), 
+                    'count': stats['del_stitch'], 
+                    'filter_params': {'service_mode': 'home_delivery', 'in_stitching': 'true'}
+                },
+                {
+                    'key': 'del_ready',
+                    'label': translate_message("Ready for Rider", language), 
+                    'description': translate_message("Waiting for rider handover", language), 
+                    'count': stats['del_ready'], 
+                    'filter_params': {'service_mode': 'home_delivery', 'status': 'ready_for_delivery'}
+                }
             ],
             'shop_orders': [
-                {'label': 'New Shop Orders', 'description': 'Accept walk-in customers', 'count': stats['shop_new'], 'filter_params': {'service_mode': 'walk_in', 'tailor_status': 'none'}},
-                {'label': 'To Measure', 'description': 'Record shop measurements', 'count': stats['shop_measure'], 'filter_params': {'service_mode': 'walk_in', 'order_type': 'measurement_service', 'tailor_status': 'accepted'}},
-                {'label': 'In Stitching', 'description': 'Shop orders being sewn', 'count': stats['shop_stitch'], 'filter_params': {'service_mode': 'walk_in', 'in_stitching': 'true'}},
-                {'label': 'Ready for Customer', 'description': 'Waiting for shop collection', 'count': stats['shop_ready'], 'filter_params': {'service_mode': 'walk_in', 'status': 'ready_for_pickup'}}
+                {
+                    'key': 'shop_new',
+                    'label': translate_message("New Shop Orders", language), 
+                    'description': translate_message("Accept walk-in customers", language), 
+                    'count': stats['shop_new'], 
+                    'filter_params': {'service_mode': 'walk_in', 'tailor_status': 'none'}
+                },
+                {
+                    'key': 'shop_measure',
+                    'label': translate_message("To Measure", language), 
+                    'description': translate_message("Record shop measurements", language), 
+                    'count': stats['shop_measure'], 
+                    'filter_params': {'service_mode': 'walk_in', 'order_type': 'measurement_service', 'tailor_status': 'accepted'}
+                },
+                {
+                    'key': 'shop_stitch',
+                    'label': translate_message("Stitching", language), 
+                    'description': translate_message("Shop orders being sewn", language), 
+                    'count': stats['shop_stitch'], 
+                    'filter_params': {'service_mode': 'walk_in', 'in_stitching': 'true'}
+                },
+                {
+                    'key': 'shop_ready',
+                    'label': translate_message("Ready for Customer", language), 
+                    'description': translate_message("Waiting for shop collection", language), 
+                    'count': stats['shop_ready'], 
+                    'filter_params': {'service_mode': 'walk_in', 'status': 'ready_for_pickup'}
+                }
             ],
             'express_orders': {
                 'total_count': stats['exp_total'],

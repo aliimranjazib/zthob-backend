@@ -375,6 +375,34 @@ TRANSLATIONS = {
     # Express Delivery
     "Day": "يوم",
     "Days": "أيام",
+
+    # Tailor Dashboard Home
+    "Today's Revenue": "إيرادات اليوم",
+    "Weekly Revenue": "الإيرادات الأسبوعية",
+    "Overdue": "متأخر",
+    "{count} Overdue": "{count} متأخر",
+    "Due Today ({count})": "استحقاق اليوم ({count})",
+    "Due this Week ({count})": "استحقاق هذا الأسبوع ({count})",
+    "New Requests": "طلبات جديدة",
+    "Accept new delivery orders": "قبول طلبات التوصيل الجديدة",
+    "Make Progress": "متابعة التنفيذ",
+    "Ready for processing": "جاهز للمعالجة",
+    "Stitching": "جاري الخياطة",
+    "Sewing and finishing": "خياطة وتشطيب",
+    "Ready for Rider": "جاهز للسائق",
+    "Waiting for rider handover": "في انتظار تسليم السائق",
+    "New Shop Orders": "طلبات متجر جديدة",
+    "Accept walk-in customers": "قبول زبائن المتجر",
+    "To Measure": "للقياس",
+    "Record shop measurements": "تسجيل مقاسات المتجر",
+    "Shop orders being sewn": "طلبات المتجر قيد الخياطة",
+    "Ready for Customer": "جاهز للزبون",
+    "Waiting for shop collection": "في انتظار استلام الزبون",
+    "Waiting for Acceptance": "في انتظار القبول",
+    "Stitching": "جاري الخياطة",
+    "New orders waiting for your approval": "طلبات جديدة في انتظار موافقتك",
+    "Orders currently being worked on": "طلبات قيد العمل حالياً",
+    "Orders ready for customer pickup": "طلبات جاهزة لاستلام العملاء",
 }
 
 
