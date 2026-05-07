@@ -109,6 +109,7 @@ _AR_LABELS = {
     'Tax':                 'الضريبة',
     'Delivery Fee':        'رسوم التوصيل',
     'Platform Fee':        'رسوم المنصة',
+    'Express Fee':         'رسوم الخدمة السريعة',
     'TOTAL AMOUNT':        'المبلغ الإجمالي',
     # History headers
     'Date & Time':         'التاريخ والوقت',
@@ -907,6 +908,8 @@ def generate_order_pdf(order, lang='en') -> bytes:
         price_rows.append(_price_row(_t('Delivery Fee', lang), order.delivery_fee))
     if order.system_fee:
         price_rows.append(_price_row(_t('Platform Fee', lang), order.system_fee))
+    if order.express_fee:
+        price_rows.append(_price_row(_t('Express Fee', lang), order.express_fee))
 
     # Divider row
     price_rows.append([

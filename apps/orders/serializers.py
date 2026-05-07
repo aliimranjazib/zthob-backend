@@ -1332,6 +1332,8 @@ class OrderListSerializer(serializers.ModelSerializer):
             'status_info',
             'has_rating',
             'tailor_rating',
+            'is_express',
+            'express_fee',
             'created_at'
         ]
 

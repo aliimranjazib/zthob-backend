@@ -798,23 +798,52 @@ class NotificationService:
 
         
         # Notify rider (confirmation)
-        if is_measurement_order:
-            body = 'Measurements successfully recorded for order #{order_number}.'
-        else:
-            body = 'Measurements successfully recorded for order #{order_number}. Waiting for tailor to complete stitching.'
-        
         NotificationService.send_notification(
             user=rider,
             title='Measurements Recorded',
-            body=body,
+            body='Measurements successfully recorded for order #{order_number}',
             notification_type='ORDER_STATUS',
             category='measurement_taken',
             data={
                 'order_id': order.id,
                 'order_number': order_number,
             },
-            priority='normal'
+            priority='high'
         )
+
+    @staticmethod
+    def send_payout_notification(payout_request):
+        """Send notification when payout status changes"""
+        status_map = {
+            'approved': {
+                'title': 'Payout Approved',
+                'body': 'Your payout request of SAR {amount} has been approved and is being processed',
+            },
+            'rejected': {
+                'title': 'Payout Rejected',
+                'body': 'Your payout request of SAR {amount} has been rejected',
+            },
+            'paid': {
+                'title': 'Payout Processed',
+                'body': 'Your payout request of SAR {amount} has been processed',
+            }
+        }
+
+        if payout_request.status in status_map:
+            msg = status_map[payout_request.status]
+            NotificationService.send_notification(
+                user=payout_request.tailor,
+                title=msg['title'],
+                body=msg['body'],
+                notification_type='PAYMENT',
+                category=f'payout_{payout_request.status}',
+                data={
+                    'payout_id': payout_request.id,
+                    'amount': str(payout_request.amount),
+                    'status': payout_request.status,
+                },
+                priority='high'
+            )
 
     @staticmethod
     def send_new_order_broadcast(order, assigned_rider_id=None):

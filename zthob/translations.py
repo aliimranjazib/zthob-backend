@@ -336,6 +336,14 @@ TRANSLATIONS = {
     # Test Notifications
     "Test Notification": "إشعار تجريبي",
     "Hello {username}! This is a test notification from Zthob.": "مرحباً {username}! هذا إشعار تجريبي من ثوب.",
+    
+    # Payout Notifications
+    "Payout Processed": "تمت معالجة الدفع",
+    "Your payout request of SAR {amount} has been processed": "تمت معالجة طلب الدفع الخاص بك بمبلغ {amount} ريال",
+    "Payout Approved": "تمت الموافقة على طلب الدفع",
+    "Your payout request of SAR {amount} has been approved and is being processed": "تمت الموافقة على طلب الدفع الخاص بك بمبلغ {amount} ريال وجاري المعالجة",
+    "Payout Rejected": "تم رفض طلب الدفع",
+    "Your payout request of SAR {amount} has been rejected": "تم رفض طلب الدفع الخاص بك بمبلغ {amount} ريال",
 
     # ========== EMPLOYEE ROLES ==========
     "Manager": "مدير",
