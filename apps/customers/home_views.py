@@ -98,7 +98,7 @@ class CustomerHomeAPIView(APIView):
         # Prefetch fabrics and their galleries to avoid N+1 queries for category images
         fabrics_prefetch = Prefetch(
             'fabrics',
-            queryset=Fabric.objects.filter(is_active=True).prefetch_related('gallery').order_by('-created_at'),
+            queryset=Fabric.objects.filter(is_active=True, approval_status='approved').prefetch_related('gallery').order_by('-created_at'),
             to_attr='sample_fabrics'
         )
         categories_qs = FabricCategory.objects.filter(is_active=True).prefetch_related(fabrics_prefetch).order_by('name')
@@ -125,6 +125,7 @@ class CustomerHomeAPIView(APIView):
         # 8. Fabrics Filtering (Active & Nearby)
         active_fabrics = Fabric.objects.filter(
             is_active=True,
+            approval_status='approved',
             tailor__review__review_status='approved',
             tailor__shop_status=True,
             tailor__user__is_active=True,

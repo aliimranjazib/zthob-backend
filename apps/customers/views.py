@@ -49,6 +49,7 @@ class FabricCatalogAPIView(APIView):
         """Get all active fabrics with optional geo-radius filtering."""
         fabrics = Fabric.objects.filter(
             is_active=True,
+            approval_status='approved',
             tailor__review__review_status='approved',
             tailor__shop_status=True,
             tailor__user__is_active=True
@@ -441,6 +442,7 @@ class TailorFabricsAPIView(APIView):
             fabrics = Fabric.objects.filter(
                 tailor=tailor,
                 is_active=True,
+                approval_status='approved',
                 tailor__review__review_status='approved',
                 tailor__shop_status=True,
                 tailor__user__is_active=True
@@ -582,6 +584,7 @@ class FabricDetailAPIView(APIView):
             fabric = Fabric.objects.filter(
                 id=fabric_id,
                 is_active=True,
+                approval_status='approved',
                 tailor__review__review_status='approved',
                 tailor__shop_status=True,
                 tailor__user__is_active=True
@@ -669,7 +672,7 @@ class FabricFavoriteToggleView(APIView):
         URL: /api/customers/fabrics/{fabric_id}/favorite/
         """
         try:
-            fabric = Fabric.objects.get(pk=fabric_id, is_active=True)
+            fabric = Fabric.objects.get(pk=fabric_id, is_active=True, approval_status='approved')
         except Fabric.DoesNotExist:
             return api_response(
                 success=False,

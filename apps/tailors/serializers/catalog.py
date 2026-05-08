@@ -72,10 +72,10 @@ class FabricSerializer(serializers.ModelSerializer):
             "fabric_type", "tags", "sku", "price", "stitching_price", "stock",
             "is_on_sale", "discount_price", "sale_start", "sale_end",
             "is_featured", "sales_count",
-            "is_low_stock", "is_out_of_stock", "is_active", 
+            "is_low_stock", "is_out_of_stock", "is_active", "approval_status",
             "created_at", "updated_at", "gallery",
         ]
-        read_only_fields = ["id", "sku", "created_at", "updated_at"]
+        read_only_fields = ["id", "sku", "approval_status", "created_at", "updated_at"]
 
 class FabricCreateSerializer(serializers.ModelSerializer):
     images = serializers.ListField(
@@ -242,8 +242,9 @@ class FabricUpdateSerializer(serializers.ModelSerializer):
             "category", "fabric_type", "seasons", "name",
             "description", "price", "stitching_price", "stock", 
             "is_active", "is_on_sale", "discount_price", "sale_start", "sale_end",
-            "is_featured", "tags",
+            "is_featured", "tags", "approval_status",
         ]
+        read_only_fields = ["approval_status"]
     
     def validate_tags(self, tags):
         """Validate that all provided tag IDs exist and are active."""
@@ -292,6 +293,8 @@ class FabricUpdateSerializer(serializers.ModelSerializer):
         # Update other fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+        # Whenever a tailor updates a fabric, reset approval status to pending
+        instance.approval_status = 'pending'
         instance.save()
         
         # Update tags if provided

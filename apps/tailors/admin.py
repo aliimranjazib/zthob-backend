@@ -847,6 +847,7 @@ class FabricAdmin(admin.ModelAdmin):
         'stock_badge',
         'season_badge',
         'is_active_badge',
+        'approval_status_badge',
         'is_on_sale',
         'image_count',
         'created_at_formatted'
@@ -858,6 +859,7 @@ class FabricAdmin(admin.ModelAdmin):
         StockStatusFilter,
         'category',
         'fabric_type',
+        'approval_status',
         'is_active',
         'is_on_sale',
         'seasons',
@@ -915,6 +917,7 @@ class FabricAdmin(admin.ModelAdmin):
                 'stitching_price',
                 'stock',
                 'is_active',
+                'approval_status',
             )
         }),
         ('Flash Sale Settings', {
@@ -951,6 +954,8 @@ class FabricAdmin(admin.ModelAdmin):
     actions = [
         'activate_fabrics',
         'deactivate_fabrics',
+        'approve_fabrics',
+        'reject_fabrics',
         'mark_as_low_stock',
         'export_fabrics_csv',
     ]
@@ -1097,6 +1102,42 @@ class FabricAdmin(admin.ModelAdmin):
         return format_html(''.join(html_parts))
     image_gallery_display.short_description = 'Image Gallery'
     
+    def approval_status_badge(self, obj):
+        """Display approval status with color-coded badge"""
+        colors = {
+            'pending': '#ffc107',
+            'approved': '#28a745',
+            'rejected': '#dc3545',
+        }
+        color = colors.get(obj.approval_status, '#6c757d')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 4px 10px; border-radius: 4px; font-size: 11px;">{}</span>',
+            color,
+            obj.get_approval_status_display()
+        )
+    approval_status_badge.short_description = 'Approval Status'
+    approval_status_badge.admin_order_field = 'approval_status'
+
+    def approve_fabrics(self, request, queryset):
+        """Bulk action to approve fabrics"""
+        count = queryset.update(approval_status='approved')
+        self.message_user(
+            request,
+            f'Successfully approved {count} fabric(s).',
+            messages.SUCCESS
+        )
+    approve_fabrics.short_description = 'Approve selected fabrics'
+
+    def reject_fabrics(self, request, queryset):
+        """Bulk action to reject fabrics"""
+        count = queryset.update(approval_status='rejected')
+        self.message_user(
+            request,
+            f'Successfully rejected {count} fabric(s).',
+            messages.SUCCESS
+        )
+    reject_fabrics.short_description = 'Reject selected fabrics'
+
     def created_at_formatted(self, obj):
         """Format creation date"""
         return obj.created_at.strftime('%Y-%m-%d %H:%M')
