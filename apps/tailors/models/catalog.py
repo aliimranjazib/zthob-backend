@@ -150,6 +150,19 @@ class Fabric(BaseModel):
         default='all_season',
         help_text='Best suited season for this fabric'
     )
+    APPROVAL_CHOICES = (
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    )
+
+    approval_status = models.CharField(
+        max_length=20,
+        choices=APPROVAL_CHOICES,
+        default='pending',
+        help_text="Approval status from admin"
+    )
+    
     is_active = models.BooleanField(
         default=True,
         help_text="Whether this fabric is available for sale"
@@ -204,6 +217,7 @@ class Fabric(BaseModel):
             models.Index(fields=['fabric_type', 'seasons']),
             models.Index(fields=['category', 'is_active']),
             models.Index(fields=['is_featured']),
+            models.Index(fields=['approval_status']),
             models.Index(fields=['is_on_sale', 'sale_start', 'sale_end']),
         ]
     
