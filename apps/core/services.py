@@ -43,21 +43,13 @@ class PhoneVerificationService:
             expires_at=expires_at
         )
         
-        # Send OTP via SMS using Twilio
-        formatted_phone = TwilioSMSService.format_phone_number(phone_number)
-        sms_success, sms_message = TwilioSMSService.send_otp_sms(
-            phone_number=formatted_phone,
-            otp_code=otp_code
-        )
+        # Send OTP via SMS using Celery task
+        from .tasks import send_otp_sms_task
+        send_otp_sms_task.delay(phone_number=phone_number, otp_code=otp_code)
         
-        if not sms_success:
-            # Log error but don't fail - OTP is still created
-            logger.error(f"Failed to send SMS OTP to {formatted_phone}: {sms_message}")
-            logger.error(f"OTP Code: {otp_code} (for manual testing if SMS fails)")
-        else:
-            logger.info(f"SMS OTP sent successfully to {formatted_phone}: {sms_message}")
+        logger.info(f"Queued SMS OTP task for {phone_number}")
         
-        return verification, otp_code, sms_success, sms_message
+        return verification, otp_code, True, "OTP is being sent"
     
     @staticmethod
     def verify_otp(user, otp_code):
@@ -263,50 +255,34 @@ class PhoneVerificationService:
                     else:
                         raise
         
-        # Use Twilio Verify API for real phone numbers
-        from .twilio_service import TwilioSMSService
-        
         # Detect locale based on country code
-        # Saudi Arabia (+966) -> Arabic (ar)
-        # Pakistan (+92) -> English (en) or Urdu (ur)
         if formatted_phone.startswith('+966'):
-            locale = 'ar'  # Arabic for Saudi Arabia
+            locale = 'ar'
         elif formatted_phone.startswith('+92'):
-            locale = 'en'  # English for Pakistan (can also use 'ur' for Urdu)
+            locale = 'en'
         else:
-            locale = 'en'  # Default to English
+            locale = 'en'
         
-        sms_success, sms_message, verification_sid = TwilioSMSService.send_verification_code(
+        # Create verification record FIRST (pending state)
+        expires_at = timezone.now() + timedelta(minutes=10)
+        verification = PhoneVerification.objects.create(
+            user=user,
             phone_number=formatted_phone,
-            locale=locale
+            otp_code=None,
+            verification_sid=None,
+            expires_at=expires_at
+        )
+
+        # Offload sending to Celery
+        from .tasks import send_verification_code_task
+        send_verification_code_task.delay(
+            phone_number=formatted_phone,
+            locale=locale,
+            verification_id=verification.id
         )
         
-        if sms_success:
-            # Create verification record with Twilio Verify SID
-            expires_at = timezone.now() + timedelta(minutes=10)  # Twilio Verify codes expire in 10 minutes
-            
-            verification = PhoneVerification.objects.create(
-                user=user,
-                phone_number=formatted_phone,
-                otp_code=None,  # No OTP code stored when using Twilio Verify
-                verification_sid=verification_sid,
-                expires_at=expires_at
-            )
-            
-            logger.info(f"Twilio Verify code sent. Verification SID: {verification_sid}, To: {formatted_phone}")
-            return verification, None, sms_success, sms_message, user
-        else:
-            # If Twilio Verify fails, log error but still create verification record for tracking
-            expires_at = timezone.now() + timedelta(minutes=5)
-            verification = PhoneVerification.objects.create(
-                user=user,
-                phone_number=formatted_phone,
-                otp_code=None,
-                verification_sid=None,
-                expires_at=expires_at
-            )
-            logger.error(f"Failed to send Twilio Verify code: {sms_message}")
-            return verification, None, sms_success, sms_message, user
+        logger.info(f"Queued Twilio Verify code task for {formatted_phone}")
+        return verification, None, True, "Verification code is being sent", user
     
     @staticmethod
     def verify_otp_for_phone(phone_number, otp_code):

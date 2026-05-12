@@ -17,6 +17,8 @@ from .serializers import (
     PhoneLoginSerializer,
     PhoneVerifySerializer,
     )
+from .throttles import OTPRateThrottle
+from rest_framework.throttling import AnonRateThrottle
 from apps.core.services import PhoneVerificationService
 from apps.core.models import PhoneVerification
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -57,6 +59,7 @@ class UserRegistrationView(APIView):
 class UserLoginView(APIView):
     serializer_class = UserLoginSerializer
     permission_classes=[AllowAny]
+    throttle_classes = [AnonRateThrottle]
 
     def post(self,request):
         serializer=UserLoginSerializer(data=request.data)
@@ -262,6 +265,7 @@ def test_deployment(request):
 class PhoneLoginView(APIView):
     """Send OTP to phone number for login/registration"""
     permission_classes = [AllowAny]
+    throttle_classes = [OTPRateThrottle]
     
     @extend_schema(
         request=PhoneLoginSerializer,
@@ -327,6 +331,7 @@ class PhoneLoginView(APIView):
 class PhoneVerifyView(APIView):
     """Verify OTP and complete login/registration"""
     permission_classes = [AllowAny]
+    throttle_classes = [OTPRateThrottle]
     
     @extend_schema(
         request=PhoneVerifySerializer,
@@ -396,9 +401,14 @@ class PhoneVerifyView(APIView):
                 user.is_active = True
                 user.is_deleted = False
                 user.save()
+
+            # Ensure requested role profile exists (Multi-Role Logic)
+            from apps.accounts.services import IdentityService
+            IdentityService.ensure_profile(user, role)
             
-            # Generate JWT tokens
-            refresh = RefreshToken.for_user(user)
+            # Generate JWT tokens (Role-Aware)
+            from apps.accounts.serializers import UnifiedRefreshToken
+            refresh = UnifiedRefreshToken.for_user(user)
             # Prepare serialized user data
             user_data = UserProfileSerializer(user).data
             
@@ -439,6 +449,7 @@ class PhoneVerifyView(APIView):
 class PhoneResendOTPView(APIView):
     """Resend OTP to phone number"""
     permission_classes = [AllowAny]
+    throttle_classes = [OTPRateThrottle]
     
     @extend_schema(
         request=PhoneLoginSerializer,

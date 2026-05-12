@@ -802,7 +802,7 @@ class CustomerMeasurementsListView(APIView):
         ]
     )
     def get(self, request):
-        if request.user.role != 'USER':
+        if not request.user.is_customer:
             return api_response(
                 success=False,
                 message="Only customers can access this endpoint",
@@ -981,7 +981,7 @@ class FamilyMemberMeasurementsView(APIView):
         tags=["Customer Measurements"]
     )
     def get(self, request, family_member_id):
-        if request.user.role != 'USER':
+        if not request.user.is_customer:
             return api_response(
                 success=False,
                 message="Only customers can access this endpoint",

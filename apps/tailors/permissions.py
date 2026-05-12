@@ -7,7 +7,8 @@ class IsTailor(permissions.BasePermission):
     Allows access only to users with the role 'TAILOR'.
     """
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.role == 'TAILOR')
+        user = request.user
+        return bool(user and user.is_authenticated and (user.is_tailor or user.is_admin))
 
 
 class IsAdmin(permissions.BasePermission):
@@ -15,7 +16,7 @@ class IsAdmin(permissions.BasePermission):
     Allows access only to users with the role 'ADMIN'.
     """
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.role == 'ADMIN')
+        return bool(request.user and request.user.is_authenticated and request.user.is_admin)
 
 
 class IsShopStaff(permissions.BasePermission):
@@ -36,12 +37,12 @@ class IsShopStaff(permissions.BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
             
-        if request.user.role not in ['TAILOR', 'ADMIN']:
+        if not (request.user.is_tailor or request.user.is_admin):
             return False
 
         # Allow if User is an Owner (has tailor_profile)
         # OR if the user has the TAILOR role (even if profile is not yet created, the view will handle it)
-        if hasattr(request.user, 'tailor_profile') or request.user.role == 'TAILOR':
+        if request.user.is_tailor or request.user.is_admin:
             return True
 
         # Allow if User is an Employee (has tailor_employee)

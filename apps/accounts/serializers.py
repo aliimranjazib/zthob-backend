@@ -1,7 +1,33 @@
-from .models import CustomUser
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import serializers
+from .models import CustomUser
 
-
+class UnifiedRefreshToken(RefreshToken):
+    """
+    Custom RefreshToken to include multi-role context and profile IDs in the JWT claims.
+    This enables the frontend to be 'app-aware' without extra API calls.
+    """
+    @classmethod
+    def for_user(cls, user):
+        token = super().for_user(user)
+        
+        # Add profile availability flags
+        token['is_customer'] = user.is_customer
+        token['is_tailor'] = user.is_tailor
+        token['is_rider'] = user.is_rider
+        
+        # Add active role (primary role for the current app)
+        token['active_role'] = user.role
+        
+        # Add profile IDs if they exist
+        if user.is_customer:
+            token['customer_id'] = user.customer_profile.id
+        if user.is_tailor:
+            token['tailor_id'] = user.tailor_profile.id
+        if user.is_rider:
+            token['rider_id'] = user.rider_profile.id
+            
+        return token
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     name = serializers.CharField(write_only=True)
@@ -62,15 +88,25 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'language',
             'date_joined',
             'tailor_context',
+            'all_roles',
+            'is_customer',
+            'is_tailor',
+            'is_rider',
         ]
         read_only_fields = [
             'id',
             'username',
             'email',
             'role',
+            'all_roles',
+            'is_customer',
+            'is_tailor',
+            'is_rider',
             'phone',  # Phone can only be updated through phone-verify endpoint
             'date_joined',
         ]
+
+    all_roles = serializers.ReadOnlyField(source='get_all_roles')
 
     def get_tailor_context(self, user):
         """

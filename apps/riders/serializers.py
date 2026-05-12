@@ -506,11 +506,23 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
         if not request or not request.user:
             return None
         
-        user_role = request.user.role
-        
         # Get allowed transitions from service
         from apps.orders.services import OrderStatusTransitionService
-        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, user_role)
+        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user)
+        
+        # Determine effective role for labeling purposes
+        if request.user.is_admin:
+            user_role = 'ADMIN'
+        elif obj.tailor == request.user:
+            user_role = 'TAILOR'
+        elif obj.rider == request.user:
+            user_role = 'RIDER'
+        elif obj.customer == request.user:
+            user_role = 'USER'
+        else:
+            if request.user.is_tailor: user_role = 'TAILOR'
+            elif request.user.is_rider: user_role = 'RIDER'
+            else: user_role = 'USER'
         
         # Build next available actions
         next_actions = []
@@ -879,11 +891,23 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
         if not request or not request.user:
             return None
         
-        user_role = request.user.role
-        
         # Get allowed transitions from service
         from apps.orders.services import OrderStatusTransitionService
-        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, user_role)
+        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user)
+        
+        # Determine effective role for labeling purposes
+        if request.user.is_admin:
+            user_role = 'ADMIN'
+        elif obj.tailor == request.user:
+            user_role = 'TAILOR'
+        elif obj.rider == request.user:
+            user_role = 'RIDER'
+        elif obj.customer == request.user:
+            user_role = 'USER'
+        else:
+            if request.user.is_tailor: user_role = 'TAILOR'
+            elif request.user.is_rider: user_role = 'RIDER'
+            else: user_role = 'USER'
         
         # Build next available actions
         next_actions = []

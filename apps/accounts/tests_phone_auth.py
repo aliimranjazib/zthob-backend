@@ -17,9 +17,9 @@ class PhoneAuthenticationTestCase(TestCase):
     def setUp(self):
         """Set up test data"""
         self.client = APIClient()
-        self.phone_login_url = reverse('phone-login')
-        self.phone_verify_url = reverse('phone-verify')
-        self.phone_resend_url = reverse('phone-resend-otp')
+        self.phone_login_url = reverse('accounts:phone-login')
+        self.phone_verify_url = reverse('accounts:phone-verify')
+        self.phone_resend_url = reverse('accounts:phone-resend-otp')
         self.test_phone = '0501234567'
         self.test_phone_formatted = '+966501234567'
     
@@ -104,6 +104,7 @@ class PhoneAuthenticationTestCase(TestCase):
         self.assertEqual(user.first_name, 'Ahmed')
         self.assertEqual(user.last_name, 'Ali')
         self.assertEqual(user.role, 'USER')
+        self.assertTrue(user.is_customer)
         self.assertTrue(user.phone_verified)
     
     def test_phone_verify_with_date_of_birth(self):
@@ -343,7 +344,7 @@ class PhoneAuthenticationTestCase(TestCase):
         
         # Use token to access protected endpoint
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access_token}')
-        profile_response = self.client.get(reverse('user-profile'))
+        profile_response = self.client.get(reverse('accounts:user-profile'))
         
         self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
         self.assertTrue(profile_response.data['success'])

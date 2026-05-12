@@ -247,6 +247,7 @@ class AdminAnalyticsService:
             start_date: Optional filter for order creation
             end_date: Optional filter for order creation
         """
+        from apps.orders.models import Order
         queryset = Order.objects.all()
         if start_date:
             queryset = queryset.filter(created_at__gte=start_date)
@@ -384,7 +385,7 @@ class AdminAnalyticsService:
         
         # Query all tailors with earnings
         tailors = User.objects.filter(
-            role='TAILOR',
+            tailor_profile__isnull=False,
             tailor_orders__created_at__gte=start_date,
             tailor_orders__status__in=['delivered', 'collected', 'in_progress', 'ready_for_delivery', 'ready_for_pickup']
         ).annotate(
@@ -420,7 +421,7 @@ class AdminAnalyticsService:
         
         # Query all riders with earnings from delivered orders
         riders = User.objects.filter(
-            role='RIDER',
+            rider_profile__isnull=False,
             rider_orders__created_at__gte=start_date,
             rider_orders__status='delivered'
         ).annotate(
@@ -565,9 +566,9 @@ class OrderStatusTransitionService:
     ROLE_ADMIN = 'ADMIN'
     
     @staticmethod
-    def get_allowed_transitions(order, user_role):
+    def get_allowed_transitions(order, user):
         """
-        Get allowed status transitions for a given order and user role.
+        Get allowed status transitions for a given order and user.
         
         Returns:
             dict: {
@@ -576,6 +577,25 @@ class OrderStatusTransitionService:
                 'tailor_status': [list of allowed tailor statuses]
             }
         """
+        if not user or not user.is_authenticated:
+            return {'status': [], 'rider_status': [], 'tailor_status': []}
+
+        # Determine effective role based on relationship to order
+        if user.is_admin:
+            user_role = OrderStatusTransitionService.ROLE_ADMIN
+        elif order.tailor == user:
+            user_role = OrderStatusTransitionService.ROLE_TAILOR
+        elif order.rider == user:
+            user_role = OrderStatusTransitionService.ROLE_RIDER
+        elif order.customer == user:
+            user_role = OrderStatusTransitionService.ROLE_USER
+        elif user.is_tailor:
+            user_role = OrderStatusTransitionService.ROLE_TAILOR
+        elif user.is_rider:
+            user_role = OrderStatusTransitionService.ROLE_RIDER
+        else:
+            user_role = OrderStatusTransitionService.ROLE_USER
+
         if order.status == 'delivered' or order.status == 'cancelled':
             return {'status': [], 'rider_status': [], 'tailor_status': []}
         
@@ -931,7 +951,7 @@ class OrderStatusTransitionService:
         return transitions
     
     @staticmethod
-    def validate_transition(order, new_status=None, new_rider_status=None, new_tailor_status=None, user_role=None, user=None):
+    def validate_transition(order, new_status=None, new_rider_status=None, new_tailor_status=None, user=None):
         """
         Validate if a status transition is allowed.
         
@@ -940,12 +960,30 @@ class OrderStatusTransitionService:
             new_status: New main status (optional)
             new_rider_status: New rider status (optional)
             new_tailor_status: New tailor status (optional)
-            user_role: Role of the user making the change
-            user: User instance (for additional validation)
+            user: User instance
         
         Returns:
             tuple: (is_valid: bool, error_message: str)
         """
+        if not user or not user.is_authenticated:
+            return False, "Authentication required"
+
+        # Determine role based on relationship to order
+        if user.is_admin:
+            user_role = OrderStatusTransitionService.ROLE_ADMIN
+        elif order.tailor == user:
+            user_role = OrderStatusTransitionService.ROLE_TAILOR
+        elif order.rider == user:
+            user_role = OrderStatusTransitionService.ROLE_RIDER
+        elif order.customer == user:
+            user_role = OrderStatusTransitionService.ROLE_USER
+        elif user.is_tailor:
+            user_role = OrderStatusTransitionService.ROLE_TAILOR
+        elif user.is_rider:
+            user_role = OrderStatusTransitionService.ROLE_RIDER
+        else:
+            user_role = OrderStatusTransitionService.ROLE_USER
+
         # Check if order is in final state
         if order.status in ['delivered', 'cancelled', 'collected']:
             return False, f"Cannot change status of {order.status} order"
@@ -967,7 +1005,7 @@ class OrderStatusTransitionService:
                 return False, "Orders can only be cancelled when status is pending"
         
         # Get allowed transitions
-        allowed = OrderStatusTransitionService.get_allowed_transitions(order, user_role)
+        allowed = OrderStatusTransitionService.get_allowed_transitions(order, user)
         
         # Validate main status
         if new_status and new_status != order.status:
@@ -1004,8 +1042,9 @@ class OrderStatusTransitionService:
         return True, ""
     
     @staticmethod
+    @transaction.atomic
     def transition(order, new_status=None, new_rider_status=None, new_tailor_status=None, 
-                   user_role=None, user=None, notes=None):
+                   user=None, notes=None):
         """
         Perform a status transition with validation and history tracking.
         
@@ -1014,7 +1053,6 @@ class OrderStatusTransitionService:
             new_status: New main status (optional)
             new_rider_status: New rider status (optional)
             new_tailor_status: New tailor status (optional)
-            user_role: Role of the user making the change
             user: User instance
             notes: Optional notes about the transition
         
@@ -1023,7 +1061,7 @@ class OrderStatusTransitionService:
         """
         # Validate transition
         is_valid, error_msg = OrderStatusTransitionService.validate_transition(
-            order, new_status, new_rider_status, new_tailor_status, user_role, user
+            order, new_status, new_rider_status, new_tailor_status, user
         )
         
         if not is_valid:
@@ -1070,28 +1108,36 @@ class OrderStatusTransitionService:
             try:
                 from apps.notifications.services import NotificationService
                 
+                from apps.notifications.tasks import (
+                    send_order_status_notification_task,
+                    send_rider_status_notification_task,
+                    send_tailor_status_notification_task
+                )
+                
+                user_id = user.id if user and hasattr(user, 'id') else None
+
                 if status_changed:
-                    NotificationService.send_order_status_notification(
-                        order=order,
+                    send_order_status_notification_task.delay(
+                        order_id=order.id,
                         old_status=old_status,
                         new_status=order.status,
-                        changed_by=user
+                        user_id=user_id
                     )
                 
                 if rider_status_changed:
-                    NotificationService.send_rider_status_notification(
-                        order=order,
-                        old_rider_status=old_rider_status,
-                        new_rider_status=order.rider_status,
-                        changed_by=user
+                    send_rider_status_notification_task.delay(
+                        order_id=order.id,
+                        old_status=old_rider_status,
+                        new_status=order.rider_status,
+                        user_id=user_id
                     )
                     
                 if tailor_status_changed:
-                    NotificationService.send_tailor_status_notification(
-                        order=order,
-                        old_tailor_status=old_tailor_status,
-                        new_tailor_status=order.tailor_status,
-                        changed_by=user
+                    send_tailor_status_notification_task.delay(
+                        order_id=order.id,
+                        old_status=old_tailor_status,
+                        new_status=order.tailor_status,
+                        user_id=user_id
                     )
             except Exception as e:
                 import logging
