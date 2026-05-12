@@ -1,4 +1,5 @@
 
+from django.utils.translation import gettext as _
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view
 from rest_framework.permissions import AllowAny,IsAuthenticated
@@ -210,30 +211,45 @@ class DeleteAccountView(APIView):
     )
     def delete(self, request):
         """
-        Delete user account
+        Delete user account or a specific role
         
-        - Soft delete (default): Marks account as deleted, keeps data
-        - Hard delete: Permanently removes account and related data
-        
-        Note: Since phone authentication doesn't use passwords, 
-        hard delete only requires authentication (no password confirmation needed).
+        - If 'role' is provided: Removes ONLY that specific role (e.g., 'TAILOR')
+        - If no 'role' is provided:
+            - Soft delete (default): Marks account as deleted, keeps data
+            - Hard delete: Permanently removes account and related data
         """
         user = request.user
+        role_to_remove = request.data.get('role')
         hard_delete = request.data.get('hard_delete', False)
         
         try:
+            if role_to_remove:
+                # Role-specific deletion
+                role_to_remove = role_to_remove.upper()
+                if role_to_remove not in ['TAILOR', 'RIDER']:
+                    return api_response(
+                        success=False,
+                        message=_("Invalid role: {role}. You can only remove 'TAILOR' or 'RIDER' roles.").format(role=role_to_remove),
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        request=request
+                    )
+                
+                user.remove_role(role_to_remove)
+                return api_response(
+                    success=True,
+                    message=_("Role '{role}' has been removed from your account.").format(role=role_to_remove),
+                    status_code=status.HTTP_200_OK,
+                    request=request
+                )
+
             if hard_delete:
                 # Hard delete - permanently remove account
-                # Note: Related data will be handled by CASCADE or SET_NULL based on model definitions
                 user_id = user.id
-                username = user.username
-                
-                # Delete the user (this will cascade to related models)
                 user.delete()
                 
                 return api_response(
                     success=True,
-                    message="Account permanently deleted. All your data has been removed.",
+                    message=_("Account permanently deleted. All your data has been removed."),
                     status_code=status.HTTP_200_OK,
                     request=request
                 )
@@ -243,7 +259,7 @@ class DeleteAccountView(APIView):
                 
                 return api_response(
                     success=True,
-                    message="Account deleted successfully. Your data has been preserved and can be restored by contacting support.",
+                    message=_("Account deleted successfully. Your data has been preserved."),
                     status_code=status.HTTP_200_OK,
                     request=request
                 )
