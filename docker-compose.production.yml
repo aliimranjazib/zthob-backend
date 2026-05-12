@@ -1,9 +1,29 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_DB=${DB_NAME:-mgask}
+      - POSTGRES_USER=${DB_USER:-mgask_user}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - prod_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   web:
     build: .
@@ -14,17 +34,20 @@ services:
       - ./media:/app/media
       - /home/mgask-2025-c03d7f556e66.json:/home/mgask-2025-c03d7f556e66.json:ro
     ports:
-      - "8000:8000"  # Production runs on 8000
+      - "8000:8000"
     env_file:
       - .env
     environment:
-      - DB_HOST=172.17.0.1
+      - DB_HOST=db
+      - APP_ENV=production
       - REDIS_URL=redis://redis:6379/1
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - APP_ENV=production
     depends_on:
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   celery_worker:
     build: .
@@ -35,12 +58,16 @@ services:
     env_file:
       - .env
     environment:
-      - DB_HOST=172.17.0.1
+      - DB_HOST=db
       - REDIS_URL=redis://redis:6379/1
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
+  prod_postgres_data:
   redis_data:
