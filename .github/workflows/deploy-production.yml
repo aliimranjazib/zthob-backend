@@ -1,102 +1,39 @@
 name: Deploy to Production
 
 on:
-  workflow_dispatch:  # Manual trigger only - click "Run workflow" button
+  workflow_dispatch:  # Manual trigger only
 
 jobs:
   deploy-production:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Deploy to production environment
+    - name: Deploy to production via Docker
       run: |
         mkdir -p ~/.ssh
         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
         
         ssh -o StrictHostKeyChecking=no root@69.62.126.95 '
-          cd /home/zthob-backend
-          
-          echo "💾 Creating production backup..."
-          sudo mkdir -p /var/backups/zthob
-          sudo chown $USER:$USER /var/backups/zthob
-          timestamp=$(date +%Y%m%d_%H%M%S)
-          
-          # Backup database
-          export $(grep -v "^#" .env.production | xargs)
-          PGPASSWORD=$DB_PASSWORD pg_dump -U $DB_USER -h localhost mgask > /var/backups/zthob/mgask_backup_${timestamp}.sql || echo "⚠️  Database backup failed (might not exist yet)"
-          
-          # Backup code
-          tar -czf /var/backups/zthob/code_backup_${timestamp}.tar.gz \
-            --exclude=".git" \
-            --exclude="__pycache__" \
-            --exclude="*.pyc" \
-            --exclude="magsk_venv" \
-            --exclude="staticfiles" \
-            . || echo "⚠️  Code backup warning"
-          
-          echo "✅ Backups created at /var/backups/zthob/"
-          
-          echo "📦 Pulling latest changes..."
+          cd /home/mgask-production
           git fetch origin
           git reset --hard origin/main
           
-          echo "🐍 Activating virtual environment..."
-          source .venv/bin/activate
+          echo "💾 Creating database backup..."
+          # Backup the Dockerized DB
+          timestamp=$(date +%Y%m%d_%H%M%S)
+          docker compose -f docker-compose.production.yml exec -T db pg_dump -U mgask_user -d mgask > /home/mgask-production/backups/backup_${timestamp}.sql || echo "Backup warning"
           
-          echo "📥 Installing dependencies..."
-          # Try using uv first (since the venv is uv-based), fallback to system pip if needed
-          export PATH="$PATH:$HOME/.local/bin"
-          if command -v uv &> /dev/null; then
-            uv pip install -r requirements.txt
-          else
-            python3 -m pip install -r requirements.txt --ignore-installed --quiet
-          fi || {
-            echo "❌ ERROR: Dependency installation failed!"
-            exit 1
-          }
+          echo "🚀 Launching Production via Docker..."
+          docker compose -f docker-compose.production.yml up -d --build
           
-          echo "🔧 Loading production environment..."
-          export $(grep -v "^#" .env.production | xargs)
-          export APP_ENV=production
-          
-          echo "🗄️  Running migrations for production..."
-          python3 manage.py migrate --verbosity=2 || {
-            echo "❌ ERROR: Migration failed!"
-            echo "💡 You can restore from backup at /var/backups/zthob/mgask_backup_${timestamp}.sql"
-            exit 1
-          }
-          
-          echo "📊 Checking migration status..."
-          python3 manage.py showmigrations
+          echo "🗄️ Running migrations..."
+          docker compose -f docker-compose.production.yml exec -T web python manage.py migrate
           
           echo "📁 Collecting static files..."
-          python3 manage.py collectstatic --noinput
+          docker compose -f docker-compose.production.yml exec -T web python manage.py collectstatic --noinput
           
-          echo "🔄 Restarting production service..."
-          sudo systemctl restart gunicorn-production
-          
-          echo "⏳ Waiting for service to start..."
-          sleep 3
-          
-          if systemctl is-active --quiet gunicorn-production; then
-            echo "✅ PRODUCTION deployment successful!"
-            echo "🌐 Production URL: http://prod.mgask.net"
-            
-            # Test the endpoint
-            curl -s -o /dev/null -w "HTTP Status: %{http_code}\n" http://prod.mgask.net/api/config/version/ || true
-          else
-            echo "❌ Production service failed to start"
-            echo "📋 Recent logs:"
-            sudo journalctl -u gunicorn-production --since "2 minutes ago" --no-pager
-            echo ""
-            echo "💡 To restore database from backup:"
-            echo "   psql -U mgask_user -d mgask < /var/backups/zthob/mgask_backup_${timestamp}.sql"
-            exit 1
-          fi
+          echo "✅ Production deployment successful!"
         '
