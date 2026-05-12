@@ -51,6 +51,23 @@ class CustomUser(AbstractUser):
         if self.is_admin: roles.append('ADMIN')
         return roles
 
+    def remove_role(self, role_name):
+        """
+        Safely removes a specific role and its associated data.
+        Does NOT delete the user account.
+        """
+        role_name = role_name.upper()
+        
+        if role_name == 'TAILOR' and hasattr(self, 'tailor_profile'):
+            self.tailor_profile.delete()
+        elif role_name == 'RIDER' and hasattr(self, 'rider_profile'):
+            self.rider_profile.delete()
+        
+        # If the removed role was the primary role, revert to USER
+        if self.role == role_name:
+            self.role = 'USER'
+            self.save()
+
     USERNAME_FIELD='username'
     REQUIRED_FIELDS=[]
     
