@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: always
+
+  web:
+    build: .
+    command: gunicorn zthob.wsgi:application --bind 0.0.0.0:8000 --workers 3
+    volumes:
+      - .:/app
+      - ./staticfiles:/app/staticfiles
+      - ./media:/app/media
+      - /home/mgask-2025-c03d7f556e66.json:/home/mgask-2025-c03d7f556e66.json:ro
+    ports:
+      - "8001:8000"  # Staging runs on 8001
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=172.17.0.1
+      - REDIS_URL=redis://redis:6379/1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - APP_ENV=staging
+    depends_on:
+      - redis
+
+  celery_worker:
+    build: .
+    command: celery -A zthob worker -l info
+    volumes:
+      - .:/app
+      - /home/mgask-2025-c03d7f556e66.json:/home/mgask-2025-c03d7f556e66.json:ro
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=172.17.0.1
+      - REDIS_URL=redis://redis:6379/1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+
+volumes:
+  redis_data:
