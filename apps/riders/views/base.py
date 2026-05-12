@@ -91,6 +91,9 @@ class RiderRegisterView(APIView):
                         'name': user.get_full_name() or user.username,
                         'email': user.email,
                         'role': user.role,
+                        'is_rider': user.is_rider,
+                        'is_customer': user.is_customer,
+                        'is_tailor': user.is_tailor,
                     },
                     'tokens': {
                         'refresh': str(refresh),
@@ -119,7 +122,7 @@ class RiderSendOTPView(APIView):
     )
     def post(self, request):
         # Verify user is a rider
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can use this endpoint",
@@ -181,7 +184,7 @@ class RiderVerifyOTPView(APIView):
     )
     def post(self, request):
         # Verify user is a rider
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can use this endpoint",
@@ -223,7 +226,7 @@ class RiderProfileView(APIView):
         tags=["Rider Profile"]
     )
     def get(self, request):
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can access this endpoint",
@@ -261,7 +264,7 @@ class RiderProfileView(APIView):
         tags=["Rider Profile"]
     )
     def put(self, request):
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can access this endpoint",
@@ -313,7 +316,7 @@ class RiderProfileSubmissionView(APIView):
         tags=["Rider Profile"]
     )
     def post(self, request):
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can access this endpoint",
@@ -374,7 +377,7 @@ class RiderProfileStatusView(APIView):
         tags=["Rider Profile"]
     )
     def get(self, request):
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can access this endpoint",
@@ -418,7 +421,7 @@ class RiderDocumentUploadView(APIView):
         tags=["Rider Profile"]
     )
     def post(self, request):
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can access this endpoint",
@@ -467,7 +470,7 @@ class RiderDocumentListView(APIView):
         tags=["Rider Profile"]
     )
     def get(self, request):
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can access this endpoint",
@@ -502,7 +505,7 @@ class RiderDocumentDeleteView(APIView):
         tags=["Rider Profile"]
     )
     def delete(self, request, document_id):
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can access this endpoint",
@@ -545,7 +548,7 @@ class RiderAvailableOrdersView(APIView):
         tags=["Rider Orders"]
     )
     def get(self, request):
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can access this endpoint",
@@ -620,7 +623,7 @@ class RiderMyOrdersView(APIView):
         tags=["Rider Orders"]
     )
     def get(self, request):
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can access this endpoint",
@@ -663,7 +666,7 @@ class RiderOrderDetailView(APIView):
         tags=["Rider Orders"]
     )
     def get(self, request, order_id):
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can access this endpoint",
@@ -743,7 +746,7 @@ class RiderAcceptOrderView(APIView):
     )
     def post(self, request, order_id):
         """Accept order - order_id comes from URL path"""
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can access this endpoint",
@@ -820,7 +823,6 @@ class RiderAcceptOrderView(APIView):
         success, error_msg, updated_order = OrderStatusTransitionService.transition(
             order=order,
             new_rider_status='accepted',
-            user_role='RIDER',
             user=request.user,
             notes='Rider accepted the order'
         )
@@ -856,7 +858,7 @@ class RiderAddMeasurementsView(APIView):
         tags=["Rider Orders"]
     )
     def post(self, request, order_id):
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can access this endpoint",
@@ -935,7 +937,6 @@ class RiderAddMeasurementsView(APIView):
                 success, error_msg, updated_order = OrderStatusTransitionService.transition(
                     order=order,
                     new_rider_status='measurement_taken',
-                    user_role='RIDER',
                     user=request.user,
                     notes=notes_text
                 )
@@ -1184,7 +1185,7 @@ class RiderUpdateOrderStatusView(APIView):
         tags=["Rider Orders"]
     )
     def patch(self, request, order_id):
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can access this endpoint",
@@ -1256,8 +1257,7 @@ class RiderUpdateOrderStatusView(APIView):
             success, error_msg, updated_order = OrderStatusTransitionService.transition(
                 order=order,
                 new_rider_status='accepted',
-                user_role='RIDER',
-                user=request.user,
+                    user=request.user,
                 notes=notes or 'Rider accepted the order'
             )
             
@@ -1275,8 +1275,7 @@ class RiderUpdateOrderStatusView(APIView):
                 success, error_msg, updated_order = OrderStatusTransitionService.transition(
                     order=order,
                     new_rider_status='measurement_taken',
-                    user_role='RIDER',
-                    user=request.user,
+                            user=request.user,
                     notes='Measurements already provided by customer - automatically confirmed'
                 )
                 if success:
@@ -1324,7 +1323,6 @@ class RiderUpdateOrderStatusView(APIView):
         success, error_msg, updated_order = OrderStatusTransitionService.transition(
             order=order,
             new_rider_status=new_rider_status,
-            user_role='RIDER',
             user=request.user,
             notes=notes
         )
@@ -1437,7 +1435,7 @@ class RiderAnalyticsView(APIView):
         from apps.riders.serializers.analytics import RiderAnalyticsSerializer
         
         # Check if user is a rider
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can access this endpoint",

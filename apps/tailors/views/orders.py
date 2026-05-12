@@ -69,7 +69,6 @@ class TailorAcceptOrderView(APIView):
         success, error_msg, updated_order = OrderStatusTransitionService.transition(
             order=order,
             new_tailor_status='accepted',
-            user_role='TAILOR',
             user=request.user,
             notes='Tailor accepted the order'
         )
@@ -152,8 +151,7 @@ class TailorUpdateOrderStatusView(APIView):
                 order=order,
                 new_status=new_status,
                 new_tailor_status=new_tailor_status,
-                user_role='TAILOR',
-                user=request.user,
+                    user=request.user,
                 notes=notes
             )
             
@@ -274,8 +272,7 @@ class TailorAddMeasurementsView(APIView):
                     success, error_msg, updated_order = OrderStatusTransitionService.transition(
                         order=order,
                         new_tailor_status='measurements_complete',
-                        user_role='TAILOR',
-                        user=request.user,
+                                    user=request.user,
                         notes=f'Measurements recorded for {recipient_name}'
                     )
                     if success:

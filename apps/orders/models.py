@@ -158,6 +158,7 @@ class Order(BaseModel):
     max_length=20,
     choices=ORDER_STATUS_CHOICES,
     default="pending",
+    db_index=True,
     help_text="Main status of the order"
     )
     
@@ -165,6 +166,7 @@ class Order(BaseModel):
         max_length=30,
         choices=RIDER_STATUS_CHOICES,
         default="none",
+        db_index=True,
         protected=False,  # Allow direct assignment for backward compatibility
         help_text="Current rider activity status"
     )
@@ -173,6 +175,7 @@ class Order(BaseModel):
         max_length=30,
         choices=TAILOR_STATUS_CHOICES,
         default="none",
+        db_index=True,
         protected=False,  # Allow direct assignment for backward compatibility
         help_text="Current tailor activity status"
     )
@@ -822,26 +825,31 @@ def send_notification_on_status_transition(sender, instance, name, source, targe
     user = method_kwargs.get('user')
     
     try:
+        from apps.notifications.tasks import (
+            send_rider_status_notification_task,
+            send_tailor_status_notification_task
+        )
+        
+        user_id = user.id if user and hasattr(user, 'id') else None
+
         # Determine which field changed based on transition method name
         if name.startswith('rider_'):
-            # Rider status transition - send rider status notification
-            NotificationService.send_rider_status_notification(
-                order=instance,
-                old_rider_status=source,  # ✅ Correct old value from FSM
-                new_rider_status=target,  # ✅ Correct new value from FSM
-                changed_by=user
+            send_rider_status_notification_task.delay(
+                order_id=instance.id,
+                old_status=source,
+                new_status=target,
+                user_id=user_id
             )
-            logger.info(f"Sent rider status notification: {source} → {target} for order {instance.order_number}")
+            logger.info(f"Queued rider status notification task: {source} → {target} for order {instance.order_number}")
             
         elif name.startswith('tailor_'):
-            # Tailor status transition - send tailor status notification
-            NotificationService.send_tailor_status_notification(
-                order=instance,
-                old_tailor_status=source,  # ✅ Correct old value from FSM
-                new_tailor_status=target,  # ✅ Correct new value from FSM
-                changed_by=user
+            send_tailor_status_notification_task.delay(
+                order_id=instance.id,
+                old_status=source,
+                new_status=target,
+                user_id=user_id
             )
-            logger.info(f"Sent tailor status notification: {source} → {target} for order {instance.order_number}")
+            logger.info(f"Queued tailor status notification task: {source} → {target} for order {instance.order_number}")
             
     except Exception as e:
         # Log error but don't fail the transition

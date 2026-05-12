@@ -44,7 +44,7 @@ class PhoneVerification(models.Model):
 
 
 class BaseModel(models.Model):
-    created_at=models.DateTimeField(auto_now_add=True)
+    created_at=models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at=models.DateTimeField(auto_now=True)
     created_by=models.ForeignKey(User,on_delete=models.SET_NULL,null=True,blank=True,related_name="%(class)s_created")
     

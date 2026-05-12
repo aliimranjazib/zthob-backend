@@ -147,9 +147,11 @@ class TailorEmployeeListCreateView(BaseTailorAPIView):
                     user.first_name = name_parts[0]
                     user.last_name  = name_parts[1] if len(name_parts) > 1 else ''
                     
-                    # Ensure user has TAILOR role (promote from USER, don't demote ADMIN)
-                    if user.role == 'USER':
-                        user.role = 'TAILOR'
+                    # Ensure user has TAILOR role (promote if only a customer, don't demote ADMIN)
+                    if user.is_customer and not user.is_tailor and not user.is_admin:
+                        from apps.accounts.services.identity import IdentityService
+                        IdentityService.ensure_profile(user, 'TAILOR')
+                        user.role = 'TAILOR'  # Still set for legacy DB consistency
                     
                     user.save(update_fields=['first_name', 'last_name', 'role'])
 

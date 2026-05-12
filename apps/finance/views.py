@@ -15,7 +15,7 @@ class TailorWalletView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if request.user.role != 'TAILOR':
+        if not request.user.is_tailor:
             return Response({"error": "Only tailors can access wallet info."}, status=status.HTTP_403_FORBIDDEN)
         
         wallet, _ = TailorWallet.objects.get_or_create(tailor=request.user)
@@ -32,7 +32,7 @@ class TailorTransactionHistoryView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        if self.request.user.role != 'TAILOR':
+        if not self.request.user.is_tailor:
             return WalletTransaction.objects.none()
         
         return WalletTransaction.objects.filter(
@@ -48,7 +48,7 @@ class PayoutRequestViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        if self.request.user.role != 'TAILOR':
+        if not self.request.user.is_tailor:
             return PayoutRequest.objects.none()
         return PayoutRequest.objects.filter(tailor=self.request.user)
 

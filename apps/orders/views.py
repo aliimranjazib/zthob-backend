@@ -1,10 +1,11 @@
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
+from django.http import Http404
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
+from django.db import transaction
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
-from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema
 from .models import Order, OrderItem ,OrderStatusHistory
@@ -73,7 +74,7 @@ class OrderCreateView(APIView):
     def post(self,request):
 
         data=request.data.copy()
-        if request.user.role == 'USER':
+        if not request.user.is_admin:
             data['customer'] = request.user.id
         # For TAILOR and ADMIN, we respect the 'customer' ID passed in the request.
         # This ensures that when a tailor/admin creates an order, the correct customer is linked.
@@ -127,13 +128,14 @@ class OrderDetailView(APIView):
     def get_object(self, order_id,request):
 
         order=get_object_or_404(Order, id=order_id)
-        if request.user.role == 'USER':
-            if order.customer != request.user:
-                raise PermissionError('You can only view your own orders')
+        # Resource-based permission check
+        is_customer = order.customer == request.user
+        is_tailor = order.tailor == request.user
+        is_rider = order.rider == request.user
+        is_admin = request.user.is_admin
 
-        elif request.user.role == 'TAILOR':
-            if order.tailor != request.user:
-                raise PermissionError('You can only view order that is assigned to you')
+        if not (is_customer or is_tailor or is_rider or is_admin):
+            raise PermissionError('You do not have permission to view this order')
 
         return order
 
@@ -175,7 +177,7 @@ class OrderDetailView(APIView):
             # Role-based permission checks for status updates
             new_status = request.data.get('status')
             if new_status:
-                if request.user.role == 'USER':
+                if request.user.is_customer and order.customer == request.user:
                     # Customers can cancel orders OR mark walk-in orders as collected
                     if new_status == 'cancelled':
                         # Only allow cancellation when status is pending
@@ -191,7 +193,7 @@ class OrderDetailView(APIView):
                         # Any other status change is not allowed
                         raise PermissionError("Customers can only cancel orders or mark walk-in orders as collected")
                         
-                elif request.user.role == 'TAILOR':
+                elif request.user.is_tailor and order.tailor == request.user:
                     # Tailors cannot cancel orders (only customers can cancel)
                     if new_status == 'cancelled':
                         raise PermissionError("Tailors cannot cancel orders. Only customers can cancel their orders.")
@@ -199,11 +201,11 @@ class OrderDetailView(APIView):
                     elif new_status == 'collected':
                         raise PermissionError("Only customers can mark walk-in orders as collected")
                         
-                elif request.user.role == 'ADMIN':
+                elif request.user.is_admin:
                     # Admins can do everything - no restrictions
                     pass
                 else:
-                    raise PermissionError("Invalid user role")
+                    raise PermissionError("You do not have permission to update this order status")
             
             serializer=OrderUpdateSerializer(order,data=request.data, partial=True)
             if serializer.is_valid():
@@ -273,17 +275,18 @@ class OrderStatusUpdateView(APIView):
         tags=["Orders"]
     )
 
+    @transaction.atomic
     def patch(self, request, order_id):
 
         try:
             order=get_object_or_404(Order,id=order_id)
             
-            # Role-based permission checks
-            if request.user.role == 'USER':
-                # Customers can only update their own orders
-                if order.customer != request.user:
-                    raise PermissionError("You can only update your own orders")
-                
+            # Role-based and Resource-based permission checks
+            is_customer = order.customer == request.user
+            is_tailor = order.tailor == request.user
+            is_admin = request.user.is_admin
+
+            if is_customer:
                 # Customers can cancel orders OR mark walk-in orders as collected
                 new_status = request.data.get('status')
                 if new_status:
@@ -301,11 +304,7 @@ class OrderStatusUpdateView(APIView):
                         # Any other status change is not allowed
                         raise PermissionError("Customers can only cancel orders or mark walk-in orders as collected")
                     
-            elif request.user.role == 'TAILOR':
-                # Tailors can only update orders assigned to them
-                if order.tailor != request.user:
-                    raise PermissionError("You can only update orders assigned to you")
-                
+            elif is_tailor:
                 # Tailors cannot cancel orders (only customers can cancel)
                 new_status = request.data.get('status')
                 if new_status and new_status == 'cancelled':
@@ -314,11 +313,11 @@ class OrderStatusUpdateView(APIView):
                 elif new_status == 'collected':
                     raise PermissionError("Only customers can mark walk-in orders as collected")
                     
-            elif request.user.role == 'ADMIN':
+            elif is_admin:
                 # Admins can do everything - no restrictions
                 pass
             else:
-                raise PermissionError("Invalid user role")
+                raise PermissionError("You do not have permission to update this order status")
             
             serializer=OrderUpdateSerializer(order, data=request.data,partial=True, context={'request':request})
             if serializer.is_valid():
@@ -357,13 +356,13 @@ class OrderHistoryView(APIView):
         try:
             order = get_object_or_404(Order, id=order_id)
             
-            # Check permissions
-            if request.user.role == 'USER':
-                if order.customer != request.user:
-                    raise PermissionError("You can only view your own order history")
-            elif request.user.role == 'TAILOR':
-                if order.tailor != request.user:
-                    raise PermissionError("You can only view history for orders assigned to you")
+            # Resource-based permission check
+            is_customer = order.customer == request.user
+            is_tailor = order.tailor == request.user
+            is_admin = request.user.is_admin
+
+            if not (is_customer or is_tailor or is_admin):
+                raise PermissionError("You do not have permission to view this order history")
             
             # Get status history
             history = OrderStatusHistory.objects.filter(order=order).order_by('-created_at')
@@ -674,10 +673,10 @@ class OrderPaymentStatusUpdateView(APIView):
             order = get_object_or_404(Order, id=order_id)
             
             # Permission checks
-            if request.user.role == 'USER':
+            if request.user.is_customer:
                 if order.customer != request.user:
                     raise PermissionError('You can only update payment status of your own orders')
-            elif request.user.role == 'ADMIN':
+            elif request.user.is_admin:
                 # Admins can update any order's payment status
                 pass
             else:
@@ -746,6 +745,12 @@ class OrderPaymentStatusUpdateView(APIView):
                 status_code=status.HTTP_200_OK
 
             )
+        except Http404:
+            return api_response(
+                success=False,
+                message="Order not found",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
         except PermissionError as e:
             return api_response(
                 success=False,
@@ -758,7 +763,7 @@ class OrderPaymentStatusUpdateView(APIView):
             logger.error(f'Payment status update error : {str(e)}', exc_info=True)
             return api_response(
                 success=False,
-                message="An error occurred while updating payment status",
+                message="Something went wrong while updating payment status",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -773,7 +778,7 @@ class OrderMeasurementsDetailView(APIView):
         tags=["Customer Measurements"]
     )
     def get(self, request, order_id):
-        if request.user.role != 'USER':
+        if not (request.user.is_customer or request.user.is_admin):
             return api_response(
                 success=False,
                 message="Only customers can access this endpoint",
@@ -889,7 +894,7 @@ class WorkOrderPDFView(APIView):
             return api_response(success=False, message='Order not found',
                               status_code=status.HTTP_404_NOT_FOUND, request=request)
         
-        if request.user.role != 'TAILOR' or order.tailor != request.user:
+        if not request.user.is_tailor or order.tailor != request.user:
             return api_response(success=False,
                               message='You do not have permission to access this work order',
                               status_code=status.HTTP_403_FORBIDDEN, request=request)

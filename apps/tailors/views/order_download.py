@@ -62,7 +62,7 @@ class TailorOrderDownloadPDFView(APIView):
     )
     def get(self, request, order_id):
         # Role guard
-        if request.user.role != 'TAILOR':
+        if not request.user.is_tailor:
             return api_response(
                 success=False,
                 message="Only tailors can access this endpoint",

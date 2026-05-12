@@ -123,7 +123,7 @@ class OrderSerializer(serializers.ModelSerializer):
     can_be_cancelled=serializers.BooleanField(read_only=True)
     custom_styles = serializers.SerializerMethodField()
     rider_status = serializers.CharField(read_only=True)
-    tailor_status = serializers.SerializerMethodField()
+    tailor_status_display = serializers.SerializerMethodField()
     status_info = serializers.SerializerMethodField()
     pricing_summary = serializers.SerializerMethodField()
     delivery_address = serializers.SerializerMethodField()
@@ -150,6 +150,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'status',
             'rider_status',
             'tailor_status',
+            'tailor_status_display',
             'subtotal',
             'stitching_price',
             'tax_amount',
@@ -223,7 +224,7 @@ class OrderSerializer(serializers.ModelSerializer):
         """Get rider phone (verified phone from user account)"""
         return obj.rider.phone if obj.rider else None
 
-    def get_tailor_status(self, obj):
+    def get_tailor_status_display(self, obj):
         """Get translated tailor status display name"""
         request = self.context.get('request')
         language = get_language_from_request(request) if request else 'en'
@@ -367,11 +368,23 @@ class OrderSerializer(serializers.ModelSerializer):
         if not request or not request.user:
             return None
         
-        user_role = request.user.role
-        
         # Get allowed transitions from service
         from apps.orders.services import OrderStatusTransitionService
-        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, user_role)
+        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user)
+        
+        # Determine effective role for labeling purposes
+        if request.user.is_admin:
+            user_role = 'ADMIN'
+        elif obj.tailor == request.user:
+            user_role = 'TAILOR'
+        elif obj.rider == request.user:
+            user_role = 'RIDER'
+        elif obj.customer == request.user:
+            user_role = 'USER'
+        else:
+            if request.user.is_tailor: user_role = 'TAILOR'
+            elif request.user.is_rider: user_role = 'RIDER'
+            else: user_role = 'USER'
         
         # Build next available actions
         next_actions = []
@@ -461,7 +474,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'current_status': obj.status,
             'current_rider_status': obj.rider_status,
             'current_tailor_status': obj.tailor_status,
-            'current_tailor_status_display': self.get_tailor_status(obj),
+            'current_tailor_status_display': self.get_tailor_status_display(obj),
             'next_available_actions': next_actions,
             'can_cancel': can_cancel,
             'cancel_reason': cancel_reason,
@@ -668,8 +681,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         }
 
     def validate_items(self,value):
-        # Get order_type from initial_data
-        order_type = self.initial_data.get('order_type', 'fabric_only')
+        # Get order_type from initial_data safely
+        initial_data = getattr(self, 'initial_data', {})
+        order_type = initial_data.get('order_type', 'fabric_only')
         
         # For measurement_service orders, allow items without fabric
         if order_type == 'measurement_service':
@@ -678,14 +692,15 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     "Measurement orders must specify at least one person to measure"
                 )
             
-            customer = self.context.get('request').user
+            request = self.context.get('request')
+            customer = request.user if request else None
             validated_items = []
             
             for item_data in value:
                 family_member = item_data.get('family_member')
                 
                 # Validate family member belongs to customer if specified
-                if family_member and family_member.user != customer:
+                if family_member and customer and family_member.user != customer:
                     raise serializers.ValidationError(
                         f"Family member {family_member.name} must belong to the authenticated customer"
                     )
@@ -703,7 +718,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Order must have at least one item")
         
         tailor =self.context.get('tailor')
-        customer = self.context.get('request').user
+        request = self.context.get('request')
+        customer = request.user if request else None
         validated_items=[]
         for item_data in value:
             fabric = item_data.get('fabric')
@@ -742,8 +758,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         return validated_items
 
     def validate_tailor(self,value):
-        order_type = self.initial_data.get('order_type', 'fabric_only')
-        service_mode = self.initial_data.get('service_mode', 'home_delivery')
+        initial_data = getattr(self, 'initial_data', {})
+        order_type = initial_data.get('order_type', 'fabric_only')
+        service_mode = initial_data.get('service_mode', 'home_delivery')
         
         # For home_delivery measurement orders, tailor is optional (rider handles it)
         if order_type == 'measurement_service' and service_mode == 'home_delivery':
@@ -755,7 +772,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         if value is None:
             raise serializers.ValidationError('Tailor is required')
         
-        if value.role!='TAILOR':
+        if not value.is_tailor:
             raise serializers.ValidationError('Selected user is not a tailor')
         try:
             tailor_profile=value.tailor_profile
@@ -999,7 +1016,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
         # Requirement: Automatically set payment status to 'paid' for walk-in orders created by tailors
         request = self.context.get('request')
-        if request and request.user.role == 'TAILOR' and service_mode == 'walk_in':
+        if request and request.user.is_tailor and service_mode == 'walk_in':
             validated_data['payment_status'] = 'paid'
 
         order = Order.objects.create(**validated_data)
@@ -1151,7 +1168,6 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         if not request or not request.user:
             return attrs
         
-        user_role = request.user.role
         new_status = attrs.get('status', instance.status)
         new_rider_status = attrs.get('rider_status', instance.rider_status)
         new_tailor_status = attrs.get('tailor_status', instance.tailor_status)
@@ -1164,7 +1180,6 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
             new_status=new_status if new_status != instance.status else None,
             new_rider_status=new_rider_status if new_rider_status != instance.rider_status else None,
             new_tailor_status=new_tailor_status if new_tailor_status != instance.tailor_status else None,
-            user_role=user_role,
             user=request.user
         )
         
@@ -1176,7 +1191,6 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         """Update order using OrderStatusTransitionService"""
         request = self.context.get('request')
         user = request.user if request else None
-        user_role = user.role if user else None
         
         # Extract status fields
         new_status = validated_data.pop('status', None)
@@ -1197,7 +1211,6 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
                 new_status=new_status,
                 new_rider_status=new_rider_status,
                 new_tailor_status=new_tailor_status,
-                user_role=user_role,
                 user=user,
                 notes=notes
             )
@@ -1298,7 +1311,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     custom_styles = serializers.SerializerMethodField()
     items = OrderItemSerializer(source='order_items', many=True, read_only=True)
     rider_status = serializers.CharField(read_only=True)
-    tailor_status = serializers.SerializerMethodField()
+    tailor_status_display = serializers.SerializerMethodField()
     status_info = serializers.SerializerMethodField()
     pricing_summary = serializers.SerializerMethodField()
     has_rating = serializers.SerializerMethodField()
@@ -1316,6 +1329,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'status',
             'rider_status',
             'tailor_status',
+            'tailor_status_display',
             'stitching_price',
             'total_amount',
             'pricing_summary',
@@ -1343,7 +1357,7 @@ class OrderListSerializer(serializers.ModelSerializer):
         full_name = obj.customer.get_full_name().strip()
         return full_name if full_name else obj.customer.username
 
-    def get_tailor_status(self, obj):
+    def get_tailor_status_display(self, obj):
         """Get translated tailor status display name"""
         request = self.context.get('request')
         language = get_language_from_request(request) if request else 'en'
@@ -1425,11 +1439,23 @@ class OrderListSerializer(serializers.ModelSerializer):
         if not request or not request.user:
             return None
         
-        user_role = request.user.role
-        
         # Get allowed transitions from service
         from apps.orders.services import OrderStatusTransitionService
-        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, user_role)
+        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user)
+        
+        # Determine effective role for labeling purposes
+        if request.user.is_admin:
+            user_role = 'ADMIN'
+        elif obj.tailor == request.user:
+            user_role = 'TAILOR'
+        elif obj.rider == request.user:
+            user_role = 'RIDER'
+        elif obj.customer == request.user:
+            user_role = 'USER'
+        else:
+            if request.user.is_tailor: user_role = 'TAILOR'
+            elif request.user.is_rider: user_role = 'RIDER'
+            else: user_role = 'USER'
         
         # Build next available actions
         next_actions = []
@@ -1519,7 +1545,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'current_status': obj.status,
             'current_rider_status': obj.rider_status,
             'current_tailor_status': obj.tailor_status,
-            'current_tailor_status_display': self.get_tailor_status(obj),
+            'current_tailor_status_display': self.get_tailor_status_display(obj),
             'next_available_actions': next_actions,
             'can_cancel': can_cancel,
             'cancel_reason': cancel_reason,

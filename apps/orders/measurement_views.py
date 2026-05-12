@@ -28,7 +28,7 @@ class MeasurementEligibilityView(APIView):
     
     def get(self, request):
         # Only customers can check eligibility
-        if request.user.role != 'USER':
+        if not request.user.is_customer:
             return api_response(
                 success=False,
                 message='Only customers can check measurement eligibility',

@@ -65,7 +65,7 @@ class RiderUpdateLocationView(APIView):
             )
         
         # Verify user is a rider
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="Only riders can update location",
@@ -360,17 +360,11 @@ class AdminTrackingView(APIView):
         order = get_object_or_404(Order, id=order_id)
         
         # Check permissions
-        user_role = request.user.role
-        has_access = False
+        is_admin = request.user.is_admin
+        is_assigned_tailor = request.user.is_tailor and order.tailor == request.user
+        is_assigned_rider = request.user.is_rider and order.rider == request.user
         
-        if user_role == 'ADMIN':
-            has_access = True
-        elif user_role == 'TAILOR' and order.tailor == request.user:
-            has_access = True
-        elif user_role == 'RIDER' and order.rider == request.user:
-            has_access = True
-        
-        if not has_access:
+        if not (is_admin or is_assigned_tailor or is_assigned_rider):
             return api_response(
                 success=False,
                 message="You do not have permission to view this tracking information",
@@ -433,19 +427,13 @@ class AdminTrackingRouteView(APIView):
         order = get_object_or_404(Order, id=order_id)
         
         # Check permissions (admin or tailor)
-        user_role = request.user.role
-        if user_role not in ['ADMIN', 'TAILOR']:
+        is_admin = request.user.is_admin
+        is_assigned_tailor = request.user.is_tailor and order.tailor == request.user
+
+        if not (is_admin or is_assigned_tailor):
             return api_response(
                 success=False,
-                message="Only admin and tailor can view route data",
-                status_code=status.HTTP_403_FORBIDDEN,
-                request=request
-            )
-        
-        if user_role == 'TAILOR' and order.tailor != request.user:
-            return api_response(
-                success=False,
-                message="You can only view route data for your own orders",
+                message="You do not have permission to view route data",
                 status_code=status.HTTP_403_FORBIDDEN,
                 request=request
             )

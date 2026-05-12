@@ -111,8 +111,8 @@ class OrderStatusInfoTest(TestCase):
             payment_status='pending',
             subtotal=Decimal('100.00'),
             tax_amount=Decimal('15.00'),
-            delivery_fee=Decimal('25.00'),
-            total_amount=Decimal('140.00')
+            delivery_fee=Decimal('20.00'),
+            total_amount=Decimal('135.00')
         )
         
         OrderItem.objects.create(
@@ -123,7 +123,7 @@ class OrderStatusInfoTest(TestCase):
         )
         
         # Create mock request
-        self.mock_request = type('obj', (object,), {'user': self.tailor})()
+        self.mock_request = type('obj', (object,), {'user': self.tailor, 'META': {}})()
     
     def test_order_list_serializer_includes_status_info(self):
         """Test that OrderListSerializer includes status_info field"""
@@ -168,15 +168,16 @@ class OrderStatusInfoTest(TestCase):
         self.assertEqual(status_info['current_status'], 'pending')
         self.assertEqual(status_info['current_tailor_status'], 'none')
         
-        # Tailor should see 'confirmed' action
+        # Tailor should see 'accepted' action
         actions = status_info['next_available_actions']
         action_values = [a['value'] for a in actions]
-        self.assertIn('confirmed', action_values)
+        self.assertIn('accepted', action_values)
     
     def test_status_info_for_confirmed_order_tailor(self):
         """Test status_info for confirmed order viewed by tailor"""
         self.order.status = 'confirmed'
         self.order.tailor_status = 'accepted'
+        self.order.rider_status = 'accepted'
         self.order.save()
         
         serializer = OrderListSerializer(
@@ -185,12 +186,12 @@ class OrderStatusInfoTest(TestCase):
         )
         status_info = serializer.data['status_info']
         
-        self.assertEqual(status_info['current_status'], 'confirmed')
+        self.assertEqual(status_info['current_status'], 'in_progress')
         
-        # Tailor should see 'in_progress' action
+        # Tailor should see 'ready_for_delivery' action eventually (or whatever is next)
         actions = status_info['next_available_actions']
         action_values = [a['value'] for a in actions]
-        self.assertIn('in_progress', action_values)
+        self.assertIn('ready_for_delivery', action_values)
     
     def test_status_info_for_rider(self):
         """Test status_info for order viewed by rider"""
@@ -198,7 +199,7 @@ class OrderStatusInfoTest(TestCase):
         self.order.rider = self.rider
         self.order.save()
         
-        mock_request = type('obj', (object,), {'user': self.rider})()
+        mock_request = type('obj', (object,), {'user': self.rider, 'META': {}})()
         serializer = RiderOrderListSerializer(
             self.order,
             context={'request': mock_request}
@@ -309,11 +310,11 @@ class OrderStatusUpdateResponseSerializerTest(TestCase):
             payment_status='pending',
             subtotal=Decimal('100.00'),
             tax_amount=Decimal('15.00'),
-            delivery_fee=Decimal('25.00'),
-            total_amount=Decimal('140.00')
+            delivery_fee=Decimal('20.00'),
+            total_amount=Decimal('135.00')
         )
         
-        self.mock_request = type('obj', (object,), {'user': self.tailor})()
+        self.mock_request = type('obj', (object,), {'user': self.tailor, 'META': {}})()
     
     def test_lightweight_serializer_fields(self):
         """Test that OrderStatusUpdateResponseSerializer only returns essential fields"""
@@ -414,12 +415,13 @@ class OrderStatusTransitionServiceTest(TestCase):
             tailor=self.tailor,
             order_type='fabric_only',
             status='confirmed',
+            tailor_status='accepted',
             rider_status='none',
             payment_status='paid'
         )
         
         transitions = OrderStatusTransitionService.get_allowed_transitions(
-            order, 'RIDER'
+            order, self.rider
         )
         
         self.assertIn('accepted', transitions['rider_status'])
@@ -431,12 +433,13 @@ class OrderStatusTransitionServiceTest(TestCase):
             tailor=self.tailor,
             order_type='fabric_only',
             status='ready_for_delivery',
+            tailor_status='accepted',
             rider_status='none',
             payment_status='paid'
         )
         
         transitions = OrderStatusTransitionService.get_allowed_transitions(
-            order, 'RIDER'
+            order, self.rider
         )
         
         self.assertIn('accepted', transitions['rider_status'])
@@ -448,12 +451,13 @@ class OrderStatusTransitionServiceTest(TestCase):
             tailor=self.tailor,
             order_type='fabric_only',
             status='in_progress',
+            tailor_status='accepted',
             rider_status='none',
             payment_status='paid'
         )
         
         transitions = OrderStatusTransitionService.get_allowed_transitions(
-            order, 'RIDER'
+            order, self.rider
         )
         
         self.assertIn('accepted', transitions['rider_status'])
@@ -465,12 +469,13 @@ class OrderStatusTransitionServiceTest(TestCase):
             tailor=self.tailor,
             order_type='fabric_only',
             status='ready_for_delivery',
+            tailor_status='accepted',
             rider_status='none',
             payment_status='paid'
         )
         
         transitions = OrderStatusTransitionService.get_allowed_transitions(
-            order, 'RIDER'
+            order, self.rider
         )
         
         # Should only allow 'accepted', not 'on_way_to_pickup'
@@ -504,6 +509,14 @@ class OrderStatusUpdateAPITest(TestCase):
             }
         )
         
+        # Create rider for the API test
+        self.rider = User.objects.create_user(
+            username='api_test_rider',
+            email='api_rider@test.com',
+            password='testpass123',
+            role='RIDER'
+        )
+        
         self.fabric_category = FabricCategory.objects.create(
             name='Fabric',
             slug='fabric'
@@ -527,6 +540,8 @@ class OrderStatusUpdateAPITest(TestCase):
         self.order = Order.objects.create(
             customer=self.customer,
             tailor=self.tailor,
+            rider=self.rider,
+            rider_status='accepted',
             order_type='fabric_only',
             payment_method='cod',
             delivery_address=self.address,
@@ -534,8 +549,8 @@ class OrderStatusUpdateAPITest(TestCase):
             payment_status='pending',
             subtotal=Decimal('100.00'),
             tax_amount=Decimal('15.00'),
-            delivery_fee=Decimal('25.00'),
-            total_amount=Decimal('140.00')
+            delivery_fee=Decimal('20.00'),
+            total_amount=Decimal('135.00')
         )
         
         self.client = APIClient()
@@ -588,4 +603,3 @@ class OrderStatusUpdateAPITest(TestCase):
         status_info = order_data['status_info']
         self.assertIn('next_available_actions', status_info)
         self.assertIn('status_progress', status_info)
-

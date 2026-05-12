@@ -98,8 +98,8 @@ class TestCustomerNotificationView(APIView):
     def post(self, request):
         from .services import NotificationService
         
-        # Verify user is a customer (role is 'USER' in model)
-        if request.user.role != 'USER':
+        # Verify user is a customer
+        if not request.user.is_customer:
             return api_response(
                 success=False,
                 message="This endpoint is only for customers",
@@ -142,7 +142,7 @@ class TestTailorNotificationView(APIView):
         from .services import NotificationService
         
         # Verify user is a tailor
-        if request.user.role != 'TAILOR':
+        if not request.user.is_tailor:
             return api_response(
                 success=False,
                 message="This endpoint is only for tailors",
@@ -185,7 +185,7 @@ class TestRiderNotificationView(APIView):
         from .services import NotificationService
         
         # Verify user is a rider
-        if request.user.role != 'RIDER':
+        if not request.user.is_rider:
             return api_response(
                 success=False,
                 message="This endpoint is only for riders",

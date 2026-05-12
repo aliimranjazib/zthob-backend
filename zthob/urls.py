@@ -200,26 +200,33 @@ def custom_admin_index(request, extra_context=None):
 # Override the index view
 admin.site.index = custom_admin_index
 
+# API URL Patterns (shared between legacy and v1)
+api_patterns = [
+    path('accounts/', include('apps.accounts.urls')),
+    path('tailors/', include('apps.tailors.urls')),
+    path('customers/', include('apps.customers.urls')),
+    path('orders/', include('apps.orders.urls')),
+    path('riders/', include('apps.riders.urls')),
+    path('notifications/', include('apps.notifications.urls')),
+    path('deliveries/', include('apps.deliveries.urls')),
+    path('customization/', include('apps.customization.urls')),
+    path('finance/', include('apps.finance.urls')),
+    path('config/', include('apps.core.urls')),
+]
+
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path('api/accounts/',include('apps.accounts.urls')),
-    path('api/tailors/',include('apps.tailors.urls')),
-    path('api/customers/',include('apps.customers.urls')),
-    path('api/orders/',include('apps.orders.urls')),
-    path('api/riders/',include('apps.riders.urls')),
-    path('api/notifications/',include('apps.notifications.urls')),
-    path('api/deliveries/',include('apps.deliveries.urls')),
-    path('api/customization/',include('apps.customization.urls')),
-    path('api/finance/',include('apps.finance.urls')),
     
-    # System Configuration
-    path('api/config/', include('apps.core.urls')),
+    # 1. Legacy API routes (No version prefix - for backward compatibility)
+    path('api/', include(api_patterns)),
+    
+    # 2. Versioned API routes (With v1 prefix)
+    path('api/v1/', include((api_patterns, 'v1'), namespace='v1')),
     
     # API documentation URLs
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/schema/swagger-ui/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path("api/schema/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
-    
 ]
 
 if settings.DEBUG:

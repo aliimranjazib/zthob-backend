@@ -21,6 +21,36 @@ class CustomUser(AbstractUser):
         ('ar', 'Arabic'),
     )
     language = models.CharField(max_length=2, choices=LANGUAGE_CHOICES, default='ar')
+    
+    @property
+    def is_customer(self):
+        """Check if user has a customer profile or USER role"""
+        return hasattr(self, 'customer_profile') or self.role == 'USER'
+    
+    @property
+    def is_tailor(self):
+        """Check if user has a tailor profile or TAILOR role"""
+        return hasattr(self, 'tailor_profile') or self.role == 'TAILOR'
+    
+    @property
+    def is_rider(self):
+        """Check if user has a rider profile or RIDER role"""
+        return hasattr(self, 'rider_profile') or self.role == 'RIDER'
+
+    @property
+    def is_admin(self):
+        """Check if user is a staff member or admin"""
+        return self.is_staff or self.role == 'ADMIN'
+
+    def get_all_roles(self):
+        """Return list of all active roles for this user"""
+        roles = []
+        if self.is_customer: roles.append('USER')
+        if self.is_tailor: roles.append('TAILOR')
+        if self.is_rider: roles.append('RIDER')
+        if self.is_admin: roles.append('ADMIN')
+        return roles
+
     USERNAME_FIELD='username'
     REQUIRED_FIELDS=[]
     
