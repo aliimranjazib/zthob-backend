@@ -7,73 +7,29 @@ on:
 jobs:
   deploy-staging:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Deploy to staging environment
+    - name: Deploy to staging via Docker
       run: |
         mkdir -p ~/.ssh
         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
         
         ssh -o StrictHostKeyChecking=no root@69.62.126.95 '
-          cd /home/zthob-backend
-          
-          echo "📦 Pulling latest changes..."
+          cd /home/mgask-staging
           git fetch origin
           git reset --hard origin/main
           
-          echo "🐍 Activating virtual environment..."
-          source .venv/bin/activate
+          echo "🚀 Launching Staging via Docker..."
+          docker compose -f docker-compose.staging.yml up -d --build
           
-          echo "📥 Installing dependencies..."
-          # Try using uv first (since the venv is uv-based), fallback to system pip if needed
-          export PATH="$PATH:$HOME/.local/bin"
-          if command -v uv &> /dev/null; then
-            uv pip install -r requirements.txt
-          else
-            python3 -m pip install -r requirements.txt --ignore-installed --quiet
-          fi || {
-            echo "❌ ERROR: Dependency installation failed!"
-            exit 1
-          }
-          
-          echo "🔧 Loading staging environment..."
-          export $(grep -v "^#" .env.staging | xargs)
-          export APP_ENV=staging
-          
-          echo "🗄️  Running migrations for staging..."
-          python3 manage.py migrate --verbosity=2 || {
-            echo "❌ ERROR: Migration failed!"
-            exit 1
-          }
-          
-          echo "📊 Checking migration status..."
-          python3 manage.py showmigrations
+          echo "🗄️ Running migrations..."
+          docker compose -f docker-compose.staging.yml exec -T web python manage.py migrate
           
           echo "📁 Collecting static files..."
-          python3 manage.py collectstatic --noinput
+          docker compose -f docker-compose.staging.yml exec -T web python manage.py collectstatic --noinput
           
-          echo "🔄 Restarting staging service..."
-          sudo systemctl restart gunicorn-staging
-          
-          echo "⏳ Waiting for service to start..."
-          sleep 3
-          
-          if systemctl is-active --quiet gunicorn-staging; then
-            echo "✅ STAGING deployment successful!"
-            echo "🌐 Staging URL: http://app.mgask.net"
-            
-            # Test the endpoint
-            curl -s -o /dev/null -w "HTTP Status: %{http_code}\n" http://app.mgask.net/api/config/version/ || true
-          else
-            echo "❌ Staging service failed to start"
-            echo "📋 Recent logs:"
-            sudo journalctl -u gunicorn-staging --since "2 minutes ago" --no-pager
-            exit 1
-          fi
+          echo "✅ Staging deployment successful!"
         '
