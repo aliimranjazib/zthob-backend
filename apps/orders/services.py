@@ -602,13 +602,16 @@ class OrderStatusTransitionService:
         
         # Handle measurement service orders specifically
         if order.order_type == 'measurement_service':
-            res = OrderStatusTransitionService._get_measurement_service_transitions(order, user_role)
-        elif order.service_mode == 'walk_in':
-            res = OrderStatusTransitionService._get_walk_in_transitions(order, user_role)
-        elif order.order_type == 'fabric_only':
-            res = OrderStatusTransitionService._get_walk_in_transitions(order, user_role) if order.service_mode == 'walk_in' else OrderStatusTransitionService._get_fabric_only_transitions(order, user_role)
-        else:  # fabric_with_stitching
-            return OrderStatusTransitionService._get_fabric_with_stitching_transitions(order, user_role)
+            return OrderStatusTransitionService._get_measurement_service_transitions(order, user_role)
+        
+        if order.service_mode == 'walk_in':
+            return OrderStatusTransitionService._get_walk_in_transitions(order, user_role)
+        
+        if order.order_type == 'fabric_only':
+            return OrderStatusTransitionService._get_fabric_only_transitions(order, user_role)
+        
+        # Default: fabric_with_stitching
+        return OrderStatusTransitionService._get_fabric_with_stitching_transitions(order, user_role)
     
     @staticmethod
     def _get_fabric_only_transitions(order, user_role):
