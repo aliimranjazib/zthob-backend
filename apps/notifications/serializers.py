@@ -12,6 +12,7 @@ class FCMDeviceTokenSerializer(serializers.ModelSerializer):
             'token',
             'device_type',
             'device_id',
+            'app_role',
             'is_active',
             'last_used_at',
             'created_at',
@@ -33,6 +34,7 @@ class FCMDeviceTokenSerializer(serializers.ModelSerializer):
         token = validated_data['token']
         device_id = validated_data.get('device_id')
         device_type = validated_data.get('device_type', 'android')
+        app_role = validated_data.get('app_role', 'CUSTOMER')
         
         # Check if token already exists
         existing_token = FCMDeviceToken.objects.filter(token=token).first()
@@ -45,24 +47,27 @@ class FCMDeviceTokenSerializer(serializers.ModelSerializer):
                 existing_token.user = user
                 existing_token.is_active = True
                 existing_token.device_type = device_type
+                existing_token.app_role = app_role
                 if device_id:
                     existing_token.device_id = device_id
-                existing_token.save(update_fields=['user', 'is_active', 'device_type', 'device_id', 'last_used_at'])
+                existing_token.save(update_fields=['user', 'is_active', 'device_type', 'device_id', 'app_role', 'last_used_at'])
                 return existing_token
             else:
                 # Same user, just reactivate and update
                 existing_token.is_active = True
                 existing_token.device_type = device_type
+                existing_token.app_role = app_role
                 if device_id:
                     existing_token.device_id = device_id
-                existing_token.save(update_fields=['is_active', 'device_type', 'device_id', 'last_used_at'])
+                existing_token.save(update_fields=['is_active', 'device_type', 'device_id', 'app_role', 'last_used_at'])
                 return existing_token
         
         # Check if user already has a token for this device_id (different token for same device)
         if device_id:
             existing_device_token = FCMDeviceToken.objects.filter(
                 user=user,
-                device_id=device_id
+                device_id=device_id,
+                app_role=app_role
             ).first()
             
             if existing_device_token:
