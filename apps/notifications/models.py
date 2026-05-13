@@ -13,6 +13,12 @@ class FCMDeviceToken(BaseModel):
         ('web', 'Web'),
     )
     
+    APP_ROLE_CHOICES = (
+        ('CUSTOMER', 'Customer'),
+        ('TAILOR', 'Tailor'),
+        ('RIDER', 'Rider'),
+    )
+    
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -44,6 +50,13 @@ class FCMDeviceToken(BaseModel):
         help_text="Whether this token is currently active"
     )
     
+    app_role = models.CharField(
+        max_length=20,
+        choices=APP_ROLE_CHOICES,
+        default='CUSTOMER',
+        help_text="The app role associated with this token"
+    )
+    
     last_used_at = models.DateTimeField(
         auto_now=True,
         help_text="Last time this token was used"
@@ -52,7 +65,7 @@ class FCMDeviceToken(BaseModel):
     class Meta:
         verbose_name = "FCM Device Token"
         verbose_name_plural = "FCM Device Tokens"
-        unique_together = [['user', 'device_id']]
+        unique_together = [['user', 'device_id', 'app_role']]
         indexes = [
             models.Index(fields=['user', 'is_active']),
             models.Index(fields=['token']),

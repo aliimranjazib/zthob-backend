@@ -60,8 +60,14 @@ class CustomUser(AbstractUser):
         
         if role_name == 'TAILOR' and hasattr(self, 'tailor_profile'):
             self.tailor_profile.delete()
+            # Delete FCM tokens for this role
+            from apps.notifications.models import FCMDeviceToken
+            FCMDeviceToken.objects.filter(user=self, app_role='TAILOR').delete()
         elif role_name == 'RIDER' and hasattr(self, 'rider_profile'):
             self.rider_profile.delete()
+            # Delete FCM tokens for this role
+            from apps.notifications.models import FCMDeviceToken
+            FCMDeviceToken.objects.filter(user=self, app_role='RIDER').delete()
         
         # If the removed role was the primary role, revert to USER
         if self.role == role_name:

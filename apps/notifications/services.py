@@ -81,7 +81,8 @@ class NotificationService:
         notification_type: str,
         category: str,
         data: Optional[Dict] = None,
-        priority: str = 'high'
+        priority: str = 'high',
+        app_role: Optional[str] = None
     ) -> bool:
         """
         Send push notification to a user
@@ -136,11 +137,15 @@ class NotificationService:
                 )
                 return True  # Return True because notification was logged successfully
             
-            # Get active FCM tokens for the user
-            fcm_tokens = FCMDeviceToken.objects.filter(
-                user=user,
-                is_active=True
-            )
+            # Get active FCM tokens for the user, filtered by role if provided
+            fcm_token_filter = {
+                'user': user,
+                'is_active': True
+            }
+            if app_role:
+                fcm_token_filter['app_role'] = app_role
+                
+            fcm_tokens = FCMDeviceToken.objects.filter(**fcm_token_filter)
             
             if not fcm_tokens.exists():
                 logger.warning(f"No active FCM tokens found for user {user.id}")
@@ -354,7 +359,8 @@ class NotificationService:
                         'old_status': old_status,
                         'customer_name': customer_name,
                     },
-                    priority='high'
+                    priority='high',
+                    app_role='CUSTOMER'
                 )
         
         # Notify tailor
@@ -374,7 +380,8 @@ class NotificationService:
                         'old_status': old_status,
                         'customer_name': customer_name,
                     },
-                    priority='high'
+                    priority='high',
+                    app_role='TAILOR'
                 )
         
         # Notify rider
@@ -394,7 +401,8 @@ class NotificationService:
                         'old_status': old_status,
                         'customer_name': customer_name,
                     },
-                    priority='high'
+                    priority='high',
+                    app_role='RIDER'
                 )
     
     @staticmethod
@@ -450,7 +458,8 @@ class NotificationService:
                         'customer_name': customer_name,
                         'tailor_name': getattr(order.tailor.tailor_profile, 'shop_name', order.tailor.username) if order.tailor else 'Tailor',
                     },
-                    priority='high'
+                    priority='high',
+                    app_role='CUSTOMER'
                 )
         
         # Notify tailor
@@ -472,7 +481,8 @@ class NotificationService:
                         'customer_name': customer_name,
                         'tailor_name': getattr(order.tailor.tailor_profile, 'shop_name', order.tailor.username) if order.tailor else 'Tailor',
                     },
-                    priority='high'
+                    priority='high',
+                    app_role='TAILOR'
                 )
         
        
@@ -498,7 +508,8 @@ class NotificationService:
                         'customer_name': customer_name,
                         'tailor_name': getattr(order.tailor.tailor_profile, 'shop_name', order.tailor.username) if order.tailor else 'Tailor',
                     },
-                    priority='high'
+                    priority='high',
+                    app_role='RIDER'
                 )
     
     @staticmethod
@@ -574,7 +585,8 @@ class NotificationService:
                         'customer_name': customer_name,
                         'rider_name': rider_name,
                     },
-                    priority='high'
+                    priority='high',
+                    app_role='CUSTOMER'
                 )
         
         # Notify tailor (if assigned)
@@ -596,7 +608,8 @@ class NotificationService:
                         'customer_name': customer_name,
                         'rider_name': rider_name,
                     },
-                    priority='high'
+                    priority='high',
+                    app_role='TAILOR'
                 )
         
         # Notify rider
@@ -618,7 +631,8 @@ class NotificationService:
                         'customer_name': customer_name,
                         'rider_name': rider_name,
                     },
-                    priority='high'
+                    priority='high',
+                    app_role='RIDER'
                 )
     
     @staticmethod
@@ -659,7 +673,8 @@ class NotificationService:
                         'old_payment_status': old_status,
                         'total_amount': total_amount,
                     },
-                    priority='high'
+                    priority='high',
+                    app_role='CUSTOMER'
                 )
         
         # Notify tailor
@@ -680,7 +695,8 @@ class NotificationService:
                         'customer': customer_name,
                         'total_amount': total_amount,
                     },
-                    priority='high'
+                    priority='high',
+                    app_role='TAILOR'
                 )
     
     @staticmethod
@@ -703,7 +719,8 @@ class NotificationService:
                     'rider_id': rider.id,
                     'rider_name': rider_name,
                 },
-                priority='high'
+                priority='high',
+                app_role='CUSTOMER'
             )
         
         # Notify tailor
@@ -720,7 +737,8 @@ class NotificationService:
                     'rider_id': rider.id,
                     'rider_name': rider_name,
                 },
-                priority='high'
+                priority='high',
+                app_role='TAILOR'
             )
         
         # Notify rider
@@ -734,7 +752,8 @@ class NotificationService:
                 'order_id': order.id,
                 'order_number': order_number,
             },
-            priority='high'
+            priority='high',
+            app_role='RIDER'
         )
     
     @staticmethod
@@ -768,7 +787,8 @@ class NotificationService:
                     'rider_id': rider.id,
                     'rider_name': rider_name,
                 },
-                priority='high'
+                priority='high',
+                app_role='CUSTOMER'
             )
         
         # Notify tailor - IMPORTANT: This tells tailor they can now start stitching
@@ -793,7 +813,8 @@ class NotificationService:
                     'rider_id': rider.id,
                     'rider_name': rider_name,
                 },
-                priority='high'
+                priority='high',
+                app_role='TAILOR'
             )
 
         
@@ -808,7 +829,8 @@ class NotificationService:
                 'order_id': order.id,
                 'order_number': order_number,
             },
-            priority='high'
+            priority='high',
+            app_role='RIDER'
         )
 
     @staticmethod
