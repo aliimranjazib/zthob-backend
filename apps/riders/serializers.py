@@ -508,7 +508,7 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
         
         # Get allowed transitions from service
         from apps.orders.services import OrderStatusTransitionService
-        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user)
+        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user, requested_role='RIDER')
         
         # Determine effective role for labeling purposes
         if request.user.is_admin:

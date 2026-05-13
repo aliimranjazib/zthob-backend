@@ -566,10 +566,15 @@ class OrderStatusTransitionService:
     ROLE_ADMIN = 'ADMIN'
     
     @staticmethod
-    def get_allowed_transitions(order, user):
+    def get_allowed_transitions(order, user, requested_role=None):
         """
         Get allowed status transitions for a given order and user.
         
+        Args:
+            order: Order instance
+            user: User instance
+            requested_role: Optional role string to force identification for multi-role users.
+            
         Returns:
             dict: {
                 'status': [list of allowed main statuses],
@@ -580,8 +585,16 @@ class OrderStatusTransitionService:
         if not user or not user.is_authenticated:
             return {'status': [], 'rider_status': [], 'tailor_status': []}
 
-        # Determine effective role based on relationship to order
-        if user.is_admin:
+        # Determine effective role
+        if requested_role == 'ADMIN' and user.is_admin:
+            user_role = OrderStatusTransitionService.ROLE_ADMIN
+        elif requested_role == 'RIDER' and user.is_rider:
+            user_role = OrderStatusTransitionService.ROLE_RIDER
+        elif requested_role == 'TAILOR' and user.is_tailor:
+            user_role = OrderStatusTransitionService.ROLE_TAILOR
+        elif requested_role == 'USER':
+            user_role = OrderStatusTransitionService.ROLE_USER
+        elif user.is_admin:
             user_role = OrderStatusTransitionService.ROLE_ADMIN
         elif order.rider == user:
             user_role = OrderStatusTransitionService.ROLE_RIDER
