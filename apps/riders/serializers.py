@@ -513,16 +513,16 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
         # Determine effective role for labeling purposes
         if request.user.is_admin:
             user_role = 'ADMIN'
-        elif obj.rider == request.user:
+        elif request.user.is_rider and (obj.rider is None or obj.rider == request.user):
+            # Prioritize RIDER role if user has a rider profile and order is available or already assigned
             user_role = 'RIDER'
         elif obj.tailor == request.user:
             user_role = 'TAILOR'
         elif obj.customer == request.user:
             user_role = 'USER'
         else:
-            # For unassigned orders, prioritize RIDER role if they have the profile
-            if request.user.is_rider: user_role = 'RIDER'
-            elif request.user.is_tailor: user_role = 'TAILOR'
+            # Fallback for other role types
+            if request.user.is_tailor: user_role = 'TAILOR'
             else: user_role = 'USER'
         
         # Build next available actions

@@ -290,12 +290,11 @@ class NotificationService:
         # Map status to notification messages
         status_messages = {
             'pending': {
-                'customer': 'Your order #{order_number} has been placed successfully',
                 'tailor': 'New order #{order_number} received from {customer_name}',
             },
             'confirmed': {
-                'customer': 'Tailor has accepted your order #{order_number}',
-                'tailor': 'You have confirmed order #{order_number}',
+                # Only rider notified of acceptance to avoid multi-role duplicates
+                'rider': 'Order #{order_number} has been accepted by tailor and is ready for pickup',
             },
             'in_progress': {
                 'customer': 'Your order #{order_number} is now in progress',
@@ -414,8 +413,6 @@ class NotificationService:
         # Map tailor_status to notification messages
         tailor_status_messages = {
             'accepted': {
-                'customer': 'Tailor has accepted your order #{order_number}',
-                'tailor': 'You have accepted order #{order_number}',
                 'rider': 'Order #{order_number} has been accepted by tailor and is ready for pickup',
             },
             'in_progress': {
@@ -525,44 +522,30 @@ class NotificationService:
         # Map rider_status to notification messages
         rider_status_messages = {
             'accepted': {
-                'customer': 'Rider has accepted your order #{order_number}',
-                'tailor': 'Rider has accepted order #{order_number}',
-                'rider': 'You have accepted order #{order_number}',
+                'tailor': 'Rider has accepted order #{order_number} and will handle the task',
             },
             'on_way_to_measurement': {
                 'customer': 'Rider is on the way to take your measurements for order #{order_number}',
-                'tailor': 'Rider is on the way to customer for measurements - order #{order_number}',
-                'rider': 'You are on the way to take measurements for order #{order_number}',
             },
             'measuring': {
                 'customer': 'Rider is taking your measurements now for order #{order_number}',
-                'tailor': 'Rider is currently taking customer measurements - order #{order_number}',
-                'rider': 'Measurements in progress for order #{order_number}',
             },
             'measurement_taken': {
-                'customer': 'Your measurements have been completed for order #{order_number}' if is_measurement_order else 'Your measurements have been completed for order #{order_number}. Tailor will now start stitching.',
-                'tailor': 'Measurements ready for order #{order_number}' if is_measurement_order else 'Measurements ready for order #{order_number}. You can now start stitching.',
-                'rider': 'Measurements successfully recorded for order #{order_number}',
+                'customer': 'Your measurements have been completed for order #{order_number}' if is_measurement_order else 'Your measurements have been completed. Tailor will now start stitching.',
+                'tailor': 'Measurements ready for order #{order_number}. You can now start stitching.',
             },
             'on_way_to_pickup': {
-                'customer': 'Rider is on the way to pickup your order #{order_number} from tailor',
                 'tailor': 'Rider is on the way to pickup order #{order_number}',
-                'rider': 'You are on the way to pickup order #{order_number} from tailor',
             },
             'picked_up': {
                 'customer': 'Rider has picked up your order #{order_number} and is preparing for delivery',
-                'tailor': 'Rider has picked up order #{order_number}',
-                'rider': 'You have picked up order #{order_number} from tailor',
             },
             'on_way_to_delivery': {
                 'customer': 'Your order #{order_number} is on the way! Rider will arrive soon.',
-                'tailor': 'Order #{order_number} is now out for delivery',
-                'rider': 'You are delivering order #{order_number} to customer',
             },
             'delivered': {
                 'customer': 'Your order #{order_number} has been delivered successfully',
                 'tailor': 'Order #{order_number} has been delivered to customer',
-                'rider': 'Order #{order_number} delivery completed',
             },
         }
         
