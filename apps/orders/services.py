@@ -596,19 +596,17 @@ class OrderStatusTransitionService:
             user_role = OrderStatusTransitionService.ROLE_TAILOR
         else:
             user_role = OrderStatusTransitionService.ROLE_USER
-
+        
         if order.status == 'delivered' or order.status == 'cancelled':
             return {'status': [], 'rider_status': [], 'tailor_status': []}
         
         # Handle measurement service orders specifically
         if order.order_type == 'measurement_service':
-            return OrderStatusTransitionService._get_measurement_service_transitions(order, user_role)
-        
-        if order.service_mode == 'walk_in':
-            return OrderStatusTransitionService._get_walk_in_transitions(order, user_role)
-        
-        if order.order_type == 'fabric_only':
-            return OrderStatusTransitionService._get_walk_in_transitions(order, user_role) if order.service_mode == 'walk_in' else OrderStatusTransitionService._get_fabric_only_transitions(order, user_role)
+            res = OrderStatusTransitionService._get_measurement_service_transitions(order, user_role)
+        elif order.service_mode == 'walk_in':
+            res = OrderStatusTransitionService._get_walk_in_transitions(order, user_role)
+        elif order.order_type == 'fabric_only':
+            res = OrderStatusTransitionService._get_walk_in_transitions(order, user_role) if order.service_mode == 'walk_in' else OrderStatusTransitionService._get_fabric_only_transitions(order, user_role)
         else:  # fabric_with_stitching
             return OrderStatusTransitionService._get_fabric_with_stitching_transitions(order, user_role)
     
