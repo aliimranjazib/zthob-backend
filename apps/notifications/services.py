@@ -887,7 +887,7 @@ class NotificationService:
             try:
                 assigned_rider = CustomUser.objects.get(
                     id=assigned_rider_id,
-                    role='RIDER',
+                    rider_profile__isnull=False,
                     is_active=True,
                     rider_profile__review__review_status='approved',
                     rider_profile__is_available=True
@@ -927,7 +927,7 @@ class NotificationService:
             
         # No specific assignment or assigned rider not available - broadcast to all
         active_riders = CustomUser.objects.filter(
-            role='RIDER',
+            rider_profile__isnull=False,
             is_active=True,
             rider_profile__review__review_status='approved',
             rider_profile__is_available=True

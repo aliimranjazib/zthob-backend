@@ -583,16 +583,17 @@ class OrderStatusTransitionService:
         # Determine effective role based on relationship to order
         if user.is_admin:
             user_role = OrderStatusTransitionService.ROLE_ADMIN
-        elif order.tailor == user:
-            user_role = OrderStatusTransitionService.ROLE_TAILOR
         elif order.rider == user:
             user_role = OrderStatusTransitionService.ROLE_RIDER
+        elif order.tailor == user:
+            user_role = OrderStatusTransitionService.ROLE_TAILOR
         elif order.customer == user:
             user_role = OrderStatusTransitionService.ROLE_USER
+        elif user.is_rider and (order.rider is None or order.rider == user):
+            # Prioritize RIDER role if user has a rider profile and order is available or already assigned to them
+            user_role = OrderStatusTransitionService.ROLE_RIDER
         elif user.is_tailor:
             user_role = OrderStatusTransitionService.ROLE_TAILOR
-        elif user.is_rider:
-            user_role = OrderStatusTransitionService.ROLE_RIDER
         else:
             user_role = OrderStatusTransitionService.ROLE_USER
 
