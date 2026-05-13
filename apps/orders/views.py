@@ -435,7 +435,7 @@ class TailorAvailableOrdersView(APIView):
             if order_type:
                 orders = orders.filter(order_type=order_type)
             
-            serializer = OrderListSerializer(orders, many=True, context={'request': request})
+            serializer = OrderListSerializer(orders, many=True, context={'request': request, 'role': 'TAILOR'})
             
             return api_response(
                 success=True,
@@ -555,7 +555,7 @@ class TailorOrderListView(APIView):
                     
                 orders = orders.exclude(status__in=['ready_for_delivery', 'ready_for_pickup', 'delivered', 'collected', 'cancelled'])
             
-            serializer = OrderListSerializer(orders, many=True, context={'request': request})
+            serializer = OrderListSerializer(orders, many=True, context={'request': request, 'role': 'TAILOR'})
             
             return api_response(
                 success=True,
@@ -603,7 +603,7 @@ class TailorPaidOrdersView(APIView):
             if order_type:
                 orders = orders.filter(order_type=order_type)
             
-            serializer = OrderListSerializer(orders, many=True, context={'request': request})
+            serializer = OrderListSerializer(orders, many=True, context={'request': request, 'role': 'TAILOR'})
             
             return api_response(
                 success=True,
@@ -643,7 +643,7 @@ class TailorOrderDetailView(APIView):
                 tailor=request.user
             )
             
-            serializer = OrderSerializer(order, context={'request': request})
+            serializer = OrderSerializer(order, context={'request': request, 'role': 'TAILOR'})
             
             return api_response(
                 success=True,

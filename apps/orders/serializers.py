@@ -370,7 +370,8 @@ class OrderSerializer(serializers.ModelSerializer):
         
         # Get allowed transitions from service
         from apps.orders.services import OrderStatusTransitionService
-        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user)
+        requested_role = self.context.get('role')
+        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user, requested_role=requested_role)
         
         # Determine effective role for labeling purposes
         if request.user.is_admin:
@@ -1441,7 +1442,8 @@ class OrderListSerializer(serializers.ModelSerializer):
         
         # Get allowed transitions from service
         from apps.orders.services import OrderStatusTransitionService
-        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user)
+        requested_role = self.context.get('role')
+        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user, requested_role=requested_role)
         
         # Determine effective role for labeling purposes
         if request.user.is_admin:
