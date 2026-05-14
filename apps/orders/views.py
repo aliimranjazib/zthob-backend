@@ -5,7 +5,8 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.db import transaction
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError, PermissionDenied
+from .actions import OrderActionManager
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema
 from .models import Order, OrderItem ,OrderStatusHistory
@@ -919,3 +920,72 @@ class WorkOrderPDFView(APIView):
             return api_response(success=False, message='Error generating work order PDF',
                               errors=str(e), status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                               request=request)
+
+class OrderActionView(APIView):
+    """
+    Unified endpoint for performing actions on an order.
+    POST /api/orders/{id}/action/
+    """
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Perform order action",
+        description="Generic endpoint to perform various actions on an order (e.g., accept, record_measurements, pickup).",
+        tags=["Orders"]
+    )
+    @transaction.atomic
+    def post(self, request, order_id):
+        order = get_object_or_404(Order, id=order_id)
+        action_key = request.data.get('action')
+        action_data = request.data.get('data', {})
+
+        if not action_key:
+            return api_response(
+                success=False,
+                message="Action key is required.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # 1. Get Action instance
+            action = OrderActionManager.get_action(action_key, order, request.user, action_data)
+            
+            # 2. Validate (Role and State)
+            action.validate()
+            
+            # 3. Execute logic
+            result_msg = action.execute()
+            
+            # 4. Run post-execution tasks
+            action.post_execute()
+
+            # Return success response with updated order info
+            response_serializer = OrderStatusUpdateResponseSerializer(order, context={'request': request})
+            return api_response(
+                success=True,
+                message=result_msg or "Action performed successfully.",
+                data=response_serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+
+        except ValidationError as e:
+            return api_response(
+                success=False,
+                message=str(e.detail[0] if isinstance(e.detail, list) else e.detail),
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        except PermissionDenied as e:
+            return api_response(
+                success=False,
+                message=str(e),
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Action error ({action_key}): {str(e)}", exc_info=True)
+            return api_response(
+                success=False,
+                message="An unexpected error occurred while performing the action.",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

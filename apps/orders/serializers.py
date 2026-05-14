@@ -8,6 +8,7 @@ from decimal import Decimal
 from django.db import transaction
 from apps.orders.services import OrderCalculationService
 from zthob.translations import get_language_from_request, translate_message
+from .actions import OrderActionManager
 
 
 User = get_user_model()
@@ -477,6 +478,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'current_tailor_status': obj.tailor_status,
             'current_tailor_status_display': self.get_tailor_status_display(obj),
             'next_available_actions': next_actions,
+            'available_actions': OrderActionManager.get_available_actions(obj, request.user),
             'can_cancel': can_cancel,
             'cancel_reason': cancel_reason,
             'status_progress': status_progress,
@@ -1016,9 +1018,12 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         validated_data.update(totals)
 
         # Requirement: Automatically set payment status to 'paid' for walk-in orders created by tailors
+        # Also auto-accept the order so it skips the 'Accept' step
         request = self.context.get('request')
         if request and request.user.is_tailor and service_mode == 'walk_in':
             validated_data['payment_status'] = 'paid'
+            validated_data['tailor_status'] = 'accepted'
+            validated_data['status'] = 'confirmed'
 
         order = Order.objects.create(**validated_data)
         
@@ -1549,6 +1554,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'current_tailor_status': obj.tailor_status,
             'current_tailor_status_display': self.get_tailor_status_display(obj),
             'next_available_actions': next_actions,
+            'available_actions': OrderActionManager.get_available_actions(obj, request.user),
             'can_cancel': can_cancel,
             'cancel_reason': cancel_reason,
             'status_progress': status_progress,
