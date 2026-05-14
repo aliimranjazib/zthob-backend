@@ -147,11 +147,17 @@ class RecordMeasurementsAction(BaseOrderAction):
         if self.order.status in ['delivered', 'collected', 'cancelled']:
             raise ValidationError("Cannot record measurements for a finalized order.")
 
-        # 2. Sequential Logic: Tailors shouldn't see this if already measured (avoids confusion)
+        # 2. Sequential & Role Logic
         user_roles = self.user.get_all_roles()
+        
+        # Tailor Check
         if 'TAILOR' in user_roles and self.order.tailor == self.user:
+            # Rule 1: Hide if already measured
             if self.order.all_items_have_measurements:
                 raise ValidationError("Measurements are already recorded.")
+            # Rule 2: Hide if it's Home Delivery (Rider's job)
+            if self.order.service_mode == 'home_delivery':
+                raise ValidationError("Rider must record measurements for home delivery orders.")
         
         # 3. Rider check
         if 'RIDER' in user_roles and self.order.rider == self.user:
