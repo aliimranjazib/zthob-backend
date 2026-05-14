@@ -70,7 +70,8 @@ class TailorAcceptOrderView(APIView):
             order=order,
             new_tailor_status='accepted',
             user=request.user,
-            notes='Tailor accepted the order'
+            notes='Tailor accepted the order',
+            requested_role='TAILOR'
         )
         
         if not success:
@@ -152,7 +153,8 @@ class TailorUpdateOrderStatusView(APIView):
                 new_status=new_status,
                 new_tailor_status=new_tailor_status,
                     user=request.user,
-                notes=notes
+                notes=notes,
+                requested_role='TAILOR'
             )
             
             if not success:
