@@ -966,7 +966,7 @@ class OrderStatusTransitionService:
         return transitions
     
     @staticmethod
-    def validate_transition(order, new_status=None, new_rider_status=None, new_tailor_status=None, user=None):
+    def validate_transition(order, new_status=None, new_rider_status=None, new_tailor_status=None, user=None, requested_role=None):
         """
         Validate if a status transition is allowed.
         
@@ -976,6 +976,7 @@ class OrderStatusTransitionService:
             new_rider_status: New rider status (optional)
             new_tailor_status: New tailor status (optional)
             user: User instance
+            requested_role: Optional role string to force identification
         
         Returns:
             tuple: (is_valid: bool, error_message: str)
@@ -983,8 +984,16 @@ class OrderStatusTransitionService:
         if not user or not user.is_authenticated:
             return False, "Authentication required"
 
-        # Determine role based on relationship to order
-        if user.is_admin:
+        # Determine role
+        if requested_role == 'ADMIN' and user.is_admin:
+            user_role = OrderStatusTransitionService.ROLE_ADMIN
+        elif requested_role == 'RIDER' and user.is_rider:
+            user_role = OrderStatusTransitionService.ROLE_RIDER
+        elif requested_role == 'TAILOR' and user.is_tailor:
+            user_role = OrderStatusTransitionService.ROLE_TAILOR
+        elif requested_role == 'USER':
+            user_role = OrderStatusTransitionService.ROLE_USER
+        elif user.is_admin:
             user_role = OrderStatusTransitionService.ROLE_ADMIN
         elif order.tailor == user:
             user_role = OrderStatusTransitionService.ROLE_TAILOR
@@ -1020,7 +1029,7 @@ class OrderStatusTransitionService:
                 return False, "Orders can only be cancelled when status is pending"
         
         # Get allowed transitions
-        allowed = OrderStatusTransitionService.get_allowed_transitions(order, user)
+        allowed = OrderStatusTransitionService.get_allowed_transitions(order, user, requested_role=requested_role)
         
         # Validate main status
         if new_status and new_status != order.status:
@@ -1059,7 +1068,7 @@ class OrderStatusTransitionService:
     @staticmethod
     @transaction.atomic
     def transition(order, new_status=None, new_rider_status=None, new_tailor_status=None, 
-                   user=None, notes=None):
+                   user=None, notes=None, requested_role=None):
         """
         Perform a status transition with validation and history tracking.
         
@@ -1070,13 +1079,14 @@ class OrderStatusTransitionService:
             new_tailor_status: New tailor status (optional)
             user: User instance
             notes: Optional notes about the transition
+            requested_role: Optional role string to force identification
         
         Returns:
             tuple: (success: bool, error_message: str, updated_order: Order)
         """
         # Validate transition
         is_valid, error_msg = OrderStatusTransitionService.validate_transition(
-            order, new_status, new_rider_status, new_tailor_status, user
+            order, new_status, new_rider_status, new_tailor_status, user, requested_role=requested_role
         )
         
         if not is_valid:

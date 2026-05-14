@@ -824,7 +824,8 @@ class RiderAcceptOrderView(APIView):
             order=order,
             new_rider_status='accepted',
             user=request.user,
-            notes='Rider accepted the order'
+            notes='Rider accepted the order',
+            requested_role='RIDER'
         )
         
         if not success:
@@ -938,7 +939,8 @@ class RiderAddMeasurementsView(APIView):
                     order=order,
                     new_rider_status='measurement_taken',
                     user=request.user,
-                    notes=notes_text
+                    notes=notes_text,
+                    requested_role='RIDER'
                 )
                 
                 if not success:
@@ -1257,8 +1259,9 @@ class RiderUpdateOrderStatusView(APIView):
             success, error_msg, updated_order = OrderStatusTransitionService.transition(
                 order=order,
                 new_rider_status='accepted',
-                    user=request.user,
-                notes=notes or 'Rider accepted the order'
+                user=request.user,
+                notes=notes or 'Rider accepted the order',
+                requested_role='RIDER'
             )
             
             if not success:
@@ -1324,7 +1327,8 @@ class RiderUpdateOrderStatusView(APIView):
             order=order,
             new_rider_status=new_rider_status,
             user=request.user,
-            notes=notes
+            notes=notes,
+            requested_role='RIDER'
         )
         
         if not success:
