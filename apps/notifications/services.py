@@ -486,8 +486,8 @@ class NotificationService:
         if new_tailor_status == 'accepted':
             NotificationService.send_new_order_broadcast(order, assigned_rider_id=order.assigned_rider_id)
             
-        # Notify rider
-        if order.rider and new_tailor_status in tailor_status_messages:
+        # Notify rider (only for non-accepted statuses, as accepted is handled by broadcast)
+        if order.rider and new_tailor_status in tailor_status_messages and new_tailor_status != 'accepted':
             message_template = tailor_status_messages[new_tailor_status].get('rider', '')
             if message_template:
                 NotificationService.send_notification(
@@ -847,7 +847,8 @@ class NotificationService:
                     'amount': str(payout_request.amount),
                     'status': payout_request.status,
                 },
-                priority='high'
+                priority='high',
+                app_role='TAILOR'
             )
 
     @staticmethod
@@ -888,7 +889,8 @@ class NotificationService:
                         'order_number': order.order_number,
                         'assigned': True
                     },
-                    priority='high'
+                    priority='high',
+                    app_role='RIDER'
                 )
                 
                 if success:
@@ -938,7 +940,8 @@ class NotificationService:
                         'order_number': order_number,
                         'broadcast': True
                     },
-                    priority='high'
+                    priority='high',
+                    app_role='RIDER'
                 )
                 if success:
                     count += 1
