@@ -522,7 +522,8 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             user_role = 'USER'
         else:
             # Fallback for other role types
-            if request.user.is_tailor: user_role = 'TAILOR'
+            if request.user.is_rider: user_role = 'RIDER'
+            elif request.user.is_tailor: user_role = 'TAILOR'
             else: user_role = 'USER'
         
         # Build next available actions
@@ -894,20 +895,22 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
         
         # Get allowed transitions from service
         from apps.orders.services import OrderStatusTransitionService
-        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user)
+        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user, requested_role='RIDER')
         
         # Determine effective role for labeling purposes
         if request.user.is_admin:
             user_role = 'ADMIN'
+        elif request.user.is_rider and (obj.rider is None or obj.rider == request.user):
+            # Prioritize RIDER role if user has a rider profile and order is available or already assigned
+            user_role = 'RIDER'
         elif obj.tailor == request.user:
             user_role = 'TAILOR'
-        elif obj.rider == request.user:
-            user_role = 'RIDER'
         elif obj.customer == request.user:
             user_role = 'USER'
         else:
-            if request.user.is_tailor: user_role = 'TAILOR'
-            elif request.user.is_rider: user_role = 'RIDER'
+            # Fallback for other role types
+            if request.user.is_rider: user_role = 'RIDER'
+            elif request.user.is_tailor: user_role = 'TAILOR'
             else: user_role = 'USER'
         
         # Build next available actions
