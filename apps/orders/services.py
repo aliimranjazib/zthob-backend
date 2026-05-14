@@ -903,7 +903,7 @@ class OrderStatusTransitionService:
                     # User requested to skip 'in_progress' and go directly to stitching
                     # BUT only if measurements are present for stitching orders
                     if order.order_type == 'fabric_with_stitching' and not order.all_items_have_measurements:
-                        transitions['tailor_status'] = []
+                        transitions['tailor_status'] = ['record_measurements']
                         transitions['custom_actions'] = [{
                             "type": "form_action", 
                             "value": "record_measurements",
@@ -923,7 +923,7 @@ class OrderStatusTransitionService:
             elif order.status == 'in_progress':
                 if order.tailor_status == 'accepted':
                     if order.order_type == 'fabric_with_stitching' and not order.all_items_have_measurements:
-                        transitions['tailor_status'] = []
+                        transitions['tailor_status'] = ['record_measurements']
                         transitions['custom_actions'] = [{
                             "type": "form_action", 
                             "value": "record_measurements",
@@ -935,7 +935,7 @@ class OrderStatusTransitionService:
                         transitions['tailor_status'] = ['stitching_started']
                 elif order.tailor_status == 'in_progress':
                     if order.order_type == 'fabric_with_stitching' and not order.all_items_have_measurements:
-                        transitions['tailor_status'] = []
+                        transitions['tailor_status'] = ['record_measurements']
                         transitions['custom_actions'] = [{
                             "type": "form_action", 
                             "value": "record_measurements",

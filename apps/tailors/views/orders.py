@@ -142,6 +142,17 @@ class TailorUpdateOrderStatusView(APIView):
                 new_status = 'ready_for_delivery'
                 new_tailor_status = None  # Don't update tailor_status
             
+            # Special handling: if tailor_status is "record_measurements", it's a form trigger
+            # We return success but don't perform a state transition
+            if new_tailor_status == 'record_measurements':
+                response_serializer = OrderStatusUpdateResponseSerializer(order, context={'request': request})
+                return api_response(
+                    success=True,
+                    message="Please record measurements for this order.",
+                    data=response_serializer.data,
+                    status_code=status.HTTP_200_OK
+                )
+            
             # Store old tailor_status for notification
             old_tailor_status = order.tailor_status
             

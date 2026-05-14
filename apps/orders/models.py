@@ -92,6 +92,7 @@ class Order(BaseModel):
         ("stitching_started", "Started Stitching"), # Tailor started stitching (stitching only)
         ("stitched", "Finished Stitching"),       # Tailor finished stitching (stitching only)
         ("measurements_complete", "Measurements Complete"),  # Measurement service complete
+        ("record_measurements", "Record Measurements"),      # Virtual status for recording process
     )
     PAYMENT_STATUS_CHOICES = (
         ("pending", "Pending"),
