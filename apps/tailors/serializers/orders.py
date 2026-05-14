@@ -6,7 +6,10 @@ from apps.orders.models import Order
 class TailorUpdateOrderStatusSerializer(serializers.Serializer):
     """Serializer for tailor updating order status (tailor_status and/or main status)"""
     tailor_status = serializers.ChoiceField(
-        choices=[choice for choice in Order.TAILOR_STATUS_CHOICES if choice[0] != 'none'] + [('ready_for_delivery', 'Ready for Delivery')],
+        choices=[choice for choice in Order.TAILOR_STATUS_CHOICES if choice[0] != 'none'] + [
+            ('ready_for_delivery', 'Ready for Delivery'),
+            ('record_measurements', 'Record Measurements')
+        ],
         required=False
     )
     status = serializers.ChoiceField(
