@@ -90,7 +90,6 @@ class AcceptOrderAction(BaseOrderAction):
                 raise ValidationError("Order is already accepted by a tailor.")
         
         elif role == 'RIDER':
-            # Rider can accept if they are the specifically assigned rider OR if it's an unassigned order
             if self.order.rider and self.order.rider != self.user:
                 raise PermissionDenied("This order is already assigned to another rider.")
             if self.order.rider_status != 'none':
@@ -117,21 +116,16 @@ class AcceptOrderAction(BaseOrderAction):
                 try:
                     assigned_rider = CustomUser.objects.get(id=assigned_rider_id, role='RIDER')
                     self.order.assigned_rider = assigned_rider
-                    # NEW: Sync with main rider field for API visibility
                     self.order.rider = assigned_rider
                 except CustomUser.DoesNotExist:
                     pass
         
         elif role == 'RIDER':
-            # Assign the rider if not already assigned
             if not self.order.rider:
                 self.order.rider = self.user
-                
-            # For measurement service, rider acceptance confirms the order
             if self.order.order_type == 'measurement_service':
                 self.order.status = 'confirmed'
                 
-            # Smart Check: If measurements already exist, skip to measurement_taken
             if self.order.all_items_have_measurements:
                 self.order.rider_status = 'measurement_taken'
             else:
@@ -285,8 +279,10 @@ class PickupOrderAction(BaseOrderAction):
             raise ValidationError("Order is not ready for delivery.")
         if self.order.rider != self.user and self.order.assigned_rider != self.user:
             raise PermissionDenied("You are not the assigned rider for this order.")
-        if self.order.rider_status == 'picked_up':
-            raise ValidationError("Order is already picked up.")
+        
+        # HIDE if already picked up or in delivery
+        if self.order.rider_status in ['picked_up', 'on_way_to_delivery', 'delivered']:
+            raise ValidationError("Order is already picked up or in delivery.")
 
     def execute(self):
         self.order.rider_status = 'picked_up'
