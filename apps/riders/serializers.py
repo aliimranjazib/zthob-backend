@@ -501,117 +501,23 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
         return obj.custom_styles if obj.custom_styles is not None else []
     
     def get_status_info(self, obj):
-        """Get status information including next available actions for riders"""
+        """Get status information including next available actions using the unified action pattern"""
         request = self.context.get('request')
         if not request or not request.user:
             return None
-        
-        # Get allowed transitions from service
-        from apps.orders.services import OrderStatusTransitionService
-        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user, requested_role='RIDER')
-        
-        # Determine effective role for labeling purposes
-        if request.user.is_admin:
-            user_role = 'ADMIN'
-        elif request.user.is_rider and (obj.rider is None or obj.rider == request.user):
-            # Prioritize RIDER role if user has a rider profile and order is available or already assigned
-            user_role = 'RIDER'
-        elif obj.tailor == request.user:
-            user_role = 'TAILOR'
-        elif obj.customer == request.user:
-            user_role = 'USER'
-        else:
-            # Fallback for other role types
-            if request.user.is_rider: user_role = 'RIDER'
-            elif request.user.is_tailor: user_role = 'TAILOR'
-            else: user_role = 'USER'
-        
-        # Build next available actions
-        next_actions = []
-        
-        # Track values to avoid duplicates (prefer more specific status types)
-        seen_values = set()
-        
-        # Add status actions
-        for status_value in allowed_transitions.get('status', []):
-            # Skip if already at this status
-            if status_value == obj.status:
-                continue
-            action = self._build_status_action('status', status_value, user_role)
-            if action:
-                next_actions.append(action)
-                seen_values.add(status_value)
-        
-        # Add rider_status actions (prefer over status if same value)
-        for rider_status_value in allowed_transitions.get('rider_status', []):
-            # Skip if already at this status
-            if rider_status_value == obj.rider_status:
-                continue
-            # If this value already exists as a status action, remove the status action and use this one
-            if rider_status_value in seen_values:
-                # Remove the duplicate status action
-                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == rider_status_value)]
-            action = self._build_status_action('rider_status', rider_status_value, user_role)
-            if action:
-                next_actions.append(action)
-                seen_values.add(rider_status_value)
-        
-        # Add tailor_status actions (prefer over status if same value)
-        for tailor_status_value in allowed_transitions.get('tailor_status', []):
-            # Skip if already at this status
-            if tailor_status_value == obj.tailor_status:
-                continue
-            # If this value already exists as a status action, remove the status action and use this one
-            if tailor_status_value in seen_values:
-                # Remove the duplicate status action
-                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == tailor_status_value)]
-            action = self._build_status_action('tailor_status', tailor_status_value, user_role)
-            if action:
-                next_actions.append(action)
-                seen_values.add(tailor_status_value)
-        
-        # Check if order can be cancelled
-        can_cancel = False
-        cancel_reason = None
-        language = get_language_from_request(request) if request else 'en'
-        
-        if user_role == 'USER' and obj.status == 'pending':
-            can_cancel = True
-        elif obj.status in ['delivered', 'cancelled']:
-            cancel_reason = translate_message("Order is {status} and cannot be cancelled", language, status=obj.status)
-        elif obj.status != 'pending':
-            cancel_reason = translate_message("Orders can only be cancelled when status is pending", language)
-        
-        # Calculate status progress
-        status_progress = self._calculate_status_progress(obj)
-        
-        # Add measurement tracking for fabric_with_stitching orders
-        measurement_status = None
-        if obj.order_type == 'fabric_with_stitching' and obj.rider_status in ['on_way_to_measurement', 'measurement_taken']:
-            from django.db.models import Q
-            total_items = obj.order_items.count()
-            items_with_measurements = obj.order_items.exclude(
-                Q(measurements__isnull=True) | Q(measurements={})
-            ).count()
-            items_without_measurements = total_items - items_with_measurements
             
-            measurement_status = {
-                'all_measured': obj.all_items_have_measurements,
-                'total_items': total_items,
-                'measured_items': items_with_measurements,
-                'remaining_items': items_without_measurements,
-            }
+        from apps.orders.actions import OrderActionManager
+        requested_role = self.context.get('role', 'RIDER')
         
         return {
             'current_status': obj.status,
             'current_rider_status': obj.rider_status,
             'current_tailor_status': obj.tailor_status,
-            'next_available_actions': next_actions,
-            'can_cancel': can_cancel,
-            'cancel_reason': cancel_reason,
-            'status_progress': status_progress,
-            'measurement_status': measurement_status,
+            'available_actions': OrderActionManager.get_available_actions(obj, request.user, requested_role=requested_role),
+            'measurement_status': obj.all_items_have_measurements if obj.order_type == 'fabric_with_stitching' else None
         }
+        
+        
     
     def _build_status_action(self, action_type, value, user_role):
         """Build action object for status transition - reuse from OrderSerializer"""
@@ -888,117 +794,23 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
         return obj.custom_styles if obj.custom_styles is not None else []
     
     def get_status_info(self, obj):
-        """Get status information including next available actions for riders"""
+        """Get status information including next available actions using the unified action pattern"""
         request = self.context.get('request')
         if not request or not request.user:
             return None
-        
-        # Get allowed transitions from service
-        from apps.orders.services import OrderStatusTransitionService
-        allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user, requested_role='RIDER')
-        
-        # Determine effective role for labeling purposes
-        if request.user.is_admin:
-            user_role = 'ADMIN'
-        elif request.user.is_rider and (obj.rider is None or obj.rider == request.user):
-            # Prioritize RIDER role if user has a rider profile and order is available or already assigned
-            user_role = 'RIDER'
-        elif obj.tailor == request.user:
-            user_role = 'TAILOR'
-        elif obj.customer == request.user:
-            user_role = 'USER'
-        else:
-            # Fallback for other role types
-            if request.user.is_rider: user_role = 'RIDER'
-            elif request.user.is_tailor: user_role = 'TAILOR'
-            else: user_role = 'USER'
-        
-        # Build next available actions
-        next_actions = []
-        
-        # Track values to avoid duplicates (prefer more specific status types)
-        seen_values = set()
-        
-        # Add status actions
-        for status_value in allowed_transitions.get('status', []):
-            # Skip if already at this status
-            if status_value == obj.status:
-                continue
-            action = self._build_status_action('status', status_value, user_role)
-            if action:
-                next_actions.append(action)
-                seen_values.add(status_value)
-        
-        # Add rider_status actions (prefer over status if same value)
-        for rider_status_value in allowed_transitions.get('rider_status', []):
-            # Skip if already at this status
-            if rider_status_value == obj.rider_status:
-                continue
-            # If this value already exists as a status action, remove the status action and use this one
-            if rider_status_value in seen_values:
-                # Remove the duplicate status action
-                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == rider_status_value)]
-            action = self._build_status_action('rider_status', rider_status_value, user_role)
-            if action:
-                next_actions.append(action)
-                seen_values.add(rider_status_value)
-        
-        # Add tailor_status actions (prefer over status if same value)
-        for tailor_status_value in allowed_transitions.get('tailor_status', []):
-            # Skip if already at this status
-            if tailor_status_value == obj.tailor_status:
-                continue
-            # If this value already exists as a status action, remove the status action and use this one
-            if tailor_status_value in seen_values:
-                # Remove the duplicate status action
-                next_actions = [a for a in next_actions if not (a['type'] == 'status' and a['value'] == tailor_status_value)]
-            action = self._build_status_action('tailor_status', tailor_status_value, user_role)
-            if action:
-                next_actions.append(action)
-                seen_values.add(tailor_status_value)
-        
-        # Check if order can be cancelled
-        can_cancel = False
-        cancel_reason = None
-        language = get_language_from_request(request) if request else 'en'
-        
-        if user_role == 'USER' and obj.status == 'pending':
-            can_cancel = True
-        elif obj.status in ['delivered', 'cancelled']:
-            cancel_reason = translate_message("Order is {status} and cannot be cancelled", language, status=obj.status)
-        elif obj.status != 'pending':
-            cancel_reason = translate_message("Orders can only be cancelled when status is pending", language)
-        
-        # Calculate status progress
-        status_progress = self._calculate_status_progress(obj)
-        
-        # Add measurement tracking for fabric_with_stitching orders
-        measurement_status = None
-        if obj.order_type == 'fabric_with_stitching' and obj.rider_status in ['on_way_to_measurement', 'measurement_taken']:
-            from django.db.models import Q
-            total_items = obj.order_items.count()
-            items_with_measurements = obj.order_items.exclude(
-                Q(measurements__isnull=True) | Q(measurements={})
-            ).count()
-            items_without_measurements = total_items - items_with_measurements
             
-            measurement_status = {
-                'all_measured': obj.all_items_have_measurements,
-                'total_items': total_items,
-                'measured_items': items_with_measurements,
-                'remaining_items': items_without_measurements,
-            }
+        from apps.orders.actions import OrderActionManager
+        requested_role = self.context.get('role', 'RIDER')
         
         return {
             'current_status': obj.status,
             'current_rider_status': obj.rider_status,
             'current_tailor_status': obj.tailor_status,
-            'next_available_actions': next_actions,
-            'can_cancel': can_cancel,
-            'cancel_reason': cancel_reason,
-            'status_progress': status_progress,
-            'measurement_status': measurement_status,
+            'available_actions': OrderActionManager.get_available_actions(obj, request.user, requested_role=requested_role),
+            'measurement_status': obj.all_items_have_measurements if obj.order_type == 'fabric_with_stitching' else None
         }
+        
+        
     
     def _build_status_action(self, action_type, value, user_role):
         """Build action object for status transition - reuse from OrderSerializer"""
