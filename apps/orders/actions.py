@@ -340,16 +340,20 @@ class OrderActionManager:
         return action_class(order, user, data)
 
     @classmethod
-    def get_available_actions(cls, order, user):
+    def get_available_actions(cls, order, user, requested_role=None):
         available = []
-        for key, action_class in cls._actions.items():
+        for action_class in cls._actions.values():
+            # If a specific role is requested, only check actions allowed for that role
+            if requested_role and requested_role not in action_class.allowed_roles:
+                continue
+                
+            action = action_class(order, user)
             try:
-                action = action_class(order, user)
                 action.validate()
                 available.append({
                     'key': action.key,
                     'label': action.label,
-                    'role': action.allowed_roles[0] if action.allowed_roles else None
+                    'role': requested_role or (action_class.allowed_roles[0] if action_class.allowed_roles else 'USER')
                 })
             except (ValidationError, PermissionDenied):
                 continue
