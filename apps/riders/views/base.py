@@ -603,7 +603,7 @@ class RiderAvailableOrdersView(APIView):
         if order_type:
             orders = orders.filter(order_type=order_type)
         
-        serializer = RiderOrderListSerializer(orders, many=True, context={'request': request})
+        serializer = RiderOrderListSerializer(orders, many=True, context={'request': request, 'role': 'RIDER'})
         return api_response(
             success=True,
             message="Available orders retrieved successfully",
@@ -646,7 +646,7 @@ class RiderMyOrdersView(APIView):
         if status_filter:
             orders = orders.filter(status=status_filter)
         
-        serializer = RiderOrderListSerializer(orders, many=True, context={'request': request})
+        serializer = RiderOrderListSerializer(orders, many=True, context={'request': request, 'role': 'RIDER'})
         return api_response(
             success=True,
             message="Your orders retrieved successfully",
@@ -715,7 +715,7 @@ class RiderOrderDetailView(APIView):
                     status_code=status.HTTP_403_FORBIDDEN
                 )
         
-        serializer = RiderOrderDetailSerializer(order, context={'request': request})
+        serializer = RiderOrderDetailSerializer(order, context={'request': request, 'role': 'RIDER'})
         return api_response(
             success=True,
             message="Order details retrieved successfully",
