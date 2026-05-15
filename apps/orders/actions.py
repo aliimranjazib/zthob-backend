@@ -13,10 +13,11 @@ class BaseOrderAction(ABC):
     label = None  # Human-readable label
     allowed_roles = []  # Roles allowed to perform this action
 
-    def __init__(self, order, user, data=None):
+    def __init__(self, order, user, data=None, requested_role=None):
         self.order = order
         self.user = user
         self.data = data or {}
+        self.requested_role = requested_role
 
     def validate(self):
         # 1. Check Role Permission (Multi-role support)
@@ -147,11 +148,10 @@ class RecordMeasurementsAction(BaseOrderAction):
         if self.order.status in ['delivered', 'collected', 'cancelled']:
             raise ValidationError("Cannot record measurements for a finalized order.")
 
-        # 2. Sequential & Role Logic
-        user_roles = self.user.get_all_roles()
+        # 2. Role-specific logic (only evaluate for the role currently being used)
+        role = self.requested_role
         
-        # Tailor Check
-        if 'TAILOR' in user_roles and self.order.tailor == self.user:
+        if role == 'TAILOR' and self.order.tailor == self.user:
             # Rule 1: Hide if already measured
             if self.order.all_items_have_measurements:
                 raise ValidationError("Measurements are already recorded.")
@@ -159,8 +159,11 @@ class RecordMeasurementsAction(BaseOrderAction):
             if self.order.service_mode == 'home_delivery':
                 raise ValidationError("Rider must record measurements for home delivery orders.")
         
-        # 3. Rider check
-        if 'RIDER' in user_roles and self.order.rider == self.user:
+        elif role == 'RIDER' and self.order.rider == self.user:
+            # Rule 1: Hide if already measured
+            if self.order.all_items_have_measurements:
+                raise ValidationError("Measurements are already recorded.")
+            # Rule 2: Valid status check
             if self.order.rider_status not in ['on_way_to_measurement', 'accepted']:
                  raise ValidationError("Invalid state to record measurements.")
 
@@ -335,11 +338,11 @@ class OrderActionManager:
     }
 
     @classmethod
-    def get_action(cls, action_key, order, user, data=None):
+    def get_action(cls, action_key, order, user, data=None, requested_role=None):
         action_class = cls._actions.get(action_key)
         if not action_class:
             raise ValidationError(f"Action '{action_key}' is not recognized.")
-        return action_class(order, user, data)
+        return action_class(order, user, data, requested_role=requested_role)
 
     @classmethod
     def get_available_actions(cls, order, user, requested_role=None):
@@ -349,7 +352,7 @@ class OrderActionManager:
             if requested_role and requested_role not in action_class.allowed_roles:
                 continue
                 
-            action = action_class(order, user)
+            action = action_class(order, user, requested_role=requested_role)
             try:
                 action.validate()
                 available.append({
