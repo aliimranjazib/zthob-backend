@@ -239,6 +239,8 @@ class MarkReadyAction(BaseOrderAction):
     def _check_requirements(self):
         if self.order.tailor_status != 'stitched':
             raise ValidationError("You must finish stitching before marking the order as ready.")
+        if self.order.status in ['ready_for_delivery', 'ready_for_pickup', 'delivered', 'collected', 'cancelled']:
+            raise ValidationError("Order is already ready or finalized.")
 
     def execute(self):
         if self.order.service_mode == 'walk_in':
