@@ -80,21 +80,32 @@ class AcceptOrderAction(BaseOrderAction):
     allowed_roles = ['TAILOR', 'RIDER']
 
     def _check_requirements(self):
-        user_roles = self.user.get_all_roles()
+        # 1. Role Check
+        role = self.requested_role
         
-        if 'TAILOR' in user_roles and self.order.tailor == self.user:
+        if role == 'TAILOR':
+            if self.order.tailor and self.order.tailor != self.user:
+                raise PermissionDenied("This order is already assigned to another tailor.")
             if self.order.tailor_status != 'none':
-                raise ValidationError("Order is already accepted by you.")
-        elif 'RIDER' in user_roles:
+                raise ValidationError("Order is already accepted by a tailor.")
+        
+        elif role == 'RIDER':
+            # Rider can accept if they are the specifically assigned rider OR if it's an unassigned order
+            if self.order.rider and self.order.rider != self.user:
+                raise PermissionDenied("This order is already assigned to another rider.")
             if self.order.rider_status != 'none':
-                raise ValidationError("Order is already accepted by another rider.")
+                raise ValidationError("Order is already accepted by a rider.")
         else:
-            raise PermissionDenied("You are not assigned to this order or don't have the required role.")
+             raise PermissionDenied("Invalid role for this action.")
 
     def execute(self):
-        user_roles = self.user.get_all_roles()
+        role = self.requested_role
         
-        if 'TAILOR' in user_roles and self.order.tailor == self.user:
+        if role == 'TAILOR':
+            # Assign the tailor if not already assigned
+            if not self.order.tailor:
+                self.order.tailor = self.user
+            
             self.order.tailor_status = 'accepted'
             if self.order.status == 'pending':
                 self.order.status = 'confirmed'
@@ -106,11 +117,20 @@ class AcceptOrderAction(BaseOrderAction):
                 try:
                     assigned_rider = CustomUser.objects.get(id=assigned_rider_id, role='RIDER')
                     self.order.assigned_rider = assigned_rider
+                    # NEW: Sync with main rider field for API visibility
+                    self.order.rider = assigned_rider
                 except CustomUser.DoesNotExist:
-                    pass # Skip if invalid rider ID provided
+                    pass
         
-        if 'RIDER' in user_roles:
-            self.order.rider = self.user
+        elif role == 'RIDER':
+            # Assign the rider if not already assigned
+            if not self.order.rider:
+                self.order.rider = self.user
+                
+            # For measurement service, rider acceptance confirms the order
+            if self.order.order_type == 'measurement_service':
+                self.order.status = 'confirmed'
+                
             # Smart Check: If measurements already exist, skip to measurement_taken
             if self.order.all_items_have_measurements:
                 self.order.rider_status = 'measurement_taken'
@@ -118,7 +138,7 @@ class AcceptOrderAction(BaseOrderAction):
                 self.order.rider_status = 'accepted'
         
         self.order.save()
-        return "Order accepted successfully."
+        return f"Order accepted successfully as {role}."
 
 
 class StartMeasuringAction(BaseOrderAction):
@@ -136,6 +156,7 @@ class StartMeasuringAction(BaseOrderAction):
 
     def execute(self):
         self.order.rider_status = 'on_way_to_measurement'
+        self.order.status = 'in_progress'
         self.order.save()
         return "You are now on your way to take measurements."
 
@@ -180,6 +201,7 @@ class RecordMeasurementsAction(BaseOrderAction):
         self.order.measurement_taken_at = timezone.now()
         
         # Update specific statuses based on role
+        self.order.status = 'in_progress'
         if self.requested_role == 'RIDER' and (self.order.rider == self.user or self.order.assigned_rider == self.user):
             self.order.rider_status = 'measurement_taken'
         elif self.requested_role == 'TAILOR' and self.order.tailor == self.user:
@@ -263,6 +285,8 @@ class PickupOrderAction(BaseOrderAction):
             raise ValidationError("Order is not ready for delivery.")
         if self.order.rider != self.user and self.order.assigned_rider != self.user:
             raise PermissionDenied("You are not the assigned rider for this order.")
+        if self.order.rider_status == 'picked_up':
+            raise ValidationError("Order is already picked up.")
 
     def execute(self):
         self.order.rider_status = 'picked_up'
@@ -278,6 +302,8 @@ class StartDeliveryAction(BaseOrderAction):
     def _check_requirements(self):
         if self.order.rider_status != 'picked_up':
             raise ValidationError("You must pickup the order before starting delivery.")
+        if self.order.rider != self.user and self.order.assigned_rider != self.user:
+            raise PermissionDenied("You are not the assigned rider for this order.")
 
     def execute(self):
         self.order.rider_status = 'on_way_to_delivery'
@@ -293,6 +319,8 @@ class MarkDeliveredAction(BaseOrderAction):
     def _check_requirements(self):
         if self.order.rider_status != 'on_way_to_delivery':
             raise ValidationError("Invalid state for delivery.")
+        if self.order.rider != self.user and self.order.assigned_rider != self.user:
+            raise PermissionDenied("You are not the assigned rider for this order.")
 
     def execute(self):
         self.order.rider_status = 'delivered'

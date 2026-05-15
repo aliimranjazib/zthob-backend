@@ -402,74 +402,22 @@ class Order(BaseModel):
     
     def _sync_main_status(self):
         """
-        Automatically sync main status based on rider_status and tailor_status.
-        This ensures the main status reflects the current state of the order.
+        Safety net for syncing main status in final states.
+        Middle-state transitions are now explicitly handled by OrderAction classes.
         """
-        # If collected (Walk-In final state)
-        if self.status == 'collected':
-            return
-
-        # If delivered by rider, main status should be delivered
-        if self.rider_status == 'delivered':
+        # 1. Delivered state
+        if self.rider_status == 'delivered' or self.status == 'delivered':
             self.status = 'delivered'
-            return
+            self.rider_status = 'delivered'
         
-        # If cancelled, keep cancelled
+        # 2. Collected state (Walk-In)
+        if self.status == 'collected':
+            self.tailor_status = 'stitched' # Ensure tailor status is at least stitched
+
+        # 3. Cancelled state
         if self.status == 'cancelled':
-            return
-
-        # NEW: For Walk-In flow
-        if self.service_mode == 'walk_in':
-            if self.status == 'pending':
-                if self.tailor_status != 'none':
-                    self.status = 'confirmed'
-                else:
-                    return
-            elif self.status == 'confirmed' and self.tailor_status in ['in_progress', 'stitching_started']:
-                 self.status = 'in_progress'
-            elif self.tailor_status == 'stitched' and self.status != 'collected':
-                self.status = 'ready_for_pickup'
-            elif self.tailor_status == 'measurements_complete' and self.status != 'collected':
-                # For measurement service walk-in orders - measurements are done, ready for pickup
-                self.status = 'ready_for_pickup'
-            return
-
-        # For measurement_service flow (Home Delivery)
-        if self.order_type == 'measurement_service':
-            if self.service_mode == 'home_delivery':
-                # Home delivery measurement: rider-driven flow (no tailor confirmation needed)
-                if self.status == 'pending' and self.rider_status == 'accepted':
-                    self.status = 'confirmed'
-                elif self.status == 'confirmed' and self.rider_status in ['on_way_to_measurement', 'measuring']:
-                    self.status = 'in_progress'
-                elif self.rider_status == 'delivered':
-                    self.status = 'delivered'
-            # Walk-in measurement handled in walk_in flow above
-            return
-
-        # For fabric_only flow (Home Delivery)
-        if self.order_type == 'fabric_only':
-            if self.status == 'pending':
-                if self.tailor_status != 'none':
-                    self.status = 'confirmed'
-                else:
-                    return
-            elif self.status == 'confirmed' and self.rider_status in ['accepted', 'on_way_to_pickup', 'picked_up', 'on_way_to_delivery']:
-                self.status = 'in_progress'
-            elif self.rider_status == 'picked_up' and self.status == 'in_progress':
-                self.status = 'ready_for_delivery'
-        
-        # For fabric_with_stitching flow (Home Delivery)
-        else:  # fabric_with_stitching
-            if self.status == 'pending':
-                if self.tailor_status != 'none':
-                    self.status = 'confirmed'
-                else:
-                    return
-            elif self.status == 'confirmed' and self.rider_status in ['accepted', 'on_way_to_measurement', 'measurement_taken']:
-                self.status = 'in_progress'
-            elif self.tailor_status == 'stitched' and self.rider_status in ['on_way_to_pickup', 'picked_up', 'on_way_to_delivery']:
-                self.status = 'ready_for_delivery'
+            # No changes needed
+            pass
 
     # ============================================================================
     # RIDER FSM TRANSITIONS
