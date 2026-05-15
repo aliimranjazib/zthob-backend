@@ -293,8 +293,9 @@ class NotificationService:
                 'tailor': 'New order #{order_number} received from {customer_name}',
             },
             'confirmed': {
-                # Only rider notified of acceptance to avoid multi-role duplicates
-                'rider': 'Order #{order_number} has been accepted by tailor and is ready for pickup',
+                'customer': 'Your order #{order_number} has been confirmed and is being prepared.',
+                'tailor': 'You have accepted order #{order_number}.',
+                'rider': 'Order #{order_number} has been accepted and is being prepared by the tailor.',
             },
             'in_progress': {
                 'customer': 'Your order #{order_number} is now in progress',
@@ -413,7 +414,8 @@ class NotificationService:
         # Map tailor_status to notification messages
         tailor_status_messages = {
             'accepted': {
-                'rider': 'Order #{order_number} has been accepted by tailor and is ready for pickup',
+                'customer': 'Tailor has accepted your order #{order_number}.',
+                'rider': 'Order #{order_number} has been accepted by the tailor and is being prepared.',
             },
             'in_progress': {
                 'customer': 'Tailor is working on your order #{order_number}',

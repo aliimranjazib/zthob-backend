@@ -18,22 +18,29 @@ class BaseOrderAction(ABC):
         self.user = user
         self.data = data or {}
         self.requested_role = requested_role
+        
+        # Capture state before execution for notification logic
+        self._old_status = order.status
+        self._old_tailor_status = order.tailor_status
+        self._old_rider_status = order.rider_status
 
     def validate(self):
         # 1. Check Role Permission (Multi-role support)
-        user_roles = self.user.get_all_roles()
         has_permission = False
         
         if not self.allowed_roles:
             has_permission = True
         else:
             for role in self.allowed_roles:
-                if role in user_roles:
-                    has_permission = True
-                    break
+                if role == 'USER' and self.user.is_customer: has_permission = True
+                elif role == 'TAILOR' and self.user.is_tailor: has_permission = True
+                elif role == 'RIDER' and self.user.is_rider: has_permission = True
+                elif role == 'ADMIN' and self.user.is_admin: has_permission = True
+                
+                if has_permission: break
         
         if not has_permission:
-            raise PermissionDenied(f"None of your roles ({user_roles}) are allowed to perform this action.")
+            raise PermissionDenied("You do not have the required role to perform this action.")
 
         # 2. Check Custom Requirements
         self._check_requirements()
@@ -47,14 +54,26 @@ class BaseOrderAction(ABC):
         pass
 
     def post_execute(self):
-        """Send notifications after successful execution"""
+        """Send notifications ONLY for statuses that actually changed"""
         from apps.notifications.services import NotificationService
         
-        # Trigger automatic status notifications based on the new state
-        # We use the existing service to ensure translations work
-        NotificationService.send_order_status_notification(self.order, "", self.order.status, self.user)
-        NotificationService.send_tailor_status_notification(self.order, "", self.order.tailor_status, self.user)
-        NotificationService.send_rider_status_notification(self.order, "", self.order.rider_status, self.user)
+        # 1. Order Status changed?
+        if self.order.status != self._old_status:
+            NotificationService.send_order_status_notification(
+                self.order, self._old_status, self.order.status, self.user
+            )
+            
+        # 2. Tailor Status changed?
+        if self.order.tailor_status != self._old_tailor_status:
+            NotificationService.send_tailor_status_notification(
+                self.order, self._old_tailor_status, self.order.tailor_status, self.user
+            )
+            
+        # 3. Rider Status changed?
+        if self.order.rider_status != self._old_rider_status:
+            NotificationService.send_rider_status_notification(
+                self.order, self._old_rider_status, self.order.rider_status, self.user
+            )
 
 
 class CancelOrderAction(BaseOrderAction):
@@ -65,7 +84,7 @@ class CancelOrderAction(BaseOrderAction):
     def _check_requirements(self):
         if self.order.status != 'pending':
             raise ValidationError(f"Only pending orders can be cancelled. Current status: {self.order.status}")
-        if 'ADMIN' not in self.user.get_all_roles() and self.order.customer != self.user:
+        if not self.user.is_admin and self.order.customer != self.user:
             raise PermissionDenied("You can only cancel your own orders.")
 
     def execute(self):
@@ -80,8 +99,16 @@ class AcceptOrderAction(BaseOrderAction):
     allowed_roles = ['TAILOR', 'RIDER']
 
     def _check_requirements(self):
-        # 1. Role Check
+        # 1. Role Check (with auto-detection)
         role = self.requested_role
+        user_roles = self.user.get_all_roles()
+
+        if not role:
+            # If no role requested, try to infer it from user properties
+            if self.user.is_tailor:
+                role = 'TAILOR'
+            elif self.user.is_rider:
+                role = 'RIDER'
         
         if role == 'TAILOR':
             if self.order.tailor and self.order.tailor != self.user:
@@ -95,10 +122,15 @@ class AcceptOrderAction(BaseOrderAction):
             if self.order.rider_status != 'none':
                 raise ValidationError("Order is already accepted by a rider.")
         else:
-             raise PermissionDenied("Invalid role for this action.")
+             raise PermissionDenied(f"Invalid role '{role}' or missing role for this action.")
 
     def execute(self):
+        # Infer role if not provided
         role = self.requested_role
+        user_roles = self.user.get_all_roles()
+        if not role:
+            if self.user.is_tailor: role = 'TAILOR'
+            elif self.user.is_rider: role = 'RIDER'
         
         if role == 'TAILOR':
             # Assign the tailor if not already assigned
@@ -171,6 +203,10 @@ class RecordMeasurementsAction(BaseOrderAction):
 
         # 3. Role-specific logic
         role = self.requested_role
+        user_roles = self.user.get_all_roles()
+        if not role:
+            if self.user.is_tailor: role = 'TAILOR'
+            elif self.user.is_rider: role = 'RIDER'
         
         if role == 'TAILOR' and self.order.tailor == self.user:
             # Rule: Hide if it's Home Delivery (Rider's job)
@@ -196,9 +232,12 @@ class RecordMeasurementsAction(BaseOrderAction):
         
         # Update specific statuses based on role
         self.order.status = 'in_progress'
-        if self.requested_role == 'RIDER' and (self.order.rider == self.user or self.order.assigned_rider == self.user):
+        
+        role = self.requested_role or ('TAILOR' if self.user.is_tailor else 'RIDER')
+
+        if role == 'RIDER' and (self.order.rider == self.user or self.order.assigned_rider == self.user):
             self.order.rider_status = 'measurement_taken'
-        elif self.requested_role == 'TAILOR' and self.order.tailor == self.user:
+        elif role == 'TAILOR' and self.order.tailor == self.user:
             self.order.tailor_status = 'accepted'
             
         self.order.save()
@@ -329,18 +368,28 @@ class MarkDeliveredAction(BaseOrderAction):
 class CollectOrderAction(BaseOrderAction):
     key = 'collect_order'
     label = 'Collect Order'
-    allowed_roles = ['USER']
+    allowed_roles = ['USER', 'TAILOR', 'ADMIN']
 
     def _check_requirements(self):
-        if self.order.customer != self.user:
-            raise PermissionDenied("Only the customer can mark the order as collected.")
+        # 1. State check
         if self.order.status != 'ready_for_pickup':
             raise ValidationError("Order is not ready for pickup.")
+        
+        # 2. Permission check
+        if self.user.is_admin or self.user.is_tailor:
+            # Admins and the assigned Tailor can always mark as collected
+            if self.user.is_tailor and self.order.tailor != self.user:
+                raise PermissionDenied("Only the assigned tailor can mark this order as collected.")
+            return
+        
+        # Customers can only mark their own orders as collected
+        if self.order.customer != self.user:
+            raise PermissionDenied("Only the customer or assigned tailor can mark the order as collected.")
 
     def execute(self):
         self.order.status = 'collected'
         self.order.save()
-        return "Thank you for collecting your order!"
+        return "Order marked as collected successfully."
 
 
 class OrderActionManager:
