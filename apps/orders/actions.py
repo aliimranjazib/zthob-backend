@@ -127,7 +127,9 @@ class StartMeasuringAction(BaseOrderAction):
     allowed_roles = ['RIDER']
 
     def _check_requirements(self):
-        if self.order.rider != self.user:
+        if self.order.all_items_have_measurements:
+            raise ValidationError("Measurements are already recorded.")
+        if self.order.rider != self.user and self.order.assigned_rider != self.user:
             raise PermissionDenied("You are not the assigned rider for this order.")
         if self.order.rider_status != 'accepted':
             raise ValidationError("You must accept the order before starting measurement.")
@@ -148,22 +150,20 @@ class RecordMeasurementsAction(BaseOrderAction):
         if self.order.status in ['delivered', 'collected', 'cancelled']:
             raise ValidationError("Cannot record measurements for a finalized order.")
 
-        # 2. Role-specific logic (only evaluate for the role currently being used)
+        # 2. Measurement check (apply to all roles)
+        if self.order.all_items_have_measurements:
+            raise ValidationError("Measurements are already recorded.")
+
+        # 3. Role-specific logic
         role = self.requested_role
         
         if role == 'TAILOR' and self.order.tailor == self.user:
-            # Rule 1: Hide if already measured
-            if self.order.all_items_have_measurements:
-                raise ValidationError("Measurements are already recorded.")
-            # Rule 2: Hide if it's Home Delivery (Rider's job)
+            # Rule: Hide if it's Home Delivery (Rider's job)
             if self.order.service_mode == 'home_delivery':
                 raise ValidationError("Rider must record measurements for home delivery orders.")
         
-        elif role == 'RIDER' and self.order.rider == self.user:
-            # Rule 1: Hide if already measured
-            if self.order.all_items_have_measurements:
-                raise ValidationError("Measurements are already recorded.")
-            # Rule 2: Valid status check
+        elif role == 'RIDER' and (self.order.rider == self.user or self.order.assigned_rider == self.user):
+            # Rule: Valid status check
             if self.order.rider_status not in ['on_way_to_measurement', 'accepted']:
                  raise ValidationError("Invalid state to record measurements.")
 
@@ -179,14 +179,12 @@ class RecordMeasurementsAction(BaseOrderAction):
 
         self.order.measurement_taken_at = timezone.now()
         
-        user_roles = self.user.get_all_roles()
-        if 'RIDER' in user_roles and self.order.rider == self.user:
+        # Update specific statuses based on role
+        if self.requested_role == 'RIDER' and (self.order.rider == self.user or self.order.assigned_rider == self.user):
             self.order.rider_status = 'measurement_taken'
-        elif 'TAILOR' in user_roles and self.order.tailor == self.user:
-            # For walk-in, tailor recording measurements completes the "measurement" phase
-            self.order.tailor_status = 'accepted' 
-            # In models.py _sync_main_status handles the rest
-        
+        elif self.requested_role == 'TAILOR' and self.order.tailor == self.user:
+            self.order.tailor_status = 'accepted'
+            
         self.order.save()
         return "Measurements recorded successfully."
 
@@ -263,7 +261,7 @@ class PickupOrderAction(BaseOrderAction):
     def _check_requirements(self):
         if self.order.status != 'ready_for_delivery':
             raise ValidationError("Order is not ready for delivery.")
-        if self.order.rider != self.user:
+        if self.order.rider != self.user and self.order.assigned_rider != self.user:
             raise PermissionDenied("You are not the assigned rider for this order.")
 
     def execute(self):
