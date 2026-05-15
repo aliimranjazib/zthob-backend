@@ -633,8 +633,9 @@ class RiderMyOrdersView(APIView):
         # Show all orders assigned to this rider, including those with rider_status='none' 
         # (which means assigned but not yet accepted - allows rider to accept them)
         # This ensures manually assigned orders are visible even if rider_status wasn't updated
+        from django.db.models import Q
         orders = Order.objects.filter(
-            rider=request.user
+            Q(rider=request.user) | Q(assigned_rider=request.user)
         ).select_related(
             'customer',
             'tailor',
@@ -689,7 +690,8 @@ class RiderOrderDetailView(APIView):
         )
         
         # Check if rider has access (either assigned or available)
-        if order.rider and order.rider != request.user:
+        is_assigned = (order.rider == request.user or order.assigned_rider == request.user)
+        if not is_assigned and order.rider is not None:
             return api_response(
                 success=False,
                 message="You don't have access to this order",

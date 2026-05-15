@@ -50,6 +50,7 @@ class TailorAcceptOrderView(APIView):
             from apps.accounts.models import CustomUser
             assigned_rider = get_object_or_404(CustomUser, id=assigned_rider_id, role='RIDER')
             order.assigned_rider = assigned_rider
+            order.rider = assigned_rider  # Sync with main rider field for API visibility
             order.save()
         
         # Check if already accepted
@@ -124,6 +125,7 @@ class TailorUpdateOrderStatusView(APIView):
                 from apps.accounts.models import CustomUser
                 assigned_rider = get_object_or_404(CustomUser, id=assigned_rider_id, role='RIDER')
                 order.assigned_rider = assigned_rider
+                order.rider = assigned_rider  # Sync with main rider field for API visibility
                 order.save()
                 
                 # If order is already accepted, notify the new rider specifically
