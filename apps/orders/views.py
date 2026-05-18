@@ -73,8 +73,24 @@ class OrderCreateView(APIView):
         tags=["Customer Orders"]
     )
     def post(self,request):
+        # 1. Idempotency Check
+        idempotency_key = request.headers.get('Idempotency-Key') or request.data.get('idempotency_key')
+        if idempotency_key:
+            existing_order = Order.objects.filter(idempotency_key=idempotency_key).first()
+            if existing_order:
+                # If retrying a successful request, just return the existing order
+                response_serializer = OrderSerializer(existing_order, context={'request': request})
+                return api_response(
+                    success=True,
+                    message="Order retrieved from previous successful request (Idempotent)",
+                    data=response_serializer.data,
+                    status_code=status.HTTP_200_OK
+                )
 
         data=request.data.copy()
+        if idempotency_key:
+            data['idempotency_key'] = idempotency_key
+
         if not request.user.is_admin:
             data['customer'] = request.user.id
         # For TAILOR and ADMIN, we respect the 'customer' ID passed in the request.

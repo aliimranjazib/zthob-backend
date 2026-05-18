@@ -153,8 +153,15 @@ class Order(BaseModel):
     unique=True,
     editable=False,
     help_text="Unique order number generated automatically"
-
     )
+
+    idempotency_key = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+        help_text="Unique key from frontend to prevent duplicate order creation"
+    )
+
     status=models.CharField(
     max_length=20,
     choices=ORDER_STATUS_CHOICES,
