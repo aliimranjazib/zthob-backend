@@ -677,7 +677,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'custom_styles',
             'items',
             'distance_km',
-            'is_express'
+            'is_express',
+            'idempotency_key'
         ]
         extra_kwargs = {
             'tailor': {'required': False, 'allow_null': True}
@@ -738,7 +739,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 
             try:
                 if isinstance(fabric,int):
-                    fabric =Fabric.objects.select_for_update().get(id=fabric)
+                    fabric =Fabric.objects.get(id=fabric)
                 elif not isinstance(fabric,Fabric):
                     raise serializers.ValidationError(f'Invalid fabric: {fabric}')
             except Fabric.DoesNotExist:
@@ -752,10 +753,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     f"{fabric.name} is not available for purchase"
                     )
 
-            if tailor and fabric.tailor.user!= tailor:
-                raise serializers.ValidationError(
-                    f"Fabric {fabric.name} does not belong to selected tailor"
-                )
             item_data['fabric']=fabric
             validated_items.append(item_data)
         return validated_items
@@ -889,6 +886,18 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'delivery_address': 'Delivery address or location coordinates are required for home delivery orders.'
             })
+            
+        # Cross-field validation for tailor and items
+        tailor = data.get('tailor')
+        items = data.get('items', [])
+        
+        if tailor:
+            for item in items:
+                fabric = item.get('fabric')
+                if fabric and fabric.tailor.user != tailor:
+                    raise serializers.ValidationError({
+                        'items': f"Fabric {fabric.name} does not belong to the selected tailor."
+                    })
             
         return data
 

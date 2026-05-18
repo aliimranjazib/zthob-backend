@@ -4,6 +4,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.core.validators import FileExtensionValidator
 from decimal import Decimal
+from django.core.cache import cache
 
 User = get_user_model()
 
@@ -143,18 +144,27 @@ class SystemSettings(models.Model):
     
     @classmethod
     def get_active_settings(cls):
-        """Get the active system settings (singleton pattern)"""
-        settings_obj = cls.objects.filter(is_active=True).first()
-        if not settings_obj:
-            # Create default settings if none exist
-            settings_obj = cls.objects.create()
+        """Get the active system settings (singleton pattern) with caching"""
+        cache_key = 'active_system_settings'
+        settings_obj = cache.get(cache_key)
+        
+        if settings_obj is None:
+            settings_obj = cls.objects.filter(is_active=True).first()
+            if not settings_obj:
+                # Create default settings if none exist
+                settings_obj = cls.objects.create()
+            # Cache for 24 hours
+            cache.set(cache_key, settings_obj, 60 * 60 * 24)
+            
         return settings_obj
     
     def save(self, *args, **kwargs):
-        """Override save to ensure only one active setting exists"""
+        """Override save to ensure only one active setting exists and clear cache"""
         if self.is_active:
             # Deactivate all other settings
             SystemSettings.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
+            # Clear cache when active settings change
+            cache.delete('active_system_settings')
         super().save(*args, **kwargs)
 
 
