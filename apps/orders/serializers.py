@@ -947,18 +947,18 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError(
                     f"{locked_fabric.name} is no longer available"
                 )
-            # Use discount price if flash sale is active
-            unit_price = locked_fabric.discount_price if (locked_fabric.is_on_sale and locked_fabric.is_sale_active and locked_fabric.discount_price is not None) else locked_fabric.price
+                # Use discount price if flash sale is active
+                unit_price = locked_fabric.discount_price if (locked_fabric.is_on_sale and locked_fabric.is_sale_active and locked_fabric.discount_price is not None) else locked_fabric.price
 
-            items_with_fabrics.append({
-                'fabric': locked_fabric,
-                'quantity': quantity,
-                'unit_price': unit_price,  # ALWAYS use current DB price, with discount if applicable
-                'measurements': item_data.get('measurements', {}),
-                'custom_instructions': item_data.get('custom_instructions', ''),
-                'family_member': item_data.get('family_member'),
-                'custom_styles': item_data.get('custom_styles'),  # Item-level custom styles
-            })
+                items_with_fabrics.append({
+                    'fabric': locked_fabric,
+                    'quantity': quantity,
+                    'unit_price': unit_price,  # ALWAYS use current DB price, with discount if applicable
+                    'measurements': item_data.get('measurements', {}),
+                    'custom_instructions': item_data.get('custom_instructions', ''),
+                    'family_member': item_data.get('family_member'),
+                    'custom_styles': item_data.get('custom_styles'),  # Item-level custom styles
+                })
         else:
             # Measurement orders - no fabric validation needed
             for item_data in items_data:
