@@ -683,6 +683,7 @@ class RiderOrderDetailView(APIView):
                 'family_member'  # Prefetch family_member for order_recipient
             ).prefetch_related(
                 'order_items__fabric',
+                'order_items__family_member',
                 'order_items__fabric__gallery',  # Prefetch gallery images for fabric images
                 'tailor__addresses'  # Prefetch tailor addresses for structured address
             ),
@@ -1499,4 +1500,3 @@ class RiderAnalyticsView(APIView):
                 message=f"Error retrieving analytics: {str(e)}",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
