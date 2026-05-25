@@ -946,7 +946,12 @@ class OrderActionView(APIView):
 
     @extend_schema(
         summary="Perform order action",
-        description="Generic endpoint to perform various actions on an order (e.g., accept, record_measurements, pickup).",
+        description=(
+            "Generic endpoint to perform various actions on an order (e.g., accept, "
+            "record_measurements, pickup). For record_measurements, send data as "
+            "{family_member: int|null, measurements: object}. For start_stitching, "
+            "you can pass stitching_completion_date and stitching_completion_time."
+        ),
         tags=["Orders"]
     )
     @transaction.atomic
@@ -976,12 +981,16 @@ class OrderActionView(APIView):
             # 4. Run post-execution tasks
             action.post_execute()
 
-            # Return success response with updated order info
+            # Return success response with updated order info and refreshed actions.
             response_serializer = OrderStatusUpdateResponseSerializer(order, context={'request': request})
+            response_data = dict(response_serializer.data)
+            status_info = response_data.get('status_info') or {}
+            response_data['available_actions'] = status_info.get('available_actions', [])
+            response_data['measurement_status'] = self._build_measurement_status(order)
             return api_response(
                 success=True,
                 message=result_msg or "Action performed successfully.",
-                data=response_serializer.data,
+                data=response_data,
                 status_code=status.HTTP_200_OK
             )
 
@@ -1006,3 +1015,47 @@ class OrderActionView(APIView):
                 message="An unexpected error occurred while performing the action.",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    def _build_measurement_status(self, order):
+        """Build measurement summary for action responses."""
+        if order.order_type not in ['fabric_with_stitching', 'measurement_service']:
+            return None
+
+        from django.db.models import Q
+        items = order.order_items.select_related('family_member')
+        total_items = items.count()
+        measured_items = items.exclude(Q(measurements__isnull=True) | Q(measurements={})).count()
+        remaining_items = total_items - measured_items
+
+        pending_recipients = []
+        seen_keys = set()
+        pending_items = items.filter(Q(measurements__isnull=True) | Q(measurements={}))
+        for item in pending_items:
+            if item.family_member:
+                key = f"family_member_{item.family_member_id}"
+                if key in seen_keys:
+                    continue
+                pending_recipients.append({
+                    'type': 'family_member',
+                    'id': item.family_member_id,
+                    'name': item.family_member.name,
+                })
+                seen_keys.add(key)
+            else:
+                key = f"customer_{order.customer_id}"
+                if key in seen_keys:
+                    continue
+                pending_recipients.append({
+                    'type': 'customer',
+                    'id': order.customer_id,
+                    'name': order.customer.get_full_name() or order.customer.username,
+                })
+                seen_keys.add(key)
+
+        return {
+            'all_measured': order.all_items_have_measurements,
+            'total_items': total_items,
+            'measured_items': measured_items,
+            'remaining_items': remaining_items,
+            'remaining_recipients': pending_recipients,
+        }

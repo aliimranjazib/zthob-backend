@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from django.utils import timezone
 from django.db.models import Q
+from apps.customers.models import FamilyMember
 
 class BaseOrderAction(ABC):
     """
@@ -192,6 +193,18 @@ class RecordMeasurementsAction(BaseOrderAction):
     label = 'Record Measurements'
     allowed_roles = ['TAILOR', 'RIDER', 'ADMIN']
 
+    def _resolve_role(self):
+        """Resolve role from requested role or authenticated user roles."""
+        if self.requested_role:
+            return self.requested_role
+        if self.user.is_admin:
+            return 'ADMIN'
+        if self.user.is_tailor:
+            return 'TAILOR'
+        if self.user.is_rider:
+            return 'RIDER'
+        return None
+
     def _check_requirements(self):
         # 1. State check
         if self.order.status in ['delivered', 'collected', 'cancelled']:
@@ -202,42 +215,59 @@ class RecordMeasurementsAction(BaseOrderAction):
             raise ValidationError("Measurements are already recorded.")
 
         # 3. Role-specific logic
-        role = self.requested_role
-        user_roles = self.user.get_all_roles()
-        if not role:
-            if self.user.is_tailor: role = 'TAILOR'
-            elif self.user.is_rider: role = 'RIDER'
+        role = self._resolve_role()
+        if role not in ['TAILOR', 'RIDER', 'ADMIN']:
+            raise PermissionDenied("Invalid role for recording measurements.")
+
+        family_member_id = self.data.get('family_member')
+        if family_member_id is not None:
+            try:
+                family_member = FamilyMember.objects.get(id=family_member_id)
+            except FamilyMember.DoesNotExist:
+                raise ValidationError("Family member not found.")
+            if family_member.user_id != self.order.customer_id:
+                raise ValidationError("Family member must belong to the order customer.")
         
-        if role == 'TAILOR' and self.order.tailor == self.user:
-            # Rule: Hide if it's Home Delivery (Rider's job)
+        if role == 'TAILOR':
+            if self.order.tailor != self.user and not self.user.is_admin:
+                raise PermissionDenied("You are not the assigned tailor for this order.")
             if self.order.service_mode == 'home_delivery':
                 raise ValidationError("Rider must record measurements for home delivery orders.")
         
-        elif role == 'RIDER' and (self.order.rider == self.user or self.order.assigned_rider == self.user):
-            # Rule: Valid status check
-            if self.order.rider_status not in ['on_way_to_measurement', 'accepted']:
-                 raise ValidationError("Invalid state to record measurements.")
+        elif role == 'RIDER':
+            if self.order.rider != self.user and self.order.assigned_rider != self.user:
+                raise PermissionDenied("You are not the assigned rider for this order.")
+            if self.order.rider_status not in ['on_way_to_measurement', 'accepted', 'measuring']:
+                raise ValidationError("Invalid state to record measurements.")
 
     def execute(self):
         measurements = self.data.get('measurements')
         if not measurements:
             raise ValidationError("Measurement data is required.")
+        family_member_id = self.data.get('family_member')
 
-        # Logic to save measurements to order items
-        for item in self.order.order_items.all():
-            item.measurements = measurements
-            item.save()
+        # Update only selected recipient items (family member OR customer/self).
+        if family_member_id is not None:
+            recipient_items = self.order.order_items.filter(family_member_id=family_member_id)
+        else:
+            recipient_items = self.order.order_items.filter(family_member__isnull=True)
+
+        if not recipient_items.exists():
+            raise ValidationError("No order items found for the selected recipient.")
+
+        recipient_items.update(measurements=measurements)
 
         self.order.measurement_taken_at = timezone.now()
-        
-        # Update specific statuses based on role
         self.order.status = 'in_progress'
-        
-        role = self.requested_role or ('TAILOR' if self.user.is_tailor else 'RIDER')
 
-        if role == 'RIDER' and (self.order.rider == self.user or self.order.assigned_rider == self.user):
-            self.order.rider_status = 'measurement_taken'
-        elif role == 'TAILOR' and self.order.tailor == self.user:
+        role = self._resolve_role()
+
+        if self.order.all_items_have_measurements:
+            if role in ['RIDER', 'ADMIN']:
+                self.order.rider_status = 'measurement_taken'
+        elif role == 'RIDER' and self.order.rider_status in ['accepted', 'on_way_to_measurement', 'measuring']:
+            self.order.rider_status = 'measuring'
+        elif role == 'TAILOR':
             self.order.tailor_status = 'accepted'
             
         self.order.save()

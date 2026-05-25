@@ -626,46 +626,63 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
 
     def _collect_recipients(self, obj):
         """Helper to collect unique recipients from order items."""
-        include_measurements = obj.rider_status == 'measurement_taken' and obj.rider_measurements
         recipients = []
-        seen_recipients = set()
+        recipients_by_key = {}
+
+        def add_recipient(key, recipient_data, measurements=None):
+            if key not in recipients_by_key:
+                recipients_by_key[key] = recipient_data
+                recipients.append(recipients_by_key[key])
+
+            if measurements:
+                recipients_by_key[key]['measurements'] = measurements
         
         # Add order-level family member if exists
         if obj.family_member:
-            recipients.append({
-                'type': 'family_member',
-                'id': obj.family_member.id,
-                'name': obj.family_member.name,
-            })
-            seen_recipients.add(f"family_{obj.family_member.id}")
+            add_recipient(
+                f"family_{obj.family_member.id}",
+                {
+                    'type': 'family_member',
+                    'id': obj.family_member.id,
+                    'name': obj.family_member.name,
+                },
+                obj.rider_measurements if obj.rider_status == 'measurement_taken' else None
+            )
         
         # Add recipients from items
         for item in obj.order_items.all():
             if item.family_member:
                 key = f"family_{item.family_member.id}"
-                if key not in seen_recipients:
-                    recipients.append({
+                add_recipient(
+                    key,
+                    {
                         'type': 'family_member',
                         'id': item.family_member.id,
                         'name': item.family_member.name,
-                    })
-                    seen_recipients.add(key)
+                    },
+                    item.measurements
+                )
             else:
                 key = "customer"
-                if key not in seen_recipients:
-                    if obj.customer:
-                        recipients.append({
+                if obj.customer:
+                    add_recipient(
+                        key,
+                        {
                             'type': 'customer',
                             'id': obj.customer.id,
                             'name': obj.customer.get_full_name() or obj.customer.username,
                             'phone': obj.customer.phone,
                             'email': obj.customer.email,
-                        })
-                        seen_recipients.add(key)
+                        },
+                        item.measurements
+                    )
 
-        if include_measurements:
+        # Backward compatibility for older single-recipient orders that only
+        # stored measurements at order level.
+        if obj.rider_status == 'measurement_taken' and obj.rider_measurements:
             for recipient in recipients:
-                recipient['measurements'] = obj.rider_measurements
+                if 'measurements' not in recipient:
+                    recipient['measurements'] = obj.rider_measurements
         
         return recipients
 
@@ -760,6 +777,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
                 'total_price': str(item.total_price),
                 'family_member': item.family_member.id if item.family_member else None,
                 'family_member_name': self._get_item_recipient_name(item),
+                'measurements': item.measurements,
                 'custom_styles': OrderItemSerializer(item, context=self.context).data.get('custom_styles', []),
             })
         return items
