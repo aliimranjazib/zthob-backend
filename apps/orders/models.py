@@ -255,6 +255,13 @@ class Order(BaseModel):
     default='credit_card',
     help_text="Payment method chosen by customer"
     )
+    payment_reference = models.CharField(
+        max_length=150,
+        null=True,
+        blank=True,
+        unique=True,
+        help_text="External payment gateway reference for paid online orders"
+    )
 
     family_member=models.ForeignKey(
     'customers.FamilyMember',
@@ -707,6 +714,96 @@ class OrderItem(BaseModel):
     def __str__(self):
         fabric_name = self.fabric.name if self.fabric else "No Fabric"
         return f"{fabric_name} x{self.quantity} - {self.order.order_number}"
+
+
+class CheckoutSession(BaseModel):
+    """
+    Temporary checkout draft. It lets customers review/pay before we create a real order.
+    """
+    STATUS_CHOICES = (
+        ('active', 'Active'),
+        ('order_created', 'Order Created'),
+        ('expired', 'Expired'),
+        ('cancelled', 'Cancelled'),
+        ('payment_failed', 'Payment Failed'),
+    )
+
+    booking_unique_key = models.CharField(
+        max_length=40,
+        unique=True,
+        db_index=True,
+        help_text="Public checkout key sent to the payment gateway/frontend"
+    )
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='checkout_sessions',
+        help_text="Customer who owns this checkout draft"
+    )
+    order = models.OneToOneField(
+        'orders.Order',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='checkout_session',
+        help_text="Order created from this checkout session"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='active',
+        db_index=True
+    )
+    request_payload = models.JSONField(
+        help_text="Original order creation payload from the mobile app"
+    )
+    pricing_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Backend-calculated totals shown on checkout"
+    )
+    client_idempotency_key = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Optional frontend retry key for checkout creation"
+    )
+    payment_method = models.CharField(
+        max_length=20,
+        choices=Order.PAYMENT_METHOD_CHOICES,
+        null=True,
+        blank=True
+    )
+    payment_reference = models.CharField(
+        max_length=150,
+        null=True,
+        blank=True,
+        unique=True,
+        help_text="Gateway transaction/reference supplied after frontend payment"
+    )
+    payment_confirmed_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Checkout Session'
+        verbose_name_plural = 'Checkout Sessions'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['customer', 'client_idempotency_key'],
+                condition=Q(client_idempotency_key__isnull=False),
+                name='unique_customer_checkout_idempotency_key'
+            )
+        ]
+
+    @property
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f"{self.booking_unique_key} - {self.status}"
+
 
 class OrderStatusHistory(BaseModel):
     """

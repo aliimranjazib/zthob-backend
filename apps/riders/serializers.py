@@ -850,8 +850,11 @@ class RiderAcceptOrderSerializer(serializers.Serializer):
     def validate_order_id(self, value):
         try:
             order = Order.objects.get(id=value)
-            if order.payment_status != 'paid':
-                raise serializers.ValidationError("Order payment must be paid before rider can accept it")
+            is_payment_ready = order.payment_status == 'paid' or (
+                order.payment_method == 'cod' and order.payment_status == 'pending'
+            )
+            if not is_payment_ready:
+                raise serializers.ValidationError("Order payment must be paid or pending COD before rider can accept it")
             if order.rider is not None:
                 raise serializers.ValidationError("Order is already assigned to another rider")
             return value

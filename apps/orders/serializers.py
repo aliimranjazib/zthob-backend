@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Order, OrderItem, OrderStatusHistory
+from .models import CheckoutSession, Order, OrderItem, OrderStatusHistory
 from apps.tailors.models import TailorProfile,Fabric
 from apps.customers.models import Address
 from apps.customization.models import CustomStyle
@@ -160,6 +160,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'total_amount',
             'payment_status',
             'payment_method',
+            'payment_reference',
             'family_member',
             'family_member_name',
             'order_recipient',
@@ -901,6 +902,97 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             
         return data
 
+    def get_checkout_pricing_snapshot(self):
+        """Calculate checkout totals without creating an order or reducing stock."""
+        validated_data = getattr(self, 'validated_data', None)
+        if validated_data is None:
+            raise serializers.ValidationError("Serializer must be valid before calculating checkout totals")
+
+        items_data = validated_data.get('items', [])
+        tailor = validated_data.get('tailor')
+        order_type = validated_data.get('order_type', 'fabric_only')
+        service_mode = validated_data.get('service_mode', 'home_delivery')
+        is_express = validated_data.get('is_express', False)
+        items_with_fabrics = []
+
+        if order_type == 'measurement_service':
+            for item_data in items_data:
+                items_with_fabrics.append({
+                    'fabric': None,
+                    'quantity': 1,
+                    'unit_price': Decimal('0.00'),
+                    'measurements': item_data.get('measurements', {}),
+                    'custom_instructions': item_data.get('custom_instructions', ''),
+                    'family_member': item_data.get('family_member'),
+                    'custom_styles': item_data.get('custom_styles'),
+                })
+        else:
+            for item_data in items_data:
+                fabric = item_data.get('fabric')
+                quantity = item_data.get('quantity', 1)
+                if fabric.stock < quantity:
+                    raise serializers.ValidationError(
+                        f"Insufficient stock for {fabric.name}. Available: {fabric.stock}, Requested: {quantity}"
+                    )
+                if not fabric.is_active:
+                    raise serializers.ValidationError(f"{fabric.name} is no longer available")
+
+                unit_price = (
+                    fabric.discount_price
+                    if (
+                        fabric.is_on_sale
+                        and fabric.is_sale_active
+                        and fabric.discount_price is not None
+                    )
+                    else fabric.price
+                )
+                items_with_fabrics.append({
+                    'fabric': fabric,
+                    'quantity': quantity,
+                    'unit_price': unit_price,
+                    'measurements': item_data.get('measurements', {}),
+                    'custom_instructions': item_data.get('custom_instructions', ''),
+                    'family_member': item_data.get('family_member'),
+                    'custom_styles': item_data.get('custom_styles'),
+                })
+
+        delivery_lat = None
+        delivery_lng = None
+        if self.context.get('using_current_location') and self.context.get('current_location_data'):
+            current_location_data = self.context['current_location_data']
+            delivery_lat = current_location_data['latitude']
+            delivery_lng = current_location_data['longitude']
+        elif self.context.get('saved_address'):
+            saved_address = self.context['saved_address']
+            delivery_lat = saved_address.latitude
+            delivery_lng = saved_address.longitude
+
+        distance_km = validated_data.get('distance_km')
+        if distance_km is not None:
+            distance_km = float(distance_km)
+
+        totals = OrderCalculationService.calculate_all_totals(
+            items_data=items_with_fabrics,
+            distance_km=distance_km,
+            delivery_latitude=delivery_lat,
+            delivery_longitude=delivery_lng,
+            tailor=tailor,
+            order_type=order_type,
+            service_mode=service_mode,
+            is_express=is_express
+        )
+
+        return {
+            'subtotal': str(totals.get('subtotal', Decimal('0.00'))),
+            'stitching_price': str(totals.get('stitching_price', Decimal('0.00'))),
+            'tax_amount': str(totals.get('tax_amount', Decimal('0.00'))),
+            'delivery_fee': str(totals.get('delivery_fee', Decimal('0.00'))),
+            'system_fee': str(totals.get('system_fee', Decimal('0.00'))),
+            'express_fee': str(totals.get('express_fee', Decimal('0.00'))),
+            'total_amount': str(totals.get('total_amount', Decimal('0.00'))),
+            'items_count': len(items_with_fabrics),
+        }
+
     @transaction.atomic
     def create(self,validated_data):
         items_data=validated_data.pop('items')
@@ -1348,7 +1440,9 @@ class OrderListSerializer(serializers.ModelSerializer):
             'stitching_price',
             'total_amount',
             'pricing_summary',
+            'payment_method',
             'payment_status',
+            'payment_reference',
             'appointment_date',
             'appointment_time',
             'stitching_completion_date',
@@ -1611,4 +1705,43 @@ class OrderPaymentStatusUpdateSerializer(serializers.Serializer):
         required=True,
         help_text="Payment status: pending, paid, or refunded"
     )
+
+
+class CheckoutSessionSerializer(serializers.ModelSerializer):
+    bookingUniqueKey = serializers.CharField(source='booking_unique_key', read_only=True)
+    pricing_summary = serializers.JSONField(source='pricing_snapshot', read_only=True)
+    order_id = serializers.IntegerField(source='order.id', read_only=True, allow_null=True)
+
+    class Meta:
+        model = CheckoutSession
+        fields = [
+            'bookingUniqueKey',
+            'status',
+            'pricing_summary',
+            'expires_at',
+            'payment_method',
+            'payment_reference',
+            'order_id',
+        ]
+        read_only_fields = fields
+
+
+class CheckoutCreateOrderSerializer(serializers.Serializer):
+    bookingUniqueKey = serializers.CharField(required=True)
+    payment_method = serializers.ChoiceField(
+        choices=[('cod', 'Cash on Delivery'), ('credit_card', 'Credit Card')],
+        required=True
+    )
+    payment_reference = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, attrs):
+        payment_method = attrs.get('payment_method')
+        payment_reference = attrs.get('payment_reference')
+        if payment_method == 'credit_card' and not payment_reference:
+            raise serializers.ValidationError({
+                'payment_reference': 'payment_reference is required for credit card orders.'
+            })
+        if payment_method == 'cod' and payment_reference:
+            attrs['payment_reference'] = None
+        return attrs
             

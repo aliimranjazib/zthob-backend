@@ -9,7 +9,7 @@ from rest_framework.exceptions import ValidationError, PermissionDenied
 from .actions import OrderActionManager
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema
-from .models import Order, OrderItem ,OrderStatusHistory
+from .models import CheckoutSession, Order, OrderItem ,OrderStatusHistory
 from .serializers import(
 OrderItemSerializer,
 OrderItemCreateSerializer,
@@ -17,13 +17,16 @@ OrderSerializer,
 OrderCreateSerializer,
 OrderUpdateSerializer,
 OrderListSerializer,
-OrderStatusHistorySerializer,
-OrderPaymentStatusUpdateSerializer,
-OrderStatusUpdateResponseSerializer,
-)
+	OrderStatusHistorySerializer,
+	OrderPaymentStatusUpdateSerializer,
+	OrderStatusUpdateResponseSerializer,
+    CheckoutCreateOrderSerializer,
+    CheckoutSessionSerializer,
+	)
 from apps.tailors.models import TailorProfile
 from apps.customers.models import CustomerProfile
 from zthob.utils import api_response 
+import uuid
 
 class OrderListView(APIView):
     permission_classes=[IsAuthenticated]
@@ -131,6 +134,244 @@ class OrderCreateView(APIView):
             status_code=status.HTTP_400_BAD_REQUEST
         )
         
+
+class CheckoutCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=OrderCreateSerializer,
+        responses={201: CheckoutSessionSerializer},
+        summary="Create checkout session",
+        description="Validate order data and return a bookingUniqueKey before creating a real order.",
+        tags=["Checkout"]
+    )
+    def post(self, request):
+        client_idempotency_key = (
+            request.headers.get('Idempotency-Key')
+            or request.data.get('client_idempotency_key')
+            or request.data.get('idempotency_key')
+        )
+
+        if client_idempotency_key:
+            existing_checkout = CheckoutSession.objects.filter(
+                customer=request.user,
+                client_idempotency_key=client_idempotency_key,
+            ).first()
+            if existing_checkout:
+                serializer = CheckoutSessionSerializer(existing_checkout, context={'request': request})
+                return api_response(
+                    success=True,
+                    message="Checkout retrieved from previous request.",
+                    data=serializer.data,
+                    status_code=status.HTTP_200_OK
+                )
+
+        data = request.data.copy()
+        if not request.user.is_admin:
+            data['customer'] = request.user.id
+
+        serializer = OrderCreateSerializer(data=data, context={'request': request})
+        if not serializer.is_valid():
+            return api_response(
+                success=False,
+                message="Checkout validation failed",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            pricing_snapshot = serializer.get_checkout_pricing_snapshot()
+            checkout = CheckoutSession.objects.create(
+                booking_unique_key=self._generate_booking_key(),
+                customer=request.user,
+                request_payload=self._json_safe_payload(data),
+                pricing_snapshot=pricing_snapshot,
+                client_idempotency_key=client_idempotency_key,
+                expires_at=timezone.now() + timezone.timedelta(minutes=30),
+            )
+            response_serializer = CheckoutSessionSerializer(checkout, context={'request': request})
+            return api_response(
+                success=True,
+                message="Checkout created successfully",
+                data=response_serializer.data,
+                status_code=status.HTTP_201_CREATED
+            )
+        except ValidationError as e:
+            return api_response(
+                success=False,
+                message="Checkout validation failed",
+                errors={'detail': str(e)},
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+    def _generate_booking_key(self):
+        while True:
+            key = f"chk_{uuid.uuid4().hex[:24]}"
+            if not CheckoutSession.objects.filter(booking_unique_key=key).exists():
+                return key
+
+    def _json_safe_payload(self, value):
+        if isinstance(value, dict):
+            return {key: self._json_safe_payload(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._json_safe_payload(item) for item in value]
+        if hasattr(value, 'id'):
+            return value.id
+        return value
+
+
+class CheckoutStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses={200: CheckoutSessionSerializer},
+        summary="Get checkout status",
+        description="Fetch checkout state by bookingUniqueKey.",
+        tags=["Checkout"]
+    )
+    def get(self, request, booking_unique_key):
+        checkout = get_object_or_404(
+            CheckoutSession.objects.select_related('order'),
+            booking_unique_key=booking_unique_key,
+            customer=request.user,
+        )
+        if checkout.status == 'active' and checkout.is_expired:
+            checkout.status = 'expired'
+            checkout.save(update_fields=['status', 'updated_at'])
+
+        serializer = CheckoutSessionSerializer(checkout, context={'request': request})
+        return api_response(
+            success=True,
+            message="Checkout status retrieved successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+class CheckoutCreateOrderView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=CheckoutCreateOrderSerializer,
+        responses={201: OrderSerializer},
+        summary="Create order from checkout",
+        description=(
+            "Create the real order from a bookingUniqueKey. COD creates a pending-payment "
+            "order. Credit card requires payment_reference and creates a paid order."
+        ),
+        tags=["Checkout"]
+    )
+    @transaction.atomic
+    def post(self, request):
+        request_serializer = CheckoutCreateOrderSerializer(data=request.data)
+        if not request_serializer.is_valid():
+            return api_response(
+                success=False,
+                message="Invalid checkout order data",
+                errors=request_serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        booking_key = request_serializer.validated_data['bookingUniqueKey']
+        payment_method = request_serializer.validated_data['payment_method']
+        payment_reference = request_serializer.validated_data.get('payment_reference')
+
+        checkout = get_object_or_404(
+            CheckoutSession.objects.select_for_update().select_related('order'),
+            booking_unique_key=booking_key,
+            customer=request.user,
+        )
+
+        if checkout.order:
+            response_serializer = OrderSerializer(checkout.order, context={'request': request})
+            return api_response(
+                success=True,
+                message="Order retrieved from previous checkout request.",
+                data=response_serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+
+        if checkout.status != 'active':
+            return api_response(
+                success=False,
+                message=f"Checkout is not active. Current status: {checkout.status}",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if checkout.is_expired:
+            checkout.status = 'expired'
+            checkout.save(update_fields=['status', 'updated_at'])
+            return api_response(
+                success=False,
+                message="Checkout has expired. Please create a new checkout.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if payment_method == 'credit_card':
+            reference_used = (
+                Order.objects.filter(payment_reference=payment_reference).exists()
+                or CheckoutSession.objects.filter(payment_reference=payment_reference).exclude(id=checkout.id).exists()
+            )
+            if reference_used:
+                return api_response(
+                    success=False,
+                    message="This payment reference has already been used.",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+        order_data = dict(checkout.request_payload)
+        order_data['customer'] = request.user.id
+        order_data['payment_method'] = payment_method
+
+        order_serializer = OrderCreateSerializer(data=order_data, context={'request': request})
+        if not order_serializer.is_valid():
+            return api_response(
+                success=False,
+                message="Order creation from checkout failed",
+                errors=order_serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            order = order_serializer.save()
+            if payment_method == 'credit_card':
+                order.payment_status = 'paid'
+                order.payment_reference = payment_reference
+                order.save(update_fields=['payment_status', 'payment_reference', 'updated_at'])
+            elif payment_method == 'cod':
+                order.payment_status = 'pending'
+                order.payment_reference = None
+                order.save(update_fields=['payment_status', 'payment_reference', 'updated_at'])
+
+            checkout.order = order
+            checkout.status = 'order_created'
+            checkout.payment_method = payment_method
+            checkout.payment_reference = payment_reference if payment_method == 'credit_card' else None
+            checkout.payment_confirmed_at = timezone.now() if payment_method == 'credit_card' else None
+            checkout.save(update_fields=[
+                'order',
+                'status',
+                'payment_method',
+                'payment_reference',
+                'payment_confirmed_at',
+                'updated_at',
+            ])
+
+            response_serializer = OrderSerializer(order, context={'request': request})
+            return api_response(
+                success=True,
+                message="Order created successfully from checkout",
+                data=response_serializer.data,
+                status_code=status.HTTP_201_CREATED
+            )
+        except ValidationError as e:
+            return api_response(
+                success=False,
+                message="Order creation from checkout failed",
+                errors={'detail': str(e)},
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
 
 class OrderDetailView(APIView):
     """
@@ -589,13 +830,13 @@ class TailorOrderListView(APIView):
 
 
 class TailorPaidOrdersView(APIView):
-    """Get orders with payment_status=paid for tailor"""
+    """Get paid orders and pending COD orders for tailor"""
     permission_classes=[IsAuthenticated]
     
     @extend_schema(
         responses=OrderListSerializer(many=True),
-        summary="Get paid orders",
-        description="Retrieve all paid orders assigned to the authenticated tailor (ready for processing)",
+        summary="Get processable orders",
+        description="Retrieve paid orders and pending COD orders assigned to the authenticated tailor (ready for processing)",
         tags=["Tailor Orders"]
     )
     def get(self, request):
@@ -603,7 +844,8 @@ class TailorPaidOrdersView(APIView):
             tailor_profile = TailorProfile.objects.get(user=request.user)
             orders = Order.objects.filter(
                 tailor=request.user,
-                payment_status='paid'
+            ).filter(
+                Q(payment_status='paid') | Q(payment_method='cod', payment_status='pending')
             ).select_related(
                 'customer',
                 'delivery_address',
@@ -624,7 +866,7 @@ class TailorPaidOrdersView(APIView):
             
             return api_response(
                 success=True,
-                message="Paid orders retrieved successfully",
+                message="Processable orders retrieved successfully",
                 data=serializer.data,
                 status_code=status.HTTP_200_OK
             )
@@ -985,6 +1227,9 @@ class OrderActionView(APIView):
             response_serializer = OrderStatusUpdateResponseSerializer(order, context={'request': request})
             response_data = dict(response_serializer.data)
             status_info = response_data.get('status_info') or {}
+            response_data['payment_method'] = order.payment_method
+            response_data['payment_status'] = order.payment_status
+            response_data['total_amount'] = str(order.total_amount)
             response_data['available_actions'] = status_info.get('available_actions', [])
             response_data['measurement_status'] = self._build_measurement_status(order)
             return api_response(

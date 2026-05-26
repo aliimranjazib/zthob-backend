@@ -99,6 +99,11 @@ class AcceptOrderAction(BaseOrderAction):
     label = 'Accept Order'
     allowed_roles = ['TAILOR', 'RIDER']
 
+    def _is_payment_ready(self):
+        return self.order.payment_status == 'paid' or (
+            self.order.payment_method == 'cod' and self.order.payment_status == 'pending'
+        )
+
     def _check_requirements(self):
         # 1. Role Check (with auto-detection)
         role = self.requested_role
@@ -112,12 +117,16 @@ class AcceptOrderAction(BaseOrderAction):
                 role = 'RIDER'
         
         if role == 'TAILOR':
+            if not self._is_payment_ready():
+                raise ValidationError("Order payment must be paid or pending COD before tailor can accept it.")
             if self.order.tailor and self.order.tailor != self.user:
                 raise PermissionDenied("This order is already assigned to another tailor.")
             if self.order.tailor_status != 'none':
                 raise ValidationError("Order is already accepted by a tailor.")
         
         elif role == 'RIDER':
+            if not self._is_payment_ready():
+                raise ValidationError("Order payment must be paid or pending COD before rider can accept it.")
             if self.order.rider and self.order.rider != self.user:
                 raise PermissionDenied("This order is already assigned to another rider.")
             if self.order.rider_status != 'none':
@@ -386,6 +395,8 @@ class MarkDeliveredAction(BaseOrderAction):
             raise ValidationError("Invalid state for delivery.")
         if self.order.rider != self.user and self.order.assigned_rider != self.user:
             raise PermissionDenied("You are not the assigned rider for this order.")
+        if self.order.payment_method == 'cod' and self.order.payment_status != 'paid':
+            raise ValidationError("Cash payment must be collected before marking the order as delivered.")
 
     def execute(self):
         self.order.rider_status = 'delivered'
@@ -404,6 +415,8 @@ class CollectOrderAction(BaseOrderAction):
         # 1. State check
         if self.order.status != 'ready_for_pickup':
             raise ValidationError("Order is not ready for pickup.")
+        if self.order.payment_method == 'cod' and self.order.payment_status != 'paid':
+            raise ValidationError("Cash payment must be collected before marking the order as collected.")
         
         # 2. Permission check
         if self.user.is_admin or self.user.is_tailor:
@@ -422,6 +435,73 @@ class CollectOrderAction(BaseOrderAction):
         return "Order marked as collected successfully."
 
 
+class CollectCashPaymentAction(BaseOrderAction):
+    key = 'collect_cash_payment'
+    label = 'Collect Cash Payment'
+    allowed_roles = ['RIDER', 'TAILOR', 'ADMIN']
+
+    def _resolve_role(self):
+        if self.requested_role:
+            return self.requested_role
+        if self.user.is_admin:
+            return 'ADMIN'
+        if self.user.is_rider:
+            return 'RIDER'
+        if self.user.is_tailor:
+            return 'TAILOR'
+        return None
+
+    def _check_requirements(self):
+        if self.order.payment_method != 'cod':
+            raise ValidationError("Cash collection is only available for COD orders.")
+        if self.order.payment_status == 'paid':
+            raise ValidationError("Cash payment has already been collected.")
+        if self.order.payment_status == 'refunded':
+            raise ValidationError("Cannot collect cash for a refunded order.")
+        if self.order.status in ['cancelled']:
+            raise ValidationError("Cannot collect cash for a cancelled order.")
+
+        role = self._resolve_role()
+        if role == 'ADMIN':
+            return
+
+        if self.order.service_mode == 'home_delivery':
+            if role != 'RIDER':
+                raise PermissionDenied("Only the assigned rider can collect cash for home delivery orders.")
+            if self.order.rider != self.user and self.order.assigned_rider != self.user:
+                raise PermissionDenied("You are not the assigned rider for this order.")
+            if self.order.rider_status not in ['on_way_to_delivery', 'delivered']:
+                raise ValidationError("Cash can be collected when the rider is delivering the order.")
+            return
+
+        if self.order.service_mode == 'walk_in':
+            if role != 'TAILOR':
+                raise PermissionDenied("Only the assigned tailor can collect cash for walk-in orders.")
+            if self.order.tailor != self.user:
+                raise PermissionDenied("You are not the assigned tailor for this order.")
+            if self.order.status not in ['ready_for_pickup', 'collected']:
+                raise ValidationError("Cash can be collected when the walk-in order is ready for pickup.")
+            return
+
+        raise ValidationError("Unsupported service mode for cash collection.")
+
+    def execute(self):
+        old_payment_status = self.order.payment_status
+        self.order.payment_status = 'paid'
+        self.order.save(update_fields=['payment_status', 'updated_at'])
+
+        from apps.orders.models import OrderStatusHistory
+        OrderStatusHistory.objects.create(
+            order=self.order,
+            status=self.order.status,
+            previous_status=self.order.status,
+            changed_by=self.user,
+            notes=f"Cash payment collected. Payment status changed from {old_payment_status} to paid."
+        )
+
+        return "Cash payment collected successfully."
+
+
 class OrderActionManager:
     """Registry for all available actions"""
     _actions = {
@@ -436,6 +516,7 @@ class OrderActionManager:
         'start_delivery': StartDeliveryAction,
         'mark_delivered': MarkDeliveredAction,
         'collect_order': CollectOrderAction,
+        'collect_cash_payment': CollectCashPaymentAction,
     }
 
     @classmethod

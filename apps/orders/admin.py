@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.http import HttpResponse
 import csv
 from datetime import datetime
-from .models import Order, OrderItem, OrderStatusHistory
+from .models import CheckoutSession, Order, OrderItem, OrderStatusHistory
 
 
 # ============================================================================
@@ -1006,3 +1006,39 @@ class OrderStatusHistoryAdmin(admin.ModelAdmin):
         """Optimize queryset"""
         qs = super().get_queryset(request)
         return qs.select_related('order', 'changed_by', 'created_by').order_by('-created_at')
+
+
+@admin.register(CheckoutSession)
+class CheckoutSessionAdmin(admin.ModelAdmin):
+    list_display = [
+        'booking_unique_key',
+        'customer',
+        'status',
+        'payment_method',
+        'payment_reference',
+        'order',
+        'expires_at',
+        'created_at',
+    ]
+    list_filter = ['status', 'payment_method', 'created_at', 'expires_at']
+    search_fields = [
+        'booking_unique_key',
+        'customer__username',
+        'customer__email',
+        'payment_reference',
+        'order__order_number',
+    ]
+    readonly_fields = [
+        'booking_unique_key',
+        'customer',
+        'order',
+        'request_payload',
+        'pricing_snapshot',
+        'client_idempotency_key',
+        'payment_method',
+        'payment_reference',
+        'payment_confirmed_at',
+        'expires_at',
+        'created_at',
+        'updated_at',
+    ]
