@@ -538,13 +538,13 @@ class RiderDocumentDeleteView(APIView):
 # ============================================================================
 
 class RiderAvailableOrdersView(APIView):
-    """List orders available for riders (payment_status=paid, no rider assigned)"""
+    """List payment-ready orders available for riders"""
     permission_classes = [IsAuthenticated]
     
     @extend_schema(
         responses=RiderOrderListSerializer(many=True),
         summary="List available orders",
-        description="Get list of orders available for riders (paid orders without assigned rider). Rider must be approved.",
+        description="Get list of orders available for riders (paid or pending COD orders without assigned rider). Rider must be approved.",
         tags=["Rider Orders"]
     )
     def get(self, request):
@@ -571,13 +571,14 @@ class RiderAvailableOrdersView(APIView):
                 status_code=status.HTTP_404_NOT_FOUND
             )
         
-        # Get orders that are paid, don't have a rider assigned, and tailor has confirmed
+        # Get payment-ready orders that don't have a rider assigned and tailor has confirmed.
         # If assigned_rider is set, only that rider can see it
         orders = Order.objects.filter(
-            payment_status='paid',
             rider__isnull=True,
             rider_status='none',
             service_mode='home_delivery',
+        ).filter(
+            Q(payment_status='paid') | Q(payment_method='cod', payment_status='pending')
         ).filter(
             Q(assigned_rider__isnull=True) | Q(assigned_rider=request.user)
         ).filter(
@@ -776,10 +777,13 @@ class RiderAcceptOrderView(APIView):
         order = get_object_or_404(Order, id=order_id)
         
         # Verify order is available
-        if order.payment_status != 'paid':
+        is_payment_ready = order.payment_status == 'paid' or (
+            order.payment_method == 'cod' and order.payment_status == 'pending'
+        )
+        if not is_payment_ready:
             return api_response(
                 success=False,
-                message="Order payment must be paid before rider can accept it",
+                message="Order payment must be paid or pending COD before rider can accept it",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
         
@@ -1229,10 +1233,13 @@ class RiderUpdateOrderStatusView(APIView):
                     status_code=status.HTTP_404_NOT_FOUND
                 )
             
-            if order.payment_status != 'paid':
+            is_payment_ready = order.payment_status == 'paid' or (
+                order.payment_method == 'cod' and order.payment_status == 'pending'
+            )
+            if not is_payment_ready:
                 return api_response(
                     success=False,
-                    message="Order payment must be paid before rider can accept it",
+                    message="Order payment must be paid or pending COD before rider can accept it",
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
             
