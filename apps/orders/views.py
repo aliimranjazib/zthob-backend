@@ -277,7 +277,7 @@ class CheckoutCreateOrderView(APIView):
         payment_reference = request_serializer.validated_data.get('payment_reference')
 
         checkout = get_object_or_404(
-            CheckoutSession.objects.select_for_update().select_related('order'),
+            CheckoutSession.objects.select_for_update(),
             booking_unique_key=booking_key,
             customer=request.user,
         )
