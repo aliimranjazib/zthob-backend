@@ -7,7 +7,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.customers.models import Address
-from apps.orders.models import CheckoutSession, Order
+from apps.orders.models import CheckoutSession, Order, OrderPayment
 from apps.tailors.models import Fabric, FabricCategory, TailorProfile
 
 
@@ -106,6 +106,9 @@ class CheckoutFlowTest(TestCase):
         order = Order.objects.get()
         self.assertEqual(order.payment_method, 'cod')
         self.assertEqual(order.payment_status, 'pending')
+        self.assertEqual(order.payment_plan, 'pay_later')
+        self.assertEqual(order.paid_amount, Decimal('0.00'))
+        self.assertEqual(order.remaining_amount, order.total_amount)
         self.assertIsNone(order.payment_reference)
         self.fabric.refresh_from_db()
         self.assertEqual(self.fabric.stock, 9)
@@ -140,9 +143,72 @@ class CheckoutFlowTest(TestCase):
         checkout = CheckoutSession.objects.get(booking_unique_key=booking_key)
         self.assertEqual(order.payment_method, 'credit_card')
         self.assertEqual(order.payment_status, 'paid')
+        self.assertEqual(order.payment_plan, 'full')
+        self.assertEqual(order.paid_amount, order.total_amount)
+        self.assertEqual(order.remaining_amount, Decimal('0.00'))
         self.assertEqual(order.payment_reference, 'txn_checkout_001')
+        self.assertEqual(OrderPayment.objects.filter(order=order, payment_type='full_payment').count(), 1)
         self.assertEqual(checkout.status, 'order_created')
         self.assertEqual(checkout.order, order)
+
+    def test_checkout_returns_backend_payment_options(self):
+        response = self.client.post(
+            '/api/orders/checkout/',
+            data=self._checkout_payload(),
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        option_keys = [
+            option['key']
+            for option in response.data['data']['pricing_summary']['payment_options']
+        ]
+        self.assertIn('full', option_keys)
+        self.assertIn('advance_50', option_keys)
+        self.assertIn('pay_later', option_keys)
+
+    def test_partial_payment_create_order_from_checkout_is_partially_paid(self):
+        booking_key = self._create_checkout()
+
+        response = self.client.post(
+            '/api/orders/checkout/create-order/',
+            data={
+                'bookingUniqueKey': booking_key,
+                'payment_method': 'credit_card',
+                'payment_option': 'advance_50',
+                'payment_reference': 'txn_checkout_deposit_001',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        order = Order.objects.get()
+        checkout = CheckoutSession.objects.get(booking_unique_key=booking_key)
+        self.assertEqual(order.payment_status, 'partially_paid')
+        self.assertEqual(order.payment_plan, 'partial')
+        self.assertEqual(order.payment_option, 'advance_50')
+        self.assertEqual(order.paid_amount, order.deposit_amount)
+        self.assertGreater(order.remaining_amount, Decimal('0.00'))
+        self.assertEqual(checkout.payment_plan, 'partial')
+        self.assertEqual(checkout.payment_option, 'advance_50')
+        self.assertEqual(OrderPayment.objects.filter(order=order, payment_type='deposit').count(), 1)
+
+    def test_unavailable_payment_option_is_rejected(self):
+        booking_key = self._create_checkout()
+
+        response = self.client.post(
+            '/api/orders/checkout/create-order/',
+            data={
+                'bookingUniqueKey': booking_key,
+                'payment_method': 'credit_card',
+                'payment_option': 'advance_30',
+                'payment_reference': 'txn_checkout_invalid_option',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Order.objects.count(), 0)
 
     def test_repeating_create_order_for_same_checkout_returns_existing_order(self):
         booking_key = self._create_checkout()
