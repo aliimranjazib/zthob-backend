@@ -15,6 +15,7 @@ User = get_user_model()
 
 
 @override_settings(
+    SECURE_SSL_REDIRECT=False,
     CACHES={
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
