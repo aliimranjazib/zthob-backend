@@ -48,6 +48,12 @@ class CODOrderFlowTest(TestCase):
             password='testpass123',
             role='RIDER',
         )
+        self.other_customer = User.objects.create_user(
+            username='cod_other_customer',
+            email='cod_other_customer@example.com',
+            password='testpass123',
+            role='USER',
+        )
 
         self.tailor_profile, _ = TailorProfile.objects.get_or_create(
             user=self.tailor,
@@ -87,6 +93,8 @@ class CODOrderFlowTest(TestCase):
         self.rider_client.force_authenticate(user=self.rider)
         self.other_rider_client = APIClient()
         self.other_rider_client.force_authenticate(user=self.other_rider)
+        self.other_customer_client = APIClient()
+        self.other_customer_client.force_authenticate(user=self.other_customer)
 
     def _create_order(self, **overrides):
         defaults = {
@@ -152,6 +160,107 @@ class CODOrderFlowTest(TestCase):
         order_ids = [order['id'] for order in response.data['data']]
         self.assertIn(cod_order.id, order_ids)
         self.assertEqual(len(order_ids), 1)
+
+    def test_customer_can_pay_remaining_balance_online(self):
+        order = self._create_order(
+            payment_method='credit_card',
+            payment_status='partially_paid',
+            payment_plan='partial',
+            payment_option='advance_50',
+            deposit_amount=Decimal('67.50'),
+            paid_amount=Decimal('67.50'),
+            remaining_amount=Decimal('67.50'),
+        )
+
+        response = self.customer_client.post(
+            f'/api/orders/{order.id}/pay-remaining/',
+            data={
+                'payment_method': 'credit_card',
+                'payment_reference': 'txn_remaining_online_001',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, 'paid')
+        self.assertEqual(order.paid_amount, order.total_amount)
+        self.assertEqual(order.remaining_amount, Decimal('0.00'))
+        self.assertEqual(
+            OrderPayment.objects.filter(
+                order=order,
+                payment_type='remaining_balance',
+                payment_reference='txn_remaining_online_001',
+            ).count(),
+            1,
+        )
+
+    def test_other_customer_cannot_pay_remaining_balance(self):
+        order = self._create_order(
+            payment_status='partially_paid',
+            paid_amount=Decimal('50.00'),
+            remaining_amount=Decimal('85.00'),
+        )
+
+        response = self.other_customer_client.post(
+            f'/api/orders/{order.id}/pay-remaining/',
+            data={
+                'payment_method': 'credit_card',
+                'payment_reference': 'txn_wrong_customer',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_pay_remaining_rejects_duplicate_payment_reference(self):
+        first_order = self._create_order(
+            payment_status='partially_paid',
+            paid_amount=Decimal('50.00'),
+            remaining_amount=Decimal('85.00'),
+        )
+        second_order = self._create_order(
+            payment_status='partially_paid',
+            paid_amount=Decimal('50.00'),
+            remaining_amount=Decimal('85.00'),
+        )
+        OrderPayment.objects.create(
+            order=first_order,
+            amount=Decimal('85.00'),
+            payment_method='credit_card',
+            payment_type='remaining_balance',
+            payment_reference='txn_duplicate_remaining',
+            collected_by=self.customer,
+        )
+
+        response = self.customer_client.post(
+            f'/api/orders/{second_order.id}/pay-remaining/',
+            data={
+                'payment_method': 'credit_card',
+                'payment_reference': 'txn_duplicate_remaining',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_pay_remaining_rejects_fully_paid_order(self):
+        order = self._create_order(
+            payment_status='paid',
+            paid_amount=Decimal('135.00'),
+            remaining_amount=Decimal('0.00'),
+        )
+
+        response = self.customer_client.post(
+            f'/api/orders/{order.id}/pay-remaining/',
+            data={
+                'payment_method': 'credit_card',
+                'payment_reference': 'txn_no_balance',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_cod_pending_order_is_available_to_rider(self):
         order = self._create_order(

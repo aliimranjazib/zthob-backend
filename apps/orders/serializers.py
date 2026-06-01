@@ -1755,6 +1755,15 @@ class OrderPaymentStatusUpdateSerializer(serializers.Serializer):
     )
 
 
+class PayRemainingBalanceSerializer(serializers.Serializer):
+    """Serializer for customer/admin online remaining-balance payment confirmation."""
+    payment_method = serializers.ChoiceField(
+        choices=[('credit_card', 'Credit Card'), ('bank_transfer', 'Bank Transfer')],
+        required=True
+    )
+    payment_reference = serializers.CharField(required=True, allow_blank=False)
+
+
 class CheckoutSessionSerializer(serializers.ModelSerializer):
     bookingUniqueKey = serializers.CharField(source='booking_unique_key', read_only=True)
     pricing_summary = serializers.JSONField(source='pricing_snapshot', read_only=True)

@@ -14,6 +14,7 @@ from .views import (
     OrderMeasurementsDetailView,
     WorkOrderPDFView,
     OrderActionView,
+    PayRemainingBalanceView,
     CheckoutCreateView,
     CheckoutStatusView,
     CheckoutCreateOrderView,
@@ -33,6 +34,7 @@ urlpatterns = [
     path('<int:order_id>/status/', OrderStatusUpdateView.as_view(), name='order-status-update'),
     path('<int:order_id>/history/', OrderHistoryView.as_view(), name='order-history'),
     path('<int:order_id>/payment-status/', OrderPaymentStatusUpdateView.as_view(), name='order-payment-status-update'),
+    path('<int:order_id>/pay-remaining/', PayRemainingBalanceView.as_view(), name='order-pay-remaining'),
     path('<int:order_id>/measurements/', OrderMeasurementsDetailView.as_view(), name='order-measurements'),
     path('<int:order_id>/action/', OrderActionView.as_view(), name='order-action'),
     

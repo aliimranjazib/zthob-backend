@@ -19,6 +19,7 @@ OrderUpdateSerializer,
 OrderListSerializer,
 	OrderStatusHistorySerializer,
 	OrderPaymentStatusUpdateSerializer,
+    PayRemainingBalanceSerializer,
 	OrderStatusUpdateResponseSerializer,
     CheckoutCreateOrderSerializer,
     CheckoutSessionSerializer,
@@ -1074,6 +1075,122 @@ class OrderPaymentStatusUpdateView(APIView):
                 message="Something went wrong while updating payment status",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class PayRemainingBalanceView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=PayRemainingBalanceSerializer,
+        responses={200: OrderSerializer},
+        summary="Pay remaining order balance",
+        description=(
+            "Confirm a customer/admin online payment for the current remaining "
+            "balance. The backend uses order.remaining_amount and does not accept "
+            "an amount from the frontend."
+        ),
+        tags=["Customer Orders"]
+    )
+    @transaction.atomic
+    def post(self, request, order_id):
+        order = get_object_or_404(Order.objects.select_for_update(), id=order_id)
+
+        if not request.user.is_admin and order.customer != request.user:
+            return api_response(
+                success=False,
+                message="You can only pay remaining balance for your own order.",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = PayRemainingBalanceSerializer(data=request.data)
+        if not serializer.is_valid():
+            return api_response(
+                success=False,
+                message="Invalid remaining payment data",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if order.status == 'cancelled':
+            return api_response(
+                success=False,
+                message="Cannot pay remaining balance for a cancelled order.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if order.payment_status == 'refunded':
+            return api_response(
+                success=False,
+                message="Cannot pay remaining balance for a refunded order.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not order.has_remaining_balance:
+            return api_response(
+                success=False,
+                message="No remaining balance to pay.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        payment_method = serializer.validated_data['payment_method']
+        payment_reference = serializer.validated_data['payment_reference']
+
+        reference_used = (
+            Order.objects.filter(payment_reference=payment_reference).exclude(id=order.id).exists()
+            or CheckoutSession.objects.filter(payment_reference=payment_reference).exists()
+            or OrderPayment.objects.filter(payment_reference=payment_reference).exists()
+        )
+        if reference_used:
+            return api_response(
+                success=False,
+                message="This payment reference has already been used.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        amount = money(order.remaining_amount)
+        old_payment_status = order.payment_status
+
+        OrderPayment.objects.create(
+            order=order,
+            amount=amount,
+            payment_method=payment_method,
+            payment_type='remaining_balance' if order.paid_amount > Decimal('0.00') else 'full_payment',
+            status='paid',
+            payment_reference=payment_reference,
+            collected_by=request.user,
+            notes='Remaining balance paid online by customer.',
+            metadata={'previous_payment_status': old_payment_status},
+        )
+
+        if not order.payment_reference:
+            order.payment_reference = payment_reference
+        order.apply_payment_summary(order.paid_amount + amount, save=False)
+        order.save(update_fields=[
+            'payment_reference',
+            'payment_status',
+            'paid_amount',
+            'remaining_amount',
+            'updated_at',
+        ])
+
+        OrderStatusHistory.objects.create(
+            order=order,
+            status=order.status,
+            previous_status=order.status,
+            changed_by=request.user,
+            notes=(
+                f"Remaining balance paid online ({amount}). "
+                f"Payment status changed from {old_payment_status} to {order.payment_status}."
+            )
+        )
+
+        response_serializer = OrderSerializer(order, context={'request': request})
+        return api_response(
+            success=True,
+            message="Remaining payment paid successfully.",
+            data=response_serializer.data,
+            status_code=status.HTTP_200_OK
+        )
 
 
 class OrderMeasurementsDetailView(APIView):
