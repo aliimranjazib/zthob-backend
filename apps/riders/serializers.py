@@ -405,7 +405,11 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'rider_status',
             'tailor_status',
             'payment_status',
+            'payment_plan',
+            'payment_option',
             'total_amount',
+            'paid_amount',
+            'remaining_amount',
             'pricing_summary',
             'customer_name',
             'customer_phone',
@@ -431,6 +435,8 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'tax_amount': str(obj.tax_amount),
             'delivery_fee': str(obj.delivery_fee),
             'total_amount': str(obj.total_amount),
+            'paid_amount': str(obj.paid_amount),
+            'remaining_amount': str(obj.remaining_amount),
         }
     
     def get_rider_status(self, obj):
@@ -557,7 +563,11 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'tailor_status',
             'payment_status',
             'payment_method',
+            'payment_plan',
+            'payment_option',
             'total_amount',
+            'paid_amount',
+            'remaining_amount',
             'subtotal',
             'tax_amount',
             'delivery_fee',
@@ -588,6 +598,8 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'tax_amount': str(obj.tax_amount),
             'delivery_fee': str(obj.delivery_fee),
             'total_amount': str(obj.total_amount),
+            'paid_amount': str(obj.paid_amount),
+            'remaining_amount': str(obj.remaining_amount),
         }
     
     def get_rider_status(self, obj):
@@ -850,7 +862,7 @@ class RiderAcceptOrderSerializer(serializers.Serializer):
     def validate_order_id(self, value):
         try:
             order = Order.objects.get(id=value)
-            is_payment_ready = order.payment_status == 'paid' or (
+            is_payment_ready = order.payment_status in ['paid', 'partially_paid'] or (
                 order.payment_method == 'cod' and order.payment_status == 'pending'
             )
             if not is_payment_ready:

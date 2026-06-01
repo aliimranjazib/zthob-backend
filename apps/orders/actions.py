@@ -4,6 +4,7 @@ from rest_framework.exceptions import ValidationError, PermissionDenied
 from django.utils import timezone
 from django.db.models import Q
 from apps.customers.models import FamilyMember
+from apps.orders.payments import money
 
 class BaseOrderAction(ABC):
     """
@@ -76,6 +77,13 @@ class BaseOrderAction(ABC):
                 self.order, self._old_rider_status, self.order.rider_status, self.user
             )
 
+    def get_available_action_data(self):
+        return {
+            'key': self.key,
+            'label': self.label,
+            'role': self.requested_role or (self.allowed_roles[0] if self.allowed_roles else 'USER')
+        }
+
 
 class CancelOrderAction(BaseOrderAction):
     key = 'cancel_order'
@@ -100,7 +108,7 @@ class AcceptOrderAction(BaseOrderAction):
     allowed_roles = ['TAILOR', 'RIDER']
 
     def _is_payment_ready(self):
-        return self.order.payment_status == 'paid' or (
+        return self.order.payment_status in ['paid', 'partially_paid'] or (
             self.order.payment_method == 'cod' and self.order.payment_status == 'pending'
         )
 
@@ -395,8 +403,8 @@ class MarkDeliveredAction(BaseOrderAction):
             raise ValidationError("Invalid state for delivery.")
         if self.order.rider != self.user and self.order.assigned_rider != self.user:
             raise PermissionDenied("You are not the assigned rider for this order.")
-        if self.order.payment_method == 'cod' and self.order.payment_status != 'paid':
-            raise ValidationError("Cash payment must be collected before marking the order as delivered.")
+        if self.order.has_remaining_balance:
+            raise ValidationError("Remaining payment must be collected before marking the order as delivered.")
 
     def execute(self):
         self.order.rider_status = 'delivered'
@@ -415,8 +423,8 @@ class CollectOrderAction(BaseOrderAction):
         # 1. State check
         if self.order.status != 'ready_for_pickup':
             raise ValidationError("Order is not ready for pickup.")
-        if self.order.payment_method == 'cod' and self.order.payment_status != 'paid':
-            raise ValidationError("Cash payment must be collected before marking the order as collected.")
+        if self.order.has_remaining_balance:
+            raise ValidationError("Remaining payment must be collected before marking the order as collected.")
         
         # 2. Permission check
         if self.user.is_admin or self.user.is_tailor:
@@ -437,7 +445,7 @@ class CollectOrderAction(BaseOrderAction):
 
 class CollectCashPaymentAction(BaseOrderAction):
     key = 'collect_cash_payment'
-    label = 'Collect Cash Payment'
+    label = 'Collect Remaining Payment'
     allowed_roles = ['RIDER', 'TAILOR', 'ADMIN']
 
     def _resolve_role(self):
@@ -452,10 +460,8 @@ class CollectCashPaymentAction(BaseOrderAction):
         return None
 
     def _check_requirements(self):
-        if self.order.payment_method != 'cod':
-            raise ValidationError("Cash collection is only available for COD orders.")
-        if self.order.payment_status == 'paid':
-            raise ValidationError("Cash payment has already been collected.")
+        if not self.order.has_remaining_balance:
+            raise ValidationError("Payment has already been collected in full.")
         if self.order.payment_status == 'refunded':
             raise ValidationError("Cannot collect cash for a refunded order.")
         if self.order.status in ['cancelled']:
@@ -487,19 +493,53 @@ class CollectCashPaymentAction(BaseOrderAction):
 
     def execute(self):
         old_payment_status = self.order.payment_status
-        self.order.payment_status = 'paid'
-        self.order.save(update_fields=['payment_status', 'updated_at'])
+        amount = money(self.order.remaining_amount)
+        payment_method = self.data.get('payment_method') or 'cod'
+        payment_reference = self.data.get('payment_reference') or None
+        notes = self.data.get('notes') or 'Remaining payment collected.'
 
-        from apps.orders.models import OrderStatusHistory
+        from apps.orders.models import OrderPayment, OrderStatusHistory
+
+        if payment_method == 'credit_card' and not payment_reference:
+            raise ValidationError("payment_reference is required for credit card collection.")
+        if payment_method not in ['cod', 'credit_card', 'bank_transfer']:
+            raise ValidationError("Invalid payment_method for collection.")
+
+        if payment_reference and OrderPayment.objects.filter(payment_reference=payment_reference).exists():
+            raise ValidationError("This payment reference has already been used.")
+
+        OrderPayment.objects.create(
+            order=self.order,
+            amount=amount,
+            payment_method=payment_method,
+            payment_type='remaining_balance' if old_payment_status == 'partially_paid' else 'full_payment',
+            status='paid',
+            payment_reference=payment_reference,
+            collected_by=self.user,
+            notes=notes,
+            metadata={'previous_payment_status': old_payment_status},
+        )
+
+        self.order.apply_payment_summary(self.order.paid_amount + amount, save=True)
+
         OrderStatusHistory.objects.create(
             order=self.order,
             status=self.order.status,
             previous_status=self.order.status,
             changed_by=self.user,
-            notes=f"Cash payment collected. Payment status changed from {old_payment_status} to paid."
+            notes=(
+                f"Payment collected ({amount}). "
+                f"Payment status changed from {old_payment_status} to {self.order.payment_status}."
+            )
         )
 
-        return "Cash payment collected successfully."
+        return "Payment collected successfully."
+
+    def get_available_action_data(self):
+        data = super().get_available_action_data()
+        data['amount_due'] = str(self.order.remaining_amount)
+        data['payment_status'] = self.order.payment_status
+        return data
 
 
 class OrderActionManager:
@@ -537,11 +577,7 @@ class OrderActionManager:
             action = action_class(order, user, requested_role=requested_role)
             try:
                 action.validate()
-                available.append({
-                    'key': action.key,
-                    'label': action.label,
-                    'role': requested_role or (action_class.allowed_roles[0] if action_class.allowed_roles else 'USER')
-                })
+                available.append(action.get_available_action_data())
             except (ValidationError, PermissionDenied):
                 continue
         return available

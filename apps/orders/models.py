@@ -96,6 +96,7 @@ class Order(BaseModel):
     )
     PAYMENT_STATUS_CHOICES = (
         ("pending", "Pending"),
+        ("partially_paid", "Partially Paid"),
         ("paid", "Paid"),
         ("refunded", "Refunded"),
     )
@@ -103,6 +104,11 @@ class Order(BaseModel):
         ("cod", "Cash on Delivery"),
         ("credit_card", "Credit Card"),
         ("bank_transfer", "Bank Transfer"),
+    )
+    PAYMENT_PLAN_CHOICES = (
+        ("full", "Full Payment"),
+        ("partial", "Partial Payment"),
+        ("pay_later", "Pay Later"),
     )
 
     customer=models.ForeignKey(
@@ -255,12 +261,42 @@ class Order(BaseModel):
     default='credit_card',
     help_text="Payment method chosen by customer"
     )
+    payment_plan = models.CharField(
+        max_length=20,
+        choices=PAYMENT_PLAN_CHOICES,
+        default='full',
+        help_text="Customer selected payment plan"
+    )
+    payment_option = models.CharField(
+        max_length=30,
+        null=True,
+        blank=True,
+        help_text="Backend-controlled checkout payment option selected by customer"
+    )
     payment_reference = models.CharField(
         max_length=150,
         null=True,
         blank=True,
         unique=True,
         help_text="External payment gateway reference for paid online orders"
+    )
+    deposit_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Advance amount paid at order creation for partial-payment orders"
+    )
+    paid_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Total amount collected so far"
+    )
+    remaining_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Outstanding balance to collect before handover"
     )
 
     family_member=models.ForeignKey(
@@ -572,6 +608,44 @@ class Order(BaseModel):
         return f"Order {self.order_number or 'N/A'} - {recipient} (by {customer_name}) to {tailor_name}"
 
     @property
+    def has_remaining_balance(self):
+        return (self.remaining_amount or Decimal('0.00')) > Decimal('0.00')
+
+    def apply_payment_summary(self, paid_amount=None, payment_plan=None, payment_option=None, save=True):
+        """Synchronize payment summary fields from the collected amount."""
+        total = self.total_amount or Decimal('0.00')
+        paid = Decimal(paid_amount if paid_amount is not None else self.paid_amount or Decimal('0.00'))
+        if paid < Decimal('0.00'):
+            paid = Decimal('0.00')
+        if paid > total:
+            paid = total
+
+        self.paid_amount = paid
+        self.remaining_amount = total - paid
+        if payment_plan:
+            self.payment_plan = payment_plan
+        if payment_option:
+            self.payment_option = payment_option
+
+        if self.payment_status != 'refunded':
+            if total == Decimal('0.00') or self.remaining_amount == Decimal('0.00'):
+                self.payment_status = 'paid'
+            elif self.paid_amount > Decimal('0.00'):
+                self.payment_status = 'partially_paid'
+            else:
+                self.payment_status = 'pending'
+
+        if save:
+            self.save(update_fields=[
+                'payment_plan',
+                'payment_option',
+                'payment_status',
+                'paid_amount',
+                'remaining_amount',
+                'updated_at',
+            ])
+
+    @property
     def items_count(self):
         """ Return total number of items in this orders """
         return self.order_items.count()
@@ -716,6 +790,76 @@ class OrderItem(BaseModel):
         return f"{fabric_name} x{self.quantity} - {self.order.order_number}"
 
 
+class OrderPayment(BaseModel):
+    PAYMENT_TYPE_CHOICES = (
+        ('deposit', 'Deposit'),
+        ('remaining_balance', 'Remaining Balance'),
+        ('full_payment', 'Full Payment'),
+        ('refund', 'Refund'),
+        ('adjustment', 'Adjustment'),
+    )
+    PAYMENT_STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('paid', 'Paid'),
+        ('failed', 'Failed'),
+        ('refunded', 'Refunded'),
+    )
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='payments',
+        help_text="Order this payment belongs to"
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Payment amount"
+    )
+    payment_method = models.CharField(
+        max_length=20,
+        choices=Order.PAYMENT_METHOD_CHOICES,
+        help_text="How this payment was collected"
+    )
+    payment_type = models.CharField(
+        max_length=30,
+        choices=PAYMENT_TYPE_CHOICES,
+        help_text="Business purpose of this payment"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=PAYMENT_STATUS_CHOICES,
+        default='paid',
+        db_index=True
+    )
+    payment_reference = models.CharField(
+        max_length=150,
+        null=True,
+        blank=True,
+        unique=True,
+        help_text="Gateway or manual collection reference"
+    )
+    collected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='collected_order_payments'
+    )
+    notes = models.TextField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['order', 'status']),
+            models.Index(fields=['payment_method', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.order.order_number} - {self.payment_type} - {self.amount}"
+
+
 class CheckoutSession(BaseModel):
     """
     Temporary checkout draft. It lets customers review/pay before we create a real order.
@@ -775,6 +919,13 @@ class CheckoutSession(BaseModel):
         null=True,
         blank=True
     )
+    payment_plan = models.CharField(
+        max_length=20,
+        choices=Order.PAYMENT_PLAN_CHOICES,
+        null=True,
+        blank=True
+    )
+    payment_option = models.CharField(max_length=30, null=True, blank=True)
     payment_reference = models.CharField(
         max_length=150,
         null=True,

@@ -24,7 +24,7 @@ class TailorHomeService:
         
         # Define base filters
         active_filter = Q(tailor=tailor_user) & (
-            Q(payment_status='paid') | Q(payment_method='cod', payment_status='pending')
+            Q(payment_status__in=['paid', 'partially_paid']) | Q(payment_method='cod', payment_status='pending')
         )
         not_final_filter = ~Q(status__in=['delivered', 'collected', 'cancelled'])
         not_ready_filter = ~Q(status__in=['ready_for_delivery', 'ready_for_pickup', 'delivered', 'collected', 'cancelled'])

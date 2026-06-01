@@ -6,7 +6,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.customers.models import Address
-from apps.orders.models import Order, OrderItem
+from apps.orders.models import Order, OrderItem, OrderPayment
 from apps.riders.models import RiderProfile, RiderProfileReview
 from apps.tailors.models import Fabric, FabricCategory, TailorProfile
 
@@ -105,6 +105,13 @@ class CODOrderFlowTest(TestCase):
             'total_amount': Decimal('135.00'),
         }
         defaults.update(overrides)
+        if 'paid_amount' not in defaults and 'remaining_amount' not in defaults:
+            if defaults.get('payment_status') == 'paid':
+                defaults['paid_amount'] = defaults['total_amount']
+                defaults['remaining_amount'] = Decimal('0.00')
+            else:
+                defaults['paid_amount'] = Decimal('0.00')
+                defaults['remaining_amount'] = defaults['total_amount']
         order = Order.objects.create(**defaults)
         OrderItem.objects.create(
             order=order,
@@ -193,6 +200,9 @@ class CODOrderFlowTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         order.refresh_from_db()
         self.assertEqual(order.payment_status, 'paid')
+        self.assertEqual(order.remaining_amount, Decimal('0.00'))
+        self.assertEqual(order.paid_amount, order.total_amount)
+        self.assertEqual(OrderPayment.objects.filter(order=order, payment_type='full_payment').count(), 1)
         self.assertEqual(response.data['data']['payment_method'], 'cod')
         self.assertEqual(response.data['data']['payment_status'], 'paid')
         action_keys = [action['key'] for action in response.data['data']['available_actions']]
@@ -233,3 +243,45 @@ class CODOrderFlowTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         order.refresh_from_db()
         self.assertEqual(order.payment_status, 'paid')
+
+    def test_partially_paid_order_must_collect_balance_before_delivery(self):
+        order = self._create_order(
+            payment_method='credit_card',
+            payment_status='partially_paid',
+            payment_plan='partial',
+            payment_option='advance_50',
+            deposit_amount=Decimal('67.50'),
+            paid_amount=Decimal('67.50'),
+            remaining_amount=Decimal('67.50'),
+            rider=self.rider,
+            rider_status='on_way_to_delivery',
+            status='ready_for_delivery',
+        )
+
+        response = self.rider_client.post(
+            f'/api/orders/{order.id}/action/',
+            data={'action': 'mark_delivered', 'role': 'RIDER', 'data': {}},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        response = self.rider_client.post(
+            f'/api/orders/{order.id}/action/',
+            data={'action': 'collect_cash_payment', 'role': 'RIDER', 'data': {}},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, 'paid')
+        self.assertEqual(order.remaining_amount, Decimal('0.00'))
+        self.assertEqual(OrderPayment.objects.filter(order=order, payment_type='remaining_balance').count(), 1)
+
+        response = self.rider_client.post(
+            f'/api/orders/{order.id}/action/',
+            data={'action': 'mark_delivered', 'role': 'RIDER', 'data': {}},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

@@ -578,7 +578,7 @@ class RiderAvailableOrdersView(APIView):
             rider_status='none',
             service_mode='home_delivery',
         ).filter(
-            Q(payment_status='paid') | Q(payment_method='cod', payment_status='pending')
+            Q(payment_status__in=['paid', 'partially_paid']) | Q(payment_method='cod', payment_status='pending')
         ).filter(
             Q(assigned_rider__isnull=True) | Q(assigned_rider=request.user)
         ).filter(
@@ -777,9 +777,9 @@ class RiderAcceptOrderView(APIView):
         order = get_object_or_404(Order, id=order_id)
         
         # Verify order is available
-        is_payment_ready = order.payment_status == 'paid' or (
-            order.payment_method == 'cod' and order.payment_status == 'pending'
-        )
+        is_payment_ready = order.payment_status in ['paid', 'partially_paid'] or (
+                order.payment_method == 'cod' and order.payment_status == 'pending'
+            )
         if not is_payment_ready:
             return api_response(
                 success=False,
@@ -1233,7 +1233,7 @@ class RiderUpdateOrderStatusView(APIView):
                     status_code=status.HTTP_404_NOT_FOUND
                 )
             
-            is_payment_ready = order.payment_status == 'paid' or (
+            is_payment_ready = order.payment_status in ['paid', 'partially_paid'] or (
                 order.payment_method == 'cod' and order.payment_status == 'pending'
             )
             if not is_payment_ready:

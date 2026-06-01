@@ -9,7 +9,7 @@ from rest_framework.exceptions import ValidationError, PermissionDenied
 from .actions import OrderActionManager
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema
-from .models import CheckoutSession, Order, OrderItem ,OrderStatusHistory
+from .models import CheckoutSession, Order, OrderItem, OrderPayment, OrderStatusHistory
 from .serializers import(
 OrderItemSerializer,
 OrderItemCreateSerializer,
@@ -27,6 +27,8 @@ from apps.tailors.models import TailorProfile
 from apps.customers.models import CustomerProfile
 from zthob.utils import api_response 
 import uuid
+from decimal import Decimal
+from apps.orders.payments import get_payment_option, money
 
 class OrderListView(APIView):
     permission_classes=[IsAuthenticated]
@@ -274,6 +276,7 @@ class CheckoutCreateOrderView(APIView):
 
         booking_key = request_serializer.validated_data['bookingUniqueKey']
         payment_method = request_serializer.validated_data['payment_method']
+        payment_option_key = request_serializer.validated_data['payment_option']
         payment_reference = request_serializer.validated_data.get('payment_reference')
 
         checkout = get_object_or_404(
@@ -307,10 +310,19 @@ class CheckoutCreateOrderView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
+        checkout_total = (checkout.pricing_snapshot or {}).get('total_amount', '0.00')
+        if not get_payment_option(checkout_total, payment_option_key):
+            return api_response(
+                success=False,
+                message=f"Payment option '{payment_option_key}' is not available for this checkout total.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
         if payment_method == 'credit_card':
             reference_used = (
                 Order.objects.filter(payment_reference=payment_reference).exists()
                 or CheckoutSession.objects.filter(payment_reference=payment_reference).exclude(id=checkout.id).exists()
+                or OrderPayment.objects.filter(payment_reference=payment_reference).exists()
             )
             if reference_used:
                 return api_response(
@@ -334,24 +346,60 @@ class CheckoutCreateOrderView(APIView):
 
         try:
             order = order_serializer.save()
-            if payment_method == 'credit_card':
-                order.payment_status = 'paid'
-                order.payment_reference = payment_reference
-                order.save(update_fields=['payment_status', 'payment_reference', 'updated_at'])
-            elif payment_method == 'cod':
-                order.payment_status = 'pending'
-                order.payment_reference = None
-                order.save(update_fields=['payment_status', 'payment_reference', 'updated_at'])
+            selected_payment_option = get_payment_option(order.total_amount, payment_option_key)
+            if not selected_payment_option:
+                raise ValidationError(f"Payment option '{payment_option_key}' is not available for this checkout total.")
+
+            pay_now_amount = money(selected_payment_option['pay_now_amount'])
+            payment_plan = selected_payment_option['payment_plan']
+
+            order.payment_method = payment_method
+            order.payment_reference = payment_reference if pay_now_amount > Decimal('0.00') else None
+            order.deposit_amount = pay_now_amount if payment_plan == 'partial' else Decimal('0.00')
+            order.apply_payment_summary(
+                pay_now_amount,
+                payment_plan=payment_plan,
+                payment_option=payment_option_key,
+                save=False,
+            )
+            order.save(update_fields=[
+                'payment_method',
+                'payment_plan',
+                'payment_option',
+                'payment_status',
+                'payment_reference',
+                'deposit_amount',
+                'paid_amount',
+                'remaining_amount',
+                'updated_at',
+            ])
+
+            if pay_now_amount > Decimal('0.00'):
+                OrderPayment.objects.create(
+                    order=order,
+                    amount=pay_now_amount,
+                    payment_method=payment_method,
+                    payment_type='deposit' if payment_plan == 'partial' else 'full_payment',
+                    status='paid',
+                    payment_reference=payment_reference,
+                    collected_by=request.user,
+                    notes='Initial checkout payment',
+                    metadata={'payment_option': payment_option_key},
+                )
 
             checkout.order = order
             checkout.status = 'order_created'
             checkout.payment_method = payment_method
-            checkout.payment_reference = payment_reference if payment_method == 'credit_card' else None
-            checkout.payment_confirmed_at = timezone.now() if payment_method == 'credit_card' else None
+            checkout.payment_plan = payment_plan
+            checkout.payment_option = payment_option_key
+            checkout.payment_reference = payment_reference if pay_now_amount > Decimal('0.00') else None
+            checkout.payment_confirmed_at = timezone.now() if pay_now_amount > Decimal('0.00') else None
             checkout.save(update_fields=[
                 'order',
                 'status',
                 'payment_method',
+                'payment_plan',
+                'payment_option',
                 'payment_reference',
                 'payment_confirmed_at',
                 'updated_at',
@@ -365,6 +413,7 @@ class CheckoutCreateOrderView(APIView):
                 status_code=status.HTTP_201_CREATED
             )
         except ValidationError as e:
+            transaction.set_rollback(True)
             return api_response(
                 success=False,
                 message="Order creation from checkout failed",
@@ -845,7 +894,7 @@ class TailorPaidOrdersView(APIView):
             orders = Order.objects.filter(
                 tailor=request.user,
             ).filter(
-                Q(payment_status='paid') | Q(payment_method='cod', payment_status='pending')
+                Q(payment_status__in=['paid', 'partially_paid']) | Q(payment_method='cod', payment_status='pending')
             ).select_related(
                 'customer',
                 'delivery_address',
@@ -1228,8 +1277,12 @@ class OrderActionView(APIView):
             response_data = dict(response_serializer.data)
             status_info = response_data.get('status_info') or {}
             response_data['payment_method'] = order.payment_method
+            response_data['payment_plan'] = order.payment_plan
+            response_data['payment_option'] = order.payment_option
             response_data['payment_status'] = order.payment_status
             response_data['total_amount'] = str(order.total_amount)
+            response_data['paid_amount'] = str(order.paid_amount)
+            response_data['remaining_amount'] = str(order.remaining_amount)
             response_data['available_actions'] = status_info.get('available_actions', [])
             response_data['measurement_status'] = self._build_measurement_status(order)
             return api_response(

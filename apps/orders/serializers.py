@@ -1,12 +1,13 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import CheckoutSession, Order, OrderItem, OrderStatusHistory
+from .models import CheckoutSession, Order, OrderItem, OrderPayment, OrderStatusHistory
 from apps.tailors.models import TailorProfile,Fabric
 from apps.customers.models import Address
 from apps.customization.models import CustomStyle
 from decimal import Decimal
 from django.db import transaction
 from apps.orders.services import OrderCalculationService
+from apps.orders.payments import build_payment_options
 from zthob.translations import get_language_from_request, translate_message
 from .actions import OrderActionManager
 
@@ -130,6 +131,7 @@ class OrderSerializer(serializers.ModelSerializer):
     delivery_address = serializers.SerializerMethodField()
     has_rating = serializers.SerializerMethodField()
     tailor_rating = serializers.SerializerMethodField()
+    payment_history = serializers.SerializerMethodField()
 
     class Meta:
         model=Order
@@ -158,9 +160,15 @@ class OrderSerializer(serializers.ModelSerializer):
             'delivery_fee',
             'system_fee',
             'total_amount',
+            'payment_plan',
+            'payment_option',
             'payment_status',
             'payment_method',
             'payment_reference',
+            'deposit_amount',
+            'paid_amount',
+            'remaining_amount',
+            'payment_history',
             'family_member',
             'family_member_name',
             'order_recipient',
@@ -618,8 +626,28 @@ class OrderSerializer(serializers.ModelSerializer):
             'delivery_fee': obj.delivery_fee,
             'system_fee': obj.system_fee,
             'express_fee': obj.express_fee,
-            'total_amount': obj.total_amount
+            'total_amount': obj.total_amount,
+            'payment_plan': obj.payment_plan,
+            'payment_option': obj.payment_option,
+            'payment_status': obj.payment_status,
+            'paid_amount': obj.paid_amount,
+            'remaining_amount': obj.remaining_amount,
         }
+
+    def get_payment_history(self, obj):
+        return [
+            {
+                'id': payment.id,
+                'amount': str(payment.amount),
+                'payment_method': payment.payment_method,
+                'payment_type': payment.payment_type,
+                'status': payment.status,
+                'payment_reference': payment.payment_reference,
+                'collected_by': payment.collected_by.username if payment.collected_by else None,
+                'created_at': payment.created_at,
+            }
+            for payment in obj.payments.all()
+        ]
 
     def get_has_rating(self, obj):
         """Return True if the customer has already submitted a rating for this order."""
@@ -982,6 +1010,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             is_express=is_express
         )
 
+        total_amount = totals.get('total_amount', Decimal('0.00'))
         return {
             'subtotal': str(totals.get('subtotal', Decimal('0.00'))),
             'stitching_price': str(totals.get('stitching_price', Decimal('0.00'))),
@@ -989,8 +1018,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'delivery_fee': str(totals.get('delivery_fee', Decimal('0.00'))),
             'system_fee': str(totals.get('system_fee', Decimal('0.00'))),
             'express_fee': str(totals.get('express_fee', Decimal('0.00'))),
-            'total_amount': str(totals.get('total_amount', Decimal('0.00'))),
+            'total_amount': str(total_amount),
             'items_count': len(items_with_fabrics),
+            'payment_options': build_payment_options(total_amount),
         }
 
     @transaction.atomic
@@ -1175,6 +1205,14 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                         f"Stock cannot be negative for {fabric.name}"
                     )
                 fabric.save(update_fields=['stock'])
+
+        if order.payment_status == 'paid':
+            order.apply_payment_summary(order.total_amount, payment_plan=order.payment_plan, save=True)
+        elif order.payment_method == 'cod':
+            order.apply_payment_summary(Decimal('0.00'), payment_plan='pay_later', payment_option='pay_later', save=True)
+        else:
+            order.apply_payment_summary(Decimal('0.00'), payment_plan=order.payment_plan, save=True)
+
         try:
             OrderStatusHistory.objects.create(
                 order=order,
@@ -1441,8 +1479,13 @@ class OrderListSerializer(serializers.ModelSerializer):
             'total_amount',
             'pricing_summary',
             'payment_method',
+            'payment_plan',
+            'payment_option',
             'payment_status',
             'payment_reference',
+            'deposit_amount',
+            'paid_amount',
+            'remaining_amount',
             'appointment_date',
             'appointment_time',
             'stitching_completion_date',
@@ -1492,6 +1535,11 @@ class OrderListSerializer(serializers.ModelSerializer):
             'delivery_fee': str(obj.delivery_fee),
             'express_fee': str(obj.express_fee),
             'total_amount': str(obj.total_amount),
+            'payment_plan': obj.payment_plan,
+            'payment_option': obj.payment_option,
+            'payment_status': obj.payment_status,
+            'paid_amount': str(obj.paid_amount),
+            'remaining_amount': str(obj.remaining_amount),
         }
 
     def get_has_rating(self, obj):
@@ -1720,6 +1768,8 @@ class CheckoutSessionSerializer(serializers.ModelSerializer):
             'pricing_summary',
             'expires_at',
             'payment_method',
+            'payment_plan',
+            'payment_option',
             'payment_reference',
             'order_id',
         ]
@@ -1732,11 +1782,36 @@ class CheckoutCreateOrderSerializer(serializers.Serializer):
         choices=[('cod', 'Cash on Delivery'), ('credit_card', 'Credit Card')],
         required=True
     )
+    payment_option = serializers.ChoiceField(
+        choices=[
+            ('full', 'Pay Full Amount'),
+            ('advance_50', 'Pay 50% Advance'),
+            ('advance_30', 'Pay 30% Advance'),
+            ('pay_later', 'Cash / Pay Later'),
+        ],
+        required=False
+    )
     payment_reference = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def validate(self, attrs):
         payment_method = attrs.get('payment_method')
         payment_reference = attrs.get('payment_reference')
+        payment_option = attrs.get('payment_option')
+
+        if not payment_option:
+            payment_option = 'pay_later' if payment_method == 'cod' else 'full'
+            attrs['payment_option'] = payment_option
+
+        if payment_method == 'credit_card' and payment_option == 'pay_later':
+            raise serializers.ValidationError({
+                'payment_option': 'pay_later is only available for COD orders.'
+            })
+
+        if payment_method == 'cod' and payment_option != 'pay_later':
+            raise serializers.ValidationError({
+                'payment_option': 'COD currently supports pay_later only.'
+            })
+
         if payment_method == 'credit_card' and not payment_reference:
             raise serializers.ValidationError({
                 'payment_reference': 'payment_reference is required for credit card orders.'
