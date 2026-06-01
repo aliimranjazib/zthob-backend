@@ -115,7 +115,8 @@ class TestCustomerNotificationView(APIView):
             notification_type='TEST',
             category='test_notification',
             data={'test': True, 'timestamp': timezone.now().isoformat()},
-            priority='high'
+            priority='high',
+            app_role='CUSTOMER'
         )
         
         if success:
@@ -158,7 +159,8 @@ class TestTailorNotificationView(APIView):
             notification_type='TEST',
             category='test_notification',
             data={'test': True, 'timestamp': timezone.now().isoformat()},
-            priority='high'
+            priority='high',
+            app_role='TAILOR'
         )
         
         if success:
@@ -201,7 +203,8 @@ class TestRiderNotificationView(APIView):
             notification_type='TEST',
             category='test_notification',
             data={'test': True, 'timestamp': timezone.now().isoformat()},
-            priority='high'
+            priority='high',
+            app_role='RIDER'
         )
         
         if success:
