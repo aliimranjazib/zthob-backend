@@ -1139,6 +1139,7 @@ class RiderStyleSelectionSerializer(serializers.Serializer):
     """Individual style selection (category + style_id)"""
     category = serializers.CharField(required=True)
     style_id = serializers.IntegerField(required=True)
+    text = serializers.CharField(required=False, allow_blank=True)
 
     def validate_style_id(self, value):
         if not CustomStyle.objects.filter(id=value, is_active=True).exists():

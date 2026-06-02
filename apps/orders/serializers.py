@@ -14,6 +14,42 @@ from .actions import OrderActionManager
 
 User = get_user_model()
 
+
+def enrich_custom_style_payload(style, idx):
+    """Validate and enrich a custom style payload while preserving optional frontend text."""
+    if not isinstance(style, dict):
+        raise serializers.ValidationError(f"custom_styles[{idx}] must be an object")
+
+    optional_text = style.get('text')
+
+    # Scenario 1: ID-only format {"style_id": 8, "category": "collar", "text": "..."}
+    if 'style_id' in style:
+        style_id = style.get('style_id')
+        try:
+            style_obj = CustomStyle.objects.select_related('category').get(id=style_id, is_active=True)
+        except CustomStyle.DoesNotExist:
+            raise serializers.ValidationError(f"Custom style with ID {style_id} not found or inactive")
+
+        enriched = {
+            "style_type": style_obj.category.name,
+            "index": style_obj.display_order,
+            "label": style_obj.name,
+            "asset_path": style_obj.image.name if style_obj.image else ""
+        }
+        if optional_text is not None:
+            enriched["text"] = str(optional_text)
+        return enriched
+
+    # Scenario 2: Traditional format (for backward compatibility)
+    required_fields = ['style_type', 'index', 'label', 'asset_path']
+    for field in required_fields:
+        if field not in style:
+            raise serializers.ValidationError(
+                f"custom_styles[{idx}] must contain either 'style_id' or '{field}'"
+            )
+    return style
+
+
 class OrderItemSerializer(serializers.ModelSerializer):
 
     fabric_name = serializers.CharField(source='fabric.name', read_only=True)
@@ -103,6 +139,19 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
         if value<=0:
             raise serializers.ValidationError('Unit price must be greater than 0')
         return value
+
+    def validate_custom_styles(self, value):
+        """Validate item-level custom styles and preserve optional frontend text."""
+        if value is None:
+            return None
+
+        if not isinstance(value, list):
+            raise serializers.ValidationError("custom_styles must be an array")
+
+        return [
+            enrich_custom_style_payload(style, idx)
+            for idx, style in enumerate(value)
+        ]
 
 
 
@@ -868,36 +917,10 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         if not isinstance(value, list):
             raise serializers.ValidationError("custom_styles must be an array")
         
-        enriched_styles = []
-        for idx, style in enumerate(value):
-            if not isinstance(style, dict):
-                raise serializers.ValidationError(f"custom_styles[{idx}] must be an object")
-            
-            # Scenario 1: ID-only format {"style_id": 8, "category": "collar"}
-            if 'style_id' in style:
-                style_id = style.get('style_id')
-                try:
-                    style_obj = CustomStyle.objects.select_related('category').get(id=style_id, is_active=True)
-                    enriched_styles.append({
-                        "style_type": style_obj.category.name,
-                        "index": style_obj.display_order,
-                        "label": style_obj.name,
-                        "asset_path": style_obj.image.name if style_obj.image else ""
-                    })
-                except CustomStyle.DoesNotExist:
-                    raise serializers.ValidationError(f"Custom style with ID {style_id} not found or inactive")
-            
-            # Scenario 2: Traditional format (for backward compatibility)
-            else:
-                required_fields = ['style_type', 'index', 'label', 'asset_path']
-                for field in required_fields:
-                    if field not in style:
-                        raise serializers.ValidationError(
-                            f"custom_styles[{idx}] must contain either 'style_id' or '{field}'"
-                        )
-                enriched_styles.append(style)
-        
-        return enriched_styles
+        return [
+            enrich_custom_style_payload(style, idx)
+            for idx, style in enumerate(value)
+        ]
 
     def validate(self, data):
         """Cross-field validation for service_mode and delivery_address"""
@@ -1265,36 +1288,10 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         if not isinstance(value, list):
             raise serializers.ValidationError("custom_styles must be an array")
         
-        enriched_styles = []
-        for idx, style in enumerate(value):
-            if not isinstance(style, dict):
-                raise serializers.ValidationError(f"custom_styles[{idx}] must be an object")
-            
-            # Scenario 1: ID-only format {"style_id": 8, "category": "collar"}
-            if 'style_id' in style:
-                style_id = style.get('style_id')
-                try:
-                    style_obj = CustomStyle.objects.select_related('category').get(id=style_id, is_active=True)
-                    enriched_styles.append({
-                        "style_type": style_obj.category.name,
-                        "index": style_obj.display_order,
-                        "label": style_obj.name,
-                        "asset_path": style_obj.image.name if style_obj.image else ""
-                    })
-                except CustomStyle.DoesNotExist:
-                    raise serializers.ValidationError(f"Custom style with ID {style_id} not found or inactive")
-            
-            # Scenario 2: Traditional format (for backward compatibility)
-            else:
-                required_fields = ['style_type', 'index', 'label', 'asset_path']
-                for field in required_fields:
-                    if field not in style:
-                        raise serializers.ValidationError(
-                            f"custom_styles[{idx}] must contain either 'style_id' or '{field}'"
-                        )
-                enriched_styles.append(style)
-        
-        return enriched_styles
+        return [
+            enrich_custom_style_payload(style, idx)
+            for idx, style in enumerate(value)
+        ]
     def validate_stitching_completion_date(self, value):
         """Validate stitching completion date is in the future"""
         if value:

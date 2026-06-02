@@ -821,6 +821,11 @@ class NotificationService:
     @staticmethod
     def send_payout_notification(payout_request):
         """Send notification when payout status changes"""
+        user = getattr(payout_request, 'tailor', None) or getattr(payout_request, 'rider', None)
+        app_role = 'TAILOR' if getattr(payout_request, 'tailor_id', None) else 'RIDER'
+        if not user:
+            return False
+
         status_map = {
             'approved': {
                 'title': 'Payout Approved',
@@ -839,7 +844,7 @@ class NotificationService:
         if payout_request.status in status_map:
             msg = status_map[payout_request.status]
             NotificationService.send_notification(
-                user=payout_request.tailor,
+                user=user,
                 title=msg['title'],
                 body=msg['body'],
                 notification_type='PAYMENT',
@@ -850,7 +855,7 @@ class NotificationService:
                     'status': payout_request.status,
                 },
                 priority='high',
-                app_role='TAILOR'
+                app_role=app_role
             )
 
     @staticmethod
@@ -949,5 +954,4 @@ class NotificationService:
                     count += 1
             
             logger.info(f"Broadcast sent to {count} riders for order {order_number}")
-
 
