@@ -1042,7 +1042,7 @@ class RiderRequestStyleConsentView(APIView):
         order = get_object_or_404(Order, id=order_id)
         
         # Check if rider is assigned to this order
-        if order.rider != request.user:
+        if order.rider != request.user and order.assigned_rider != request.user:
             return api_response(
                 success=False,
                 message="You are not authorized to request consent for this order",
@@ -1096,7 +1096,7 @@ class RiderUpdateStyleWithConsentView(APIView):
             order = get_object_or_404(Order.objects.prefetch_related('order_items'), id=order_id)
             
             # 1. Verify rider authorization
-            if order.rider != request.user:
+            if order.rider != request.user and order.assigned_rider != request.user:
                 return api_response(
                     success=False,
                     message="You are not authorized to update styles for this order",
@@ -1127,12 +1127,15 @@ class RiderUpdateStyleWithConsentView(APIView):
             for s in styles_data:
                 style_obj = styles_objs.get(s['style_id'])
                 if style_obj:
-                    detailed_styles.append({
+                    detailed_style = {
                         "style_type": style_obj.category.name,
                         "index": style_obj.display_order,
                         "label": style_obj.name,
                         "asset_path": style_obj.image.name if style_obj.image else ""
-                    })
+                    }
+                    if s.get('text') is not None:
+                        detailed_style["text"] = str(s.get('text'))
+                    detailed_styles.append(detailed_style)
             
             # Update Order items (Efficient bulk update)
             order.order_items.all().update(custom_styles=detailed_styles)

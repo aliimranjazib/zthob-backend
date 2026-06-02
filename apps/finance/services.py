@@ -1,7 +1,10 @@
 from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
-from .models import TailorWallet, WalletTransaction, PayoutRequest
+from .models import (
+    TailorWallet, WalletTransaction, PayoutRequest,
+    RiderWallet, RiderWalletTransaction, RiderPayoutRequest,
+)
 
 class WalletService:
     """
@@ -13,6 +16,12 @@ class WalletService:
     def get_or_create_wallet(tailor):
         """Ensures a tailor has a wallet initialized."""
         wallet, created = TailorWallet.objects.get_or_create(tailor=tailor)
+        return wallet
+
+    @staticmethod
+    def get_or_create_rider_wallet(rider):
+        """Ensures a rider has a wallet initialized."""
+        wallet, created = RiderWallet.objects.get_or_create(rider=rider)
         return wallet
 
     @classmethod
@@ -60,6 +69,44 @@ class WalletService:
 
     @classmethod
     @transaction.atomic
+    def process_rider_order_earning(cls, order):
+        """
+        Credits rider earning when a home-delivery order is completed.
+        Formula: delivery_fee.
+        """
+        rider = order.rider or order.assigned_rider
+        if not rider:
+            return None
+
+        if order.service_mode != 'home_delivery':
+            return None
+
+        if RiderWalletTransaction.objects.filter(order=order, transaction_type='credit').exists():
+            return None
+
+        delivery_fee = order.delivery_fee or Decimal('0.00')
+        if delivery_fee <= Decimal('0.00'):
+            return None
+
+        wallet = cls.get_or_create_rider_wallet(rider)
+        transaction_entry = RiderWalletTransaction.objects.create(
+            wallet=wallet,
+            transaction_type='credit',
+            source='order',
+            amount=delivery_fee,
+            order=order,
+            description=f"Delivery earning for Order {order.order_number} (Delivery fee: {delivery_fee})",
+            running_balance=wallet.available_balance + delivery_fee
+        )
+
+        wallet.available_balance += delivery_fee
+        wallet.total_earned += delivery_fee
+        wallet.save()
+
+        return transaction_entry
+
+    @classmethod
+    @transaction.atomic
     def process_payout(cls, payout_request, admin_user, reference_number, notes=""):
         """
         Processes a payout request, marking it as paid and deducting from wallet.
@@ -86,6 +133,40 @@ class WalletService:
         wallet.save()
 
         # Update Payout Request
+        payout_request.status = 'paid'
+        payout_request.payment_reference = reference_number
+        payout_request.admin_notes = notes
+        payout_request.processed_at = timezone.now()
+        payout_request.processed_by = admin_user
+        payout_request.save()
+
+        return transaction_entry
+
+    @classmethod
+    @transaction.atomic
+    def process_rider_payout(cls, payout_request, admin_user, reference_number, notes=""):
+        """
+        Processes a rider payout request, marking it as paid and deducting from wallet.
+        """
+        if payout_request.status == 'paid':
+            return None
+
+        wallet = cls.get_or_create_rider_wallet(payout_request.rider)
+
+        transaction_entry = RiderWalletTransaction.objects.create(
+            wallet=wallet,
+            transaction_type='debit',
+            source='payout',
+            amount=payout_request.amount,
+            payout_request=payout_request,
+            description=f"Payout processed. Ref: {reference_number}",
+            running_balance=wallet.available_balance - payout_request.amount
+        )
+
+        wallet.available_balance -= payout_request.amount
+        wallet.total_withdrawn += payout_request.amount
+        wallet.save()
+
         payout_request.status = 'paid'
         payout_request.payment_reference = reference_number
         payout_request.admin_notes = notes

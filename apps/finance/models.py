@@ -49,6 +49,51 @@ class TailorWallet(BaseModel):
         return f"Wallet: {self.tailor.username} - Balance: {self.available_balance}"
 
 
+class RiderWallet(BaseModel):
+    """
+    Tracks the financial balance of a rider.
+    Credited from delivery fees when home-delivery orders are completed.
+    """
+    rider = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='rider_wallet',
+        limit_choices_to={'role': 'RIDER'},
+        help_text=_("The rider who owns this wallet")
+    )
+    available_balance = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text=_("Funds available for withdrawal")
+    )
+    pending_balance = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text=_("Funds from deliveries in progress (not yet completed)")
+    )
+    total_earned = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text=_("Lifetime earnings of the rider")
+    )
+    total_withdrawn = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text=_("Total amount successfully paid out to the rider")
+    )
+
+    class Meta:
+        verbose_name = _("Rider Wallet")
+        verbose_name_plural = _("Rider Wallets")
+
+    def __str__(self):
+        return f"Rider Wallet: {self.rider.username} - Balance: {self.available_balance}"
+
+
 class WalletTransaction(BaseModel):
     """
     A ledger entry for every movement of money in a tailor's wallet.
@@ -120,6 +165,67 @@ class WalletTransaction(BaseModel):
         return f"{self.transaction_type.upper()} | {self.amount} | {self.wallet.tailor.username}"
 
 
+class RiderWalletTransaction(BaseModel):
+    """
+    A ledger entry for every movement of money in a rider's wallet.
+    """
+    TRANSACTION_TYPE_CHOICES = WalletTransaction.TRANSACTION_TYPE_CHOICES
+    SOURCE_CHOICES = WalletTransaction.SOURCE_CHOICES
+
+    wallet = models.ForeignKey(
+        RiderWallet,
+        on_delete=models.CASCADE,
+        related_name='transactions',
+        help_text=_("The wallet this transaction belongs to")
+    )
+    transaction_type = models.CharField(
+        max_length=20,
+        choices=TRANSACTION_TYPE_CHOICES
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=SOURCE_CHOICES
+    )
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2
+    )
+    order = models.ForeignKey(
+        'orders.Order',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rider_wallet_transactions',
+        help_text=_("Associated order (if applicable)")
+    )
+    payout_request = models.ForeignKey(
+        'finance.RiderPayoutRequest',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='wallet_transactions',
+        help_text=_("Associated payout request (if applicable)")
+    )
+    description = models.TextField(
+        blank=True,
+        help_text=_("Detailed description of the transaction")
+    )
+    running_balance = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        help_text=_("Wallet balance after this transaction (snapshot)")
+    )
+
+    class Meta:
+        verbose_name = _("Rider Wallet Transaction")
+        verbose_name_plural = _("Rider Wallet Transactions")
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.transaction_type.upper()} | {self.amount} | {self.wallet.rider.username}"
+
+
 class PayoutRequest(BaseModel):
     """
     Tracks requests made by tailors to withdraw funds to their bank accounts.
@@ -176,3 +282,56 @@ class PayoutRequest(BaseModel):
 
     def __str__(self):
         return f"Payout {self.amount} - {self.tailor.username} ({self.status})"
+
+
+class RiderPayoutRequest(BaseModel):
+    """
+    Tracks requests made by riders to withdraw funds to their bank accounts.
+    """
+    STATUS_CHOICES = PayoutRequest.STATUS_CHOICES
+
+    rider = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='rider_payout_requests',
+        limit_choices_to={'role': 'RIDER'}
+    )
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+    bank_name = models.CharField(max_length=100, blank=True)
+    account_number = models.CharField(max_length=50, blank=True)
+    iban = models.CharField(max_length=50, blank=True)
+    account_holder_name = models.CharField(max_length=100, blank=True)
+    
+    admin_notes = models.TextField(
+        blank=True,
+        help_text=_("Notes from admin regarding approval/rejection/payment")
+    )
+    payment_reference = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text=_("Reference ID from the bank transfer or ClickPay")
+    )
+    processed_at = models.DateTimeField(null=True, blank=True)
+    processed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='processed_rider_payouts'
+    )
+
+    class Meta:
+        verbose_name = _("Rider Payout Request")
+        verbose_name_plural = _("Rider Payout Requests")
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Rider payout {self.amount} - {self.rider.username} ({self.status})"
