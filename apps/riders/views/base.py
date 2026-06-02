@@ -1093,7 +1093,10 @@ class RiderUpdateStyleWithConsentView(APIView):
         from apps.customization.models import CustomStyle, UserStylePreset
         serializer = RiderUpdateStyleSerializer(data=request.data)
         if serializer.is_valid():
-            order = get_object_or_404(Order.objects.prefetch_related('order_items'), id=order_id)
+            order = get_object_or_404(
+                Order.objects.prefetch_related('order_items__family_member'),
+                id=order_id
+            )
             
             # 1. Verify rider authorization
             if order.rider != request.user and order.assigned_rider != request.user:
@@ -1115,7 +1118,29 @@ class RiderUpdateStyleWithConsentView(APIView):
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
             
-            # 3. Update styles
+            # 3. Resolve the exact order item/person to update
+            order_items = list(order.order_items.all())
+            order_item_id = serializer.validated_data.get('order_item_id')
+            target_item = None
+
+            if order_item_id:
+                target_item = next((item for item in order_items if item.id == order_item_id), None)
+                if target_item is None:
+                    return api_response(
+                        success=False,
+                        message="Order item does not belong to this order",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+            elif len(order_items) == 1:
+                target_item = order_items[0]
+            else:
+                return api_response(
+                    success=False,
+                    message="order_item_id is required when an order has multiple items",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            # 4. Update styles
             styles_data = serializer.validated_data['styles']
             
             # Fetch CustomStyle objects in bulk to avoid N+1
@@ -1137,14 +1162,14 @@ class RiderUpdateStyleWithConsentView(APIView):
                         detailed_style["text"] = str(s.get('text'))
                     detailed_styles.append(detailed_style)
             
-            # Update Order items (Efficient bulk update)
-            order.order_items.all().update(custom_styles=detailed_styles)
+            target_item.custom_styles = detailed_styles
+            target_item.save(update_fields=['custom_styles', 'updated_at'])
+
+            if len(order_items) == 1:
+                order.custom_styles = detailed_styles
+                order.save(update_fields=['custom_styles', 'updated_at'])
             
-            # Also update order-level custom_styles
-            order.custom_styles = detailed_styles
-            order.save(update_fields=['custom_styles', 'updated_at'])
-            
-            # 4. Handle "Save as Default" (Option 3)
+            # 5. Handle "Save as Default" (Option 3)
             profile_updated = False
             if serializer.validated_data.get('save_as_default') and order.customer:
                 # Update or create default UserStylePreset
@@ -1171,6 +1196,8 @@ class RiderUpdateStyleWithConsentView(APIView):
                 message="Styles updated successfully",
                 data={
                     "order_id": order.id,
+                    "order_item_id": target_item.id,
+                    "family_member": target_item.family_member_id,
                     "profile_updated": profile_updated,
                     "styles": detailed_styles
                 },

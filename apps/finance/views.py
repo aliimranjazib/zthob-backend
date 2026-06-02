@@ -10,6 +10,7 @@ from .serializers import (
     TailorWalletSerializer, WalletTransactionSerializer, 
     PayoutRequestSerializer, RiderWalletSerializer,
     RiderWalletTransactionSerializer, RiderPayoutRequestSerializer,
+    get_finance_role,
 )
 
 class TailorWalletView(APIView):
@@ -19,12 +20,13 @@ class TailorWalletView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if request.user.is_tailor:
+        finance_role = get_finance_role(request.user)
+        if finance_role == 'tailor':
             wallet, _ = TailorWallet.objects.get_or_create(tailor=request.user)
             serializer = TailorWalletSerializer(wallet)
             return Response(serializer.data)
         
-        if request.user.is_rider:
+        if finance_role == 'rider':
             wallet, _ = RiderWallet.objects.get_or_create(rider=request.user)
             serializer = RiderWalletSerializer(wallet)
             return Response(serializer.data)
@@ -41,17 +43,18 @@ class TailorTransactionHistoryView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_serializer_class(self):
-        if self.request.user.is_rider and not self.request.user.is_tailor:
+        if get_finance_role(self.request.user) == 'rider':
             return RiderWalletTransactionSerializer
         return WalletTransactionSerializer
 
     def get_queryset(self):
-        if self.request.user.is_tailor:
+        finance_role = get_finance_role(self.request.user)
+        if finance_role == 'tailor':
             return WalletTransaction.objects.filter(
                 wallet__tailor=self.request.user
             ).select_related('order').order_by('-created_at')
         
-        if self.request.user.is_rider:
+        if finance_role == 'rider':
             return RiderWalletTransaction.objects.filter(
                 wallet__rider=self.request.user
             ).select_related('order').order_by('-created_at')
@@ -67,21 +70,23 @@ class PayoutRequestViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_serializer_class(self):
-        if self.request.user.is_rider and not self.request.user.is_tailor:
+        if get_finance_role(self.request.user) == 'rider':
             return RiderPayoutRequestSerializer
         return PayoutRequestSerializer
 
     def get_queryset(self):
-        if self.request.user.is_tailor:
+        finance_role = get_finance_role(self.request.user)
+        if finance_role == 'tailor':
             return PayoutRequest.objects.filter(tailor=self.request.user)
-        if self.request.user.is_rider:
+        if finance_role == 'rider':
             return RiderPayoutRequest.objects.filter(rider=self.request.user)
         return PayoutRequest.objects.none()
 
     def perform_create(self, serializer):
-        if self.request.user.is_tailor:
+        finance_role = get_finance_role(self.request.user)
+        if finance_role == 'tailor':
             serializer.save(tailor=self.request.user)
-        elif self.request.user.is_rider:
+        elif finance_role == 'rider':
             serializer.save(rider=self.request.user)
         else:
             raise PermissionDenied("Only tailors or riders can request payouts.")

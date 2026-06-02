@@ -1151,6 +1151,7 @@ class RiderUpdateStyleSerializer(serializers.Serializer):
     """Serializer for rider updating styles with consent code"""
     styles = RiderStyleSelectionSerializer(many=True, required=True)
     consent_code = serializers.CharField(required=True, min_length=4, max_length=4)
+    order_item_id = serializers.IntegerField(required=False)
     save_as_default = serializers.BooleanField(default=False)
 
     def validate_styles(self, value):
