@@ -82,6 +82,7 @@ class TailorOrderDownloadPDFView(APIView):
             ).prefetch_related(
                 'order_items__fabric',
                 'order_items__family_member',
+                'payments__collected_by',
                 'status_history__changed_by',
             ),
             id=order_id,

@@ -6,6 +6,8 @@ Requires: reportlab, arabic-reshaper, python-bidi
 """
 import io
 import os
+from decimal import Decimal
+from xml.sax.saxutils import escape
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
@@ -25,12 +27,12 @@ logger = logging.getLogger(__name__)
 
 # ─── Arabic font registration ─────────────────────────────────────────────────
 _FONTS_DIR = os.path.join(settings.BASE_DIR, 'fonts')
-_AR_FONT_REGULAR = 'Amiri-Regular'  # Corrected TTF names
-_AR_FONT_BOLD    = 'Amiri-Bold'
+_AR_FONT_REGULAR = 'IBMPlexSansArabic-Regular'
+_AR_FONT_BOLD    = 'IBMPlexSansArabic-Bold'
 
 try:
-    pdfmetrics.registerFont(TTFont(_AR_FONT_REGULAR, os.path.join(_FONTS_DIR, 'Amiri-Regular.ttf')))
-    pdfmetrics.registerFont(TTFont(_AR_FONT_BOLD,    os.path.join(_FONTS_DIR, 'Amiri-Bold.ttf')))
+    pdfmetrics.registerFont(TTFont(_AR_FONT_REGULAR, os.path.join(_FONTS_DIR, 'IBMPlexSansArabic-Regular.ttf')))
+    pdfmetrics.registerFont(TTFont(_AR_FONT_BOLD,    os.path.join(_FONTS_DIR, 'IBMPlexSansArabic-Bold.ttf')))
     _ARABIC_FONT_AVAILABLE = True
 except Exception as e:
     logger.warning("Failed to load Arabic fonts: %s", e)
@@ -64,6 +66,8 @@ _AR_LABELS = {
     'ORDER ITEMS':         'عناصر الطلب',
     'RIDER MEASUREMENTS':  'قياسات المندوب',
     'PRICING SUMMARY':     'ملخص التسعير',
+    'PAYMENT SUMMARY':     'ملخص الدفع',
+    'PAYMENT HISTORY':     'سجل المدفوعات',
     'STATUS HISTORY':      'سجل الحالة',
     # Order info labels
     'Order Number':        'رقم الطلب',
@@ -71,6 +75,12 @@ _AR_LABELS = {
     'Service Mode':        'طريقة الخدمة',
     'Payment Method':      'طريقة الدفع',
     'Payment Status':      'حالة الدفع',
+    'Payment Plan':        'خطة الدفع',
+    'Payment Option':      'خيار الدفع',
+    'Deposit Amount':      'مبلغ العربون',
+    'Paid Amount':         'المبلغ المدفوع',
+    'Remaining Amount':    'المبلغ المتبقي',
+    'Amount Due':          'المبلغ المستحق',
     'Items Count':         'عدد العناصر',
     'Est. Delivery':       'التسليم المتوقع',
     'Actual Delivery':     'تاريخ التسليم',
@@ -111,6 +121,12 @@ _AR_LABELS = {
     'Platform Fee':        'رسوم المنصة',
     'Express Fee':         'رسوم الخدمة السريعة',
     'TOTAL AMOUNT':        'المبلغ الإجمالي',
+    'Payment Type':        'نوع الدفع',
+    'Method':              'الطريقة',
+    'Amount':              'المبلغ',
+    'Collected By':        'تم التحصيل بواسطة',
+    'Reference':           'المرجع',
+    'No payment records found.': 'لا توجد سجلات دفع.',
     # History headers
     'Date & Time':         'التاريخ والوقت',
     'Status':              'الحالة',
@@ -128,6 +144,43 @@ _AR_LABELS = {
     'Styles:':             'الأنماط:',
     'N/A':                 'غير متاح',
     'Measured at:':        'تم القياس في:',
+    'Measurement Service': 'خدمة القياس',
+    'Yes':                 'نعم',
+    'No':                  'لا',
+    # Order values
+    'Fabric Purchase Only': 'شراء قماش فقط',
+    'Fabric + Stitching':  'قماش مع خياطة',
+    'Measurement Service Only': 'خدمة قياس فقط',
+    'Home Delivery':       'توصيل للمنزل',
+    'Walk-In Service':     'زيارة المحل',
+    'Cash on Delivery':    'الدفع عند الاستلام',
+    'Credit Card':         'بطاقة ائتمان',
+    'Bank Transfer':       'تحويل بنكي',
+    'Pending':             'قيد الانتظار',
+    'Partially Paid':      'مدفوع جزئياً',
+    'Paid':                'مدفوع',
+    'Refunded':            'مسترد',
+    'Full Payment':        'دفع كامل',
+    'Partial Payment':     'دفع جزئي',
+    'Pay Later':           'الدفع لاحقاً',
+    'Confirmed':           'مؤكد',
+    'In Progress':         'قيد التنفيذ',
+    'Ready for Delivery':  'جاهز للتوصيل',
+    'Ready for Pickup':    'جاهز للاستلام',
+    'Delivered':           'تم التوصيل',
+    'Collected':           'تم الاستلام',
+    'Cancelled':           'ملغي',
+    'New':                 'جديد',
+    'Accepted Order':      'تم قبول الطلب',
+    'Started Stitching':   'بدأت الخياطة',
+    'Finished Stitching':  'انتهت الخياطة',
+    'Measurements Complete': 'اكتملت القياسات',
+    'Record Measurements': 'تسجيل القياسات',
+    'Deposit':             'عربون',
+    'Remaining Balance':   'المبلغ المتبقي',
+    'Refund':              'استرداد',
+    'Adjustment':          'تعديل',
+    'Failed':              'فشل',
     # Common measurement keys
     'Chest':               'الصدر',
     'Waist':               'الخصر',
@@ -151,7 +204,7 @@ _AR_LABELS = {
 
 
 # ─── Brand colors ────────────────────────────────────────────────────────────
-BRAND_PRIMARY   = colors.HexColor('#1A1A2E')   # Dark navy
+BRAND_PRIMARY   = colors.HexColor('#990404')   # Brand red
 BRAND_ACCENT    = colors.HexColor('#C9A84C')   # Gold
 BRAND_LIGHT     = colors.HexColor('#F5F5F5')   # Light grey
 BRAND_MID       = colors.HexColor('#DDDDDD')   # Divider grey
@@ -298,6 +351,41 @@ def _fmt_amount(value, currency='SAR'):
         return f'{currency} {value}'
 
 
+def _safe_text(value):
+    """Escape text before inserting it into a ReportLab Paragraph."""
+    if value is None:
+        return '—'
+    return escape(str(value))
+
+
+def _choice_display(value, choices, lang='en'):
+    """Return a localized display label for a Django choice value."""
+    display = dict(choices).get(value, value or '—')
+    return _t(display, lang) if lang == 'ar' else str(display)
+
+
+def _localized_value(text, lang='en'):
+    """Translate common display values when Arabic is requested."""
+    return _t(text, lang) if lang == 'ar' else str(text or '—')
+
+
+def _short_reference(reference):
+    """Avoid exposing full gateway/manual payment references in the PDF."""
+    if not reference:
+        return '—'
+    reference = str(reference)
+    if len(reference) <= 8:
+        return reference
+    return f'...{reference[-6:]}'
+
+
+def _is_positive_amount(value):
+    try:
+        return Decimal(value or '0.00') > Decimal('0.00')
+    except Exception:
+        return False
+
+
 def _status_badge_color(status):
     """Return background color for status badge."""
     mapping = {
@@ -333,15 +421,15 @@ def _kv_table(rows, col_widths=None, lang='en'):
         val = row[1]
         skip_trans = row[2] if len(row) > 2 else False
         
-        lbl_p = Paragraph(_t(lbl, lang) if is_ar else lbl, s['label'])
+        lbl_p = Paragraph(_safe_text(_t(lbl, lang) if is_ar else lbl), s['label'])
         
         if is_ar:
             val_text = str(val) if skip_trans else _t(val, lang)
-            val_p = Paragraph(val_text if val else '—', s['value'])
+            val_p = Paragraph(_safe_text(val_text if val else '—'), s['value'])
             data.append([val_p, lbl_p])
         else:
             val_text = str(val) if val else '—'
-            val_p = Paragraph(val_text, s['value'])
+            val_p = Paragraph(_safe_text(val_text), s['value'])
             data.append([lbl_p, val_p])
 
     tbl = Table(data, colWidths=col_widths, hAlign='RIGHT' if is_ar else 'LEFT')
@@ -361,6 +449,64 @@ def _t(text, lang):
         return str(text) if text else '—'
     arabic = _AR_LABELS.get(str(text), str(text)) if text else '—'
     return _shape_arabic(arabic)
+
+
+def _measurement_field_map():
+    """
+    Return active measurement field metadata keyed by JSON field name.
+    The PDF uses this as the source of truth for labels and ordering.
+    """
+    try:
+        from apps.customization.models import MeasurementField
+        fields = MeasurementField.objects.select_related('template').filter(
+            is_active=True,
+            template__is_active=True,
+        ).order_by('template__display_order', 'display_order', 'name')
+    except Exception as exc:
+        logger.debug("Unable to load measurement field metadata for PDF: %s", exc)
+        return {}
+
+    field_map = {}
+    for idx, field in enumerate(fields):
+        field_map.setdefault(field.name, {
+            'label_en': field.display_name or field.name.replace('_', ' ').title(),
+            'label_ar': field.display_name_ar or field.display_name or field.name,
+            'order': idx,
+            'unit': getattr(field.template, 'default_unit', 'cm') or 'cm',
+        })
+    return field_map
+
+
+def _format_measurement_pairs(measurements, lang='en', field_map=None):
+    """Format measurement JSON into localized, consistently ordered label/value/unit tuples."""
+    if not measurements or not isinstance(measurements, dict):
+        return []
+
+    field_map = field_map if field_map is not None else _measurement_field_map()
+    formatted = []
+    unknown_base_order = len(field_map) + 1000
+
+    for idx, (key, value) in enumerate(measurements.items()):
+        if key == 'title' or value in (None, '', 'null'):
+            continue
+
+        meta = field_map.get(key, {})
+        fallback = str(key).replace('_', ' ').title()
+        if lang == 'ar':
+            raw_label = meta.get('label_ar') or _AR_LABELS.get(fallback, fallback)
+            label = _shape_arabic(raw_label)
+        else:
+            label = meta.get('label_en') or fallback
+
+        formatted.append((
+            meta.get('order', unknown_base_order + idx),
+            label,
+            value,
+            meta.get('unit', 'cm'),
+        ))
+
+    formatted.sort(key=lambda item: item[0])
+    return [(label, value, unit) for _, label, value, unit in formatted]
 
 
 def _measurements_grid(pairs, page_w, s, lang='en', title=''):
@@ -400,16 +546,16 @@ def _measurements_grid(pairs, page_w, s, lang='en', title=''):
         except ValueError:
             return False
 
-    def _cell(lbl, val):
-        lbl_text = _t(lbl, lang) if lang == 'ar' else lbl.upper()
+    def _cell(lbl, val, unit=None):
+        lbl_text = lbl if lang == 'ar' else str(lbl).upper()
         val_text = str(val)
-        unit_text = 'cm' if _is_numeric(val) else ''
+        unit_text = unit if _is_numeric(val) else ''
         inner = [
-            [Paragraph(lbl_text, lbl_style)],
-            [Paragraph(val_text, val_style)],
+            [Paragraph(_safe_text(lbl_text), lbl_style)],
+            [Paragraph(_safe_text(val_text), val_style)],
         ]
         if unit_text:
-            inner.append([Paragraph(unit_text, unit_style)])
+            inner.append([Paragraph(_safe_text(unit_text), unit_style)])
         inner_tbl = Table(inner, colWidths=['100%'])
         inner_tbl.setStyle(TableStyle([
             ('TOPPADDING',    (0, 0), (-1, -1), 1),
@@ -427,7 +573,7 @@ def _measurements_grid(pairs, page_w, s, lang='en', title=''):
     # Optional title header row
     if title:
         title_text = _shape_arabic(title) if is_ar else title.upper()
-        title_cell = Paragraph(title_text, ParagraphStyle(
+        title_cell = Paragraph(_safe_text(title_text), ParagraphStyle(
             f'MeasTitle_{lang}', fontSize=8, fontName=font_bold,
             textColor=WHITE, alignment=TA_CENTER,
         ))
@@ -450,7 +596,16 @@ def _measurements_grid(pairs, page_w, s, lang='en', title=''):
         # Pad with empty cells to fill the row
         while len(chunk) < COLS:
             chunk.append(('', ''))
-        grid_rows.append([_cell(lbl, val) if lbl else '' for lbl, val in chunk])
+        cells = []
+        for pair in chunk:
+            if not pair or not pair[0]:
+                cells.append('')
+                continue
+            lbl = pair[0]
+            val = pair[1]
+            unit = pair[2] if len(pair) > 2 else 'cm'
+            cells.append(_cell(lbl, val, unit))
+        grid_rows.append(cells)
 
     if not grid_rows:
         return Paragraph('', s['value'])
@@ -512,6 +667,7 @@ def generate_order_pdf(order, lang='en') -> bytes:
     s = _styles(lang)
     page_w = A4[0] - 40 * mm
     story = []
+    measurement_fields = _measurement_field_map()
 
     # ── Header banner ─────────────────────────────────────────────────────────
     _receipt_label = _shape_arabic(_AR_LABELS['Order Receipt']) if is_ar else 'Order Receipt'
@@ -548,8 +704,8 @@ def generate_order_pdf(order, lang='en') -> bytes:
     story.append(Spacer(1, 5 * mm))
 
     # ── Status strip ──────────────────────────────────────────────────────────
-    status_display  = order.get_status_display()
-    tailor_status_display = order.get_tailor_status_display() if order.tailor_status else _t('N/A', lang)
+    status_display = _choice_display(order.status, order.ORDER_STATUS_CHOICES, lang)
+    tailor_status_display = _choice_display(order.tailor_status, order.TAILOR_STATUS_CHOICES, lang) if order.tailor_status else _t('N/A', lang)
     status_color = _status_badge_color(order.status)
     _sb_font = _AR_FONT_BOLD if (is_ar and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
 
@@ -558,13 +714,13 @@ def generate_order_pdf(order, lang='en') -> bytes:
     _placed_lbl  = _t('Placed:', lang)
 
     status_data = [[
-        Paragraph(f'{_status_lbl} <b>{_shape_arabic(status_display) if is_ar else status_display}</b>',
+        Paragraph(f'{_safe_text(_status_lbl)} <b>{_safe_text(status_display)}</b>',
                   ParagraphStyle(f'sb_{lang}', parent=s['value'], fontSize=9, textColor=WHITE, fontName=_sb_font,
                                  alignment=TA_RIGHT if is_ar else TA_LEFT)),
-        Paragraph(f'{_tailor_lbl} <b>{_shape_arabic(tailor_status_display) if is_ar else tailor_status_display}</b>',
+        Paragraph(f'{_safe_text(_tailor_lbl)} <b>{_safe_text(tailor_status_display)}</b>',
                   ParagraphStyle(f'sb2_{lang}', parent=s['value'], fontSize=9, textColor=WHITE, fontName=_sb_font,
                                  alignment=TA_CENTER)),
-        Paragraph(f'{_placed_lbl} <b>{_fmt_datetime(order.created_at)}</b>',
+        Paragraph(f'{_safe_text(_placed_lbl)} <b>{_safe_text(_fmt_datetime(order.created_at))}</b>',
                   ParagraphStyle(f'sb3_{lang}', parent=s['value'], fontSize=9, textColor=WHITE, fontName=_sb_font,
                                  alignment=TA_LEFT if is_ar else TA_RIGHT)),
     ]]
@@ -584,17 +740,17 @@ def generate_order_pdf(order, lang='en') -> bytes:
 
     # ── Two-column: Order Info + Customer Info ────────────────────────────────
     # Order Info
-    order_type_display = order.get_order_type_display()
-    service_mode_display = order.get_service_mode_display()
-    payment_status_display = order.get_payment_status_display()
-    payment_method_display = order.get_payment_method_display()
+    order_type_display = _choice_display(order.order_type, order.ORDER_TYPE_CHOICES, lang)
+    service_mode_display = _choice_display(order.service_mode, order.SERVICE_MODE_CHOICES, lang)
+    payment_status_display = _choice_display(order.payment_status, order.PAYMENT_STATUS_CHOICES, lang)
+    payment_method_display = _choice_display(order.payment_method, order.PAYMENT_METHOD_CHOICES, lang)
 
     order_info_rows = [
         ('Order Number',     order.order_number, True),
-        ('Order Type',       order_type_display),
-        ('Service Mode',     service_mode_display),
-        ('Payment Method',   payment_method_display),
-        ('Payment Status',   payment_status_display),
+        ('Order Type',       order_type_display, True),
+        ('Service Mode',     service_mode_display, True),
+        ('Payment Method',   payment_method_display, True),
+        ('Payment Status',   payment_status_display, True),
         ('Items Count',      str(order.items_count)),
     ]
     if order.estimated_delivery_date:
@@ -744,10 +900,10 @@ def generate_order_pdf(order, lang='en') -> bytes:
         item_rows = [item_headers]
 
         for item in items:
-            fabric_name = item.fabric.name if item.fabric else 'Measurement Service'
+            fabric_name = item.fabric.name if item.fabric else _localized_value('Measurement Service', lang)
             fabric_sku  = f'SKU: {item.fabric.sku}' if item.fabric and item.fabric.sku else ''
             fabric_cell = Paragraph(
-                f'{fabric_name}<br/><font color="#888888" size="7">{fabric_sku}</font>',
+                f'{_safe_text(fabric_name)}<br/><font color="#888888" size="7">{_safe_text(fabric_sku)}</font>',
                 s['table_cell']
             )
 
@@ -764,10 +920,10 @@ def generate_order_pdf(order, lang='en') -> bytes:
 
             row = [
                 fabric_cell,
-                Paragraph(_shape_arabic(recipient) if is_ar else recipient, s['table_cell']),
-                Paragraph(str(item.quantity), s['table_cell']),
-                Paragraph(_fmt_amount(item.unit_price), s['table_cell']),
-                Paragraph(_fmt_amount(item.total_price), s['table_cell']),
+                Paragraph(_safe_text(_shape_arabic(recipient) if is_ar else recipient), s['table_cell']),
+                Paragraph(_safe_text(str(item.quantity)), s['table_cell']),
+                Paragraph(_safe_text(_fmt_amount(item.unit_price)), s['table_cell']),
+                Paragraph(_safe_text(_fmt_amount(item.total_price)), s['table_cell']),
                 Paragraph(is_ready, ParagraphStyle(
                     f'is_ready_{lang}', parent=s['table_cell'],
                     textColor=ready_color, fontName=_item_font_bold
@@ -784,16 +940,12 @@ def generate_order_pdf(order, lang='en') -> bytes:
             if item.custom_instructions:
                 _instr_label = _t('Instructions:', lang)
                 _instr_text  = _shape_arabic(item.custom_instructions) if is_ar else item.custom_instructions
-                instr_p = Paragraph(f'<b>{_instr_label}</b> {_instr_text}', s['small'])
+                instr_p = Paragraph(f'<b>{_safe_text(_instr_label)}</b> {_safe_text(_instr_text)}', s['small'])
                 item_rows.append([instr_p, '', '', '', '', ''])
 
             # 2. Measurements row — rendered as a professional grid
             if item.measurements and isinstance(item.measurements, dict):
-                meas_pairs = [
-                    (str(k).replace('_', ' ').title(), v)
-                    for k, v in item.measurements.items()
-                    if k != 'title' and v not in (None, '', 'null')
-                ]
+                meas_pairs = _format_measurement_pairs(item.measurements, lang, measurement_fields)
                 if meas_pairs:
                     meas_title = item.measurements.get('title', '')
                     grid = _measurements_grid(meas_pairs, page_w, s, lang, title=meas_title)
@@ -810,7 +962,7 @@ def generate_order_pdf(order, lang='en') -> bytes:
                     _styles_text = ',  '.join(style_texts)
                     if is_ar:
                         _styles_text = _shape_arabic(_styles_text)
-                    style_p = Paragraph(f'<b>{_styles_label}</b> {_styles_text}', s['small'])
+                    style_p = Paragraph(f'<b>{_safe_text(_styles_label)}</b> {_safe_text(_styles_text)}', s['small'])
                     item_rows.append([style_p, '', '', '', '', ''])
 
         items_tbl = Table(item_rows, colWidths=col_widths_items, repeatRows=1)
@@ -863,15 +1015,11 @@ def generate_order_pdf(order, lang='en') -> bytes:
         story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
         if order.measurement_taken_at:
             story.append(Paragraph(
-                f'<i>{_t("Measured at:", lang)} {_fmt_datetime(order.measurement_taken_at)}</i>',
+                f'<i>{_safe_text(_t("Measured at:", lang))} {_safe_text(_fmt_datetime(order.measurement_taken_at))}</i>',
                 s['small']
             ))
             story.append(Spacer(1, 2 * mm))
-        meas_pairs = [
-            (str(k).replace('_', ' ').title(), str(v))
-            for k, v in order.rider_measurements.items()
-            if v not in (None, '', 'null')
-        ]
+        meas_pairs = _format_measurement_pairs(order.rider_measurements, lang, measurement_fields)
         story.append(_measurements_grid(meas_pairs, page_w, s, lang))
         story.append(Spacer(1, 5 * mm))
 
@@ -933,6 +1081,109 @@ def generate_order_pdf(order, lang='en') -> bytes:
         ('BACKGROUND',    (0, -1), (-1, -1), BRAND_LIGHT),
     ]))
     story.append(pricing_tbl)
+    story.append(Spacer(1, 6 * mm))
+
+    # ── Payment Summary + History ────────────────────────────────────────────
+    story.append(Paragraph(_t('PAYMENT SUMMARY', lang), s['section_header']))
+    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
+
+    payment_plan_display = _choice_display(order.payment_plan, order.PAYMENT_PLAN_CHOICES, lang)
+    payment_summary_rows = [
+        ('Payment Plan', payment_plan_display, True),
+        ('Payment Method', payment_method_display, True),
+        ('Payment Status', payment_status_display, True),
+        ('Paid Amount', _fmt_amount(order.paid_amount), True),
+        ('Remaining Amount', _fmt_amount(order.remaining_amount), True),
+    ]
+    if order.payment_option:
+        payment_summary_rows.insert(1, ('Payment Option', order.payment_option, True))
+    if _is_positive_amount(order.deposit_amount):
+        payment_summary_rows.append(('Deposit Amount', _fmt_amount(order.deposit_amount), True))
+
+    story.append(_kv_table(payment_summary_rows, lang=lang))
+
+    if _is_positive_amount(order.remaining_amount):
+        due_label = _t('Amount Due', lang)
+        due_tbl = Table([[
+            Paragraph(_safe_text(due_label), s['total_label']),
+            Paragraph(_safe_text(_fmt_amount(order.remaining_amount)), s['total_value']),
+        ]], colWidths=[page_w * 0.65, page_w * 0.35])
+        due_tbl.setStyle(TableStyle([
+            ('BACKGROUND',    (0, 0), (-1, -1), colors.HexColor('#FFF8E1')),
+            ('BOX',           (0, 0), (-1, -1), 0.7, BRAND_ACCENT),
+            ('TOPPADDING',    (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING',   (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING',  (0, 0), (-1, -1), 8),
+        ]))
+        story.append(Spacer(1, 2 * mm))
+        story.append(due_tbl)
+
+    payments = list(order.payments.select_related('collected_by').order_by('created_at'))
+    story.append(Spacer(1, 4 * mm))
+    story.append(Paragraph(_t('PAYMENT HISTORY', lang), s['section_header']))
+    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
+
+    if payments:
+        pay_headers = [
+            Paragraph(_t('Date & Time', lang), s['table_header']),
+            Paragraph(_t('Payment Type', lang), s['table_header']),
+            Paragraph(_t('Method', lang), s['table_header']),
+            Paragraph(_t('Status', lang), s['table_header']),
+            Paragraph(_t('Amount', lang), s['table_header']),
+            Paragraph(_t('Collected By', lang), s['table_header']),
+            Paragraph(_t('Reference', lang), s['table_header']),
+        ]
+        if is_ar:
+            pay_headers.reverse()
+        pay_rows = [pay_headers]
+
+        for payment in payments:
+            collected_by = (
+                payment.collected_by.get_full_name() or payment.collected_by.username
+                if payment.collected_by else '—'
+            )
+            pay_row = [
+                Paragraph(_safe_text(_fmt_datetime(payment.created_at)), s['small']),
+                Paragraph(_safe_text(_choice_display(payment.payment_type, payment.PAYMENT_TYPE_CHOICES, lang)), s['small']),
+                Paragraph(_safe_text(_choice_display(payment.payment_method, order.PAYMENT_METHOD_CHOICES, lang)), s['small']),
+                Paragraph(_safe_text(_choice_display(payment.status, payment.PAYMENT_STATUS_CHOICES, lang)), s['small']),
+                Paragraph(_safe_text(_fmt_amount(payment.amount)), s['small']),
+                Paragraph(_safe_text(_shape_arabic(collected_by) if is_ar else collected_by), s['small']),
+                Paragraph(_safe_text(_short_reference(payment.payment_reference)), s['small']),
+            ]
+            if is_ar:
+                pay_row.reverse()
+            pay_rows.append(pay_row)
+
+        pay_tbl = Table(
+            pay_rows,
+            colWidths=[
+                page_w * 0.18,
+                page_w * 0.15,
+                page_w * 0.14,
+                page_w * 0.12,
+                page_w * 0.13,
+                page_w * 0.16,
+                page_w * 0.12,
+            ],
+            repeatRows=1
+        )
+        pay_tbl.setStyle(TableStyle([
+            ('BACKGROUND',    (0, 0), (-1, 0),  BRAND_PRIMARY),
+            ('TOPPADDING',    (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING',   (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING',  (0, 0), (-1, -1), 4),
+            ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+            ('GRID',          (0, 0), (-1, -1), 0.3, BRAND_MID),
+            ('LINEBELOW',     (0, 0), (-1, 0),  1,   BRAND_ACCENT),
+            ('ROWBACKGROUNDS',(0, 1), (-1, -1), [WHITE, BRAND_LIGHT]),
+        ]))
+        story.append(pay_tbl)
+    else:
+        story.append(Paragraph(_t('No payment records found.', lang), s['value']))
+
     story.append(Spacer(1, 6 * mm))
 
     # ── Status History ────────────────────────────────────────────────────────
