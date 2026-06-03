@@ -53,6 +53,7 @@ class Order(BaseModel):
     ORDER_TYPE_CHOICES = (
         ('fabric_only', 'Fabric Purchase Only'),
         ('fabric_with_stitching', 'Fabric + Stitching'),
+        ('stitching_only', 'Stitching Only'),
         ('measurement_service', 'Measurement Service Only'),
     )
     SERVICE_MODE_CHOICES = (
@@ -146,7 +147,7 @@ class Order(BaseModel):
         max_length=25,
         choices=ORDER_TYPE_CHOICES,
         default='fabric_with_stitching',
-        help_text="Type of order - fabric only or fabric with stitching"
+        help_text="Type of order - fabric only, fabric with stitching, stitching only, or measurement service"
     )
     service_mode = models.CharField(
         max_length=20,
@@ -205,7 +206,7 @@ class Order(BaseModel):
     max_digits=10,
     decimal_places=2,
     default=Decimal('0.00'),
-    help_text="Total stitching price for order (only for fabric_with_stitching orders)"
+    help_text="Total stitching price for order (for fabric_with_stitching and stitching_only orders)"
     )
 
     tax_amount=models.DecimalField(
@@ -662,7 +663,7 @@ class Order(BaseModel):
         if self.order_type == 'fabric_only':
             return True
         
-        # For measurement_service and fabric_with_stitching, check measurements
+        # For measurement_service, fabric_with_stitching, and stitching_only, check measurements
         items_without_measurements = self.order_items.filter(
             Q(measurements__isnull=True) | Q(measurements={})
         )

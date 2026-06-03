@@ -116,17 +116,20 @@ class OrderCalculationService:
         return system_settings.delivery_fee_under_10km
 
     @staticmethod
-    def calculate_stitching_price(items_data, order_type):
+    def calculate_stitching_price(items_data, order_type, manual_stitching_price=None):
         """
         Calculate stitching price from fabric items.
         
         Args:
             items_data: List of items with fabric and quantity
-            order_type: Type of order ('fabric_only' or 'fabric_with_stitching')
+            order_type: Type of order
         
         Returns:
             Decimal: Total stitching price
         """
+        if order_type == 'stitching_only':
+            return Decimal(str(manual_stitching_price or '0.00')).quantize(Decimal('0.01'))
+
         if order_type != 'fabric_with_stitching':
             return Decimal('0.00')
         
@@ -159,7 +162,7 @@ class OrderCalculationService:
         return Decimal('0.00')
 
     @staticmethod
-    def calculate_all_totals(items_data, distance_km=None, delivery_address=None, tailor=None, tax_rate=None, order_type='fabric_only', service_mode='home_delivery', delivery_latitude=None, delivery_longitude=None, is_express=False):
+    def calculate_all_totals(items_data, distance_km=None, delivery_address=None, tailor=None, tax_rate=None, order_type='fabric_only', service_mode='home_delivery', delivery_latitude=None, delivery_longitude=None, is_express=False, manual_stitching_price=None):
         """
         Calculate all order totals.
         
@@ -169,7 +172,7 @@ class OrderCalculationService:
             delivery_address: Delivery address (optional)
             tailor: Tailor object (optional)
             tax_rate: Custom tax rate (optional, uses system settings if not provided)
-            order_type: Type of order ('fabric_only' or 'fabric_with_stitching') - determines if stitching price is included
+            order_type: Type of order - determines if stitching price is included
             service_mode: Service mode ('home_delivery' or 'walk_in') - determines if delivery fee is charged
             delivery_latitude: Delivery latitude (optional)
             delivery_longitude: Delivery longitude (optional)
@@ -188,8 +191,12 @@ class OrderCalculationService:
         
         subtotal = OrderCalculationService.calculate_subtotal(items_data)
         
-        # Calculate stitching price if order type is fabric_with_stitching
-        stitching_price = OrderCalculationService.calculate_stitching_price(items_data, order_type)
+        # Calculate stitching price if order type includes stitching
+        stitching_price = OrderCalculationService.calculate_stitching_price(
+            items_data,
+            order_type,
+            manual_stitching_price=manual_stitching_price,
+        )
         
         # Subtotal includes fabric price, stitching price is added separately
         # Tax is calculated on subtotal (fabric price only)
@@ -211,7 +218,7 @@ class OrderCalculationService:
         
         # Total includes: subtotal (fabric) + stitching_price + tax + delivery_fee
         system_fee = Decimal('0.00')
-        if order_type == 'fabric_with_stitching' and service_mode != 'walk_in':
+        if order_type in ['fabric_with_stitching', 'stitching_only'] and service_mode != 'walk_in':
             system_settings = OrderCalculationService.get_system_settings()
             system_fee = system_settings.system_fee_amount
         
@@ -623,7 +630,7 @@ class OrderStatusTransitionService:
         if order.order_type == 'fabric_only':
             return OrderStatusTransitionService._get_fabric_only_transitions(order, user_role)
         
-        # Default: fabric_with_stitching
+        # Default: stitching flows
         return OrderStatusTransitionService._get_fabric_with_stitching_transitions(order, user_role)
     
     @staticmethod
@@ -775,7 +782,7 @@ class OrderStatusTransitionService:
                 elif order.tailor_status == 'stitching_started':
                     transitions['tailor_status'] = ['stitched']
                 # If measurements are already taken and complete, tailor can start stitching directly
-                elif (order.order_type == 'fabric_with_stitching' and 
+                elif (order.order_type in ['fabric_with_stitching', 'stitching_only'] and
                       (order.rider_status == 'measurement_taken' or order.all_items_have_measurements) and 
                       order.all_items_have_measurements and 
                       order.tailor_status == 'accepted'):
@@ -792,8 +799,8 @@ class OrderStatusTransitionService:
                     transitions['tailor_status'] = ['accepted']
                 transitions['status'] = ['in_progress']
                 
-                # For fabric_with_stitching, only allow progression if measurements are complete
-                if order.order_type == 'fabric_with_stitching':
+                # For stitching orders, only allow progression if measurements are complete
+                if order.order_type in ['fabric_with_stitching', 'stitching_only']:
                     # Check if measurements are complete
                     measurements_complete = (order.rider_status == 'measurement_taken' or 
                                            order.all_items_have_measurements)
@@ -814,8 +821,8 @@ class OrderStatusTransitionService:
                 if order.tailor_status == 'none' and order.rider_status != 'measurement_taken':
                     transitions['tailor_status'] = ['accepted']
                 
-                # For fabric_with_stitching, only allow progression if measurements are complete
-                if order.order_type == 'fabric_with_stitching':
+                # For stitching orders, only allow progression if measurements are complete
+                if order.order_type in ['fabric_with_stitching', 'stitching_only']:
                     # Check if measurements are complete
                     measurements_complete = (order.rider_status == 'measurement_taken' or 
                                            order.all_items_have_measurements)
@@ -902,7 +909,7 @@ class OrderStatusTransitionService:
                 if order.tailor_status == 'accepted':
                     # User requested to skip 'in_progress' and go directly to stitching
                     # BUT only if measurements are present for stitching orders
-                    if order.order_type == 'fabric_with_stitching' and not order.all_items_have_measurements:
+                    if order.order_type in ['fabric_with_stitching', 'stitching_only'] and not order.all_items_have_measurements:
                         transitions['tailor_status'] = ['record_measurements']
                         transitions['custom_actions'] = [{
                             "type": "form_action", 
@@ -917,12 +924,12 @@ class OrderStatusTransitionService:
                     # Allow late acceptance (jump to stitching)
                     transitions['tailor_status'] = ['accepted']
                     # Add stitching_started only if measurements present (or if we want to allow quick accept -> check -> stitch loop)
-                    if not (order.order_type == 'fabric_with_stitching' and not order.all_items_have_measurements):
+                    if not (order.order_type in ['fabric_with_stitching', 'stitching_only'] and not order.all_items_have_measurements):
                          transitions['tailor_status'].append('stitching_started')
             
             elif order.status == 'in_progress':
                 if order.tailor_status == 'accepted':
-                    if order.order_type == 'fabric_with_stitching' and not order.all_items_have_measurements:
+                    if order.order_type in ['fabric_with_stitching', 'stitching_only'] and not order.all_items_have_measurements:
                         transitions['tailor_status'] = ['record_measurements']
                         transitions['custom_actions'] = [{
                             "type": "form_action", 
@@ -934,7 +941,7 @@ class OrderStatusTransitionService:
                     else:
                         transitions['tailor_status'] = ['stitching_started']
                 elif order.tailor_status == 'in_progress':
-                    if order.order_type == 'fabric_with_stitching' and not order.all_items_have_measurements:
+                    if order.order_type in ['fabric_with_stitching', 'stitching_only'] and not order.all_items_have_measurements:
                         transitions['tailor_status'] = ['record_measurements']
                         transitions['custom_actions'] = [{
                             "type": "form_action", 
@@ -1060,7 +1067,7 @@ class OrderStatusTransitionService:
         
         # Validate stitching completion date is set before starting stitching
         if new_tailor_status == 'stitching_started':
-            if order.order_type == 'fabric_with_stitching' and not order.stitching_completion_date:
+            if order.order_type in ['fabric_with_stitching', 'stitching_only'] and not order.stitching_completion_date:
                 return False, "You must set the stitching completion date before starting stitching. Please update the order with expected completion date first."
         
         return True, ""
@@ -1231,8 +1238,8 @@ class OrderStatusTransitionService:
             elif order.rider_status == 'picked_up' and order.status == 'in_progress':
                 order.status = 'ready_for_delivery'
         
-        # For fabric_with_stitching flow (Home Delivery)
-        else:  # fabric_with_stitching
+        # For stitching flow (Home Delivery)
+        else:
             if order.status == 'pending':
                 if order.tailor_status != 'none':
                     order.status = 'confirmed'
@@ -1242,8 +1249,6 @@ class OrderStatusTransitionService:
                 order.status = 'in_progress'
             elif order.tailor_status == 'stitched' and order.rider_status in ['on_way_to_pickup', 'picked_up', 'on_way_to_delivery']:
                 order.status = 'ready_for_delivery'
-
-
 
 
 

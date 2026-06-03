@@ -12,6 +12,7 @@ from apps.tailors.serializers.tailor_pos import (
 )
 from apps.customers.models import CustomerProfile
 from apps.orders.models import Order
+from apps.orders.serializers import OrderListSerializer, OrderSerializer
 from zthob.utils import api_response
 
 User = get_user_model()
@@ -241,4 +242,82 @@ class TailorCreateCustomerView(BaseTailorAPIView):
                 'is_existing': False,
             },
             status_code=status.HTTP_201_CREATED,
+        )
+
+
+class TailorPOSCustomerOrdersView(BaseTailorAPIView):
+    """
+    GET /api/tailors/pos/customers/{customer_id}/orders/
+    Returns orders for a selected POS customer, scoped to this tailor shop only.
+    """
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_pos'
+
+    def get(self, request, customer_id):
+        profile = self.get_tailor_profile(request.user)
+        if not profile:
+            return api_response(success=False, message="Shop profile not found", status_code=404)
+
+        orders = (
+            Order.objects.filter(customer_id=customer_id, tailor=profile.user)
+            .select_related('customer', 'tailor', 'delivery_address', 'rider')
+            .prefetch_related('order_items__fabric')
+            .order_by('-created_at')
+        )
+
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            orders = orders.filter(status=status_filter)
+
+        serializer = OrderListSerializer(
+            orders,
+            many=True,
+            context={'request': request, 'role': 'TAILOR'},
+        )
+        return api_response(
+            success=True,
+            message="Customer orders retrieved successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK,
+        )
+
+
+class TailorPOSCustomerOrderDetailView(BaseTailorAPIView):
+    """
+    GET /api/tailors/pos/customers/{customer_id}/orders/{order_id}/
+    Returns one selected POS customer order, scoped to this tailor shop only.
+    """
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_pos'
+
+    def get(self, request, customer_id, order_id):
+        profile = self.get_tailor_profile(request.user)
+        if not profile:
+            return api_response(success=False, message="Shop profile not found", status_code=404)
+
+        try:
+            order = (
+                Order.objects.select_related(
+                    'customer',
+                    'tailor',
+                    'delivery_address',
+                    'rider',
+                    'family_member',
+                )
+                .prefetch_related('order_items__fabric', 'status_history')
+                .get(id=order_id, customer_id=customer_id, tailor=profile.user)
+            )
+        except Order.DoesNotExist:
+            return api_response(
+                success=False,
+                message="Order not found for this customer",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = OrderSerializer(order, context={'request': request, 'role': 'TAILOR'})
+        return api_response(
+            success=True,
+            message="Customer order details retrieved successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK,
         )

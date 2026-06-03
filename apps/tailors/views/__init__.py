@@ -45,7 +45,9 @@ from .order_download import TailorOrderDownloadPDFView
 from .config import TailorConfigView
 from .tailor_pos import (
     TailorCustomerListView,
-    TailorCreateCustomerView
+    TailorCreateCustomerView,
+    TailorPOSCustomerOrdersView,
+    TailorPOSCustomerOrderDetailView
 )
 from .rating import (
     SubmitTailorRatingView,
@@ -108,6 +110,8 @@ __all__ = [
     # POS views
     'TailorCustomerListView',
     'TailorCreateCustomerView',
+    'TailorPOSCustomerOrdersView',
+    'TailorPOSCustomerOrderDetailView',
 
     # Rating views
     'SubmitTailorRatingView',

@@ -49,6 +49,8 @@ from apps.tailors.views import (
     # POS views
     TailorCustomerListView,
     TailorCreateCustomerView,
+    TailorPOSCustomerOrdersView,
+    TailorPOSCustomerOrderDetailView,
 
     # Rating views
     SubmitTailorRatingView,
@@ -123,6 +125,8 @@ urlpatterns = [
     # POS URLs
     path('pos/customers/', TailorCustomerListView.as_view(), name='tailor-pos-customers'),
     path('pos/customers/create/', TailorCreateCustomerView.as_view(), name='tailor-pos-create-customer'),
+    path('pos/customers/<int:customer_id>/orders/', TailorPOSCustomerOrdersView.as_view(), name='tailor-pos-customer-orders'),
+    path('pos/customers/<int:customer_id>/orders/<int:order_id>/', TailorPOSCustomerOrderDetailView.as_view(), name='tailor-pos-customer-order-detail'),
 
     path('phone/send-otp/', SendOTPView.as_view(), name='customer-send-otp'),
     path('phone/verify-otp/', VerifyOTPView.as_view(), name='customer-verify-otp'),
@@ -131,4 +135,3 @@ urlpatterns = [
     path('employees/', TailorEmployeeListCreateView.as_view(), name='tailor-employees'),
     path('employees/<int:pk>/', TailorEmployeeDetailView.as_view(), name='tailor-employee-detail'),
 ]
-

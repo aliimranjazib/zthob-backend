@@ -97,7 +97,7 @@ class OrderCreateView(APIView):
         if idempotency_key:
             data['idempotency_key'] = idempotency_key
 
-        if not request.user.is_admin:
+        if not (request.user.is_admin or request.user.is_tailor):
             data['customer'] = request.user.id
         # For TAILOR and ADMIN, we respect the 'customer' ID passed in the request.
         # This ensures that when a tailor/admin creates an order, the correct customer is linked.
@@ -851,7 +851,7 @@ class TailorOrderListView(APIView):
                     # Those missing measurements are in the 'To Measure' bucket
                     orders = orders.filter(
                         Q(tailor_status__in=['in_progress', 'stitching_started', 'stitched']) |
-                        Q(tailor_status='accepted', order_type='fabric_with_stitching')
+                        Q(tailor_status='accepted', order_type__in=['fabric_with_stitching', 'stitching_only'])
                     ).exclude(
                         Q(tailor_status='accepted', order_items__measurements={}) |
                         Q(tailor_status='accepted', order_items__measurements__isnull=True)
@@ -1433,7 +1433,7 @@ class OrderActionView(APIView):
 
     def _build_measurement_status(self, order):
         """Build measurement summary for action responses."""
-        if order.order_type not in ['fabric_with_stitching', 'measurement_service']:
+        if order.order_type not in ['fabric_with_stitching', 'stitching_only', 'measurement_service']:
             return None
 
         from django.db.models import Q
