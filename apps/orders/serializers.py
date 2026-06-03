@@ -509,9 +509,9 @@ class OrderSerializer(serializers.ModelSerializer):
         # Calculate status progress
         status_progress = self._calculate_status_progress(obj)
         
-        # Add measurement tracking for fabric_with_stitching orders
+        # Add measurement tracking for stitching orders
         measurement_status = None
-        if obj.order_type == 'fabric_with_stitching':
+        if obj.order_type in ['fabric_with_stitching', 'stitching_only']:
             is_rider_measuring = obj.rider_status in ['on_way_to_measurement', 'measurement_taken']
             is_walk_in_measuring = obj.service_mode == 'walk_in' and obj.status in ['confirmed', 'in_progress']
             
@@ -633,8 +633,8 @@ class OrderSerializer(serializers.ModelSerializer):
                 }
             current_step = steps.get(obj.status, 0)
             total_steps = 5
-        else:  # fabric_with_stitching
-            # Fabric with stitching: pending -> confirmed -> in_progress -> ready_for_delivery -> delivered (5 main steps)
+        else:  # stitching flows
+            # Stitching flow: pending -> confirmed -> in_progress -> ready_for_delivery/pickup -> delivered/collected
             # But with more granular tracking via rider_status and tailor_status
             steps = {
                 'pending': 1,
@@ -746,6 +746,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'order_type',
             'service_mode',
             'payment_method',
+            'stitching_price',
             'family_member',
             'delivery_address',
             'estimated_delivery_date',
@@ -762,24 +763,50 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'tailor': {'required': False, 'allow_null': True}
         }
 
+    def _get_target_customer(self):
+        request = self.context.get('request')
+        if not request:
+            return None
+
+        user = request.user
+        if user.is_admin or user.is_tailor:
+            customer_id = getattr(self, 'initial_data', {}).get('customer')
+            if customer_id:
+                try:
+                    return User.objects.get(id=customer_id)
+                except (User.DoesNotExist, TypeError, ValueError):
+                    return None
+
+        return user
+
     def validate_items(self,value):
         # Get order_type from initial_data safely
         initial_data = getattr(self, 'initial_data', {})
         order_type = initial_data.get('order_type', 'fabric_only')
         
-        # For measurement_service orders, allow items without fabric
-        if order_type == 'measurement_service':
+        # For measurement_service and stitching_only orders, allow items without fabric
+        if order_type in ['measurement_service', 'stitching_only']:
             if not value or len(value)==0:
-                raise serializers.ValidationError(
-                    "Measurement orders must specify at least one person to measure"
-                )
+                if order_type == 'measurement_service':
+                    raise serializers.ValidationError(
+                        "Measurement orders must specify at least one person to measure"
+                    )
+                raise serializers.ValidationError("Stitching-only orders must have at least one item")
             
-            request = self.context.get('request')
-            customer = request.user if request else None
+            customer = self._get_target_customer()
             validated_items = []
             
             for item_data in value:
                 family_member = item_data.get('family_member')
+                fabric = item_data.get('fabric')
+                quantity = item_data.get('quantity', 1)
+
+                if order_type == 'stitching_only' and fabric is not None:
+                    raise serializers.ValidationError(
+                        "Stitching-only orders cannot include catalog fabric. Use fabric_with_stitching instead."
+                    )
+                if quantity <= 0:
+                    raise serializers.ValidationError("Quantity must be greater than 0")
                 
                 # Validate family member belongs to customer if specified
                 if family_member and customer and family_member.user != customer:
@@ -789,7 +816,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 
                 # For measurement orders, set default values
                 item_data['fabric'] = None
-                item_data['quantity'] = 1
+                item_data['quantity'] = 1 if order_type == 'measurement_service' else quantity
                 item_data['unit_price'] = Decimal('0.00')
                 validated_items.append(item_data)
             
@@ -800,8 +827,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Order must have at least one item")
         
         tailor =self.context.get('tailor')
-        request = self.context.get('request')
-        customer = request.user if request else None
+        customer = self._get_target_customer()
         validated_items=[]
         for item_data in value:
             fabric = item_data.get('fabric')
@@ -863,8 +889,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
     def validate_family_member(self, value):
         if value:
-            # Get the customer from context (set in the view)
-            customer = self.context.get('request').user
+            customer = self._get_target_customer()
             if value.user != customer:
                 raise serializers.ValidationError('Family member must belong to the authenticated customer')
         return value
@@ -873,7 +898,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         if value is None:
             return None
             
-        customer = self.context.get('request').user
+        customer = self._get_target_customer()
         
         # Case 1: Integer ID (Saved Address)
         if isinstance(value, int):
@@ -926,6 +951,18 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         """Cross-field validation for service_mode and delivery_address"""
         service_mode = data.get('service_mode', 'home_delivery')
         delivery_address = data.get('delivery_address')
+        order_type = data.get('order_type', 'fabric_only')
+        stitching_price = data.get('stitching_price', Decimal('0.00'))
+        
+        if order_type == 'stitching_only':
+            if service_mode != 'walk_in':
+                raise serializers.ValidationError({
+                    'service_mode': 'Stitching-only orders are currently supported for walk-in service only.'
+                })
+            if stitching_price is None or stitching_price <= Decimal('0.00'):
+                raise serializers.ValidationError({
+                    'stitching_price': 'Stitching price is required for stitching-only orders.'
+                })
         
         # Check context for one-time address (current location)
         using_current_location = self.context.get('using_current_location', False)
@@ -964,13 +1001,14 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         order_type = validated_data.get('order_type', 'fabric_only')
         service_mode = validated_data.get('service_mode', 'home_delivery')
         is_express = validated_data.get('is_express', False)
+        manual_stitching_price = validated_data.get('stitching_price')
         items_with_fabrics = []
 
-        if order_type == 'measurement_service':
+        if order_type in ['measurement_service', 'stitching_only']:
             for item_data in items_data:
                 items_with_fabrics.append({
                     'fabric': None,
-                    'quantity': 1,
+                    'quantity': 1 if order_type == 'measurement_service' else item_data.get('quantity', 1),
                     'unit_price': Decimal('0.00'),
                     'measurements': item_data.get('measurements', {}),
                     'custom_instructions': item_data.get('custom_instructions', ''),
@@ -1030,7 +1068,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             tailor=tailor,
             order_type=order_type,
             service_mode=service_mode,
-            is_express=is_express
+            is_express=is_express,
+            manual_stitching_price=manual_stitching_price,
         )
 
         total_amount = totals.get('total_amount', Decimal('0.00'))
@@ -1105,11 +1144,11 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     'custom_styles': item_data.get('custom_styles'),  # Item-level custom styles
                 })
         else:
-            # Measurement orders - no fabric validation needed
+            # No catalog fabric needed for measurement_service and stitching_only orders
             for item_data in items_data:
                 items_with_fabrics.append({
                     'fabric': None,
-                    'quantity': 1,
+                    'quantity': 1 if item_data.get('quantity') is None else item_data.get('quantity', 1),
                     'unit_price': Decimal('0.00'),
                     'measurements': item_data.get('measurements', {}),
                     'custom_instructions': item_data.get('custom_instructions', ''),
@@ -1125,6 +1164,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         order_type = validated_data.get('order_type', 'fabric_only')
         service_mode = validated_data.get('service_mode', 'home_delivery')
         is_express = validated_data.get('is_express', False)
+        manual_stitching_price = validated_data.get('stitching_price')
         
         # Prepare delivery coordinates based on delivery type
         delivery_lat = None
@@ -1165,7 +1205,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             tailor=tailor,
             order_type=order_type,
             service_mode=service_mode,
-            is_express=is_express
+            is_express=is_express,
+            manual_stitching_price=manual_stitching_price,
         )
         
         # Update validated_data with calculated totals (including stitching_price)
@@ -1222,6 +1263,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     family_member=item_data['family_member'],
                     custom_styles=item_data.get('custom_styles'),  # Item-level custom styles
                 )
+                if fabric is None:
+                    continue
                 fabric.stock -= quantity
                 if fabric.stock < 0:
                     raise serializers.ValidationError(
@@ -1675,9 +1718,9 @@ class OrderListSerializer(serializers.ModelSerializer):
         # Calculate status progress
         status_progress = OrderSerializer._calculate_status_progress(self, obj)
         
-        # Add measurement tracking for fabric_with_stitching orders
+        # Add measurement tracking for stitching orders
         measurement_status = None
-        if obj.order_type == 'fabric_with_stitching':
+        if obj.order_type in ['fabric_with_stitching', 'stitching_only']:
             is_rider_measuring = obj.rider_status in ['on_way_to_measurement', 'measurement_taken']
             is_walk_in_measuring = obj.service_mode == 'walk_in' and obj.status in ['confirmed', 'in_progress']
             

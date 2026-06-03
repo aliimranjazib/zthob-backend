@@ -52,7 +52,7 @@ class TailorHomeService:
             
             # --- DELIVERY ORDERS ACTION BUCKETS ---
             del_new=Count('id', filter=Q(service_mode='home_delivery', tailor_status='none') & not_ready_filter),
-            del_prepare=Count('id', filter=Q(service_mode='home_delivery', tailor_status='accepted', order_type='fabric_with_stitching') & not_ready_filter),
+            del_prepare=Count('id', filter=Q(service_mode='home_delivery', tailor_status='accepted', order_type__in=['fabric_with_stitching', 'stitching_only']) & not_ready_filter),
             del_stitch=Count('id', filter=Q(service_mode='home_delivery', tailor_status__in=['in_progress', 'stitching_started', 'stitched']) & not_ready_filter),
             del_ready=Count('id', filter=Q(service_mode='home_delivery', status='ready_for_delivery')),
             
@@ -61,7 +61,7 @@ class TailorHomeService:
             shop_measure=Count('id', filter=Q(service_mode='walk_in', tailor_status='accepted') & (Q(order_type='measurement_service') | Q(has_missing_measurements=True)) & not_ready_filter, distinct=True),
             shop_stitch=Count('id', filter=(
                 Q(service_mode='walk_in', tailor_status__in=['in_progress', 'stitching_started', 'stitched']) |
-                Q(service_mode='walk_in', tailor_status='accepted', order_type='fabric_with_stitching', has_missing_measurements=False)
+                Q(service_mode='walk_in', tailor_status='accepted', order_type__in=['fabric_with_stitching', 'stitching_only'], has_missing_measurements=False)
             ) & not_ready_filter, distinct=True),
             shop_ready=Count('id', filter=Q(service_mode='walk_in', status='ready_for_pickup')),
             
