@@ -1378,7 +1378,14 @@ class OrderActionView(APIView):
         try:
             # 1. Get Action instance
             requested_role = request.data.get('role')
-            action = OrderActionManager.get_action(action_key, order, request.user, action_data, requested_role=requested_role)
+            action = OrderActionManager.get_action(
+                action_key,
+                order,
+                request.user,
+                action_data,
+                requested_role=requested_role,
+                request=request,
+            )
             
             # 2. Validate (Role and State)
             action.validate()

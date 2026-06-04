@@ -114,8 +114,8 @@ class NotificationService:
                     user=user,
                     notification_type=notification_type,
                     category=category,
-                    title=title,
-                    body=body,
+                    title=translated_title,
+                    body=translated_body,
                     data=data or {},
                     status='failed',
                     error_message="Firebase Admin SDK not installed.",
@@ -129,8 +129,8 @@ class NotificationService:
                     user=user,
                     notification_type=notification_type,
                     category=category,
-                    title=title,
-                    body=body,
+                    title=translated_title,
+                    body=translated_body,
                     data=data or {},
                     status='pending',
                     error_message="Firebase not configured. Set FIREBASE_CREDENTIALS_PATH in .env to point to your service account JSON file.",
@@ -158,8 +158,8 @@ class NotificationService:
             payload_data = {
                 'type': notification_type,
                 'category': category,
-                'title': title,
-                'body': body,
+                'title': translated_title,
+                'body': translated_body,
             }
             
             if data:
@@ -232,8 +232,8 @@ class NotificationService:
                         fcm_token=fcm_token,
                         notification_type=notification_type,
                         category=category,
-                        title=title,
-                        body=body,
+                        title=translated_title,
+                        body=translated_body,
                         data=data or {},
                         status='failed',
                         error_message=str(e),
@@ -954,4 +954,3 @@ class NotificationService:
                     count += 1
             
             logger.info(f"Broadcast sent to {count} riders for order {order_number}")
-
