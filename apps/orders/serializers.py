@@ -31,6 +31,7 @@ def enrich_custom_style_payload(style, idx):
             raise serializers.ValidationError(f"Custom style with ID {style_id} not found or inactive")
 
         enriched = {
+            "style_id": style_obj.id,
             "style_type": style_obj.category.name,
             "index": style_obj.display_order,
             "label": style_obj.name,
@@ -48,6 +49,36 @@ def enrich_custom_style_payload(style, idx):
                 f"custom_styles[{idx}] must contain either 'style_id' or '{field}'"
             )
     return style
+
+
+def attach_custom_style_ids(styles):
+    """Best-effort response enrichment for legacy custom style payloads."""
+    if not styles:
+        return styles
+
+    for style in styles:
+        if not isinstance(style, dict) or style.get('style_id'):
+            continue
+
+        style_type = style.get('style_type')
+        label = style.get('label')
+        index = style.get('index')
+        if style_type is None or label is None or index is None:
+            continue
+
+        try:
+            style_obj = CustomStyle.objects.select_related('category').get(
+                category__name=style_type,
+                name=label,
+                display_order=index,
+                is_active=True,
+            )
+        except (CustomStyle.DoesNotExist, CustomStyle.MultipleObjectsReturned):
+            continue
+
+        style['style_id'] = style_obj.id
+
+    return styles
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -106,6 +137,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
             
         import copy
         processed_styles = copy.deepcopy(styles)
+        processed_styles = attach_custom_style_ids(processed_styles)
         
         from django.conf import settings
         media_url = getattr(settings, 'MEDIA_URL', '/media/')
@@ -406,6 +438,7 @@ class OrderSerializer(serializers.ModelSerializer):
             
         import copy
         processed_styles = copy.deepcopy(styles)
+        processed_styles = attach_custom_style_ids(processed_styles)
         
         from django.conf import settings
         media_url = getattr(settings, 'MEDIA_URL', '/media/')
@@ -1614,6 +1647,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             
         import copy
         processed_styles = copy.deepcopy(styles)
+        processed_styles = attach_custom_style_ids(processed_styles)
         
         from django.conf import settings
         media_url = getattr(settings, 'MEDIA_URL', '/media/')
