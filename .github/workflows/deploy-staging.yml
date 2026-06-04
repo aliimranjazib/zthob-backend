@@ -37,8 +37,14 @@ jobs:
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
+          echo "Checking SSH TCP connectivity for staging server..."
+          if ! nc -vz -w 20 "$SSH_HOST" "$SSH_PORT"; then
+            echo "::error::Cannot reach SSH_HOST on SSH_PORT from the GitHub runner. Check DNS, port, server firewall/security group, and whether GitHub-hosted runner IPs are allowed."
+            exit 1
+          fi
+
           echo "Scanning SSH host key for staging server..."
-          if ! ssh-keyscan -4 -H -T 20 -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts 2>ssh-keyscan.err; then
+          if ! ssh-keyscan -H -T 20 -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts 2>ssh-keyscan.err; then
             echo "::error::ssh-keyscan failed. Check SSH_HOST, SSH_PORT, firewall, and whether the server allows GitHub-hosted runners."
             cat ssh-keyscan.err
             exit 1
