@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.db.models import Q
 from apps.customers.models import FamilyMember
 from apps.orders.payments import money
+from zthob.translations import get_language_from_request, translate_message
 
 class BaseOrderAction(ABC):
     """
@@ -15,11 +16,12 @@ class BaseOrderAction(ABC):
     label = None  # Human-readable label
     allowed_roles = []  # Roles allowed to perform this action
 
-    def __init__(self, order, user, data=None, requested_role=None):
+    def __init__(self, order, user, data=None, requested_role=None, request=None):
         self.order = order
         self.user = user
         self.data = data or {}
         self.requested_role = requested_role
+        self.request = request
         
         # Capture state before execution for notification logic
         self._old_status = order.status
@@ -78,9 +80,10 @@ class BaseOrderAction(ABC):
             )
 
     def get_available_action_data(self):
+        language = get_language_from_request(self.request) if self.request else 'en'
         return {
             'key': self.key,
-            'label': self.label,
+            'label': translate_message(self.label, language),
             'role': self.requested_role or (self.allowed_roles[0] if self.allowed_roles else 'USER')
         }
 
@@ -560,21 +563,21 @@ class OrderActionManager:
     }
 
     @classmethod
-    def get_action(cls, action_key, order, user, data=None, requested_role=None):
+    def get_action(cls, action_key, order, user, data=None, requested_role=None, request=None):
         action_class = cls._actions.get(action_key)
         if not action_class:
             raise ValidationError(f"Action '{action_key}' is not recognized.")
-        return action_class(order, user, data, requested_role=requested_role)
+        return action_class(order, user, data, requested_role=requested_role, request=request)
 
     @classmethod
-    def get_available_actions(cls, order, user, requested_role=None):
+    def get_available_actions(cls, order, user, requested_role=None, request=None):
         available = []
         for action_class in cls._actions.values():
             # If a specific role is requested, only check actions allowed for that role
             if requested_role and requested_role not in action_class.allowed_roles:
                 continue
                 
-            action = action_class(order, user, requested_role=requested_role)
+            action = action_class(order, user, requested_role=requested_role, request=request)
             try:
                 action.validate()
                 available.append(action.get_available_action_data())

@@ -519,7 +519,12 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'current_status': obj.status,
             'current_rider_status': obj.rider_status,
             'current_tailor_status': obj.tailor_status,
-            'available_actions': OrderActionManager.get_available_actions(obj, request.user, requested_role=requested_role),
+            'available_actions': OrderActionManager.get_available_actions(
+                obj,
+                request.user,
+                requested_role=requested_role,
+                request=request,
+            ),
             'measurement_status': obj.all_items_have_measurements if obj.order_type == 'fabric_with_stitching' else None
         }
         
@@ -836,7 +841,12 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'current_status': obj.status,
             'current_rider_status': obj.rider_status,
             'current_tailor_status': obj.tailor_status,
-            'available_actions': OrderActionManager.get_available_actions(obj, request.user, requested_role=requested_role),
+            'available_actions': OrderActionManager.get_available_actions(
+                obj,
+                request.user,
+                requested_role=requested_role,
+                request=request,
+            ),
             'measurement_status': obj.all_items_have_measurements if obj.order_type == 'fabric_with_stitching' else None
         }
         
