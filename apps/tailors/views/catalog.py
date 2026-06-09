@@ -8,12 +8,13 @@ from zthob.utils import api_response
 from rest_framework import status
 
 from ..models import (
-    FabricCategory, FabricImage, FabricTag, 
+    FabricCategory, FabricCountry, FabricImage, FabricTag,
     FabricType, Fabric
 )
 from ..serializers import (
     FabricCategorySerializer, FabricTagSerializer, FabricTypeSerializer,
-    FabricSerializer, FabricCreateSerializer, FabricUpdateSerializer
+    FabricSerializer, FabricCreateSerializer, FabricUpdateSerializer,
+    FabricCountrySerializer
 )
 from ..permissions import IsTailor, IsAdmin
 from .base import BaseTailorAuthenticatedView
@@ -227,6 +228,129 @@ class TailorFabricCategoryDetailView(APIView):
             success=True, 
             message="Fabric category deleted", 
             data=None, 
+            status_code=status.HTTP_200_OK
+        )
+
+# Fabric Country Views
+@extend_schema(
+    tags=["Fabric Countries"],
+    description="Get all active fabric countries available for selection"
+)
+class TailorFabricCountryListView(APIView):
+    permission_classes = [AllowAny]
+    serializer_class = FabricCountrySerializer
+
+    def get(self, request):
+        queryset = FabricCountry.objects.filter(is_active=True).order_by("display_order", "name")
+        data = FabricCountrySerializer(queryset, many=True).data
+        return api_response(
+            success=True,
+            message="Fabric countries fetched",
+            data=data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+@extend_schema(
+    tags=["Admin Fabric Countries"],
+    description="Admin fabric country management operations"
+)
+class AdminFabricCountryListCreateView(APIView):
+    permission_classes = [IsAdmin]
+    serializer_class = FabricCountrySerializer
+
+    def get(self, request):
+        queryset = FabricCountry.objects.all().order_by("display_order", "name")
+        data = FabricCountrySerializer(queryset, many=True).data
+        return api_response(
+            success=True,
+            message="Fabric countries fetched",
+            data=data,
+            status_code=status.HTTP_200_OK
+        )
+
+    def post(self, request):
+        serializer = FabricCountrySerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(created_by=request.user)
+            return api_response(
+                success=True,
+                message="Fabric country created",
+                data=serializer.data,
+                status_code=status.HTTP_201_CREATED
+            )
+        return api_response(
+            success=False,
+            message="Validation failed",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+
+@extend_schema(
+    tags=["Admin Fabric Countries"],
+    description="Admin fabric country detail operations"
+)
+class AdminFabricCountryDetailView(APIView):
+    permission_classes = [IsAdmin]
+    serializer_class = FabricCountrySerializer
+
+    def get_object(self, pk):
+        return FabricCountry.objects.get(pk=pk)
+
+    def get(self, request, pk):
+        country = self.get_object(pk)
+        data = FabricCountrySerializer(country).data
+        return api_response(
+            success=True,
+            message="Fabric country fetched",
+            data=data,
+            status_code=status.HTTP_200_OK
+        )
+
+    def put(self, request, pk):
+        country = self.get_object(pk)
+        serializer = FabricCountrySerializer(country, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return api_response(
+                success=True,
+                message="Fabric country updated",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+        return api_response(
+            success=False,
+            message="Validation failed",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    def patch(self, request, pk):
+        country = self.get_object(pk)
+        serializer = FabricCountrySerializer(country, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return api_response(
+                success=True,
+                message="Fabric country updated",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK
+            )
+        return api_response(
+            success=False,
+            message="Validation failed",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    def delete(self, request, pk):
+        country = self.get_object(pk)
+        country.delete()
+        return api_response(
+            success=True,
+            message="Fabric country deleted",
+            data=None,
             status_code=status.HTTP_200_OK
         )
 

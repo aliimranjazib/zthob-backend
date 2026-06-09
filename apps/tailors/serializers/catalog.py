@@ -1,8 +1,8 @@
 # apps/tailors/serializers/catalog.py
 from rest_framework import serializers
 from ..models import (
-    Fabric, FabricImage, FabricType, 
-    FabricCategory, FabricTag
+    Fabric, FabricImage, FabricType,
+    FabricCategory, FabricTag, FabricCountry
 )
 from ..models.base import SEASON_CHOICES
 from .base import ImageWithMetadataSerializer
@@ -28,6 +28,26 @@ class FabricCategoryBasicSerializer(serializers.ModelSerializer):
     class Meta:
         model = FabricCategory
         fields = ['id', 'name', 'is_active']
+
+
+class FabricCountrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FabricCountry
+        fields = [
+            "id", "code", "name", "name_ar",
+            "description", "description_ar",
+            "famous_mills", "display_order", "is_active",
+            "created_at", "updated_at",
+        ]
+
+
+class FabricCountryBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FabricCountry
+        fields = [
+            "id", "code", "name", "name_ar",
+            "description", "description_ar", "famous_mills",
+        ]
 
 # Fabric Tag Serializers
 class FabricTagSerializer(serializers.ModelSerializer):
@@ -61,6 +81,7 @@ class FabricSerializer(serializers.ModelSerializer):
     gallery = FabricImageSerializer(many=True, read_only=True)
     category = FabricCategoryBasicSerializer(read_only=True)
     fabric_type = FabricTypeBasicSerializer(read_only=True)
+    country = FabricCountryBasicSerializer(read_only=True)
     tags = FabricTagBasicSerializer(many=True, read_only=True)
     is_low_stock = serializers.ReadOnlyField()
     is_out_of_stock = serializers.ReadOnlyField()
@@ -69,7 +90,7 @@ class FabricSerializer(serializers.ModelSerializer):
         model = Fabric
         fields = [
             "id", "category", "name", "description", "seasons",
-            "fabric_type", "tags", "sku", "price", "stitching_price", "stock",
+            "fabric_type", "tags", "country", "sku", "price", "stitching_price", "stock",
             "is_on_sale", "discount_price", "sale_start", "sale_end",
             "is_featured", "sales_count",
             "is_low_stock", "is_out_of_stock", "is_active", "approval_status",
@@ -78,6 +99,18 @@ class FabricSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "sku", "approval_status", "created_at", "updated_at"]
 
 class FabricCreateSerializer(serializers.ModelSerializer):
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=FabricCategory.objects.all(),
+        required=False,
+        allow_null=True,
+        help_text="Fabric category ID"
+    )
+    country = serializers.PrimaryKeyRelatedField(
+        queryset=FabricCountry.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+        help_text="Fabric country ID"
+    )
     images = serializers.ListField(
         child=ImageWithMetadataSerializer(),
         required=True,
@@ -95,7 +128,7 @@ class FabricCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Fabric
         fields = [
-            "category", "name", "seasons", "fabric_type",
+            "category", "name", "seasons", "fabric_type", "country",
             "description", "price", "stitching_price", "stock", 
             "is_active", "is_on_sale", "discount_price", "sale_start", "sale_end",
             "is_featured", "images", "tags",
@@ -218,10 +251,22 @@ class FabricCreateSerializer(serializers.ModelSerializer):
 class FabricUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating existing fabrics."""
     
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=FabricCategory.objects.all(),
+        required=False,
+        allow_null=True,
+        help_text="Fabric category ID"
+    )
     fabric_type = serializers.PrimaryKeyRelatedField(
         queryset=FabricType.objects.all(),
         required=False,
         help_text="Fabric type ID"
+    )
+    country = serializers.PrimaryKeyRelatedField(
+        queryset=FabricCountry.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+        help_text="Fabric country ID"
     )
     seasons = serializers.ChoiceField(
         choices=SEASON_CHOICES,
@@ -239,7 +284,7 @@ class FabricUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Fabric
         fields = [
-            "category", "fabric_type", "seasons", "name",
+            "category", "fabric_type", "country", "seasons", "name",
             "description", "price", "stitching_price", "stock", 
             "is_active", "is_on_sale", "discount_price", "sale_start", "sale_end",
             "is_featured", "tags", "approval_status",

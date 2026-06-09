@@ -13,6 +13,8 @@ from .catalog import (
     FabricTypeBasicSerializer,
     FabricCategorySerializer,
     FabricCategoryBasicSerializer,
+    FabricCountrySerializer,
+    FabricCountryBasicSerializer,
     FabricTagSerializer,
     FabricTagBasicSerializer
 )
@@ -61,6 +63,8 @@ __all__ = [
     'FabricTypeBasicSerializer',
     'FabricCategorySerializer',
     'FabricCategoryBasicSerializer',
+    'FabricCountrySerializer',
+    'FabricCountryBasicSerializer',
     'FabricTagSerializer',
     'FabricTagBasicSerializer',
     

@@ -11,6 +11,9 @@ from apps.tailors.views import (
     # Catalog views
     TailorFabricCategoryListCreateView,
     TailorFabricCategoryDetailView,
+    TailorFabricCountryListView,
+    AdminFabricCountryListCreateView,
+    AdminFabricCountryDetailView,
     TailorFabricView,
     TailorFabricDetailView,
     TailorFabricTypeListCreateView,
@@ -89,6 +92,11 @@ urlpatterns = [
     # Fabric Category URLs
     path('category/', TailorFabricCategoryListCreateView.as_view(), name='fabric-category'),
     path('category/<int:pk>/', TailorFabricCategoryDetailView.as_view(), name='fabric-category-detail'),
+
+    # Fabric Country URLs
+    path('fabric-countries/', TailorFabricCountryListView.as_view(), name='fabric-countries'),
+    path('admin/fabric-countries/', AdminFabricCountryListCreateView.as_view(), name='admin-fabric-countries'),
+    path('admin/fabric-countries/<int:pk>/', AdminFabricCountryDetailView.as_view(), name='admin-fabric-country-detail'),
     
     # Fabric Image URLs
     path('images/<int:image_id>/set-primary/', FabricImagePrimaryView.as_view(), name='fabric-image-set-primary'),
