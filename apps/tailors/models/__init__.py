@@ -1,11 +1,12 @@
 # apps/tailors/models/__init__.py
 from .profile import TailorProfile
 from .catalog import (
-    Fabric, 
-    FabricType, 
-    FabricCategory, 
-    FabricTag, 
-    FabricImage
+    Fabric,
+    FabricType,
+    FabricCategory,
+    FabricTag,
+    FabricImage,
+    FabricCountry,
 )
 from .review import TailorProfileReview
 from .service_areas import ServiceArea
@@ -19,6 +20,7 @@ __all__ = [
     'FabricCategory', 
     'FabricTag', 
     'FabricImage',
+    'FabricCountry',
     'TailorProfileReview',
     'ServiceArea',
     'TailorRating',

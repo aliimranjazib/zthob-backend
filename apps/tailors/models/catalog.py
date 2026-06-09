@@ -75,6 +75,61 @@ class FabricCategory(SluggedModel):
         return self.name
 
 
+class FabricCountry(BaseModel):
+    """Admin-managed catalog of countries that can be assigned to fabrics."""
+
+    code = models.CharField(
+        max_length=10,
+        unique=True,
+        help_text="Short country code like JP, KR, CN"
+    )
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Country name in English"
+    )
+    name_ar = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Country name in Arabic"
+    )
+    description = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Short description in English"
+    )
+    description_ar = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Short description in Arabic"
+    )
+    famous_mills = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Comma-separated famous mills or manufacturers"
+    )
+    display_order = models.PositiveIntegerField(
+        default=0,
+        help_text="Controls display order in dropdowns"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this country is available for selection"
+    )
+
+    class Meta:
+        verbose_name = "Fabric Country"
+        verbose_name_plural = "Fabric Countries"
+        ordering = ["display_order", "name"]
+        indexes = [
+            models.Index(fields=["is_active", "display_order"]),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
 class Fabric(BaseModel):
     """Model representing a fabric item."""
     
@@ -106,6 +161,14 @@ class Fabric(BaseModel):
         blank=True,
         related_name="fabrics",
         help_text="Category of fabric"
+    )
+    country = models.ForeignKey(
+        FabricCountry,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="fabrics",
+        help_text="Country selected for this fabric"
     )
     
     # Basic Information
