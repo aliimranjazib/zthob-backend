@@ -54,7 +54,7 @@ class FabricCatalogAPIView(APIView):
             tailor__shop_status=True,
             tailor__user__is_active=True
         ).select_related(
-            'category', 'fabric_type', 'tailor', 'tailor__user'
+            'category', 'fabric_type', 'country', 'tailor', 'tailor__user'
         ).prefetch_related(
             'tags', 'gallery', 
             Prefetch('tailor__user__addresses', queryset=Address.objects.filter(is_default=True)),
@@ -447,7 +447,7 @@ class TailorFabricsAPIView(APIView):
                 tailor__shop_status=True,
                 tailor__user__is_active=True
             ).select_related(
-                'category', 'fabric_type', 'tailor', 'tailor__user'
+                'category', 'fabric_type', 'country', 'tailor', 'tailor__user'
             ).prefetch_related(
                 'tags', 'gallery',
                 Prefetch('tailor__user__addresses', queryset=Address.objects.filter(is_default=True)),

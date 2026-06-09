@@ -4,7 +4,11 @@ from rest_framework import serializers
 from apps.accounts.serializers import UserProfileSerializer
 from apps.tailors.models import Fabric, TailorProfile, FabricCategory
 from apps.tailors.serializers import FabricCategorySerializer, FabricImageSerializer
-from apps.tailors.serializers.catalog import FabricTypeBasicSerializer, FabricTagBasicSerializer
+from apps.tailors.serializers.catalog import (
+    FabricCountryBasicSerializer,
+    FabricTagBasicSerializer,
+    FabricTypeBasicSerializer,
+)
 from apps.customers.models import Address, CustomerProfile, FamilyMember, FabricFavorite
 
 # ============================================================================
@@ -143,8 +147,9 @@ class FabricHomeSerializer(serializers.ModelSerializer):
 class FabricCatalogSerializer(serializers.ModelSerializer):
     gallery = FabricImageSerializer(many=True, read_only=True)
     category = FabricCategorySerializer(read_only=True)
-    fabric_type=FabricTypeBasicSerializer(read_only=True)
-    tags=FabricTagBasicSerializer(many=True, read_only=True)
+    fabric_type = FabricTypeBasicSerializer(read_only=True)
+    country = FabricCountryBasicSerializer(read_only=True)
+    tags = FabricTagBasicSerializer(many=True, read_only=True)
     tailor = TailorHomeSerializer(read_only=True)
     is_favorited = serializers.BooleanField(read_only=True, default=False)
     favorite_count = serializers.IntegerField(read_only=True, default=0)
@@ -161,8 +166,9 @@ class FabricCatalogSerializer(serializers.ModelSerializer):
             "stock",
             "is_active",
             "seasons",
-            "fabric_type",  
-            "tags", 
+            "fabric_type",
+            "country",
+            "tags",
             "gallery",
             "category",
             "tailor",
