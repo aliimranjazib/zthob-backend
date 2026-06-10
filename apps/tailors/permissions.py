@@ -36,27 +36,22 @@ class IsShopStaff(permissions.BasePermission):
         # Must be authenticated and have a professional role (TAILOR or ADMIN)
         if not request.user or not request.user.is_authenticated:
             return False
-            
-        if not (request.user.is_tailor or request.user.is_admin):
-            return False
 
-        # Allow if User is an Owner (has tailor_profile)
-        # OR if the user has the TAILOR role (even if profile is not yet created, the view will handle it)
-        if request.user.is_tailor or request.user.is_admin:
+        if request.user.is_admin:
             return True
 
-        # Allow if User is an Employee (has tailor_employee)
         if hasattr(request.user, 'tailor_employee'):
             employee = request.user.tailor_employee
             if not employee.is_active:
                 return False
-            
-            # Check for specific permission flag (if defined in the view)
+
             required_perm = getattr(view, 'required_employee_permission', None)
             if required_perm:
                 return getattr(employee, required_perm, False)
-            
-            # If no specific permission required, just being an active staff member is enough for basic access
+
+            return True
+
+        if hasattr(request.user, 'tailor_profile'):
             return True
 
         return False

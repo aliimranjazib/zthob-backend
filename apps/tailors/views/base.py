@@ -18,7 +18,7 @@ class BaseTailorAPIView(APIView):
         if profile:
             return profile
         # Check if employee
-        if hasattr(user, 'tailor_employee'):
+        if hasattr(user, 'tailor_employee') and user.tailor_employee.is_active:
             return user.tailor_employee.tailor
         return None
 
@@ -29,4 +29,3 @@ class BaseTailorAuthenticatedView(BaseTailorAPIView):
         super().__init__(*args, **kwargs)
         from ..permissions import IsShopStaff
         self.permission_classes = [IsAuthenticated, IsShopStaff]
-

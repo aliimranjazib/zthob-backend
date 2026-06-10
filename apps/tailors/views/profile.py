@@ -25,7 +25,13 @@ class TailorProfileView(BaseTailorAuthenticatedView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
-        profile, _ = TailorProfile.objects.get_or_create(user=request.user)
+        profile = self.get_tailor_profile(request.user)
+        if not profile:
+            return api_response(
+                success=False,
+                message='Tailor profile not found',
+                status_code=status.HTTP_404_NOT_FOUND
+            )
         serializer = TailorProfileSerializer(profile, context={'request': request})
         return api_response(
             success=True,
@@ -35,7 +41,13 @@ class TailorProfileView(BaseTailorAuthenticatedView):
         )
     
     def put(self, request):
-        profile, _ = TailorProfile.objects.get_or_create(user=request.user)
+        profile = self.get_tailor_profile(request.user)
+        if not profile:
+            return api_response(
+                success=False,
+                message='Tailor profile not found',
+                status_code=status.HTTP_404_NOT_FOUND
+            )
         
         # Create a copy of request data
         data = request.data.copy()
@@ -92,7 +104,13 @@ class TailorProfileView(BaseTailorAuthenticatedView):
     
     def patch(self, request):
         """PATCH method for partial updates - same logic as PUT but explicitly for partial updates."""
-        profile, _ = TailorProfile.objects.get_or_create(user=request.user)
+        profile = self.get_tailor_profile(request.user)
+        if not profile:
+            return api_response(
+                success=False,
+                message='Tailor profile not found',
+                status_code=status.HTTP_404_NOT_FOUND
+            )
         
         # Create a copy of request data
         data = request.data.copy()
@@ -156,9 +174,8 @@ class TailorProfileSubmissionView(BaseTailorAuthenticatedView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def post(self, request):
-        try:
-            profile = TailorProfile.objects.get(user=request.user)
-        except TailorProfile.DoesNotExist:
+        profile = self.get_tailor_profile(request.user)
+        if not profile:
             return api_response(
                 success=False,
                 message="Tailor profile not found",
@@ -226,9 +243,8 @@ class TailorProfileSubmissionView(BaseTailorAuthenticatedView):
 class TailorProfileStatusView(BaseTailorAuthenticatedView):
     
     def get(self, request):
-        try:
-            profile = TailorProfile.objects.get(user=request.user)
-        except TailorProfile.DoesNotExist:
+        profile = self.get_tailor_profile(request.user)
+        if not profile:
             return api_response(
                 success=False,
                 message="Profile not found",
