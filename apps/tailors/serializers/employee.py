@@ -11,6 +11,9 @@ VALID_PERMISSIONS = [
     'can_view_analytics',
     'can_manage_employees',
     'can_manage_pos',
+    'can_manage_shop_profile',
+    'can_manage_shop_status',
+    'can_manage_shop_address',
 ]
 
 

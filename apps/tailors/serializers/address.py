@@ -29,7 +29,7 @@ class TailorAddressCreateSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         """Create a new address for the tailor, replacing any existing one."""
-        user = self.context.get('request').user
+        user = self.context.get('target_user') or self.context.get('request').user
         
         # Delete any existing address for this tailor
         Address.objects.filter(user=user).delete()

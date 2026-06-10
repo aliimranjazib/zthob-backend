@@ -43,7 +43,11 @@ class TailorConfigView(APIView):
                     "Manages the shop on behalf of the owner. Has access to orders, catalog, and staff.",
                     language
                 ),
-                "default_permissions": ["can_manage_orders", "can_manage_catalog", "can_view_analytics", "can_manage_pos"]
+                "default_permissions": [
+                    "can_manage_orders", "can_manage_catalog", "can_view_analytics",
+                    "can_manage_pos", "can_manage_shop_profile", "can_manage_shop_status",
+                    "can_manage_shop_address"
+                ]
             },
             {
                 "key": "stitcher",
@@ -122,6 +126,30 @@ class TailorConfigView(APIView):
                 "title": translate_message("Manage POS & Customers", language),
                 "description": translate_message(
                     "Can use the point-of-sale system and manage customer records.",
+                    language
+                ),
+            },
+            {
+                "key": "can_manage_shop_profile",
+                "title": translate_message("Manage Shop Profile", language),
+                "description": translate_message(
+                    "Can view and update the shop profile information.",
+                    language
+                ),
+            },
+            {
+                "key": "can_manage_shop_status",
+                "title": translate_message("Manage Shop Status", language),
+                "description": translate_message(
+                    "Can turn the shop on or off.",
+                    language
+                ),
+            },
+            {
+                "key": "can_manage_shop_address",
+                "title": translate_message("Manage Shop Address", language),
+                "description": translate_message(
+                    "Can view and update the shop address.",
                     language
                 ),
             },

@@ -12,26 +12,36 @@ from ..serializers.address import (
     TailorAddressUpdateSerializer,
     TailorAddressResponseSerializer
 )
-from ..permissions import IsTailor
+from ..permissions import IsShopStaff
+from .base import BaseTailorAPIView
 from zthob.utils import api_response
 
 @extend_schema(
     tags=["Tailor Address"],
     description="Get tailor's single address"
 )
-class TailorAddressView(APIView):
+class TailorAddressView(BaseTailorAPIView):
     """Get tailor's single address."""
-    permission_classes = [IsAuthenticated, IsTailor]
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_shop_address'
     
     def get(self, request):
         """Get the tailor's address."""
         try:
+            target_user = self.get_tailor_owner_user(request.user)
+            if not target_user:
+                return api_response(
+                    success=False,
+                    message='Tailor profile not found',
+                    data=None,
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
             # First try to get the default address
-            address = Address.objects.filter(user=request.user, is_default=True).first()
+            address = Address.objects.filter(user=target_user, is_default=True).first()
             
             # If no default address, get the first address
             if not address:
-                address = Address.objects.filter(user=request.user).first()
+                address = Address.objects.filter(user=target_user).first()
             
             if address:
                 serializer = TailorAddressResponseSerializer(address)
@@ -60,13 +70,25 @@ class TailorAddressView(APIView):
     tags=["Tailor Address"],
     description="Create or update tailor's single address"
 )
-class TailorAddressCreateUpdateView(APIView):
+class TailorAddressCreateUpdateView(BaseTailorAPIView):
     """Create or update tailor's single address."""
-    permission_classes = [IsAuthenticated, IsTailor]
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_shop_address'
     
     def post(self, request):
         """Create a new address for the tailor (replaces any existing one)."""
-        serializer = TailorAddressCreateSerializer(data=request.data, context={'request': request})
+        target_user = self.get_tailor_owner_user(request.user)
+        if not target_user:
+            return api_response(
+                success=False,
+                message='Tailor profile not found',
+                data=None,
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        serializer = TailorAddressCreateSerializer(
+            data=request.data,
+            context={'request': request, 'target_user': target_user}
+        )
         
         if serializer.is_valid():
             address = serializer.save()
@@ -88,12 +110,20 @@ class TailorAddressCreateUpdateView(APIView):
     def put(self, request):
         """Update the tailor's existing address."""
         try:
+            target_user = self.get_tailor_owner_user(request.user)
+            if not target_user:
+                return api_response(
+                    success=False,
+                    message='Tailor profile not found',
+                    data=None,
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
             # First try to get the default address
-            address = Address.objects.filter(user=request.user, is_default=True).first()
+            address = Address.objects.filter(user=target_user, is_default=True).first()
             
             # If no default address, get the first address
             if not address:
-                address = Address.objects.filter(user=request.user).first()
+                address = Address.objects.filter(user=target_user).first()
             
             if address:
                 serializer = TailorAddressUpdateSerializer(address, data=request.data, partial=True)
@@ -133,15 +163,24 @@ class TailorAddressCreateUpdateView(APIView):
     tags=["Tailor Address"],
     description="Delete tailor's address"
 )
-class TailorAddressDeleteView(APIView):
+class TailorAddressDeleteView(BaseTailorAPIView):
     """Delete tailor's address."""
-    permission_classes = [IsAuthenticated, IsTailor]
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_shop_address'
     
     def delete(self, request):
         """Delete the tailor's address."""
         try:
+            target_user = self.get_tailor_owner_user(request.user)
+            if not target_user:
+                return api_response(
+                    success=False,
+                    message='Tailor profile not found',
+                    data=None,
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
             # Delete all addresses for this user
-            addresses = Address.objects.filter(user=request.user)
+            addresses = Address.objects.filter(user=target_user)
             deleted_count = addresses.count()
             
             if deleted_count > 0:

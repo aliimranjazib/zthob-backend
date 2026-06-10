@@ -14,6 +14,7 @@ class TailorHomeAPIView(APIView):
     Aggregates counters, express orders, and recent activity.
     """
     permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_orders'
     serializer_class = TailorHomeSerializer
 
     @extend_schema(
