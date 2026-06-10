@@ -23,7 +23,6 @@ from zthob.utils import api_response
 class TailorAddressView(BaseTailorAPIView):
     """Get tailor's single address."""
     permission_classes = [IsAuthenticated, IsShopStaff]
-    required_employee_permission = 'can_manage_shop_address'
     
     def get(self, request):
         """Get the tailor's address."""
@@ -73,10 +72,16 @@ class TailorAddressView(BaseTailorAPIView):
 class TailorAddressCreateUpdateView(BaseTailorAPIView):
     """Create or update tailor's single address."""
     permission_classes = [IsAuthenticated, IsShopStaff]
-    required_employee_permission = 'can_manage_shop_address'
     
     def post(self, request):
         """Create a new address for the tailor (replaces any existing one)."""
+        if hasattr(request.user, 'tailor_employee') and not self.employee_has_permission(request.user, 'can_manage_shop_address'):
+            return api_response(
+                success=False,
+                message='Permission denied',
+                errors=None,
+                status_code=status.HTTP_403_FORBIDDEN
+            )
         target_user = self.get_tailor_owner_user(request.user)
         if not target_user:
             return api_response(
@@ -110,6 +115,13 @@ class TailorAddressCreateUpdateView(BaseTailorAPIView):
     def put(self, request):
         """Update the tailor's existing address."""
         try:
+            if hasattr(request.user, 'tailor_employee') and not self.employee_has_permission(request.user, 'can_manage_shop_address'):
+                return api_response(
+                    success=False,
+                    message='Permission denied',
+                    errors=None,
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
             target_user = self.get_tailor_owner_user(request.user)
             if not target_user:
                 return api_response(
@@ -166,11 +178,17 @@ class TailorAddressCreateUpdateView(BaseTailorAPIView):
 class TailorAddressDeleteView(BaseTailorAPIView):
     """Delete tailor's address."""
     permission_classes = [IsAuthenticated, IsShopStaff]
-    required_employee_permission = 'can_manage_shop_address'
     
     def delete(self, request):
         """Delete the tailor's address."""
         try:
+            if hasattr(request.user, 'tailor_employee') and not self.employee_has_permission(request.user, 'can_manage_shop_address'):
+                return api_response(
+                    success=False,
+                    message='Permission denied',
+                    data=None,
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
             target_user = self.get_tailor_owner_user(request.user)
             if not target_user:
                 return api_response(

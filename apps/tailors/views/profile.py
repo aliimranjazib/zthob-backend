@@ -21,7 +21,6 @@ from .base import BaseTailorAuthenticatedView
     description="Tailor profile management operations - supports GET, PUT, and PATCH methods"
 )
 class TailorProfileView(BaseTailorAuthenticatedView):
-    required_employee_permission = 'can_manage_shop_profile'
     serializer_class = TailorProfileSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
@@ -42,6 +41,12 @@ class TailorProfileView(BaseTailorAuthenticatedView):
         )
     
     def put(self, request):
+        if hasattr(request.user, 'tailor_employee') and not self.employee_has_permission(request.user, 'can_manage_shop_profile'):
+            return api_response(
+                success=False,
+                message='Permission denied',
+                status_code=status.HTTP_403_FORBIDDEN
+            )
         profile = self.get_tailor_profile(request.user)
         if not profile:
             return api_response(
@@ -105,6 +110,12 @@ class TailorProfileView(BaseTailorAuthenticatedView):
     
     def patch(self, request):
         """PATCH method for partial updates - same logic as PUT but explicitly for partial updates."""
+        if hasattr(request.user, 'tailor_employee') and not self.employee_has_permission(request.user, 'can_manage_shop_profile'):
+            return api_response(
+                success=False,
+                message='Permission denied',
+                status_code=status.HTTP_403_FORBIDDEN
+            )
         profile = self.get_tailor_profile(request.user)
         if not profile:
             return api_response(
@@ -171,11 +182,16 @@ class TailorProfileView(BaseTailorAuthenticatedView):
     description="Submit tailor profile for admin review"
 )
 class TailorProfileSubmissionView(BaseTailorAuthenticatedView):
-    required_employee_permission = 'can_manage_shop_profile'
     serializer_class = TailorProfileSubmissionSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def post(self, request):
+        if hasattr(request.user, 'tailor_employee') and not self.employee_has_permission(request.user, 'can_manage_shop_profile'):
+            return api_response(
+                success=False,
+                message='Permission denied',
+                status_code=status.HTTP_403_FORBIDDEN
+            )
         profile = self.get_tailor_profile(request.user)
         if not profile:
             return api_response(
@@ -243,8 +259,6 @@ class TailorProfileSubmissionView(BaseTailorAuthenticatedView):
     description="Check tailor profile review status"
 )
 class TailorProfileStatusView(BaseTailorAuthenticatedView):
-    required_employee_permission = 'can_manage_shop_profile'
-    
     def get(self, request):
         profile = self.get_tailor_profile(request.user)
         if not profile:
@@ -285,10 +299,15 @@ class TailorProfileStatusView(BaseTailorAuthenticatedView):
     description="Update shop status (on/off)"
 )
 class TailorShopStatusView(BaseTailorAuthenticatedView):
-    required_employee_permission = 'can_manage_shop_status'
-    
     def put(self, request):
         """Update shop status"""
+        if hasattr(request.user, 'tailor_employee') and not self.employee_has_permission(request.user, 'can_manage_shop_status'):
+            return api_response(
+                success=False,
+                message='Permission denied',
+                status_code=status.HTTP_403_FORBIDDEN,
+                request=request
+            )
         profile = self.get_tailor_profile(request.user)
         if not profile:
             return api_response(
