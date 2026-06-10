@@ -615,6 +615,7 @@ class FabricImagePrimaryView(BaseTailorAuthenticatedView):
     """
     View to set an image as the primary image for a fabric
     """
+    required_employee_permission = 'can_manage_catalog'
     
     @extend_schema(
         description="Set an existing image as the primary image for a fabric",
@@ -635,8 +636,8 @@ class FabricImagePrimaryView(BaseTailorAuthenticatedView):
                 status_code=status.HTTP_404_NOT_FOUND
             )
         
-        # Check permissions (only the tailor who owns the fabric can modify the image)
-        if image.fabric.tailor.user != request.user:
+        profile = self.get_tailor_profile(request.user)
+        if not profile or image.fabric.tailor_id != profile.id:
             return api_response(
                 success=False, 
                 message="You don't have permission to modify this image",
@@ -664,6 +665,7 @@ class FabricImageDeleteView(BaseTailorAuthenticatedView):
     """
     View to delete an individual fabric image
     """
+    required_employee_permission = 'can_manage_catalog'
     
     @extend_schema(
         description="Delete a fabric image. If it's the primary image, the first remaining image will become primary.",
@@ -685,8 +687,8 @@ class FabricImageDeleteView(BaseTailorAuthenticatedView):
                 status_code=status.HTTP_404_NOT_FOUND
             )
         
-        # Check permissions (only the tailor who owns the fabric can delete the image)
-        if image.fabric.tailor.user != request.user:
+        profile = self.get_tailor_profile(request.user)
+        if not profile or image.fabric.tailor_id != profile.id:
             return api_response(
                 success=False, 
                 message="You don't have permission to delete this image",
@@ -737,6 +739,7 @@ class FabricImageAddView(BaseTailorAuthenticatedView):
     View to add new images to an existing fabric
     """
     parser_classes = [MultiPartParser, FormParser]
+    required_employee_permission = 'can_manage_catalog'
     
     @extend_schema(
         description="Add one or more images to an existing fabric. Maximum 4 images total per fabric.",
@@ -758,8 +761,8 @@ class FabricImageAddView(BaseTailorAuthenticatedView):
                 status_code=status.HTTP_404_NOT_FOUND
             )
         
-        # Check permissions
-        if fabric.tailor.user != request.user:
+        profile = self.get_tailor_profile(request.user)
+        if not profile or fabric.tailor_id != profile.id:
             return api_response(
                 success=False,
                 message="You don't have permission to modify this fabric",
@@ -867,6 +870,7 @@ class FabricImageUpdateView(BaseTailorAuthenticatedView):
     View to update/replace an existing fabric image file
     """
     parser_classes = [MultiPartParser, FormParser]
+    required_employee_permission = 'can_manage_catalog'
     
     @extend_schema(
         description="Replace an existing fabric image file. Optionally update is_primary and order.",
@@ -888,8 +892,8 @@ class FabricImageUpdateView(BaseTailorAuthenticatedView):
                 status_code=status.HTTP_404_NOT_FOUND
             )
         
-        # Check permissions
-        if image.fabric.tailor.user != request.user:
+        profile = self.get_tailor_profile(request.user)
+        if not profile or image.fabric.tailor_id != profile.id:
             return api_response(
                 success=False,
                 message="You don't have permission to modify this image",

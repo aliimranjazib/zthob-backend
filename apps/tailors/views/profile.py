@@ -285,9 +285,8 @@ class TailorShopStatusView(BaseTailorAuthenticatedView):
     
     def put(self, request):
         """Update shop status"""
-        try:
-            profile = TailorProfile.objects.get(user=request.user)
-        except TailorProfile.DoesNotExist:
+        profile = self.get_tailor_profile(request.user)
+        if not profile:
             return api_response(
                 success=False,
                 message="Profile not found",

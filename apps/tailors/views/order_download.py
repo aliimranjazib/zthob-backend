@@ -17,16 +17,17 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.views import APIView
 
 from apps.orders.models import Order
+from apps.tailors.permissions import IsShopStaff
 from apps.tailors.services.order_pdf import generate_order_pdf
 from zthob.utils import api_response
+from .base import BaseTailorAPIView
 
 logger = logging.getLogger(__name__)
 
 
-class TailorOrderDownloadPDFView(APIView):
+class TailorOrderDownloadPDFView(BaseTailorAPIView):
     """
     Download a full PDF receipt for a specific order.
 
@@ -34,7 +35,8 @@ class TailorOrderDownloadPDFView(APIView):
     The PDF includes order details, customer info, items, measurements,
     pricing summary and status history.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_orders'
 
     @extend_schema(
         summary="Download order PDF",
@@ -61,12 +63,12 @@ class TailorOrderDownloadPDFView(APIView):
         ],
     )
     def get(self, request, order_id):
-        # Role guard
-        if not request.user.is_tailor:
+        profile = self.get_tailor_profile(request.user)
+        if not profile:
             return api_response(
                 success=False,
-                message="Only tailors can access this endpoint",
-                status_code=status.HTTP_403_FORBIDDEN,
+                message="Tailor profile not found",
+                status_code=status.HTTP_404_NOT_FOUND,
             )
 
         # Fetch order with related data in a single query burst
@@ -88,8 +90,7 @@ class TailorOrderDownloadPDFView(APIView):
             id=order_id,
         )
 
-        # Ownership guard
-        if order.tailor != request.user:
+        if order.tailor_id != profile.user_id:
             return api_response(
                 success=False,
                 message="You don't have access to this order",
