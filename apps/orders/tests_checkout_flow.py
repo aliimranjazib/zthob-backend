@@ -283,6 +283,7 @@ class CheckoutFlowTest(TestCase):
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
+            'responseCode': '000',
             'transactionId': '2610414541753672882',
             'paymentLink': {'linkUrl': 'https://pg.alinmapay.com.sa/SB_Transactions/direct.htm?paymentId='},
         }
