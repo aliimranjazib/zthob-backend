@@ -26,7 +26,7 @@ services:
       retries: 5
 
   web:
-    build: .
+    image: ${APP_IMAGE}
     command: gunicorn zthob.wsgi:application --bind 0.0.0.0:8000 --workers 3
     volumes:
       - .:/app
@@ -50,7 +50,7 @@ services:
         condition: service_healthy
 
   celery_worker:
-    build: .
+    image: ${APP_IMAGE}
     command: celery -A zthob worker -l info
     volumes:
       - .:/app
