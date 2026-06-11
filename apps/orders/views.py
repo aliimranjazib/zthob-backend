@@ -1,11 +1,15 @@
+import json
+import logging
+
 from django.shortcuts import get_object_or_404, render
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.db import transaction
 from rest_framework import status
 from rest_framework.exceptions import ValidationError, PermissionDenied
+from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from .actions import OrderActionManager
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema
@@ -23,6 +27,8 @@ OrderListSerializer,
 	OrderStatusUpdateResponseSerializer,
     CheckoutCreateOrderSerializer,
     CheckoutSessionSerializer,
+    CheckoutInitiatePaymentSerializer,
+    CheckoutInitiatePaymentResponseSerializer,
 	)
 from apps.tailors.models import TailorProfile
 from apps.tailors.permissions import IsShopStaff
@@ -31,6 +37,15 @@ from zthob.utils import api_response
 import uuid
 from decimal import Decimal
 from apps.orders.payments import get_payment_option, money
+from apps.orders.alinma import (
+    AlinmaConfigurationError,
+    AlinmaGatewayError,
+    get_alinma_config,
+    initiate_hosted_payment,
+    is_successful_callback,
+    parse_callback_payload,
+    verify_callback_signature,
+)
 
 
 def _get_tailor_owner_user(request):
@@ -43,6 +58,108 @@ def _get_tailor_owner_user(request):
         return request.user
     except TailorProfile.DoesNotExist:
         return None
+
+
+logger = logging.getLogger(__name__)
+
+
+def _create_order_from_checkout(*, checkout, customer, payment_method, payment_option_key, payment_reference, collected_by):
+    if checkout.order:
+        return checkout.order
+
+    if checkout.status not in {'active', 'payment_initiated'}:
+        raise ValidationError(f"Checkout is not active. Current status: {checkout.status}")
+
+    if checkout.is_expired:
+        checkout.status = 'expired'
+        checkout.save(update_fields=['status', 'updated_at'])
+        raise ValidationError("Checkout has expired. Please create a new checkout.")
+
+    checkout_total = (checkout.pricing_snapshot or {}).get('total_amount', '0.00')
+    if not get_payment_option(checkout_total, payment_option_key):
+        raise ValidationError(
+            f"Payment option '{payment_option_key}' is not available for this checkout total."
+        )
+
+    if payment_method == 'credit_card':
+        reference_used = (
+            Order.objects.filter(payment_reference=payment_reference).exists()
+            or CheckoutSession.objects.filter(payment_reference=payment_reference).exclude(id=checkout.id).exists()
+            or OrderPayment.objects.filter(payment_reference=payment_reference).exists()
+        )
+        if reference_used:
+            raise ValidationError("This payment reference has already been used.")
+
+    order_data = dict(checkout.request_payload)
+    order_data['customer'] = customer.id
+    order_data['payment_method'] = payment_method
+
+    order_serializer = OrderCreateSerializer(data=order_data, context={'request': None})
+    if not order_serializer.is_valid():
+        raise ValidationError(order_serializer.errors)
+
+    order = order_serializer.save()
+    selected_payment_option = get_payment_option(order.total_amount, payment_option_key)
+    if not selected_payment_option:
+        raise ValidationError(
+            f"Payment option '{payment_option_key}' is not available for this checkout total."
+        )
+
+    pay_now_amount = money(selected_payment_option['pay_now_amount'])
+    payment_plan = selected_payment_option['payment_plan']
+
+    order.payment_method = payment_method
+    order.payment_reference = payment_reference if pay_now_amount > Decimal('0.00') else None
+    order.deposit_amount = pay_now_amount if payment_plan == 'partial' else Decimal('0.00')
+    order.apply_payment_summary(
+        pay_now_amount,
+        payment_plan=payment_plan,
+        payment_option=payment_option_key,
+        save=False,
+    )
+    order.save(update_fields=[
+        'payment_method',
+        'payment_plan',
+        'payment_option',
+        'payment_status',
+        'payment_reference',
+        'deposit_amount',
+        'paid_amount',
+        'remaining_amount',
+        'updated_at',
+    ])
+
+    if pay_now_amount > Decimal('0.00'):
+        OrderPayment.objects.create(
+            order=order,
+            amount=pay_now_amount,
+            payment_method=payment_method,
+            payment_type='deposit' if payment_plan == 'partial' else 'full_payment',
+            status='paid',
+            payment_reference=payment_reference,
+            collected_by=collected_by,
+            notes='Initial checkout payment',
+            metadata={'payment_option': payment_option_key},
+        )
+
+    checkout.order = order
+    checkout.status = 'order_created'
+    checkout.payment_method = payment_method
+    checkout.payment_plan = payment_plan
+    checkout.payment_option = payment_option_key
+    checkout.payment_reference = payment_reference if pay_now_amount > Decimal('0.00') else None
+    checkout.payment_confirmed_at = timezone.now() if pay_now_amount > Decimal('0.00') else None
+    checkout.save(update_fields=[
+        'order',
+        'status',
+        'payment_method',
+        'payment_plan',
+        'payment_option',
+        'payment_reference',
+        'payment_confirmed_at',
+        'updated_at',
+    ])
+    return order
 
 class OrderListView(APIView):
     permission_classes=[IsAuthenticated]
@@ -264,6 +381,140 @@ class CheckoutStatusView(APIView):
         )
 
 
+class CheckoutInitiatePaymentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=CheckoutInitiatePaymentSerializer,
+        responses={200: CheckoutInitiatePaymentResponseSerializer},
+        summary="Initiate Alinma hosted payment",
+        description="Create an Alinma hosted payment session for an existing checkout draft.",
+        tags=["Checkout"]
+    )
+    @transaction.atomic
+    def post(self, request):
+        serializer = CheckoutInitiatePaymentSerializer(data=request.data)
+        if not serializer.is_valid():
+            return api_response(
+                success=False,
+                message="Invalid checkout payment initiation data",
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        booking_key = serializer.validated_data['bookingUniqueKey']
+        payment_option_key = serializer.validated_data.get('payment_option', 'full')
+        checkout = get_object_or_404(
+            CheckoutSession.objects.select_for_update(),
+            booking_unique_key=booking_key,
+            customer=request.user,
+        )
+
+        if checkout.order:
+            return api_response(
+                success=False,
+                message="This checkout already has an order.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if checkout.status not in {'active', 'payment_initiated'}:
+            return api_response(
+                success=False,
+                message=f"Checkout is not active. Current status: {checkout.status}",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if checkout.is_expired:
+            checkout.status = 'expired'
+            checkout.save(update_fields=['status', 'updated_at'])
+            return api_response(
+                success=False,
+                message="Checkout has expired. Please create a new checkout.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        checkout_total = (checkout.pricing_snapshot or {}).get('total_amount', '0.00')
+        selected_payment_option = get_payment_option(checkout_total, payment_option_key)
+        if not selected_payment_option:
+            return api_response(
+                success=False,
+                message=f"Payment option '{payment_option_key}' is not available for this checkout total.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        pay_now_amount = money(selected_payment_option['pay_now_amount'])
+        if pay_now_amount <= Decimal('0.00'):
+            return api_response(
+                success=False,
+                message="This payment option does not require online payment.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        request_payload = checkout.request_payload or {}
+        customer_payload = {}
+        if request.user.email:
+            customer_payload['customerEmail'] = request.user.email
+
+        try:
+            config = get_alinma_config()
+            receipt_url = f"{config.receipt_base_url.rstrip('/')}/api/orders/checkout/alinma/callback/"
+            gateway_response = initiate_hosted_payment(
+                track_id=booking_key,
+                amount=str(pay_now_amount),
+                order_id=booking_key,
+                description=f'Checkout payment for {booking_key}',
+                receipt_url=receipt_url,
+                customer=customer_payload or None,
+                user_data={
+                    'bookingUniqueKey': booking_key,
+                    'paymentOption': payment_option_key,
+                    'customerId': request.user.id,
+                    'orderType': request_payload.get('order_type'),
+                },
+            )
+        except AlinmaConfigurationError as exc:
+            return api_response(
+                success=False,
+                message=str(exc),
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except AlinmaGatewayError as exc:
+            return api_response(
+                success=False,
+                message=str(exc),
+                status_code=status.HTTP_502_BAD_GATEWAY
+            )
+
+        gateway_transaction_id = str(gateway_response.get('transactionId') or '')
+        link_url = ((gateway_response.get('paymentLink') or {}).get('linkUrl') or '').strip()
+        if not gateway_transaction_id or not link_url:
+            return api_response(
+                success=False,
+                message="Alinma Pay did not return a valid payment link.",
+                status_code=status.HTTP_502_BAD_GATEWAY
+            )
+
+        checkout.status = 'payment_initiated'
+        checkout.payment_method = 'credit_card'
+        checkout.payment_option = payment_option_key
+        checkout.save(update_fields=['status', 'payment_method', 'payment_option', 'updated_at'])
+
+        return api_response(
+            success=True,
+            message="Alinma payment initiated successfully",
+            data={
+                'bookingUniqueKey': booking_key,
+                'payment_option': payment_option_key,
+                'gateway_transaction_id': gateway_transaction_id,
+                'payment_url': f'{link_url}{gateway_transaction_id}',
+                'amount': str(pay_now_amount),
+                'currency': config.currency,
+                'status': 'initiated',
+            },
+            status_code=status.HTTP_200_OK
+        )
+
+
 class CheckoutCreateOrderView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -324,101 +575,15 @@ class CheckoutCreateOrderView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
-        checkout_total = (checkout.pricing_snapshot or {}).get('total_amount', '0.00')
-        if not get_payment_option(checkout_total, payment_option_key):
-            return api_response(
-                success=False,
-                message=f"Payment option '{payment_option_key}' is not available for this checkout total.",
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-
-        if payment_method == 'credit_card':
-            reference_used = (
-                Order.objects.filter(payment_reference=payment_reference).exists()
-                or CheckoutSession.objects.filter(payment_reference=payment_reference).exclude(id=checkout.id).exists()
-                or OrderPayment.objects.filter(payment_reference=payment_reference).exists()
-            )
-            if reference_used:
-                return api_response(
-                    success=False,
-                    message="This payment reference has already been used.",
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
-
-        order_data = dict(checkout.request_payload)
-        order_data['customer'] = request.user.id
-        order_data['payment_method'] = payment_method
-
-        order_serializer = OrderCreateSerializer(data=order_data, context={'request': request})
-        if not order_serializer.is_valid():
-            return api_response(
-                success=False,
-                message="Order creation from checkout failed",
-                errors=order_serializer.errors,
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-
         try:
-            order = order_serializer.save()
-            selected_payment_option = get_payment_option(order.total_amount, payment_option_key)
-            if not selected_payment_option:
-                raise ValidationError(f"Payment option '{payment_option_key}' is not available for this checkout total.")
-
-            pay_now_amount = money(selected_payment_option['pay_now_amount'])
-            payment_plan = selected_payment_option['payment_plan']
-
-            order.payment_method = payment_method
-            order.payment_reference = payment_reference if pay_now_amount > Decimal('0.00') else None
-            order.deposit_amount = pay_now_amount if payment_plan == 'partial' else Decimal('0.00')
-            order.apply_payment_summary(
-                pay_now_amount,
-                payment_plan=payment_plan,
-                payment_option=payment_option_key,
-                save=False,
+            order = _create_order_from_checkout(
+                checkout=checkout,
+                customer=request.user,
+                payment_method=payment_method,
+                payment_option_key=payment_option_key,
+                payment_reference=payment_reference,
+                collected_by=request.user,
             )
-            order.save(update_fields=[
-                'payment_method',
-                'payment_plan',
-                'payment_option',
-                'payment_status',
-                'payment_reference',
-                'deposit_amount',
-                'paid_amount',
-                'remaining_amount',
-                'updated_at',
-            ])
-
-            if pay_now_amount > Decimal('0.00'):
-                OrderPayment.objects.create(
-                    order=order,
-                    amount=pay_now_amount,
-                    payment_method=payment_method,
-                    payment_type='deposit' if payment_plan == 'partial' else 'full_payment',
-                    status='paid',
-                    payment_reference=payment_reference,
-                    collected_by=request.user,
-                    notes='Initial checkout payment',
-                    metadata={'payment_option': payment_option_key},
-                )
-
-            checkout.order = order
-            checkout.status = 'order_created'
-            checkout.payment_method = payment_method
-            checkout.payment_plan = payment_plan
-            checkout.payment_option = payment_option_key
-            checkout.payment_reference = payment_reference if pay_now_amount > Decimal('0.00') else None
-            checkout.payment_confirmed_at = timezone.now() if pay_now_amount > Decimal('0.00') else None
-            checkout.save(update_fields=[
-                'order',
-                'status',
-                'payment_method',
-                'payment_plan',
-                'payment_option',
-                'payment_reference',
-                'payment_confirmed_at',
-                'updated_at',
-            ])
-
             response_serializer = OrderSerializer(order, context={'request': request})
             return api_response(
                 success=True,
@@ -434,6 +599,84 @@ class CheckoutCreateOrderView(APIView):
                 errors={'detail': str(e)},
                 status_code=status.HTTP_400_BAD_REQUEST
             )
+
+
+class CheckoutAlinmaCallbackView(APIView):
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = []
+
+    @transaction.atomic
+    def post(self, request):
+        return self._handle(request)
+
+    @transaction.atomic
+    def get(self, request):
+        return self._handle(request)
+
+    def _handle(self, request):
+        encrypted_data = request.data.get('data') or request.query_params.get('data')
+        if not encrypted_data:
+            return HttpResponse('Missing data', status=400)
+
+        try:
+            payload = parse_callback_payload(encrypted_data)
+        except (AlinmaConfigurationError, AlinmaGatewayError, ValueError) as exc:
+            logger.exception('Failed to parse Alinma callback')
+            return HttpResponse(str(exc), status=400)
+
+        if payload.get('signature') and not verify_callback_signature(payload):
+            logger.warning('Rejected Alinma callback with invalid signature')
+            return HttpResponse('Invalid signature', status=400)
+
+        order_details = payload.get('orderDetails') or {}
+        booking_key = order_details.get('orderId')
+
+        if not booking_key:
+            user_data_raw = ((payload.get('additionalDetails') or {}).get('userData') or '').strip()
+            if user_data_raw:
+                try:
+                    user_data = json.loads(user_data_raw)
+                    booking_key = user_data.get('bookingUniqueKey')
+                except json.JSONDecodeError:
+                    booking_key = None
+
+        if not booking_key:
+            return HttpResponse('Missing order reference', status=400)
+
+        checkout = CheckoutSession.objects.select_for_update().select_related('customer', 'order').filter(
+            booking_unique_key=booking_key
+        ).first()
+        if not checkout:
+            return HttpResponse('Checkout not found', status=404)
+
+        if checkout.order:
+            return HttpResponse('OK', status=200)
+
+        transaction_id = str(payload.get('transactionId') or '')
+
+        if is_successful_callback(payload):
+            payment_option_key = checkout.payment_option or 'full'
+            try:
+                _create_order_from_checkout(
+                    checkout=checkout,
+                    customer=checkout.customer,
+                    payment_method='credit_card',
+                    payment_option_key=payment_option_key,
+                    payment_reference=transaction_id or booking_key,
+                    collected_by=None,
+                )
+            except ValidationError as exc:
+                logger.exception('Failed to finalize checkout %s after successful Alinma callback', booking_key)
+                checkout.status = 'payment_failed'
+                checkout.save(update_fields=['status', 'updated_at'])
+                return HttpResponse(str(exc), status=400)
+        else:
+            checkout.status = 'payment_failed'
+            checkout.payment_method = 'credit_card'
+            checkout.payment_reference = transaction_id or None
+            checkout.save(update_fields=['status', 'payment_method', 'payment_reference', 'updated_at'])
+
+        return HttpResponse('OK', status=200)
 
 
 class OrderDetailView(APIView):

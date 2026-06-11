@@ -1912,4 +1912,27 @@ class CheckoutCreateOrderSerializer(serializers.Serializer):
         if payment_method == 'cod' and payment_reference:
             attrs['payment_reference'] = None
         return attrs
+
+
+class CheckoutInitiatePaymentSerializer(serializers.Serializer):
+    bookingUniqueKey = serializers.CharField(required=True)
+    payment_option = serializers.ChoiceField(
+        choices=[
+            ('full', 'Pay Full Amount'),
+            ('advance_50', 'Pay 50% Advance'),
+            ('advance_30', 'Pay 30% Advance'),
+        ],
+        required=False,
+        default='full',
+    )
+
+
+class CheckoutInitiatePaymentResponseSerializer(serializers.Serializer):
+    bookingUniqueKey = serializers.CharField()
+    payment_option = serializers.CharField()
+    gateway_transaction_id = serializers.CharField()
+    payment_url = serializers.URLField()
+    amount = serializers.CharField()
+    currency = serializers.CharField()
+    status = serializers.CharField()
             

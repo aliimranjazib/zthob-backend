@@ -404,6 +404,22 @@ TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN', None)
 TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER', None)
 TWILIO_VERIFY_SERVICE_SID = os.getenv('TWILIO_VERIFY_SERVICE_SID', None)
 
+# Alinma Pay Configuration
+ALINMAPAY_TERMINAL_ID = os.getenv('ALINMAPAY_TERMINAL_ID', '')
+ALINMAPAY_TERMINAL_PASSWORD = os.getenv('ALINMAPAY_TERMINAL_PASSWORD', '')
+ALINMAPAY_MERCHANT_KEY = os.getenv('ALINMAPAY_MERCHANT_KEY', '')
+ALINMAPAY_CURRENCY = os.getenv('ALINMAPAY_CURRENCY', 'SAR')
+ALINMAPAY_RECEIPT_BASE_URL = os.getenv('ALINMAPAY_RECEIPT_BASE_URL', 'https://app.mgask.net')
+ALINMAPAY_TIMEOUT_SECONDS = int(os.getenv('ALINMAPAY_TIMEOUT_SECONDS', '30'))
+ALINMAPAY_REQUEST_URL = os.getenv(
+    'ALINMAPAY_REQUEST_URL',
+    (
+        'https://pg.alinmapay.com.sa/Transactions/v2/payments/pay-request'
+        if APP_ENV == 'production'
+        else 'https://pg.alinmapay.com.sa/SB_Transactions/v2/payments/pay-request'
+    ),
+)
+
 # Jazzmin Admin UI Configuration - Simplified
 JAZZMIN_SETTINGS = {
     # Simple branding
