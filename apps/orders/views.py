@@ -1,5 +1,6 @@
 import json
 import logging
+from types import SimpleNamespace
 
 from django.shortcuts import get_object_or_404, render
 from django.http import Http404, HttpResponse
@@ -63,7 +64,16 @@ def _get_tailor_owner_user(request):
 logger = logging.getLogger(__name__)
 
 
-def _create_order_from_checkout(*, checkout, customer, payment_method, payment_option_key, payment_reference, collected_by):
+def _create_order_from_checkout(
+    *,
+    checkout,
+    customer,
+    payment_method,
+    payment_option_key,
+    payment_reference,
+    collected_by,
+    serializer_request=None,
+):
     if checkout.order:
         return checkout.order
 
@@ -94,7 +104,8 @@ def _create_order_from_checkout(*, checkout, customer, payment_method, payment_o
     order_data['customer'] = customer.id
     order_data['payment_method'] = payment_method
 
-    order_serializer = OrderCreateSerializer(data=order_data, context={'request': None})
+    context_request = serializer_request or SimpleNamespace(user=customer)
+    order_serializer = OrderCreateSerializer(data=order_data, context={'request': context_request})
     if not order_serializer.is_valid():
         raise ValidationError(order_serializer.errors)
 
@@ -583,6 +594,7 @@ class CheckoutCreateOrderView(APIView):
                 payment_option_key=payment_option_key,
                 payment_reference=payment_reference,
                 collected_by=request.user,
+                serializer_request=request,
             )
             response_serializer = OrderSerializer(order, context={'request': request})
             return api_response(
@@ -643,7 +655,7 @@ class CheckoutAlinmaCallbackView(APIView):
         if not booking_key:
             return HttpResponse('Missing order reference', status=400)
 
-        checkout = CheckoutSession.objects.select_for_update().select_related('customer', 'order').filter(
+        checkout = CheckoutSession.objects.select_for_update().select_related('customer').filter(
             booking_unique_key=booking_key
         ).first()
         if not checkout:
