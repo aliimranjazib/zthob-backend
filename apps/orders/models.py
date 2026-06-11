@@ -867,6 +867,7 @@ class CheckoutSession(BaseModel):
     """
     STATUS_CHOICES = (
         ('active', 'Active'),
+        ('payment_initiated', 'Payment Initiated'),
         ('order_created', 'Order Created'),
         ('expired', 'Expired'),
         ('cancelled', 'Cancelled'),
