@@ -113,6 +113,16 @@ def initiate_hosted_payment(
     if customer:
         payload['customer'] = customer
 
+    logger.info(
+        'Initiating Alinma hosted payment: request_url=%s track_id=%s order_id=%s amount=%s currency=%s receipt_url=%s',
+        config.request_url,
+        track_id,
+        order_id,
+        amount,
+        config.currency,
+        receipt_url,
+    )
+
     try:
         response = requests.post(
             config.request_url,
@@ -120,21 +130,54 @@ def initiate_hosted_payment(
             timeout=config.request_timeout,
         )
     except requests.RequestException as exc:
-        logger.exception('Failed to connect to Alinma Pay')
+        logger.exception(
+            'Failed to connect to Alinma Pay: request_url=%s track_id=%s order_id=%s',
+            config.request_url,
+            track_id,
+            order_id,
+        )
         raise AlinmaGatewayError('Could not connect to Alinma Pay.') from exc
+
+    logger.info(
+        'Alinma Pay response received: track_id=%s order_id=%s status_code=%s',
+        track_id,
+        order_id,
+        response.status_code,
+    )
 
     try:
         data = response.json()
     except ValueError as exc:
-        logger.error('Alinma Pay returned non-JSON response: %s', response.text[:500])
+        logger.error(
+            'Alinma Pay returned non-JSON response: track_id=%s order_id=%s status_code=%s body=%s',
+            track_id,
+            order_id,
+            response.status_code,
+            response.text[:1000],
+        )
         raise AlinmaGatewayError('Alinma Pay returned an unreadable response.') from exc
 
     if response.status_code >= 400:
+        logger.error(
+            'Alinma Pay rejected payment initiation: track_id=%s order_id=%s status_code=%s response=%s',
+            track_id,
+            order_id,
+            response.status_code,
+            json.dumps(data)[:1000],
+        )
         raise AlinmaGatewayError(
             data.get('responseDescription')
             or data.get('message')
             or 'Alinma Pay rejected the payment initiation request.'
         )
+
+    logger.info(
+        'Alinma Pay initiation succeeded: track_id=%s order_id=%s transaction_id=%s response_code=%s',
+        track_id,
+        order_id,
+        data.get('transactionId'),
+        data.get('responseCode'),
+    )
 
     return data
 
