@@ -25,11 +25,24 @@ OrderListSerializer,
     CheckoutSessionSerializer,
 	)
 from apps.tailors.models import TailorProfile
+from apps.tailors.permissions import IsShopStaff
 from apps.customers.models import CustomerProfile
 from zthob.utils import api_response 
 import uuid
 from decimal import Decimal
 from apps.orders.payments import get_payment_option, money
+
+
+def _get_tailor_owner_user(request):
+    """Resolve the owner tailor user for owner/staff sessions."""
+    if hasattr(request.user, 'tailor_employee') and request.user.tailor_employee.is_active:
+        return request.user.tailor_employee.tailor.user
+
+    try:
+        TailorProfile.objects.get(user=request.user)
+        return request.user
+    except TailorProfile.DoesNotExist:
+        return None
 
 class OrderListView(APIView):
     permission_classes=[IsAuthenticated]
@@ -715,7 +728,8 @@ class CustomerOrderListView(APIView):
         )
 class TailorAvailableOrdersView(APIView):
     """Get all non-completed orders assigned to tailor (includes both pending and accepted orders)"""
-    permission_classes=[IsAuthenticated]
+    permission_classes=[IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_orders'
     
     @extend_schema(
         responses=OrderListSerializer(many=True),
@@ -724,43 +738,43 @@ class TailorAvailableOrdersView(APIView):
         tags=["Tailor Orders"]
     )
     def get(self, request):
-        try:
-            tailor_profile = TailorProfile.objects.get(user=request.user)
-            # Show all orders that are not completed yet (exclude delivered and cancelled)
-            orders = Order.objects.filter(
-                tailor=request.user
-            ).exclude(
-                status__in=['delivered', 'cancelled']
-            ).select_related('customer', 'delivery_address', 'rider').prefetch_related('order_items__fabric').order_by('-created_at')
-            
-            # Filter by payment status
-            payment_status = request.query_params.get('payment_status')
-            if payment_status:
-                orders = orders.filter(payment_status=payment_status)
-            
-            # Filter by order type
-            order_type = request.query_params.get('order_type')
-            if order_type:
-                orders = orders.filter(order_type=order_type)
-            
-            serializer = OrderListSerializer(orders, many=True, context={'request': request, 'role': 'TAILOR'})
-            
-            return api_response(
-                success=True,
-                message="Available orders retrieved successfully",
-                data=serializer.data,
-                status_code=status.HTTP_200_OK
-            )
-        except TailorProfile.DoesNotExist:
+        tailor_user = _get_tailor_owner_user(request)
+        if not tailor_user:
             return api_response(
                 success=False,
                 message="User is not a tailor",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
+        # Show all orders that are not completed yet (exclude delivered and cancelled)
+        orders = Order.objects.filter(
+            tailor=tailor_user
+        ).exclude(
+            status__in=['delivered', 'cancelled']
+        ).select_related('customer', 'delivery_address', 'rider').prefetch_related('order_items__fabric').order_by('-created_at')
+        
+        # Filter by payment status
+        payment_status = request.query_params.get('payment_status')
+        if payment_status:
+            orders = orders.filter(payment_status=payment_status)
+        
+        # Filter by order type
+        order_type = request.query_params.get('order_type')
+        if order_type:
+            orders = orders.filter(order_type=order_type)
+            
+        serializer = OrderListSerializer(orders, many=True, context={'request': request, 'role': 'TAILOR'})
+        
+        return api_response(
+            success=True,
+            message="Available orders retrieved successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
 
 
 class TailorOrderListView(APIView):
-    permission_classes=[IsAuthenticated]
+    permission_classes=[IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_orders'
     @extend_schema(
         responses=OrderListSerializer(many=True),
         summary="Get my tailor orders",
@@ -769,119 +783,119 @@ class TailorOrderListView(APIView):
     )
 
     def get(self,request):
-        try:
-            tailor_profile = TailorProfile.objects.get(user=request.user)
-            
-            # Base queryset: All orders for this tailor
-            orders = Order.objects.filter(
-                tailor=request.user
-            ).select_related('customer', 'delivery_address', 'rider').prefetch_related('order_items__fabric').order_by('-created_at')
-            
-            # Filters
-            status_filter = request.query_params.get('status')
-            tailor_status_filter = request.query_params.get('tailor_status')
-            payment_status = request.query_params.get('payment_status')
-            order_type = request.query_params.get('order_type')
-
-            if status_filter:
-                if status_filter == 'express':
-                    orders = orders.filter(is_express=True)
-                else:
-                    orders = orders.filter(status=status_filter)
-            elif not tailor_status_filter:
-                # Default: Show active orders only (exclude completed/cancelled)
-                # unless a specific tailor_status is requested
-                orders = orders.exclude(status__in=['delivered', 'collected', 'cancelled'])
-            
-            if tailor_status_filter:
-                orders = orders.filter(tailor_status=tailor_status_filter)
-            
-            if payment_status:
-                orders = orders.filter(payment_status=payment_status)
-
-            if order_type:
-                orders = orders.filter(order_type=order_type)
-
-            # Date based filters for dashboard alerts
-            today = timezone.now().date()
-            is_overdue = request.query_params.get('is_overdue')
-            if is_overdue == 'true':
-                orders = orders.filter(
-                    estimated_delivery_date__lt=today
-                ).exclude(status__in=['delivered', 'collected', 'cancelled'])
-
-            delivery_due = request.query_params.get('delivery_due')
-            if delivery_due == 'today':
-                orders = orders.filter(
-                    estimated_delivery_date=today
-                ).exclude(status__in=['delivered', 'collected', 'cancelled'])
-            elif delivery_due == 'week':
-                week_end = today + timezone.timedelta(days=7)
-                orders = orders.filter(
-                    estimated_delivery_date__gte=today,
-                    estimated_delivery_date__lte=week_end
-                ).exclude(status__in=['delivered', 'collected', 'cancelled'])
-
-            # New filters for action buckets
-            service_mode_filter = request.query_params.get('service_mode')
-            if service_mode_filter:
-                orders = orders.filter(service_mode=service_mode_filter)
-            
-            exclude_ready = request.query_params.get('exclude_ready')
-            if exclude_ready == 'true':
-                orders = orders.exclude(status__in=['ready_for_delivery', 'ready_for_pickup', 'delivered', 'collected'])
-
-            # Filter for orders that need measurements (usually for Shop Orders)
-            needs_measurements = request.query_params.get('needs_measurements')
-            if needs_measurements == 'true':
-                orders = orders.filter(
-                    tailor_status='accepted'
-                ).filter(
-                    Q(order_items__measurements={}) | Q(order_items__measurements__isnull=True)
-                ).distinct()
-
-            # New in_stitching filter for dashboard buckets
-            in_stitching = request.query_params.get('in_stitching')
-            if in_stitching == 'true':
-                # Determine which statuses to include based on service_mode to match dashboard
-                service_mode = request.query_params.get('service_mode')
-                if service_mode == 'walk_in':
-                    # Shop orders include 'accepted' in the stitching bucket
-                    # BUT ONLY if they already have measurements
-                    # Those missing measurements are in the 'To Measure' bucket
-                    orders = orders.filter(
-                        Q(tailor_status__in=['in_progress', 'stitching_started', 'stitched']) |
-                        Q(tailor_status='accepted', order_type__in=['fabric_with_stitching', 'stitching_only'])
-                    ).exclude(
-                        Q(tailor_status='accepted', order_items__measurements={}) |
-                        Q(tailor_status='accepted', order_items__measurements__isnull=True)
-                    ).distinct()
-                else:
-                    # Delivery orders separate 'accepted' into 'To Prepare' (Make Progress)
-                    stitching_statuses = ['in_progress', 'stitching_started', 'stitched']
-                    orders = orders.filter(tailor_status__in=stitching_statuses)
-                    
-                orders = orders.exclude(status__in=['ready_for_delivery', 'ready_for_pickup', 'delivered', 'collected', 'cancelled'])
-            
-            serializer = OrderListSerializer(orders, many=True, context={'request': request, 'role': 'TAILOR'})
-            
-            return api_response(
-                success=True,
-                message="Your tailor orders retrieved successfully",
-                data=serializer.data,
-                status_code=status.HTTP_200_OK
-            )
-        except TailorProfile.DoesNotExist:
+        tailor_user = _get_tailor_owner_user(request)
+        if not tailor_user:
             return api_response(
                 success=False,
                 message="User is not a tailor",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
+            
+        # Base queryset: All orders for this tailor
+        orders = Order.objects.filter(
+            tailor=tailor_user
+        ).select_related('customer', 'delivery_address', 'rider').prefetch_related('order_items__fabric').order_by('-created_at')
+        
+        # Filters
+        status_filter = request.query_params.get('status')
+        tailor_status_filter = request.query_params.get('tailor_status')
+        payment_status = request.query_params.get('payment_status')
+        order_type = request.query_params.get('order_type')
+
+        if status_filter:
+            if status_filter == 'express':
+                orders = orders.filter(is_express=True)
+            else:
+                orders = orders.filter(status=status_filter)
+        elif not tailor_status_filter:
+            # Default: Show active orders only (exclude completed/cancelled)
+            # unless a specific tailor_status is requested
+            orders = orders.exclude(status__in=['delivered', 'collected', 'cancelled'])
+        
+        if tailor_status_filter:
+            orders = orders.filter(tailor_status=tailor_status_filter)
+        
+        if payment_status:
+            orders = orders.filter(payment_status=payment_status)
+
+        if order_type:
+            orders = orders.filter(order_type=order_type)
+
+        # Date based filters for dashboard alerts
+        today = timezone.now().date()
+        is_overdue = request.query_params.get('is_overdue')
+        if is_overdue == 'true':
+            orders = orders.filter(
+                estimated_delivery_date__lt=today
+            ).exclude(status__in=['delivered', 'collected', 'cancelled'])
+
+        delivery_due = request.query_params.get('delivery_due')
+        if delivery_due == 'today':
+            orders = orders.filter(
+                estimated_delivery_date=today
+            ).exclude(status__in=['delivered', 'collected', 'cancelled'])
+        elif delivery_due == 'week':
+            week_end = today + timezone.timedelta(days=7)
+            orders = orders.filter(
+                estimated_delivery_date__gte=today,
+                estimated_delivery_date__lte=week_end
+            ).exclude(status__in=['delivered', 'collected', 'cancelled'])
+
+        # New filters for action buckets
+        service_mode_filter = request.query_params.get('service_mode')
+        if service_mode_filter:
+            orders = orders.filter(service_mode=service_mode_filter)
+        
+        exclude_ready = request.query_params.get('exclude_ready')
+        if exclude_ready == 'true':
+            orders = orders.exclude(status__in=['ready_for_delivery', 'ready_for_pickup', 'delivered', 'collected'])
+
+        # Filter for orders that need measurements (usually for Shop Orders)
+        needs_measurements = request.query_params.get('needs_measurements')
+        if needs_measurements == 'true':
+            orders = orders.filter(
+                tailor_status='accepted'
+            ).filter(
+                Q(order_items__measurements={}) | Q(order_items__measurements__isnull=True)
+            ).distinct()
+
+        # New in_stitching filter for dashboard buckets
+        in_stitching = request.query_params.get('in_stitching')
+        if in_stitching == 'true':
+            # Determine which statuses to include based on service_mode to match dashboard
+            service_mode = request.query_params.get('service_mode')
+            if service_mode == 'walk_in':
+                # Shop orders include 'accepted' in the stitching bucket
+                # BUT ONLY if they already have measurements
+                # Those missing measurements are in the 'To Measure' bucket
+                orders = orders.filter(
+                    Q(tailor_status__in=['in_progress', 'stitching_started', 'stitched']) |
+                    Q(tailor_status='accepted', order_type__in=['fabric_with_stitching', 'stitching_only'])
+                ).exclude(
+                    Q(tailor_status='accepted', order_items__measurements={}) |
+                    Q(tailor_status='accepted', order_items__measurements__isnull=True)
+                ).distinct()
+            else:
+                # Delivery orders separate 'accepted' into 'To Prepare' (Make Progress)
+                stitching_statuses = ['in_progress', 'stitching_started', 'stitched']
+                orders = orders.filter(tailor_status__in=stitching_statuses)
+                
+            orders = orders.exclude(status__in=['ready_for_delivery', 'ready_for_pickup', 'delivered', 'collected', 'cancelled'])
+            
+        serializer = OrderListSerializer(orders, many=True, context={'request': request, 'role': 'TAILOR'})
+        
+        return api_response(
+            success=True,
+            message="Your tailor orders retrieved successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
 
 
 class TailorPaidOrdersView(APIView):
     """Get paid orders and pending COD orders for tailor"""
-    permission_classes=[IsAuthenticated]
+    permission_classes=[IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_orders'
     
     @extend_schema(
         responses=OrderListSerializer(many=True),
@@ -890,47 +904,47 @@ class TailorPaidOrdersView(APIView):
         tags=["Tailor Orders"]
     )
     def get(self, request):
-        try:
-            tailor_profile = TailorProfile.objects.get(user=request.user)
-            orders = Order.objects.filter(
-                tailor=request.user,
-            ).filter(
-                Q(payment_status__in=['paid', 'partially_paid']) | Q(payment_method='cod', payment_status='pending')
-            ).select_related(
-                'customer',
-                'delivery_address',
-                'rider'
-            ).prefetch_related('order_items').order_by('-created_at')
-            
-            # Filter by status if provided
-            status_filter = request.query_params.get('status')
-            if status_filter:
-                orders = orders.filter(status=status_filter)
-            
-            # Filter by order type if provided
-            order_type = request.query_params.get('order_type')
-            if order_type:
-                orders = orders.filter(order_type=order_type)
-            
-            serializer = OrderListSerializer(orders, many=True, context={'request': request, 'role': 'TAILOR'})
-            
-            return api_response(
-                success=True,
-                message="Processable orders retrieved successfully",
-                data=serializer.data,
-                status_code=status.HTTP_200_OK
-            )
-        except TailorProfile.DoesNotExist:
+        tailor_user = _get_tailor_owner_user(request)
+        if not tailor_user:
             return api_response(
                 success=False,
                 message="User is not a tailor",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
+        orders = Order.objects.filter(
+            tailor=tailor_user,
+        ).filter(
+            Q(payment_status__in=['paid', 'partially_paid']) | Q(payment_method='cod', payment_status='pending')
+        ).select_related(
+            'customer',
+            'delivery_address',
+            'rider'
+        ).prefetch_related('order_items').order_by('-created_at')
+        
+        # Filter by status if provided
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            orders = orders.filter(status=status_filter)
+        
+        # Filter by order type if provided
+        order_type = request.query_params.get('order_type')
+        if order_type:
+            orders = orders.filter(order_type=order_type)
+            
+        serializer = OrderListSerializer(orders, many=True, context={'request': request, 'role': 'TAILOR'})
+        
+        return api_response(
+            success=True,
+            message="Processable orders retrieved successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
 
 
 class TailorOrderDetailView(APIView):
     """Get detailed order information for tailor including rider measurements"""
-    permission_classes=[IsAuthenticated]
+    permission_classes=[IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_orders'
     
     @extend_schema(
         responses=OrderSerializer,
@@ -939,33 +953,32 @@ class TailorOrderDetailView(APIView):
         tags=["Tailor Orders"]
     )
     def get(self, request, order_id):
-        try:
-            tailor_profile = TailorProfile.objects.get(user=request.user)
-            order = get_object_or_404(
-                Order.objects.select_related(
-                    'customer',
-                    'delivery_address',
-                    'rider',
-                    'family_member'
-                ).prefetch_related('order_items__fabric', 'status_history'),
-                id=order_id,
-                tailor=request.user
-            )
-            
-            serializer = OrderSerializer(order, context={'request': request, 'role': 'TAILOR'})
-            
-            return api_response(
-                success=True,
-                message="Order details retrieved successfully",
-                data=serializer.data,
-                status_code=status.HTTP_200_OK
-            )
-        except TailorProfile.DoesNotExist:
+        tailor_user = _get_tailor_owner_user(request)
+        if not tailor_user:
             return api_response(
                 success=False,
                 message="User is not a tailor",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
+        order = get_object_or_404(
+            Order.objects.select_related(
+                'customer',
+                'delivery_address',
+                'rider',
+                'family_member'
+            ).prefetch_related('order_items__fabric', 'status_history'),
+            id=order_id,
+            tailor=tailor_user
+        )
+        
+        serializer = OrderSerializer(order, context={'request': request, 'role': 'TAILOR'})
+        
+        return api_response(
+            success=True,
+            message="Order details retrieved successfully",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK
+        )
 
 
 class OrderPaymentStatusUpdateView(APIView):
