@@ -33,7 +33,7 @@ OrderListSerializer,
 	)
 from apps.tailors.models import TailorProfile
 from apps.tailors.permissions import IsShopStaff
-from apps.customers.models import CustomerProfile
+from apps.customers.models import CustomerProfile, Address
 from zthob.utils import api_response 
 import uuid
 from decimal import Decimal
@@ -171,6 +171,37 @@ def _create_order_from_checkout(
         'updated_at',
     ])
     return order
+
+
+def _build_alinma_customer_payload(*, checkout, user):
+    payload = {}
+
+    if getattr(user, 'email', None):
+        payload['customerEmail'] = user.email
+
+    address = None
+    request_payload = checkout.request_payload or {}
+    address_id = request_payload.get('delivery_address')
+    if address_id:
+        try:
+            address = Address.objects.filter(id=address_id, user=user).first()
+        except Exception:
+            address = None
+
+    if address:
+        payload['billingAddressStreet'] = address.street or 'N/A'
+        payload['billingAddressCity'] = address.city or 'Riyadh'
+        payload['billingAddressState'] = address.city or 'Riyadh'
+        payload['billingAddressPostalCode'] = getattr(address, 'postal_code', '') or '00000'
+        payload['billingAddressCountry'] = 'SA'
+    else:
+        payload['billingAddressStreet'] = 'N/A'
+        payload['billingAddressCity'] = 'Riyadh'
+        payload['billingAddressState'] = 'Riyadh'
+        payload['billingAddressPostalCode'] = '00000'
+        payload['billingAddressCountry'] = 'SA'
+
+    return payload
 
 class OrderListView(APIView):
     permission_classes=[IsAuthenticated]
@@ -462,9 +493,7 @@ class CheckoutInitiatePaymentView(APIView):
             )
 
         request_payload = checkout.request_payload or {}
-        customer_payload = {}
-        if request.user.email:
-            customer_payload['customerEmail'] = request.user.email
+        customer_payload = _build_alinma_customer_payload(checkout=checkout, user=request.user)
 
         try:
             config = get_alinma_config()

@@ -157,6 +157,8 @@ def initiate_hosted_payment(
         )
         raise AlinmaGatewayError('Alinma Pay returned an unreadable response.') from exc
 
+    response_code = str(data.get('responseCode') or '')
+
     if response.status_code >= 400:
         logger.error(
             'Alinma Pay rejected payment initiation: track_id=%s order_id=%s status_code=%s response=%s',
@@ -169,6 +171,20 @@ def initiate_hosted_payment(
             data.get('responseDescription')
             or data.get('message')
             or 'Alinma Pay rejected the payment initiation request.'
+        )
+
+    if response_code not in {'000', '001'}:
+        logger.error(
+            'Alinma Pay returned non-success responseCode: track_id=%s order_id=%s response_code=%s response=%s',
+            track_id,
+            order_id,
+            response_code,
+            json.dumps(data)[:1000],
+        )
+        raise AlinmaGatewayError(
+            data.get('responseDescription')
+            or data.get('message')
+            or f'Alinma Pay returned response code {response_code}.'
         )
 
     logger.info(
