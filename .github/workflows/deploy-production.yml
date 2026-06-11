@@ -83,14 +83,14 @@ jobs:
       - name: Deploy production
         env:
           APP_IMAGE: ${{ env.APP_IMAGE }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_USERNAME: ${{ github.repository_owner }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
           SSH_USER: ${{ secrets.SSH_USER }}
         run: |
-          if [ -z "${GHCR_USERNAME:-}" ] || [ -z "${GHCR_TOKEN:-}" ]; then
-            echo "::error::GHCR_USERNAME or GHCR_TOKEN secret is missing for the production environment"
+          if [ -z "${GHCR_TOKEN:-}" ]; then
+            echo "::error::GHCR_TOKEN secret is missing for the production environment"
             exit 1
           fi
 
