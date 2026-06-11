@@ -18,6 +18,8 @@ from .views import (
     CheckoutCreateView,
     CheckoutStatusView,
     CheckoutCreateOrderView,
+    CheckoutInitiatePaymentView,
+    CheckoutAlinmaCallbackView,
 )
 from .measurement_views import MeasurementEligibilityView
 
@@ -27,6 +29,8 @@ urlpatterns = [
     # General order endpoints
     path('', OrderListView.as_view(), name='order-list'),
     path('checkout/', CheckoutCreateView.as_view(), name='checkout-create'),
+    path('checkout/initiate-payment/', CheckoutInitiatePaymentView.as_view(), name='checkout-initiate-payment'),
+    path('checkout/alinma/callback/', CheckoutAlinmaCallbackView.as_view(), name='checkout-alinma-callback'),
     path('checkout/create-order/', CheckoutCreateOrderView.as_view(), name='checkout-create-order'),
     path('checkout/<str:booking_unique_key>/', CheckoutStatusView.as_view(), name='checkout-status'),
     path('create/', OrderCreateView.as_view(), name='order-create'),
