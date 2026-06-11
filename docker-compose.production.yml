@@ -29,7 +29,6 @@ services:
     image: ${APP_IMAGE}
     command: gunicorn zthob.wsgi:application --bind 0.0.0.0:8000 --workers 4
     volumes:
-      - .:/app
       - ./staticfiles:/app/staticfiles
       - ./media:/app/media
       - /home/mgask-2025-c03d7f556e66.json:/home/mgask-2025-c03d7f556e66.json:ro
@@ -53,7 +52,6 @@ services:
     image: ${APP_IMAGE}
     command: celery -A zthob worker -l info
     volumes:
-      - .:/app
       - /home/mgask-2025-c03d7f556e66.json:/home/mgask-2025-c03d7f556e66.json:ro
     env_file:
       - .env
