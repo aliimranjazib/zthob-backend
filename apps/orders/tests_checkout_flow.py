@@ -336,7 +336,9 @@ class CheckoutFlowTest(TestCase):
             data={'data': 'encrypted-payload-placeholder'},
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn('status=success', response['Location'])
+        self.assertIn(f'booking_key={booking_key}', response['Location'])
         order = Order.objects.get()
         checkout.refresh_from_db()
         self.assertEqual(order.payment_method, 'credit_card')
@@ -374,7 +376,9 @@ class CheckoutFlowTest(TestCase):
             data={'data': 'encrypted-payload-placeholder'},
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn('status=failed', response['Location'])
+        self.assertIn(f'booking_key={booking_key}', response['Location'])
         checkout.refresh_from_db()
         self.assertEqual(checkout.status, 'payment_failed')
         self.assertEqual(checkout.payment_reference, 'alinma_txn_failed')
