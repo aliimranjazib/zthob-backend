@@ -200,6 +200,19 @@ def custom_admin_index(request, extra_context=None):
 # Override the index view
 admin.site.index = custom_admin_index
 
+
+def payment_result_view(request):
+    """Public landing page for hosted payment gateway redirects."""
+    status_value = (request.GET.get('status') or '').strip().lower()
+    context = {
+        'status': status_value,
+        'booking_key': (request.GET.get('booking_key') or '').strip(),
+        'order_id': (request.GET.get('order_id') or '').strip(),
+        'payment_reference': (request.GET.get('payment_reference') or '').strip(),
+        'is_success': status_value == 'success',
+    }
+    return TemplateResponse(request, 'payment_result.html', context)
+
 # API URL Patterns (shared between legacy and v1)
 api_patterns = [
     path('accounts/', include('apps.accounts.urls')),
@@ -216,6 +229,7 @@ api_patterns = [
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path('payment-result', payment_result_view, name='payment-result'),
     
     # 1. Legacy API routes (No version prefix - for backward compatibility)
     path('api/', include(api_patterns)),

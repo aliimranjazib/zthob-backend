@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Payment Result</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f4f6fb;
+            --card: #ffffff;
+            --text: #14213d;
+            --muted: #5c677d;
+            --success: #0a7f5a;
+            --failed: #c0392b;
+            --border: #dde3ee;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(180deg, #eef4ff 0%, var(--bg) 100%);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 520px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: 0 14px 40px rgba(20, 33, 61, 0.08);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            background: {% if is_success %}rgba(10, 127, 90, 0.12){% else %}rgba(192, 57, 43, 0.12){% endif %};
+            color: {% if is_success %}var(--success){% else %}var(--failed){% endif %};
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: 28px;
+        }
+
+        p {
+            margin: 0 0 18px;
+            line-height: 1.5;
+            color: var(--muted);
+        }
+
+        dl {
+            margin: 0;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .row {
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #fbfcff;
+        }
+
+        dt {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+
+        dd {
+            margin: 0;
+            font-size: 16px;
+            word-break: break-word;
+        }
+    </style>
+</head>
+<body>
+    <main class="card">
+        <span class="badge">{% if is_success %}Payment Successful{% else %}Payment Failed{% endif %}</span>
+        <h1>{% if is_success %}Your payment was confirmed{% else %}Your payment could not be completed{% endif %}</h1>
+        <p>
+            {% if is_success %}
+            The hosted payment flow returned successfully. You can use the details below to continue in the app.
+            {% else %}
+            The hosted payment flow returned without a successful confirmation. You can retry the payment from the app.
+            {% endif %}
+        </p>
+        <dl>
+            <div class="row">
+                <dt>Status</dt>
+                <dd>{{ status|default:"unknown" }}</dd>
+            </div>
+            {% if booking_key %}
+            <div class="row">
+                <dt>Booking Key</dt>
+                <dd>{{ booking_key }}</dd>
+            </div>
+            {% endif %}
+            {% if order_id %}
+            <div class="row">
+                <dt>Order ID</dt>
+                <dd>{{ order_id }}</dd>
+            </div>
+            {% endif %}
+            {% if payment_reference %}
+            <div class="row">
+                <dt>Payment Reference</dt>
+                <dd>{{ payment_reference }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+    </main>
+</body>
+</html>
