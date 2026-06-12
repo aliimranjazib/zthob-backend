@@ -1,9 +1,11 @@
 import json
 import logging
 from types import SimpleNamespace
+from urllib.parse import urlencode
 
+from django.conf import settings
 from django.shortcuts import get_object_or_404, render
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, HttpResponseRedirect
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
@@ -202,6 +204,20 @@ def _build_alinma_customer_payload(*, checkout, user):
         payload['billingAddressCountry'] = 'SA'
 
     return payload
+
+
+def _build_alinma_return_redirect(*, booking_key, status_value, order_id=None, payment_reference=None):
+    base_url = getattr(settings, 'ALINMAPAY_RETURN_URL', '').strip() or 'https://app.mgask.net/payment-result'
+    query = {
+        'booking_key': booking_key,
+        'status': status_value,
+    }
+    if order_id is not None:
+        query['order_id'] = order_id
+    if payment_reference:
+        query['payment_reference'] = payment_reference
+    separator = '&' if '?' in base_url else '?'
+    return f'{base_url}{separator}{urlencode(query)}'
 
 class OrderListView(APIView):
     permission_classes=[IsAuthenticated]
@@ -691,7 +707,14 @@ class CheckoutAlinmaCallbackView(APIView):
             return HttpResponse('Checkout not found', status=404)
 
         if checkout.order:
-            return HttpResponse('OK', status=200)
+            return HttpResponseRedirect(
+                _build_alinma_return_redirect(
+                    booking_key=booking_key,
+                    status_value='success',
+                    order_id=checkout.order_id,
+                    payment_reference=checkout.payment_reference,
+                )
+            )
 
         transaction_id = str(payload.get('transactionId') or '')
 
@@ -710,14 +733,35 @@ class CheckoutAlinmaCallbackView(APIView):
                 logger.exception('Failed to finalize checkout %s after successful Alinma callback', booking_key)
                 checkout.status = 'payment_failed'
                 checkout.save(update_fields=['status', 'updated_at'])
-                return HttpResponse(str(exc), status=400)
+                return HttpResponseRedirect(
+                    _build_alinma_return_redirect(
+                        booking_key=booking_key,
+                        status_value='failed',
+                    )
+                )
         else:
             checkout.status = 'payment_failed'
             checkout.payment_method = 'credit_card'
             checkout.payment_reference = transaction_id or None
             checkout.save(update_fields=['status', 'payment_method', 'payment_reference', 'updated_at'])
 
-        return HttpResponse('OK', status=200)
+        if checkout.order_id:
+            return HttpResponseRedirect(
+                _build_alinma_return_redirect(
+                    booking_key=booking_key,
+                    status_value='success',
+                    order_id=checkout.order_id,
+                    payment_reference=checkout.payment_reference,
+                )
+            )
+
+        return HttpResponseRedirect(
+            _build_alinma_return_redirect(
+                booking_key=booking_key,
+                status_value='failed',
+                payment_reference=checkout.payment_reference,
+            )
+        )
 
 
 class OrderDetailView(APIView):
