@@ -5,6 +5,11 @@ from apps.orders.models import Order
 
 class TailorUpdateOrderStatusSerializer(serializers.Serializer):
     """Serializer for tailor updating order status (tailor_status and/or main status)"""
+    RIDER_ASSIGNMENT_TYPE_CHOICES = (
+        ('measurement', 'Measurement Rider'),
+        ('delivery', 'Delivery Rider'),
+    )
+
     tailor_status = serializers.ChoiceField(
         choices=[choice for choice in Order.TAILOR_STATUS_CHOICES if choice[0] != 'none'] + [
             ('ready_for_delivery', 'Ready for Delivery'),
@@ -18,6 +23,11 @@ class TailorUpdateOrderStatusSerializer(serializers.Serializer):
     )
     notes = serializers.CharField(required=False, allow_blank=True)
     assigned_rider_id = serializers.IntegerField(required=False, allow_null=True)
+    rider_assignment_type = serializers.ChoiceField(
+        choices=RIDER_ASSIGNMENT_TYPE_CHOICES,
+        required=False,
+        help_text="Use 'measurement' when assigning a rider to take measurements, or 'delivery' when assigning a delivery rider."
+    )
     
     def validate(self, attrs):
         """Ensure at least one field is provided"""
@@ -39,4 +49,3 @@ class TailorAddMeasurementsSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError("Measurements cannot be empty")
         return value
-

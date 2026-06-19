@@ -394,6 +394,7 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
     status_info = serializers.SerializerMethodField()
     pricing_summary = serializers.SerializerMethodField()
     rider_status = serializers.SerializerMethodField()
+    rider_assignment_type = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -403,6 +404,7 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'order_type',
             'status',
             'rider_status',
+            'rider_assignment_type',
             'tailor_status',
             'payment_status',
             'payment_plan',
@@ -451,6 +453,19 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             display_name = obj.get_rider_status_display()
             
         return translate_message(display_name, language)
+
+    def get_rider_assignment_type(self, obj):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if user and obj.measurement_rider_id == getattr(user, 'id', None):
+            return 'measurement'
+        if user and obj.delivery_rider_id == getattr(user, 'id', None):
+            return 'delivery'
+        if obj.status == 'ready_for_delivery':
+            return 'delivery'
+        if obj.order_type == 'measurement_service' or not obj.all_items_have_measurements:
+            return 'measurement'
+        return None
     
     def get_customer_name(self, obj):
         if not obj.customer:
@@ -556,6 +571,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
     status_info = serializers.SerializerMethodField()
     pricing_summary = serializers.SerializerMethodField()
     rider_status = serializers.SerializerMethodField()
+    rider_assignment_type = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -565,6 +581,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'order_type',
             'status',
             'rider_status',
+            'rider_assignment_type',
             'tailor_status',
             'payment_status',
             'payment_method',
@@ -619,6 +636,19 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             display_name = obj.get_rider_status_display()
             
         return translate_message(display_name, language)
+
+    def get_rider_assignment_type(self, obj):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if user and obj.measurement_rider_id == getattr(user, 'id', None):
+            return 'measurement'
+        if user and obj.delivery_rider_id == getattr(user, 'id', None):
+            return 'delivery'
+        if obj.status == 'ready_for_delivery':
+            return 'delivery'
+        if obj.order_type == 'measurement_service' or not obj.all_items_have_measurements:
+            return 'measurement'
+        return None
     
     def get_customer_info(self, obj):
         if obj.customer:

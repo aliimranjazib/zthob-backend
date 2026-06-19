@@ -102,6 +102,7 @@ def _create_order_from_checkout(
         if reference_used:
             raise ValidationError("This payment reference has already been used.")
 
+    previous_payment_status = 'pending'
     order_data = dict(checkout.request_payload)
     order_data['customer'] = customer.id
     order_data['payment_method'] = payment_method
@@ -172,6 +173,31 @@ def _create_order_from_checkout(
         'payment_confirmed_at',
         'updated_at',
     ])
+
+    # Checkout-created orders bypass the usual status transition/action flows,
+    # so fire the initial order/payment notifications explicitly here.
+    try:
+        from apps.notifications.services import NotificationService
+
+        NotificationService.send_order_status_notification(
+            order=order,
+            old_status='pending',
+            new_status=order.status,
+            changed_by=collected_by or customer,
+        )
+
+        if order.payment_status != previous_payment_status:
+            NotificationService.send_payment_status_notification(
+                order=order,
+                old_status=previous_payment_status,
+                new_status=order.payment_status,
+            )
+    except Exception:
+        logger.exception(
+            'Failed to send initial checkout notifications for order %s',
+            getattr(order, 'order_number', order.id),
+        )
+
     return order
 
 

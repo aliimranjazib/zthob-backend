@@ -14,6 +14,52 @@ from zthob.utils import api_response
 
 from apps.tailors.permissions import IsShopStaff
 
+
+def _get_rider_or_404(rider_id):
+    from apps.accounts.models import CustomUser
+    return get_object_or_404(CustomUser, id=rider_id, role='RIDER')
+
+
+def _assign_measurement_rider(order, rider):
+    order.measurement_rider = rider
+    order.assigned_rider = rider
+    order.rider = rider
+    order.save(update_fields=[
+        'measurement_rider',
+        'assigned_rider',
+        'rider',
+        'updated_at',
+    ])
+
+
+def _assign_delivery_rider(order, rider):
+    order.delivery_rider = rider
+    order.assigned_rider = rider
+    order.rider = rider
+    if order.rider_status == 'measurement_taken':
+        order.rider_status = 'none'
+        update_fields = ['delivery_rider', 'assigned_rider', 'rider', 'rider_status', 'updated_at']
+    else:
+        update_fields = ['delivery_rider', 'assigned_rider', 'rider', 'updated_at']
+    order.save(update_fields=update_fields)
+
+
+def _notify_assigned_rider(order, rider_id):
+    try:
+        from apps.notifications.services import NotificationService
+        NotificationService.send_new_order_broadcast(order, assigned_rider_id=rider_id)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to send assigned rider notification: {str(e)}")
+
+
+def _can_assign_delivery_rider(order, new_status=None):
+    return order.service_mode == 'home_delivery' and (
+        order.status == 'ready_for_delivery' or new_status == 'ready_for_delivery'
+    )
+
+
 class TailorAcceptOrderView(APIView):
     """Tailor accepts an order"""
     permission_classes = [IsAuthenticated, IsShopStaff]
@@ -44,14 +90,23 @@ class TailorAcceptOrderView(APIView):
         self.check_object_permissions(request, order)
 
         
-        # Handle assigned rider if provided in data
+        rider_assignment_type = request.data.get('rider_assignment_type')
         assigned_rider_id = request.data.get('assigned_rider_id')
+        assigned_rider = None
         if assigned_rider_id:
-            from apps.accounts.models import CustomUser
-            assigned_rider = get_object_or_404(CustomUser, id=assigned_rider_id, role='RIDER')
-            order.assigned_rider = assigned_rider
-            order.rider = assigned_rider  # Sync with main rider field for API visibility
-            order.save()
+            assigned_rider = _get_rider_or_404(assigned_rider_id)
+            if rider_assignment_type == 'delivery':
+                return api_response(
+                    success=False,
+                    message="Delivery rider can only be assigned when marking the order ready for delivery.",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            if rider_assignment_type == 'measurement' and order.all_items_have_measurements:
+                return api_response(
+                    success=False,
+                    message="Measurements already exist for this order. Assign a delivery rider when marking ready for delivery.",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
         
         # Check if already accepted
         if order.tailor_status == 'accepted':
@@ -83,6 +138,9 @@ class TailorAcceptOrderView(APIView):
             )
         
         order = updated_order
+
+        if assigned_rider and not order.all_items_have_measurements:
+            _assign_measurement_rider(order, assigned_rider)
         
         response_serializer = OrderSerializer(order, context={'request': request})
         return api_response(
@@ -119,24 +177,28 @@ class TailorUpdateOrderStatusView(APIView):
             new_status = serializer.validated_data.get('status')
             notes = serializer.validated_data.get('notes', '')
             assigned_rider_id = serializer.validated_data.get('assigned_rider_id')
-            
-            # Handle assigned rider if provided
+            rider_assignment_type = serializer.validated_data.get('rider_assignment_type')
+            assigned_rider = None
+            is_ready_for_delivery_action = new_status == 'ready_for_delivery' or new_tailor_status == 'ready_for_delivery'
+
             if assigned_rider_id:
-                from apps.accounts.models import CustomUser
-                assigned_rider = get_object_or_404(CustomUser, id=assigned_rider_id, role='RIDER')
-                order.assigned_rider = assigned_rider
-                order.rider = assigned_rider  # Sync with main rider field for API visibility
-                order.save()
-                
-                # If order is already accepted, notify the new rider specifically
-                if order.tailor_status in ['accepted', 'in_progress', 'stitching_started', 'stitched'] and not new_tailor_status == 'accepted':
-                    try:
-                        from apps.notifications.services import NotificationService
-                        NotificationService.send_new_order_broadcast(order, assigned_rider_id=assigned_rider_id)
-                    except Exception as e:
-                        import logging
-                        logger = logging.getLogger(__name__)
-                        logger.error(f"Failed to send assigned rider notification: {str(e)}")
+                assigned_rider = _get_rider_or_404(assigned_rider_id)
+                if not rider_assignment_type:
+                    rider_assignment_type = 'delivery' if is_ready_for_delivery_action else 'measurement'
+
+                if rider_assignment_type == 'measurement' and order.all_items_have_measurements:
+                    return api_response(
+                        success=False,
+                        message="Measurements already exist for this order. Assign a delivery rider when marking ready for delivery.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if rider_assignment_type == 'delivery' and not _can_assign_delivery_rider(order, new_status='ready_for_delivery' if is_ready_for_delivery_action else new_status):
+                    return api_response(
+                        success=False,
+                        message="Delivery rider can only be assigned when the order is ready for delivery.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
             
             # Special handling: if tailor_status is "ready_for_delivery", map it to main status
             # This allows consistent use of tailor_status field
@@ -178,7 +240,15 @@ class TailorUpdateOrderStatusView(APIView):
                 )
             
             order = updated_order
-            
+
+            if assigned_rider:
+                if rider_assignment_type == 'delivery':
+                    _assign_delivery_rider(order, assigned_rider)
+                else:
+                    _assign_measurement_rider(order, assigned_rider)
+
+                if order.tailor_status in ['accepted', 'in_progress', 'stitching_started', 'stitched'] and not new_tailor_status == 'accepted':
+                    _notify_assigned_rider(order, assigned_rider_id)
 
             
             # Use lightweight response serializer for status updates

@@ -197,6 +197,8 @@ class OrderSerializer(serializers.ModelSerializer):
     tailor_contact=serializers.SerializerMethodField()
     rider_name=serializers.SerializerMethodField()
     rider_phone=serializers.SerializerMethodField()
+    measurement_rider_name=serializers.SerializerMethodField()
+    delivery_rider_name=serializers.SerializerMethodField()
     family_member_name=serializers.SerializerMethodField()
     order_recipient=serializers.SerializerMethodField()
     all_recipients=serializers.SerializerMethodField()
@@ -229,6 +231,10 @@ class OrderSerializer(serializers.ModelSerializer):
             'rider',
             'rider_name',
             'rider_phone',
+            'measurement_rider',
+            'measurement_rider_name',
+            'delivery_rider',
+            'delivery_rider_name',
             'order_type',
             'service_mode',
             'status',
@@ -314,6 +320,22 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_rider_phone(self, obj):
         """Get rider phone (verified phone from user account)"""
         return obj.rider.phone if obj.rider else None
+
+    def _get_rider_display_name(self, rider):
+        if not rider:
+            return None
+        try:
+            if hasattr(rider, 'rider_profile') and rider.rider_profile:
+                return rider.rider_profile.full_name or rider.username
+        except Exception:
+            pass
+        return rider.username
+
+    def get_measurement_rider_name(self, obj):
+        return self._get_rider_display_name(obj.measurement_rider)
+
+    def get_delivery_rider_name(self, obj):
+        return self._get_rider_display_name(obj.delivery_rider)
 
     def get_tailor_status_display(self, obj):
         """Get translated tailor status display name"""
@@ -579,7 +601,27 @@ class OrderSerializer(serializers.ModelSerializer):
             'cancel_reason': cancel_reason,
             'status_progress': status_progress,
             'measurement_status': measurement_status,
-            'is_waiting_for_rider': (user_role == 'TAILOR' and obj.service_mode == 'home_delivery' and obj.tailor_status != 'none' and obj.rider_status == 'none'),
+            'needs_measurement': not obj.all_items_have_measurements,
+            'can_assign_measurement_rider': (
+                user_role == 'TAILOR'
+                and obj.service_mode == 'home_delivery'
+                and obj.tailor_status != 'none'
+                and not obj.all_items_have_measurements
+                and obj.measurement_rider_id is None
+            ),
+            'can_assign_delivery_rider': (
+                user_role == 'TAILOR'
+                and obj.service_mode == 'home_delivery'
+                and obj.status == 'ready_for_delivery'
+                and obj.delivery_rider_id is None
+            ),
+            'is_waiting_for_rider': (
+                user_role == 'TAILOR'
+                and obj.service_mode == 'home_delivery'
+                and obj.tailor_status != 'none'
+                and obj.rider_status == 'none'
+                and not obj.all_items_have_measurements
+            ),
         }
     
     def _build_status_action(self, action_type, value, user_role):
