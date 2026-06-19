@@ -162,12 +162,19 @@ class AcceptOrderAction(BaseOrderAction):
             if self.order.status == 'pending':
                 self.order.status = 'confirmed'
             
-            # Optional: Assign a specific rider during acceptance
+            # Optional: Assign a measurement rider during acceptance. Delivery
+            # rider assignment belongs to the ready-for-delivery step.
             assigned_rider_id = self.data.get('assigned_rider_id')
             if assigned_rider_id:
+                rider_assignment_type = self.data.get('rider_assignment_type')
+                if rider_assignment_type == 'delivery':
+                    raise ValidationError("Delivery rider can only be assigned when marking the order ready for delivery.")
+                if self.order.all_items_have_measurements:
+                    raise ValidationError("Measurements already exist for this order. Assign a delivery rider when marking ready for delivery.")
                 from apps.accounts.models import CustomUser
                 try:
                     assigned_rider = CustomUser.objects.get(id=assigned_rider_id, role='RIDER')
+                    self.order.measurement_rider = assigned_rider
                     self.order.assigned_rider = assigned_rider
                     self.order.rider = assigned_rider
                 except CustomUser.DoesNotExist:
@@ -176,10 +183,14 @@ class AcceptOrderAction(BaseOrderAction):
         elif role == 'RIDER':
             if not self.order.rider:
                 self.order.rider = self.user
+            if self.order.status == 'ready_for_delivery':
+                self.order.delivery_rider = self.user
+            elif not self.order.all_items_have_measurements or self.order.order_type == 'measurement_service':
+                self.order.measurement_rider = self.user
             if self.order.order_type == 'measurement_service':
                 self.order.status = 'confirmed'
                 
-            if self.order.all_items_have_measurements:
+            if self.order.all_items_have_measurements and self.order.status != 'ready_for_delivery':
                 self.order.rider_status = 'measurement_taken'
             else:
                 self.order.rider_status = 'accepted'
@@ -353,6 +364,18 @@ class MarkReadyAction(BaseOrderAction):
             self.order.status = 'ready_for_pickup'
         else:
             self.order.status = 'ready_for_delivery'
+            assigned_rider_id = self.data.get('assigned_rider_id')
+            if assigned_rider_id:
+                from apps.accounts.models import CustomUser
+                try:
+                    assigned_rider = CustomUser.objects.get(id=assigned_rider_id, role='RIDER')
+                    self.order.delivery_rider = assigned_rider
+                    self.order.assigned_rider = assigned_rider
+                    self.order.rider = assigned_rider
+                    if self.order.rider_status == 'measurement_taken':
+                        self.order.rider_status = 'none'
+                except CustomUser.DoesNotExist:
+                    pass
         
         self.order.save()
         return "Order is now ready for the next step."

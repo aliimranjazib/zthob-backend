@@ -313,9 +313,17 @@ class CheckoutFlowTest(TestCase):
         ALINMAPAY_MERCHANT_KEY='00112233445566778899aabbccddeeff',
         ALINMAPAY_REQUEST_URL='https://example.com/pay-request',
     )
+    @patch('apps.notifications.services.NotificationService.send_payment_status_notification')
+    @patch('apps.notifications.services.NotificationService.send_order_status_notification')
     @patch('apps.orders.views.verify_callback_signature', return_value=True)
     @patch('apps.orders.views.parse_callback_payload')
-    def test_alinma_callback_creates_paid_order(self, mock_parse_callback_payload, _mock_verify):
+    def test_alinma_callback_creates_paid_order(
+        self,
+        mock_parse_callback_payload,
+        _mock_verify,
+        mock_send_order_status_notification,
+        mock_send_payment_status_notification,
+    ):
         booking_key = self._create_checkout()
         checkout = CheckoutSession.objects.get(booking_unique_key=booking_key)
         checkout.payment_option = 'full'
@@ -346,6 +354,12 @@ class CheckoutFlowTest(TestCase):
         self.assertEqual(order.payment_reference, 'alinma_txn_001')
         self.assertEqual(checkout.status, 'order_created')
         self.assertEqual(Order.objects.count(), 1)
+        mock_send_order_status_notification.assert_called_once()
+        mock_send_payment_status_notification.assert_called_once_with(
+            order=order,
+            old_status='pending',
+            new_status='paid',
+        )
 
     @override_settings(
         ALINMAPAY_TERMINAL_ID='TERM123',

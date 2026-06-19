@@ -632,6 +632,10 @@ class NotificationService:
                 'customer': 'Your order #{order_number} has been placed successfully! Payment of SAR {total_amount} confirmed.',
                 'tailor': 'New order #{order_number} received from {customer}. Payment of SAR {total_amount} confirmed.',
             },
+            'partially_paid': {
+                'customer': 'Your order #{order_number} has been placed successfully! Advance payment of SAR {total_amount} confirmed.',
+                'tailor': 'New order #{order_number} received from {customer}. Advance payment confirmed.',
+            },
             'pending': {
                 'customer': 'Payment pending for order #{order_number}',
             },

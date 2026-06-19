@@ -582,13 +582,18 @@ class RiderAvailableOrdersView(APIView):
         ).filter(
             Q(assigned_rider__isnull=True) | Q(assigned_rider=request.user)
         ).filter(
-            # Show if:
-            # 1. Main status is confirmed/in_progress OR tailor has accepted it (regular orders)
-            # 2. OR it's a measurement_service order with home_delivery (no tailor needed)
-            Q(status__in=['confirmed', 'in_progress', 'ready_for_delivery']) | 
-            Q(tailor_status__in=['accepted', 'in_progress', 'stitching_started', 'stitched']) |
+            # Delivery work is available once the order is ready for delivery.
+            Q(status='ready_for_delivery') |
+            # Fabric-only legacy flow can still use a rider after tailor acceptance.
+            Q(order_type='fabric_only', tailor_status__in=['accepted', 'in_progress', 'stitching_started', 'stitched']) |
+            # Measurement work is available only while measurements are still missing.
+            (
+                Q(order_type__in=['fabric_with_stitching', 'stitching_only'], tailor_status__in=['accepted', 'in_progress'])
+                & (Q(order_items__measurements__isnull=True) | Q(order_items__measurements={}))
+            ) |
+            # Measurement service home-delivery orders are handled directly by riders.
             Q(order_type='measurement_service', service_mode='home_delivery')
-        ).select_related(
+        ).distinct().select_related(
             'customer',
             'tailor',
             'delivery_address'
@@ -636,7 +641,10 @@ class RiderMyOrdersView(APIView):
         # This ensures manually assigned orders are visible even if rider_status wasn't updated
         from django.db.models import Q
         orders = Order.objects.filter(
-            Q(rider=request.user) | Q(assigned_rider=request.user)
+            Q(rider=request.user) |
+            Q(assigned_rider=request.user) |
+            Q(measurement_rider=request.user) |
+            Q(delivery_rider=request.user)
         ).select_related(
             'customer',
             'tailor',
@@ -692,7 +700,12 @@ class RiderOrderDetailView(APIView):
         )
         
         # Check if rider has access (either assigned or available)
-        is_assigned = (order.rider == request.user or order.assigned_rider == request.user)
+        is_assigned = (
+            order.rider == request.user
+            or order.assigned_rider == request.user
+            or order.measurement_rider == request.user
+            or order.delivery_rider == request.user
+        )
         if not is_assigned and order.rider is not None:
             return api_response(
                 success=False,
@@ -805,24 +818,41 @@ class RiderAcceptOrderView(APIView):
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
         
-        if order.rider is not None:
+        if order.rider is not None and order.rider != request.user:
             return api_response(
                 success=False,
                 message="Order is already assigned to another rider",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
+        if order.rider_status != 'none':
+            return api_response(
+                success=False,
+                message="Order has already been accepted by a rider",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
         
         # Assign rider to order
         order.rider = request.user
+        if order.status == 'ready_for_delivery':
+            order.delivery_rider = request.user
+        elif not order.all_items_have_measurements or order.order_type == 'measurement_service':
+            order.measurement_rider = request.user
         order.save()
         
         # Create rider assignment record
-        assignment = RiderOrderAssignment.objects.create(
+        assignment, _ = RiderOrderAssignment.objects.get_or_create(
             order=order,
-            rider=request.user,
-            status='accepted',
-            accepted_at=timezone.now()
+            defaults={
+                'rider': request.user,
+                'status': 'accepted',
+                'accepted_at': timezone.now()
+            }
         )
+        if not _:
+            assignment.rider = request.user
+            assignment.status = 'accepted'
+            assignment.accepted_at = timezone.now()
+            assignment.save(update_fields=['rider', 'status', 'accepted_at', 'updated_at'])
         
         # Use transition service to update rider status to 'accepted'
         from apps.orders.services import OrderStatusTransitionService
@@ -1246,7 +1276,7 @@ class RiderUpdateOrderStatusView(APIView):
         notes = serializer.validated_data.get('notes', '')
         
         # If unassigned and rider wants to accept, allow assignment here
-        if order.rider is None and new_rider_status == 'accepted':
+        if (order.rider is None or order.rider == request.user) and new_rider_status == 'accepted':
             # Check rider profile approval
             try:
                 rider_profile = request.user.rider_profile
@@ -1285,14 +1315,26 @@ class RiderUpdateOrderStatusView(APIView):
             
             # Assign rider and create assignment
             order.rider = request.user
+            if order.status == 'ready_for_delivery':
+                order.delivery_rider = request.user
+            elif not order.all_items_have_measurements or order.order_type == 'measurement_service':
+                order.measurement_rider = request.user
             order.save()
-            assignment = RiderOrderAssignment.objects.create(
+            assignment, _ = RiderOrderAssignment.objects.get_or_create(
                 order=order,
-                rider=request.user,
-                status='accepted',
-                accepted_at=timezone.now(),
-                notes=notes
+                defaults={
+                    'rider': request.user,
+                    'status': 'accepted',
+                    'accepted_at': timezone.now(),
+                    'notes': notes
+                }
             )
+            if not _:
+                assignment.rider = request.user
+                assignment.status = 'accepted'
+                assignment.accepted_at = timezone.now()
+                assignment.notes = notes
+                assignment.save(update_fields=['rider', 'status', 'accepted_at', 'notes', 'updated_at'])
             
             # Use transition service to set rider_status=accepted
             from apps.orders.services import OrderStatusTransitionService
@@ -1314,7 +1356,12 @@ class RiderUpdateOrderStatusView(APIView):
             order = updated_order
             
             # If all items already have measurements (customer provided them), automatically transition to measurement_taken
-            if order.order_type == 'fabric_with_stitching' and order.all_items_have_measurements:
+            if (
+                order.order_type == 'fabric_with_stitching'
+                and order.all_items_have_measurements
+                and order.status != 'ready_for_delivery'
+                and order.delivery_rider != request.user
+            ):
                 success, error_msg, updated_order = OrderStatusTransitionService.transition(
                     order=order,
                     new_rider_status='measurement_taken',
@@ -1335,7 +1382,12 @@ class RiderUpdateOrderStatusView(APIView):
             )
         
         # Verify rider has access for subsequent updates
-        if order.rider != request.user:
+        if (
+            order.rider != request.user
+            and order.assigned_rider != request.user
+            and order.measurement_rider != request.user
+            and order.delivery_rider != request.user
+        ):
             return api_response(
                 success=False,
                 message="You don't have access to this order",

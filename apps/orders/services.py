@@ -670,8 +670,11 @@ class OrderStatusTransitionService:
                 # Tailor can't change status once ready for delivery
                 pass
         elif user_role == OrderStatusTransitionService.ROLE_RIDER:
-            # Rider can accept order if tailor has already accepted (tailor_status == 'accepted')
-            if order.rider_status == 'none' and order.tailor_status == 'accepted':
+            # Rider can accept order for measurement after tailor acceptance, or for
+            # delivery once the finished order is ready.
+            if order.rider_status == 'none' and (
+                order.tailor_status == 'accepted' or order.status == 'ready_for_delivery'
+            ):
                 transitions['rider_status'] = ['accepted']
             elif order.rider_status == 'accepted':
                 transitions['rider_status'] = ['on_way_to_pickup']
@@ -848,8 +851,11 @@ class OrderStatusTransitionService:
                 # Tailor can't change status once ready for delivery
                 pass
         elif user_role == OrderStatusTransitionService.ROLE_RIDER:
-            # Rider can accept order if tailor has already accepted (tailor_status == 'accepted')
-            if order.rider_status == 'none' and order.tailor_status == 'accepted':
+            # Rider can accept order for measurement after tailor acceptance, or for
+            # delivery once the finished order is ready.
+            if order.rider_status == 'none' and (
+                order.tailor_status == 'accepted' or order.status == 'ready_for_delivery'
+            ):
                 transitions['rider_status'] = ['accepted']
             elif order.rider_status == 'accepted':
                 # Check if all items already have measurements (customer provided them during order creation)
@@ -1249,6 +1255,3 @@ class OrderStatusTransitionService:
                 order.status = 'in_progress'
             elif order.tailor_status == 'stitched' and order.rider_status in ['on_way_to_pickup', 'picked_up', 'on_way_to_delivery']:
                 order.status = 'ready_for_delivery'
-
-
-
