@@ -577,6 +577,11 @@ class RiderAvailableOrdersView(APIView):
             & Q(measurement_rider__isnull=True)
             & Q(delivery_rider__isnull=True)
         )
+        unassigned_delivery_work = (
+            Q(rider__isnull=True)
+            & Q(assigned_rider__isnull=True)
+            & Q(delivery_rider__isnull=True)
+        )
         measurement_assignment = (
             Q(measurement_rider=request.user)
             | (
@@ -592,25 +597,29 @@ class RiderAvailableOrdersView(APIView):
             )
         )
         measurement_work = (
+            Q(rider_status='none')
+            & 
             Q(order_type__in=['fabric_with_stitching', 'stitching_only'], tailor_status__in=['accepted', 'in_progress'])
             & (Q(order_items__measurements__isnull=True) | Q(order_items__measurements={}))
             & (unassigned_work | measurement_assignment)
         )
         delivery_work = (
             Q(status='ready_for_delivery')
-            & (unassigned_work | delivery_assignment)
+            & Q(rider_status__in=['none', 'measurement_taken'])
+            & (unassigned_delivery_work | delivery_assignment)
         )
         fabric_only_work = (
-            Q(order_type='fabric_only', tailor_status__in=['accepted', 'in_progress', 'stitching_started', 'stitched'])
+            Q(rider_status='none')
+            & Q(order_type='fabric_only', tailor_status__in=['accepted', 'in_progress', 'stitching_started', 'stitched'])
             & (unassigned_work | delivery_assignment)
         )
         measurement_service_work = (
-            Q(order_type='measurement_service', service_mode='home_delivery')
+            Q(rider_status='none')
+            & Q(order_type='measurement_service', service_mode='home_delivery')
             & (unassigned_work | measurement_assignment)
         )
 
         orders = Order.objects.filter(
-            rider_status='none',
             service_mode='home_delivery',
         ).filter(
             Q(payment_status__in=['paid', 'partially_paid']) | Q(payment_method='cod', payment_status='pending')
@@ -872,13 +881,14 @@ class RiderAcceptOrderView(APIView):
                 )
         
         is_delivery_assignment = order.status == 'ready_for_delivery' and order.delivery_rider == request.user
-        if order.rider is not None and order.rider != request.user and not is_delivery_assignment:
+        is_open_delivery_assignment = order.status == 'ready_for_delivery' and order.delivery_rider_id is None
+        if order.rider is not None and order.rider != request.user and not is_delivery_assignment and not is_open_delivery_assignment:
             return api_response(
                 success=False,
                 message="Order is already assigned to another rider",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
-        if is_delivery_assignment and order.rider_status == 'measurement_taken':
+        if (is_delivery_assignment or is_open_delivery_assignment) and order.rider_status == 'measurement_taken':
             order.rider_status = 'none'
         if order.rider_status != 'none':
             return api_response(
@@ -1330,7 +1340,7 @@ class RiderUpdateOrderStatusView(APIView):
         if order.status == 'ready_for_delivery':
             if order.delivery_rider_id:
                 return order.delivery_rider_id == user.id
-            return order.rider_id in [None, user.id] or order.assigned_rider_id == user.id
+            return order.rider_status in ['none', 'measurement_taken']
 
         if order.order_type == 'measurement_service' or not order.all_items_have_measurements:
             if order.measurement_rider_id:

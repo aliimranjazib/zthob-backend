@@ -408,6 +408,12 @@ class MarkReadyAction(BaseOrderAction):
                         self.order.rider_status = 'none'
                 except CustomUser.DoesNotExist:
                     pass
+            else:
+                self.order.delivery_rider = None
+                self.order.assigned_rider = None
+                self.order.rider = None
+                if self.order.rider_status == 'measurement_taken':
+                    self.order.rider_status = 'none'
         
         self.order.save()
         return "Order is now ready for the next step."

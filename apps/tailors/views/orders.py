@@ -44,6 +44,18 @@ def _assign_delivery_rider(order, rider):
     order.save(update_fields=update_fields)
 
 
+def _open_delivery_assignment(order):
+    order.delivery_rider = None
+    order.assigned_rider = None
+    order.rider = None
+    if order.rider_status == 'measurement_taken':
+        order.rider_status = 'none'
+        update_fields = ['delivery_rider', 'assigned_rider', 'rider', 'rider_status', 'updated_at']
+    else:
+        update_fields = ['delivery_rider', 'assigned_rider', 'rider', 'updated_at']
+    order.save(update_fields=update_fields)
+
+
 def _notify_assigned_rider(order, rider_id):
     try:
         from apps.notifications.services import NotificationService
@@ -249,6 +261,8 @@ class TailorUpdateOrderStatusView(APIView):
 
                 if order.tailor_status in ['accepted', 'in_progress', 'stitching_started', 'stitched'] and not new_tailor_status == 'accepted':
                     _notify_assigned_rider(order, assigned_rider_id)
+            elif is_ready_for_delivery_action and order.service_mode == 'home_delivery':
+                _open_delivery_assignment(order)
 
             
             # Use lightweight response serializer for status updates
