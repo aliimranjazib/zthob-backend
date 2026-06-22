@@ -644,12 +644,13 @@ class RiderMyOrdersView(APIView):
             Q(rider=request.user) |
             Q(assigned_rider=request.user) |
             Q(measurement_rider=request.user) |
-            Q(delivery_rider=request.user)
+            Q(delivery_rider=request.user) |
+            Q(rider_assignment__rider=request.user)
         ).select_related(
             'customer',
             'tailor',
             'delivery_address'
-        ).prefetch_related('order_items__fabric').order_by('-created_at')
+        ).prefetch_related('order_items__fabric').distinct().order_by('-created_at')
         
         # Filter by status if provided
         status_filter = request.query_params.get('status')
@@ -705,6 +706,10 @@ class RiderOrderDetailView(APIView):
             or order.assigned_rider == request.user
             or order.measurement_rider == request.user
             or order.delivery_rider == request.user
+            or (
+                hasattr(order, 'rider_assignment')
+                and order.rider_assignment.rider == request.user
+            )
         )
         if not is_assigned and order.rider is not None:
             return api_response(
@@ -818,12 +823,15 @@ class RiderAcceptOrderView(APIView):
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
         
-        if order.rider is not None and order.rider != request.user:
+        is_delivery_assignment = order.status == 'ready_for_delivery' and order.delivery_rider == request.user
+        if order.rider is not None and order.rider != request.user and not is_delivery_assignment:
             return api_response(
                 success=False,
                 message="Order is already assigned to another rider",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
+        if is_delivery_assignment and order.rider_status == 'measurement_taken':
+            order.rider_status = 'none'
         if order.rider_status != 'none':
             return api_response(
                 success=False,
@@ -835,8 +843,12 @@ class RiderAcceptOrderView(APIView):
         order.rider = request.user
         if order.status == 'ready_for_delivery':
             order.delivery_rider = request.user
+            order.assigned_rider = request.user
+            if order.rider_status == 'measurement_taken':
+                order.rider_status = 'none'
         elif not order.all_items_have_measurements or order.order_type == 'measurement_service':
             order.measurement_rider = request.user
+            order.assigned_rider = request.user
         order.save()
         
         # Create rider assignment record
@@ -1265,6 +1277,19 @@ class RiderUpdateOrderStatusView(APIView):
             and (order.rider_id == user.id or order.assigned_rider_id == user.id)
             and order.status == 'ready_for_delivery'
         )
+
+    def _can_accept_assignment(self, order, user):
+        if order.status == 'ready_for_delivery':
+            if order.delivery_rider_id:
+                return order.delivery_rider_id == user.id
+            return order.rider_id in [None, user.id] or order.assigned_rider_id == user.id
+
+        if order.order_type == 'measurement_service' or not order.all_items_have_measurements:
+            if order.measurement_rider_id:
+                return order.measurement_rider_id == user.id
+            return order.rider_id in [None, user.id] or order.assigned_rider_id == user.id
+
+        return order.rider_id in [None, user.id] or order.assigned_rider_id == user.id
     
     @extend_schema(
         request=RiderUpdateOrderStatusSerializer,
@@ -1296,7 +1321,7 @@ class RiderUpdateOrderStatusView(APIView):
         notes = serializer.validated_data.get('notes', '')
         
         # If unassigned and rider wants to accept, allow assignment here
-        if (order.rider is None or order.rider == request.user) and new_rider_status == 'accepted':
+        if new_rider_status == 'accepted' and self._can_accept_assignment(order, request.user):
             # Check rider profile approval
             try:
                 rider_profile = request.user.rider_profile
@@ -1337,8 +1362,12 @@ class RiderUpdateOrderStatusView(APIView):
             order.rider = request.user
             if order.status == 'ready_for_delivery':
                 order.delivery_rider = request.user
+                order.assigned_rider = request.user
+                if order.rider_status == 'measurement_taken':
+                    order.rider_status = 'none'
             elif not order.all_items_have_measurements or order.order_type == 'measurement_service':
                 order.measurement_rider = request.user
+                order.assigned_rider = request.user
             order.save()
             assignment, _ = RiderOrderAssignment.objects.get_or_create(
                 order=order,
@@ -1399,6 +1428,13 @@ class RiderUpdateOrderStatusView(APIView):
                 message="Order accepted successfully",
                 data=response_serializer.data,
                 status_code=status.HTTP_200_OK
+            )
+
+        if new_rider_status == 'accepted':
+            return api_response(
+                success=False,
+                message="You are not the assigned rider for this order stage.",
+                status_code=status.HTTP_403_FORBIDDEN
             )
         
         # Verify rider has access for subsequent updates
