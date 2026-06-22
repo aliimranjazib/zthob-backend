@@ -1245,6 +1245,26 @@ class RiderUpdateStyleWithConsentView(APIView):
 class RiderUpdateOrderStatusView(APIView):
     """Rider updates order status"""
     permission_classes = [IsAuthenticated]
+    measurement_statuses = {'on_way_to_measurement', 'measuring', 'measurement_taken'}
+    delivery_statuses = {'on_way_to_pickup', 'picked_up', 'on_way_to_delivery', 'delivered'}
+
+    def _can_update_measurement_status(self, order, user):
+        if order.measurement_rider_id == user.id:
+            return True
+        return (
+            order.measurement_rider_id is None
+            and (order.rider_id == user.id or order.assigned_rider_id == user.id)
+            and (not order.all_items_have_measurements or order.order_type == 'measurement_service')
+        )
+
+    def _can_update_delivery_status(self, order, user):
+        if order.delivery_rider_id == user.id:
+            return True
+        return (
+            order.delivery_rider_id is None
+            and (order.rider_id == user.id or order.assigned_rider_id == user.id)
+            and order.status == 'ready_for_delivery'
+        )
     
     @extend_schema(
         request=RiderUpdateOrderStatusSerializer,
@@ -1391,6 +1411,32 @@ class RiderUpdateOrderStatusView(APIView):
             return api_response(
                 success=False,
                 message="You don't have access to this order",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+
+        if (
+            new_rider_status in self.measurement_statuses
+            and not self._can_update_measurement_status(order, request.user)
+        ):
+            return api_response(
+                success=False,
+                message="Only the assigned measurement rider can update measurement status for this order.",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+
+        if (
+            new_rider_status in self.delivery_statuses
+            and not self._can_update_delivery_status(order, request.user)
+            and not (
+                new_rider_status == 'delivered'
+                and order.order_type == 'measurement_service'
+                and order.delivery_rider_id is None
+                and self._can_update_measurement_status(order, request.user)
+            )
+        ):
+            return api_response(
+                success=False,
+                message="Only the assigned delivery rider can update delivery status for this order.",
                 status_code=status.HTTP_403_FORBIDDEN
             )
         

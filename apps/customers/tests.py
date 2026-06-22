@@ -1,13 +1,81 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework import status
 from decimal import Decimal
 
 from apps.customers.models import FabricFavorite
-from apps.tailors.models import Fabric, FabricCategory, TailorProfile
+from apps.orders.models import Order, OrderStatusHistory
+from apps.tailors.models import Fabric, FabricCategory, TailorProfile, TailorProfileReview
 
 User = get_user_model()
+
+
+class CustomerTailorProfileStitchingTimeTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.customer = User.objects.create_user(
+            username='stitching_time_customer',
+            password='testpass123',
+            role='USER',
+        )
+        self.tailor = User.objects.create_user(
+            username='stitching_time_tailor',
+            password='testpass123',
+            role='TAILOR',
+        )
+        self.tailor_profile, _ = TailorProfile.objects.get_or_create(
+            user=self.tailor,
+            defaults={'shop_name': 'Fast Stitch Tailor', 'shop_status': True},
+        )
+        self.tailor_profile.shop_status = True
+        self.tailor_profile.save(update_fields=['shop_status'])
+        TailorProfileReview.objects.update_or_create(
+            profile=self.tailor_profile,
+            defaults={'review_status': 'approved'},
+        )
+
+    def _create_completed_order_with_ready_duration(self, days_to_ready):
+        now = timezone.now()
+        created_at = now - timezone.timedelta(days=10)
+        ready_at = created_at + timezone.timedelta(days=days_to_ready)
+
+        order = Order.objects.create(
+            customer=self.customer,
+            tailor=self.tailor,
+            order_type='fabric_with_stitching',
+            service_mode='home_delivery',
+            status='delivered',
+            tailor_status='stitched',
+            rider_status='delivered',
+            payment_status='paid',
+            total_amount=Decimal('100.00'),
+            paid_amount=Decimal('100.00'),
+            remaining_amount=Decimal('0.00'),
+        )
+        Order.objects.filter(id=order.id).update(created_at=created_at)
+        OrderStatusHistory.objects.create(
+            order=order,
+            status='ready_for_delivery',
+            previous_status='in_progress',
+            changed_by=self.tailor,
+            notes='Order marked ready for delivery',
+        )
+        OrderStatusHistory.objects.filter(order=order, status='ready_for_delivery').update(
+            created_at=ready_at
+        )
+        return order
+
+    def test_customer_tailor_detail_includes_average_stitching_time_days(self):
+        self._create_completed_order_with_ready_duration(days_to_ready=2)
+        self._create_completed_order_with_ready_duration(days_to_ready=4)
+
+        response = self.client.get(f'/api/customers/tailors/{self.tailor.id}/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data['data']['average_stitching_time_days'], 3.0)
+        self.assertEqual(response.data['data']['completed_stitching_orders_count'], 2)
 
 
 class FabricFavoriteModelTest(TestCase):

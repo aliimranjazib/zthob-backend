@@ -9,6 +9,7 @@ from apps.tailors.serializers.catalog import (
     FabricTagBasicSerializer,
     FabricTypeBasicSerializer,
 )
+from apps.tailors.services.stitching_time import get_average_stitching_time_stats
 from apps.customers.models import Address, CustomerProfile, FamilyMember, FabricFavorite
 
 # ============================================================================
@@ -27,14 +28,30 @@ class TailorHomeSerializer(serializers.ModelSerializer):
     city = serializers.SerializerMethodField()
     address = serializers.SerializerMethodField()
     is_express = serializers.BooleanField(source='is_express_delivery_enabled', read_only=True)
+    average_stitching_time_days = serializers.SerializerMethodField()
+    completed_stitching_orders_count = serializers.SerializerMethodField()
 
     class Meta:
         model = TailorProfile
         fields = [
             'id', 'shop_name', 'shop_image_url', 
             'avg_overall_satisfaction', 'rating_count', 'city', 'address',
+            'average_stitching_time_days', 'completed_stitching_orders_count',
             'is_express', 'express_delivery_days', 'express_delivery_fee'
         ]
+
+    def _get_stitching_time_stats(self, obj):
+        cache = self.context.setdefault('tailor_stitching_time_stats', {})
+        user_id = obj.user_id
+        if user_id not in cache:
+            cache[user_id] = get_average_stitching_time_stats(obj.user)
+        return cache[user_id]
+
+    def get_average_stitching_time_days(self, obj):
+        return self._get_stitching_time_stats(obj)['average_stitching_time_days']
+
+    def get_completed_stitching_orders_count(self, obj):
+        return self._get_stitching_time_stats(obj)['completed_stitching_orders_count']
 
     def get_shop_image_url(self, obj):
         if obj.shop_image:
