@@ -457,10 +457,10 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
     def get_rider_assignment_type(self, obj):
         request = self.context.get('request')
         user = getattr(request, 'user', None)
-        if user and obj.measurement_rider_id == getattr(user, 'id', None):
-            return 'measurement'
         if user and obj.delivery_rider_id == getattr(user, 'id', None):
             return 'delivery'
+        if user and obj.measurement_rider_id == getattr(user, 'id', None):
+            return 'measurement'
         if obj.status == 'ready_for_delivery':
             return 'delivery'
         if obj.order_type == 'measurement_service' or not obj.all_items_have_measurements:
@@ -640,10 +640,10 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
     def get_rider_assignment_type(self, obj):
         request = self.context.get('request')
         user = getattr(request, 'user', None)
-        if user and obj.measurement_rider_id == getattr(user, 'id', None):
-            return 'measurement'
         if user and obj.delivery_rider_id == getattr(user, 'id', None):
             return 'delivery'
+        if user and obj.measurement_rider_id == getattr(user, 'id', None):
+            return 'measurement'
         if obj.status == 'ready_for_delivery':
             return 'delivery'
         if obj.order_type == 'measurement_service' or not obj.all_items_have_measurements:

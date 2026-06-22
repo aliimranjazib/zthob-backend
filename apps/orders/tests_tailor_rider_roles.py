@@ -241,6 +241,97 @@ class TailorRiderRoleAssignmentTest(TestCase):
         self.assertIsNotNone(order_item)
         self.assertEqual(order_item['rider_assignment_type'], 'delivery')
 
+    def test_measurement_rider_does_not_see_delivery_job_after_different_rider_assignment(self):
+        order = self._create_stitching_order(measurements={'chest': 42})
+        order.tailor_status = 'stitched'
+        order.status = 'in_progress'
+        order.rider_status = 'measurement_taken'
+        order.measurement_rider = self.measurement_rider
+        order.rider = self.measurement_rider
+        order.assigned_rider = self.measurement_rider
+        order.save()
+
+        self.client.force_authenticate(user=self.tailor)
+        assign_response = self.client.patch(
+            f'/api/tailors/orders/{order.id}/update-status/',
+            {
+                'tailor_status': 'ready_for_delivery',
+                'assigned_rider_id': self.delivery_rider.id,
+                'rider_assignment_type': 'delivery',
+            },
+            format='json',
+        )
+        self.assertEqual(assign_response.status_code, 200, assign_response.data)
+
+        self.client.force_authenticate(user=self.measurement_rider)
+        available_response = self.client.get('/api/riders/orders/available/')
+        self.assertEqual(available_response.status_code, 200, available_response.data)
+        self.assertNotIn(order.id, [item['id'] for item in available_response.data['data']])
+
+        my_orders_response = self.client.get('/api/riders/orders/my-orders/')
+        self.assertEqual(my_orders_response.status_code, 200, my_orders_response.data)
+        self.assertNotIn(order.id, [item['id'] for item in my_orders_response.data['data']])
+
+    def test_same_rider_assignment_is_delivery_after_mark_ready(self):
+        order = self._create_stitching_order(measurements={'chest': 42})
+        order.tailor_status = 'stitched'
+        order.status = 'in_progress'
+        order.rider_status = 'measurement_taken'
+        order.measurement_rider = self.measurement_rider
+        order.rider = self.measurement_rider
+        order.assigned_rider = self.measurement_rider
+        order.save()
+
+        self.client.force_authenticate(user=self.tailor)
+        assign_response = self.client.patch(
+            f'/api/tailors/orders/{order.id}/update-status/',
+            {
+                'tailor_status': 'ready_for_delivery',
+                'assigned_rider_id': self.measurement_rider.id,
+                'rider_assignment_type': 'delivery',
+            },
+            format='json',
+        )
+        self.assertEqual(assign_response.status_code, 200, assign_response.data)
+
+        self.client.force_authenticate(user=self.measurement_rider)
+        response = self.client.get('/api/riders/orders/my-orders/')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        order_item = next((item for item in response.data['data'] if item['id'] == order.id), None)
+        self.assertIsNotNone(order_item)
+        self.assertEqual(order_item['rider_assignment_type'], 'delivery')
+
+    def test_ready_for_delivery_accepts_delivery_rider_id_alias(self):
+        order = self._create_stitching_order(measurements={'chest': 42})
+        order.tailor_status = 'stitched'
+        order.status = 'in_progress'
+        order.rider_status = 'measurement_taken'
+        order.measurement_rider = self.measurement_rider
+        order.rider = self.measurement_rider
+        order.assigned_rider = self.measurement_rider
+        order.save()
+
+        self.client.force_authenticate(user=self.tailor)
+        assign_response = self.client.patch(
+            f'/api/tailors/orders/{order.id}/update-status/',
+            {
+                'tailor_status': 'ready_for_delivery',
+                'delivery_rider_id': self.delivery_rider.id,
+                'rider_assignment_type': 'delivery',
+            },
+            format='json',
+        )
+        self.assertEqual(assign_response.status_code, 200, assign_response.data)
+        order.refresh_from_db()
+        self.assertEqual(order.delivery_rider, self.delivery_rider)
+
+        self.client.force_authenticate(user=self.delivery_rider)
+        response = self.client.get('/api/riders/orders/my-orders/')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn(order.id, [item['id'] for item in response.data['data']])
+
     def test_other_rider_does_not_see_assigned_delivery_job_in_available_orders(self):
         other_rider = self._create_approved_rider('other_delivery_rider')
         order = self._create_stitching_order(measurements={'chest': 42})

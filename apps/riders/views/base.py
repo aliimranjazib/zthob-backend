@@ -571,37 +571,51 @@ class RiderAvailableOrdersView(APIView):
                 status_code=status.HTTP_404_NOT_FOUND
             )
         
-        # Get unassigned work plus work explicitly assigned to this rider.
-        # Tailor-assigned measurement/delivery jobs set rider/assigned_rider, so
-        # rider__isnull=True alone would hide valid "new" jobs from the app.
+        unassigned_work = (
+            Q(rider__isnull=True)
+            & Q(assigned_rider__isnull=True)
+            & Q(measurement_rider__isnull=True)
+            & Q(delivery_rider__isnull=True)
+        )
+        measurement_assignment = (
+            Q(measurement_rider=request.user)
+            | (
+                Q(measurement_rider__isnull=True)
+                & (Q(rider=request.user) | Q(assigned_rider=request.user))
+            )
+        )
+        delivery_assignment = (
+            Q(delivery_rider=request.user)
+            | (
+                Q(delivery_rider__isnull=True)
+                & (Q(rider=request.user) | Q(assigned_rider=request.user))
+            )
+        )
+        measurement_work = (
+            Q(order_type__in=['fabric_with_stitching', 'stitching_only'], tailor_status__in=['accepted', 'in_progress'])
+            & (Q(order_items__measurements__isnull=True) | Q(order_items__measurements={}))
+            & (unassigned_work | measurement_assignment)
+        )
+        delivery_work = (
+            Q(status='ready_for_delivery')
+            & (unassigned_work | delivery_assignment)
+        )
+        fabric_only_work = (
+            Q(order_type='fabric_only', tailor_status__in=['accepted', 'in_progress', 'stitching_started', 'stitched'])
+            & (unassigned_work | delivery_assignment)
+        )
+        measurement_service_work = (
+            Q(order_type='measurement_service', service_mode='home_delivery')
+            & (unassigned_work | measurement_assignment)
+        )
+
         orders = Order.objects.filter(
             rider_status='none',
             service_mode='home_delivery',
         ).filter(
             Q(payment_status__in=['paid', 'partially_paid']) | Q(payment_method='cod', payment_status='pending')
         ).filter(
-            (
-                Q(rider__isnull=True)
-                & Q(assigned_rider__isnull=True)
-                & Q(measurement_rider__isnull=True)
-                & Q(delivery_rider__isnull=True)
-            )
-            | Q(rider=request.user)
-            | Q(assigned_rider=request.user)
-            | Q(measurement_rider=request.user)
-            | Q(delivery_rider=request.user)
-        ).filter(
-            # Delivery work is available once the order is ready for delivery.
-            Q(status='ready_for_delivery') |
-            # Fabric-only legacy flow can still use a rider after tailor acceptance.
-            Q(order_type='fabric_only', tailor_status__in=['accepted', 'in_progress', 'stitching_started', 'stitched']) |
-            # Measurement work is available only while measurements are still missing.
-            (
-                Q(order_type__in=['fabric_with_stitching', 'stitching_only'], tailor_status__in=['accepted', 'in_progress'])
-                & (Q(order_items__measurements__isnull=True) | Q(order_items__measurements={}))
-            ) |
-            # Measurement service home-delivery orders are handled directly by riders.
-            Q(order_type='measurement_service', service_mode='home_delivery')
+            delivery_work | fabric_only_work | measurement_work | measurement_service_work
         ).distinct().select_related(
             'customer',
             'tailor',
@@ -645,16 +659,41 @@ class RiderMyOrdersView(APIView):
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
-        # Show all orders assigned to this rider, including those with rider_status='none' 
-        # (which means assigned but not yet accepted - allows rider to accept them)
-        # This ensures manually assigned orders are visible even if rider_status wasn't updated
-        from django.db.models import Q
+        measurement_assignment = (
+            Q(measurement_rider=request.user)
+            | (
+                Q(measurement_rider__isnull=True)
+                & (Q(rider=request.user) | Q(assigned_rider=request.user))
+            )
+        )
+        delivery_assignment = (
+            Q(delivery_rider=request.user)
+            | (
+                Q(delivery_rider__isnull=True)
+                & (Q(rider=request.user) | Q(assigned_rider=request.user))
+            )
+        )
+        active_measurement_work = (
+            (
+                Q(order_type='measurement_service', service_mode='home_delivery')
+                | (
+                    Q(order_type__in=['fabric_with_stitching', 'stitching_only'], tailor_status__in=['accepted', 'in_progress'])
+                    & (Q(order_items__measurements__isnull=True) | Q(order_items__measurements={}))
+                )
+            )
+            & measurement_assignment
+        )
+        active_delivery_work = (
+            (
+                Q(status='ready_for_delivery')
+                | Q(rider_status__in=['accepted', 'on_way_to_pickup', 'picked_up', 'on_way_to_delivery'])
+            )
+            & delivery_assignment
+        )
         orders = Order.objects.filter(
-            Q(rider=request.user) |
-            Q(assigned_rider=request.user) |
-            Q(measurement_rider=request.user) |
-            Q(delivery_rider=request.user) |
-            Q(rider_assignment__rider=request.user)
+            active_measurement_work |
+            active_delivery_work |
+            Q(rider_assignment__rider=request.user, delivery_rider=request.user)
         ).select_related(
             'customer',
             'tailor',

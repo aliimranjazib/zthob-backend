@@ -391,7 +391,12 @@ class MarkReadyAction(BaseOrderAction):
             self.order.status = 'ready_for_pickup'
         else:
             self.order.status = 'ready_for_delivery'
-            assigned_rider_id = self.data.get('assigned_rider_id')
+            assigned_rider_id = (
+                self.data.get('assigned_rider_id')
+                or self.data.get('delivery_rider_id')
+                or self.data.get('rider_id')
+                or self.data.get('assigned_rider')
+            )
             if assigned_rider_id:
                 from apps.accounts.models import CustomUser
                 try:
