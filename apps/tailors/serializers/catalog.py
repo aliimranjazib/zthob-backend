@@ -228,6 +228,7 @@ class FabricCreateSerializer(serializers.ModelSerializer):
         fabric = Fabric.objects.create(
             tailor=tailor_profile,
             created_by=request.user,
+            approval_status='approved',
             **validated_data,
         )
         
@@ -338,8 +339,7 @@ class FabricUpdateSerializer(serializers.ModelSerializer):
         # Update other fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        # Whenever a tailor updates a fabric, reset approval status to pending
-        instance.approval_status = 'pending'
+        instance.approval_status = 'approved'
         instance.save()
         
         # Update tags if provided
