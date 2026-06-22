@@ -571,16 +571,25 @@ class RiderAvailableOrdersView(APIView):
                 status_code=status.HTTP_404_NOT_FOUND
             )
         
-        # Get payment-ready orders that don't have a rider assigned and tailor has confirmed.
-        # If assigned_rider is set, only that rider can see it
+        # Get unassigned work plus work explicitly assigned to this rider.
+        # Tailor-assigned measurement/delivery jobs set rider/assigned_rider, so
+        # rider__isnull=True alone would hide valid "new" jobs from the app.
         orders = Order.objects.filter(
-            rider__isnull=True,
             rider_status='none',
             service_mode='home_delivery',
         ).filter(
             Q(payment_status__in=['paid', 'partially_paid']) | Q(payment_method='cod', payment_status='pending')
         ).filter(
-            Q(assigned_rider__isnull=True) | Q(assigned_rider=request.user)
+            (
+                Q(rider__isnull=True)
+                & Q(assigned_rider__isnull=True)
+                & Q(measurement_rider__isnull=True)
+                & Q(delivery_rider__isnull=True)
+            )
+            | Q(rider=request.user)
+            | Q(assigned_rider=request.user)
+            | Q(measurement_rider=request.user)
+            | Q(delivery_rider=request.user)
         ).filter(
             # Delivery work is available once the order is ready for delivery.
             Q(status='ready_for_delivery') |

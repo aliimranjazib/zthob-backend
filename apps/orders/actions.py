@@ -7,6 +7,29 @@ from apps.customers.models import FamilyMember
 from apps.orders.payments import money
 from zthob.translations import get_language_from_request, translate_message
 
+
+def _is_measurement_rider(order, user):
+    return (
+        order.measurement_rider == user
+        or (
+            order.measurement_rider_id is None
+            and (order.rider == user or order.assigned_rider == user)
+            and (not order.all_items_have_measurements or order.order_type == 'measurement_service')
+        )
+    )
+
+
+def _is_delivery_rider(order, user):
+    return (
+        order.delivery_rider == user
+        or (
+            order.delivery_rider_id is None
+            and (order.rider == user or order.assigned_rider == user)
+            and order.status == 'ready_for_delivery'
+        )
+    )
+
+
 class BaseOrderAction(ABC):
     """
     Base class for all Order Actions.
@@ -138,8 +161,11 @@ class AcceptOrderAction(BaseOrderAction):
         elif role == 'RIDER':
             if not self._is_payment_ready():
                 raise ValidationError("Order payment must be paid or pending COD before rider can accept it.")
-            if self.order.rider and self.order.rider != self.user:
+            is_delivery_assignment = self.order.status == 'ready_for_delivery' and self.order.delivery_rider == self.user
+            if self.order.rider and self.order.rider != self.user and not is_delivery_assignment:
                 raise PermissionDenied("This order is already assigned to another rider.")
+            if is_delivery_assignment and self.order.rider_status == 'measurement_taken':
+                self.order.rider_status = 'none'
             if self.order.rider_status != 'none':
                 raise ValidationError("Order is already accepted by a rider.")
         else:
@@ -181,12 +207,13 @@ class AcceptOrderAction(BaseOrderAction):
                     pass
         
         elif role == 'RIDER':
-            if not self.order.rider:
-                self.order.rider = self.user
+            self.order.rider = self.user
             if self.order.status == 'ready_for_delivery':
                 self.order.delivery_rider = self.user
+                self.order.assigned_rider = self.user
             elif not self.order.all_items_have_measurements or self.order.order_type == 'measurement_service':
                 self.order.measurement_rider = self.user
+                self.order.assigned_rider = self.user
             if self.order.order_type == 'measurement_service':
                 self.order.status = 'confirmed'
                 
@@ -207,7 +234,7 @@ class StartMeasuringAction(BaseOrderAction):
     def _check_requirements(self):
         if self.order.all_items_have_measurements:
             raise ValidationError("Measurements are already recorded.")
-        if self.order.rider != self.user and self.order.assigned_rider != self.user:
+        if not _is_measurement_rider(self.order, self.user):
             raise PermissionDenied("You are not the assigned rider for this order.")
         if self.order.rider_status != 'accepted':
             raise ValidationError("You must accept the order before starting measurement.")
@@ -266,7 +293,7 @@ class RecordMeasurementsAction(BaseOrderAction):
                 raise ValidationError("Rider must record measurements for home delivery orders.")
         
         elif role == 'RIDER':
-            if self.order.rider != self.user and self.order.assigned_rider != self.user:
+            if not _is_measurement_rider(self.order, self.user):
                 raise PermissionDenied("You are not the assigned rider for this order.")
             if self.order.rider_status not in ['on_way_to_measurement', 'accepted', 'measuring']:
                 raise ValidationError("Invalid state to record measurements.")
@@ -389,7 +416,7 @@ class PickupOrderAction(BaseOrderAction):
     def _check_requirements(self):
         if self.order.status != 'ready_for_delivery':
             raise ValidationError("Order is not ready for delivery.")
-        if self.order.rider != self.user and self.order.assigned_rider != self.user:
+        if not _is_delivery_rider(self.order, self.user):
             raise PermissionDenied("You are not the assigned rider for this order.")
         
         # HIDE if already picked up or in delivery
@@ -410,7 +437,7 @@ class StartDeliveryAction(BaseOrderAction):
     def _check_requirements(self):
         if self.order.rider_status != 'picked_up':
             raise ValidationError("You must pickup the order before starting delivery.")
-        if self.order.rider != self.user and self.order.assigned_rider != self.user:
+        if not _is_delivery_rider(self.order, self.user):
             raise PermissionDenied("You are not the assigned rider for this order.")
 
     def execute(self):
@@ -427,7 +454,7 @@ class MarkDeliveredAction(BaseOrderAction):
     def _check_requirements(self):
         if self.order.rider_status != 'on_way_to_delivery':
             raise ValidationError("Invalid state for delivery.")
-        if self.order.rider != self.user and self.order.assigned_rider != self.user:
+        if not _is_delivery_rider(self.order, self.user):
             raise PermissionDenied("You are not the assigned rider for this order.")
         if self.order.has_remaining_balance:
             raise ValidationError("Remaining payment must be collected before marking the order as delivered.")
@@ -500,7 +527,7 @@ class CollectCashPaymentAction(BaseOrderAction):
         if self.order.service_mode == 'home_delivery':
             if role != 'RIDER':
                 raise PermissionDenied("Only the assigned rider can collect cash for home delivery orders.")
-            if self.order.rider != self.user and self.order.assigned_rider != self.user:
+            if not _is_delivery_rider(self.order, self.user):
                 raise PermissionDenied("You are not the assigned rider for this order.")
             if self.order.rider_status not in ['on_way_to_delivery', 'delivered']:
                 raise ValidationError("Cash can be collected when the rider is delivering the order.")
