@@ -753,7 +753,7 @@ class TailorInvitationCodeAdmin(admin.ModelAdmin):
 class TailorRiderAssociationAdmin(admin.ModelAdmin):
     """Admin interface for Tailor-Rider Associations"""
     
-    list_display = ['tailor_name', 'rider_name', 'is_active_badge', 'priority', 'joined_via_code', 'created_at_formatted']
+    list_display = ['tailor_name', 'rider_name', 'measurement_capability', 'delivery_capability', 'is_active_badge', 'priority', 'joined_via_code', 'created_at_formatted']
     list_filter = ['is_active', 'created_at']
     search_fields = [
         'tailor__username', 
@@ -769,7 +769,7 @@ class TailorRiderAssociationAdmin(admin.ModelAdmin):
             'fields': ('tailor', 'rider', 'is_active')
         }),
         ('Details', {
-            'fields': ('joined_via_code', 'nickname', 'priority')
+            'fields': ('joined_via_code', 'nickname', 'priority', 'can_take_measurements', 'can_do_delivery')
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at', 'created_by'),
@@ -808,6 +808,16 @@ class TailorRiderAssociationAdmin(admin.ModelAdmin):
         )
     is_active_badge.short_description = 'Status'
     is_active_badge.admin_order_field = 'is_active'
+
+    def measurement_capability(self, obj):
+        return 'Yes' if obj.can_take_measurements else 'No'
+    measurement_capability.short_description = 'Measurement'
+    measurement_capability.admin_order_field = 'can_take_measurements'
+
+    def delivery_capability(self, obj):
+        return 'Yes' if obj.can_do_delivery else 'No'
+    delivery_capability.short_description = 'Delivery'
+    delivery_capability.admin_order_field = 'can_do_delivery'
     
     def created_at_formatted(self, obj):
         """Format created date"""
@@ -816,5 +826,4 @@ class TailorRiderAssociationAdmin(admin.ModelAdmin):
         return '-'
     created_at_formatted.short_description = 'Joined'
     created_at_formatted.admin_order_field = 'created_at'
-
 

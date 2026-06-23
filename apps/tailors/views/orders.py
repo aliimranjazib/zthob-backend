@@ -20,6 +20,23 @@ def _get_rider_or_404(rider_id):
     return get_object_or_404(CustomUser, id=rider_id, role='RIDER')
 
 
+def _validate_tailor_rider_capability(tailor, rider, assignment_type):
+    from apps.riders.models import TailorRiderAssociation
+
+    association = TailorRiderAssociation.objects.filter(
+        tailor=tailor,
+        rider=rider,
+        is_active=True,
+    ).first()
+    if not association:
+        return
+
+    if assignment_type == 'measurement' and not association.can_take_measurements:
+        raise ValueError("This rider is not enabled for measurement assignments.")
+    if assignment_type == 'delivery' and not association.can_do_delivery:
+        raise ValueError("This rider is not enabled for delivery assignments.")
+
+
 def _assign_measurement_rider(order, rider):
     order.measurement_rider = rider
     order.assigned_rider = rider
@@ -119,6 +136,14 @@ class TailorAcceptOrderView(APIView):
                     message="Measurements already exist for this order. Assign a delivery rider when marking ready for delivery.",
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
+            try:
+                _validate_tailor_rider_capability(request.user, assigned_rider, 'measurement')
+            except ValueError as exc:
+                return api_response(
+                    success=False,
+                    message=str(exc),
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
         
         # Check if already accepted
         if order.tailor_status == 'accepted':
@@ -209,6 +234,14 @@ class TailorUpdateOrderStatusView(APIView):
                     return api_response(
                         success=False,
                         message="Delivery rider can only be assigned when the order is ready for delivery.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+                try:
+                    _validate_tailor_rider_capability(request.user, assigned_rider, rider_assignment_type)
+                except ValueError as exc:
+                    return api_response(
+                        success=False,
+                        message=str(exc),
                         status_code=status.HTTP_400_BAD_REQUEST
                     )
             

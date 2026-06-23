@@ -577,6 +577,16 @@ class TailorRiderAssociation(BaseModel):
         default=0,
         help_text="Priority/ranking for this rider (higher = more preferred)"
     )
+
+    can_take_measurements = models.BooleanField(
+        default=True,
+        help_text="Whether this rider can be assigned measurement work for this tailor"
+    )
+
+    can_do_delivery = models.BooleanField(
+        default=True,
+        help_text="Whether this rider can be assigned delivery work for this tailor"
+    )
     
     class Meta:
         verbose_name = "Tailor-Rider Association"
@@ -598,4 +608,3 @@ class TailorRiderAssociation(BaseModel):
             rider_name = self.rider.rider_profile.full_name or rider_name
         
         return f"{tailor_name} ↔ {rider_name}"
-

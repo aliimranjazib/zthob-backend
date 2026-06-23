@@ -46,6 +46,7 @@ try:
     CreateInvitationCodeSerializer = _module.CreateInvitationCodeSerializer
     RiderBasicInfoSerializer = _module.RiderBasicInfoSerializer
     TailorRiderAssociationSerializer = _module.TailorRiderAssociationSerializer
+    TailorRiderAssociationUpdateSerializer = _module.TailorRiderAssociationUpdateSerializer
     JoinTailorTeamSerializer = _module.JoinTailorTeamSerializer
     TailorBasicInfoSerializer = _module.TailorBasicInfoSerializer
 finally:
@@ -73,6 +74,7 @@ __all__ = [
     'CreateInvitationCodeSerializer',
     'RiderBasicInfoSerializer',
     'TailorRiderAssociationSerializer',
+    'TailorRiderAssociationUpdateSerializer',
     'JoinTailorTeamSerializer',
     'TailorBasicInfoSerializer',
 ]

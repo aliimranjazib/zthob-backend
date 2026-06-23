@@ -70,7 +70,15 @@ def rider_my_tailors(request):
             'id': assoc.tailor.id,
             'shop_name': getattr(tailor_profile, 'shop_name', assoc.tailor.username),
             'phone': (tailor_profile.contact_number if tailor_profile and tailor_profile.contact_number else getattr(assoc.tailor, 'phone', '')),
-            'joined_at': assoc.created_at
+            'joined_at': assoc.created_at,
+            'can_take_measurements': assoc.can_take_measurements,
+            'can_do_delivery': assoc.can_do_delivery,
+            'rider_types': [
+                role for role, enabled in (
+                    ('measurement', assoc.can_take_measurements),
+                    ('delivery', assoc.can_do_delivery),
+                ) if enabled
+            ],
         }
         tailors_data.append(tailor_data)
     

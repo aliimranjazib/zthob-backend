@@ -10,6 +10,7 @@ from .serializers import (
     TailorInvitationCodeSerializer,
     CreateInvitationCodeSerializer,
     TailorRiderAssociationSerializer,
+    TailorRiderAssociationUpdateSerializer,
 )
 
 
@@ -106,6 +107,9 @@ def tailor_my_riders(request):
             'vehicle_type': getattr(rider_profile, 'vehicle_type', ''),
             'rating': float(getattr(rider_profile, 'rating', 0.0)),
             'is_available': getattr(rider_profile, 'is_available', False),
+            'can_take_measurements': assoc.can_take_measurements,
+            'can_do_delivery': assoc.can_do_delivery,
+            'rider_types': serializer.data['rider_types'],
             'joined_at': assoc.created_at,
             'statistics': serializer.data['statistics']
         }
@@ -120,19 +124,43 @@ def tailor_my_riders(request):
     )
 
 
-@api_view(['DELETE'])
+@api_view(['PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated, IsTailor])
 def remove_rider_from_team(request, rider_id):
-    """Remove a rider from tailor's team (deactivate association)"""
+    """Update or remove a rider from tailor's team"""
     association = get_object_or_404(
         models.TailorRiderAssociation,
         tailor=request.user,
         rider_id=rider_id
     )
-    
+
+    if request.method == 'PATCH':
+        serializer = TailorRiderAssociationUpdateSerializer(
+            association,
+            data=request.data,
+            partial=True,
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return api_response(
+                success=True,
+                message="Rider settings updated successfully",
+                data=TailorRiderAssociationSerializer(association).data,
+                status_code=status.HTTP_200_OK,
+                request=request
+            )
+
+        return api_response(
+            success=False,
+            message="Invalid data",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            request=request
+        )
+
     association.is_active = False
-    association.save()
-    
+    association.save(update_fields=['is_active', 'updated_at'])
+
     return api_response(
         success=True,
         message="Rider removed from your team successfully",

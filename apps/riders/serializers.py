@@ -1043,6 +1043,7 @@ class TailorRiderAssociationSerializer(serializers.ModelSerializer):
     rider_info = RiderBasicInfoSerializer(source='rider', read_only=True)
     statistics = serializers.SerializerMethodField()
     joined_via_code_display = serializers.CharField(source='joined_via_code.code', read_only=True)
+    rider_types = serializers.SerializerMethodField()
     
     class Meta:
         model = models.TailorRiderAssociation
@@ -1052,6 +1053,9 @@ class TailorRiderAssociationSerializer(serializers.ModelSerializer):
             'is_active',
             'nickname',
             'priority',
+            'can_take_measurements',
+            'can_do_delivery',
+            'rider_types',
             'joined_via_code_display',
             'statistics',
             'created_at',
@@ -1103,6 +1107,14 @@ class TailorRiderAssociationSerializer(serializers.ModelSerializer):
             'acceptance_rate': round(acceptance_rate, 1)
         }
 
+    def get_rider_types(self, obj):
+        rider_types = []
+        if obj.can_take_measurements:
+            rider_types.append('measurement')
+        if obj.can_do_delivery:
+            rider_types.append('delivery')
+        return rider_types
+
 
 class JoinTailorTeamSerializer(serializers.Serializer):
     """Serializer for riders joining a tailor's team using code"""
@@ -1151,6 +1163,35 @@ class JoinTailorTeamSerializer(serializers.Serializer):
             'tailor': tailor,
             'created': created
         }
+
+
+class TailorRiderAssociationUpdateSerializer(serializers.ModelSerializer):
+    """Tailor updates rider capabilities and team metadata"""
+
+    class Meta:
+        model = models.TailorRiderAssociation
+        fields = [
+            'nickname',
+            'priority',
+            'can_take_measurements',
+            'can_do_delivery',
+            'is_active',
+        ]
+
+    def validate(self, attrs):
+        can_take_measurements = attrs.get(
+            'can_take_measurements',
+            getattr(self.instance, 'can_take_measurements', True),
+        )
+        can_do_delivery = attrs.get(
+            'can_do_delivery',
+            getattr(self.instance, 'can_do_delivery', True),
+        )
+        if not can_take_measurements and not can_do_delivery:
+            raise serializers.ValidationError(
+                "Rider must be enabled for at least one role: measurement or delivery."
+            )
+        return attrs
 
 
 class TailorBasicInfoSerializer(serializers.ModelSerializer):
