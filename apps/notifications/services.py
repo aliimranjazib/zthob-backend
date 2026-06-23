@@ -912,8 +912,11 @@ class NotificationService:
                 return  # Don't broadcast if specific rider assigned
                 
             except CustomUser.DoesNotExist:
-                logger.warning(f"Assigned rider {assigned_rider_id} not found or not eligible. Falling back to broadcast.")
-                # Fall through to broadcast
+                logger.warning(
+                    f"Assigned rider {assigned_rider_id} not found or not eligible. "
+                    f"Skipping broadcast for explicitly assigned order {order.order_number}."
+                )
+                return
         
         # Determine if this order should be broadcasted to all riders
         # We only broadcast home_delivery orders to all riders

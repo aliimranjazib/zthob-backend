@@ -12,7 +12,6 @@ from .views import (
     RiderAvailableOrdersView,
     RiderMyOrdersView,
     RiderOrderDetailView,
-    RiderAcceptOrderView,
     RiderAddMeasurementsView,
     RiderUpdateOrderStatusView,
     RiderRequestStyleConsentView,
@@ -60,7 +59,6 @@ urlpatterns = [
     path('orders/available/', RiderAvailableOrdersView.as_view(), name='available-orders'),
     path('orders/my-orders/', RiderMyOrdersView.as_view(), name='my-orders'),
     path('orders/<int:order_id>/', RiderOrderDetailView.as_view(), name='order-detail'),
-    path('orders/<int:order_id>/accept/', RiderAcceptOrderView.as_view(), name='accept-order'),
     path('orders/<int:order_id>/measurements/', RiderAddMeasurementsView.as_view(), name='add-measurements'),
     path('orders/<int:order_id>/update-status/', RiderUpdateOrderStatusView.as_view(), name='update-status'),
     path('orders/<int:order_id>/request-style-consent/', RiderRequestStyleConsentView.as_view(), name='request-style-consent'),
@@ -83,4 +81,3 @@ urlpatterns = [
     path('join-team/', join_tailor_team, name='join-team'),
     path('my-tailors/', rider_my_tailors, name='my-tailors'),
 ]
-
