@@ -25,6 +25,20 @@ def _validate_tailor_rider_capability(tailor, rider, assignment_type):
         raise ValidationError("This rider is not enabled for delivery assignments.")
 
 
+def _get_assignable_rider(rider_id):
+    from apps.accounts.models import CustomUser
+
+    try:
+        rider = CustomUser.objects.get(id=rider_id)
+    except CustomUser.DoesNotExist:
+        raise ValidationError("Assigned rider was not found.")
+
+    if not rider.is_rider:
+        raise ValidationError("Assigned user is not a rider.")
+
+    return rider
+
+
 def _is_measurement_rider(order, user):
     return (
         order.measurement_rider == user
@@ -214,15 +228,11 @@ class AcceptOrderAction(BaseOrderAction):
                     raise ValidationError("Delivery rider can only be assigned when marking the order ready for delivery.")
                 if self.order.all_items_have_measurements:
                     raise ValidationError("Measurements already exist for this order. Assign a delivery rider when marking ready for delivery.")
-                from apps.accounts.models import CustomUser
-                try:
-                    assigned_rider = CustomUser.objects.get(id=assigned_rider_id, role='RIDER')
-                    _validate_tailor_rider_capability(self.user, assigned_rider, 'measurement')
-                    self.order.measurement_rider = assigned_rider
-                    self.order.assigned_rider = assigned_rider
-                    self.order.rider = assigned_rider
-                except CustomUser.DoesNotExist:
-                    pass
+                assigned_rider = _get_assignable_rider(assigned_rider_id)
+                _validate_tailor_rider_capability(self.user, assigned_rider, 'measurement')
+                self.order.measurement_rider = assigned_rider
+                self.order.assigned_rider = assigned_rider
+                self.order.rider = assigned_rider
         
         elif role == 'RIDER':
             self.order.rider = self.user
@@ -416,17 +426,13 @@ class MarkReadyAction(BaseOrderAction):
                 or self.data.get('assigned_rider')
             )
             if assigned_rider_id:
-                from apps.accounts.models import CustomUser
-                try:
-                    assigned_rider = CustomUser.objects.get(id=assigned_rider_id, role='RIDER')
-                    _validate_tailor_rider_capability(self.user, assigned_rider, 'delivery')
-                    self.order.delivery_rider = assigned_rider
-                    self.order.assigned_rider = assigned_rider
-                    self.order.rider = assigned_rider
-                    if self.order.rider_status == 'measurement_taken':
-                        self.order.rider_status = 'none'
-                except CustomUser.DoesNotExist:
-                    pass
+                assigned_rider = _get_assignable_rider(assigned_rider_id)
+                _validate_tailor_rider_capability(self.user, assigned_rider, 'delivery')
+                self.order.delivery_rider = assigned_rider
+                self.order.assigned_rider = assigned_rider
+                self.order.rider = assigned_rider
+                if self.order.rider_status == 'measurement_taken':
+                    self.order.rider_status = 'none'
             else:
                 self.order.delivery_rider = None
                 self.order.assigned_rider = None

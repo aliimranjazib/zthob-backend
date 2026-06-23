@@ -17,7 +17,11 @@ from apps.tailors.permissions import IsShopStaff
 
 def _get_rider_or_404(rider_id):
     from apps.accounts.models import CustomUser
-    return get_object_or_404(CustomUser, id=rider_id, role='RIDER')
+    rider = get_object_or_404(CustomUser, id=rider_id)
+    if not rider.is_rider:
+        from django.http import Http404
+        raise Http404("Assigned user is not a rider")
+    return rider
 
 
 def _validate_tailor_rider_capability(tailor, rider, assignment_type):

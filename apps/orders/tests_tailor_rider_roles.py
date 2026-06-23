@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from apps.orders.models import Order, OrderItem
-from apps.riders.models import RiderProfile, RiderProfileReview
+from apps.riders.models import RiderProfile, RiderProfileReview, TailorRiderAssociation
 from apps.tailors.models import TailorProfile
 
 
@@ -60,6 +60,20 @@ class TailorRiderRoleAssignmentTest(TestCase):
             username=username,
             password='testpass123',
             role='RIDER',
+        )
+        profile, _ = RiderProfile.objects.get_or_create(user=rider)
+        profile.full_name = username
+        profile.save(update_fields=['full_name'])
+        review, _ = RiderProfileReview.objects.get_or_create(profile=profile)
+        review.review_status = 'approved'
+        review.save(update_fields=['review_status'])
+        return rider
+
+    def _create_approved_multirole_rider(self, username):
+        rider = User.objects.create_user(
+            username=username,
+            password='testpass123',
+            role='USER',
         )
         profile, _ = RiderProfile.objects.get_or_create(user=rider)
         profile.full_name = username
@@ -140,6 +154,48 @@ class TailorRiderRoleAssignmentTest(TestCase):
         self.assertEqual(order.assigned_rider, self.measurement_rider)
         self.assertEqual(order.rider, self.measurement_rider)
         self.assertIsNone(order.delivery_rider)
+
+    def test_tailor_can_assign_multirole_measurement_rider_with_user_primary_role(self):
+        multirole_rider = self._create_approved_multirole_rider('multirole_measurement_rider')
+        TailorRiderAssociation.objects.create(
+            tailor=self.tailor,
+            rider=multirole_rider,
+            can_take_measurements=True,
+            can_do_delivery=False,
+        )
+        order = self._create_stitching_order()
+
+        self.client.force_authenticate(user=self.tailor)
+        response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {
+                'action': 'accept_order',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': multirole_rider.id,
+                    'rider_assignment_type': 'measurement',
+                },
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        order.refresh_from_db()
+        self.assertEqual(order.measurement_rider, multirole_rider)
+        self.assertEqual(order.assigned_rider, multirole_rider)
+        self.assertEqual(order.rider, multirole_rider)
+
+        self.client.force_authenticate(user=multirole_rider)
+        available_response = self.client.get('/api/riders/orders/available/')
+        self.assertEqual(available_response.status_code, 200, available_response.data)
+        order_ids = [item['id'] for item in available_response.data['data']]
+        self.assertIn(order.id, order_ids)
+
+        self.client.force_authenticate(user=self.delivery_rider)
+        other_response = self.client.get('/api/riders/orders/available/')
+        self.assertEqual(other_response.status_code, 200, other_response.data)
+        other_order_ids = [item['id'] for item in other_response.data['data']]
+        self.assertNotIn(order.id, other_order_ids)
 
     def test_assigned_measurement_rider_sees_new_job_in_available_orders(self):
         order = self._create_stitching_order()
