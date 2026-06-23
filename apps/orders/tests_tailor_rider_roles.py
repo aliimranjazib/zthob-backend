@@ -24,15 +24,19 @@ User = get_user_model()
 class TailorRiderRoleAssignmentTest(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.notification_patchers = [
-            patch('apps.notifications.tasks.send_order_status_notification_task.delay'),
-            patch('apps.notifications.tasks.send_rider_status_notification_task.delay'),
-            patch('apps.notifications.tasks.send_tailor_status_notification_task.delay'),
-            patch('apps.notifications.services.NotificationService.send_new_order_broadcast'),
-        ]
-        for patcher in self.notification_patchers:
-            patcher.start()
-            self.addCleanup(patcher.stop)
+        self.mock_send_order_status_notification = patch(
+            'apps.notifications.tasks.send_order_status_notification_task.delay'
+        ).start()
+        self.addCleanup(patch.stopall)
+        self.mock_send_rider_status_notification = patch(
+            'apps.notifications.tasks.send_rider_status_notification_task.delay'
+        ).start()
+        self.mock_send_tailor_status_notification = patch(
+            'apps.notifications.tasks.send_tailor_status_notification_task.delay'
+        ).start()
+        self.mock_send_new_order_broadcast = patch(
+            'apps.notifications.services.NotificationService.send_new_order_broadcast'
+        ).start()
 
         self.customer = User.objects.create_user(
             username='role_customer',
@@ -94,8 +98,12 @@ class TailorRiderRoleAssignmentTest(TestCase):
         self.client.force_authenticate(user=self.tailor)
 
         response = self.client.post(
-            f'/api/tailors/orders/{order.id}/accept/',
-            {'assigned_rider_id': self.delivery_rider.id},
+            f'/api/orders/{order.id}/action/',
+            {
+                'action': 'accept_order',
+                'role': 'TAILOR',
+                'data': {},
+            },
             format='json',
         )
 
@@ -113,10 +121,14 @@ class TailorRiderRoleAssignmentTest(TestCase):
         self.client.force_authenticate(user=self.tailor)
 
         response = self.client.post(
-            f'/api/tailors/orders/{order.id}/accept/',
+            f'/api/orders/{order.id}/action/',
             {
-                'assigned_rider_id': self.measurement_rider.id,
-                'rider_assignment_type': 'measurement',
+                'action': 'accept_order',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.measurement_rider.id,
+                    'rider_assignment_type': 'measurement',
+                },
             },
             format='json',
         )
@@ -133,10 +145,14 @@ class TailorRiderRoleAssignmentTest(TestCase):
         order = self._create_stitching_order()
         self.client.force_authenticate(user=self.tailor)
         accept_response = self.client.post(
-            f'/api/tailors/orders/{order.id}/accept/',
+            f'/api/orders/{order.id}/action/',
             {
-                'assigned_rider_id': self.measurement_rider.id,
-                'rider_assignment_type': 'measurement',
+                'action': 'accept_order',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.measurement_rider.id,
+                    'rider_assignment_type': 'measurement',
+                },
             },
             format='json',
         )
@@ -150,6 +166,53 @@ class TailorRiderRoleAssignmentTest(TestCase):
         self.assertIsNotNone(order_item)
         self.assertEqual(order_item['rider_assignment_type'], 'measurement')
 
+    def test_other_rider_does_not_see_assigned_measurement_job_in_available_orders(self):
+        other_rider = self._create_approved_rider('other_measurement_rider')
+        order = self._create_stitching_order()
+        self.client.force_authenticate(user=self.tailor)
+        accept_response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {
+                'action': 'accept_order',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.measurement_rider.id,
+                    'rider_assignment_type': 'measurement',
+                },
+            },
+            format='json',
+        )
+        self.assertEqual(accept_response.status_code, 200, accept_response.data)
+
+        self.client.force_authenticate(user=other_rider)
+        response = self.client.get('/api/riders/orders/available/')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertNotIn(order.id, [item['id'] for item in response.data['data']])
+
+    def test_assigned_measurement_rider_notification_is_targeted(self):
+        order = self._create_stitching_order()
+        self.client.force_authenticate(user=self.tailor)
+
+        response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {
+                'action': 'accept_order',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.measurement_rider.id,
+                    'rider_assignment_type': 'measurement',
+                },
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.mock_send_new_order_broadcast.assert_called_with(
+            order,
+            assigned_rider_id=self.measurement_rider.id,
+        )
+
     def test_ready_for_delivery_assigns_delivery_rider_and_resets_measurement_status(self):
         order = self._create_stitching_order(measurements={'chest': 42})
         order.tailor_status = 'stitched'
@@ -161,12 +224,15 @@ class TailorRiderRoleAssignmentTest(TestCase):
         order.save()
 
         self.client.force_authenticate(user=self.tailor)
-        response = self.client.patch(
-            f'/api/tailors/orders/{order.id}/update-status/',
+        response = self.client.post(
+            f'/api/orders/{order.id}/action/',
             {
-                'tailor_status': 'ready_for_delivery',
-                'assigned_rider_id': self.delivery_rider.id,
-                'rider_assignment_type': 'delivery',
+                'action': 'mark_ready',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.delivery_rider.id,
+                    'rider_assignment_type': 'delivery',
+                },
             },
             format='json',
         )
@@ -191,12 +257,15 @@ class TailorRiderRoleAssignmentTest(TestCase):
         order.save()
 
         self.client.force_authenticate(user=self.tailor)
-        assign_response = self.client.patch(
-            f'/api/tailors/orders/{order.id}/update-status/',
+        assign_response = self.client.post(
+            f'/api/orders/{order.id}/action/',
             {
-                'tailor_status': 'ready_for_delivery',
-                'assigned_rider_id': self.delivery_rider.id,
-                'rider_assignment_type': 'delivery',
+                'action': 'mark_ready',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.delivery_rider.id,
+                    'rider_assignment_type': 'delivery',
+                },
             },
             format='json',
         )
@@ -222,12 +291,15 @@ class TailorRiderRoleAssignmentTest(TestCase):
         order.save()
 
         self.client.force_authenticate(user=self.tailor)
-        assign_response = self.client.patch(
-            f'/api/tailors/orders/{order.id}/update-status/',
+        assign_response = self.client.post(
+            f'/api/orders/{order.id}/action/',
             {
-                'tailor_status': 'ready_for_delivery',
-                'assigned_rider_id': self.delivery_rider.id,
-                'rider_assignment_type': 'delivery',
+                'action': 'mark_ready',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.delivery_rider.id,
+                    'rider_assignment_type': 'delivery',
+                },
             },
             format='json',
         )
@@ -252,12 +324,15 @@ class TailorRiderRoleAssignmentTest(TestCase):
         order.save()
 
         self.client.force_authenticate(user=self.tailor)
-        assign_response = self.client.patch(
-            f'/api/tailors/orders/{order.id}/update-status/',
+        assign_response = self.client.post(
+            f'/api/orders/{order.id}/action/',
             {
-                'tailor_status': 'ready_for_delivery',
-                'assigned_rider_id': self.delivery_rider.id,
-                'rider_assignment_type': 'delivery',
+                'action': 'mark_ready',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.delivery_rider.id,
+                    'rider_assignment_type': 'delivery',
+                },
             },
             format='json',
         )
@@ -283,12 +358,15 @@ class TailorRiderRoleAssignmentTest(TestCase):
         order.save()
 
         self.client.force_authenticate(user=self.tailor)
-        assign_response = self.client.patch(
-            f'/api/tailors/orders/{order.id}/update-status/',
+        assign_response = self.client.post(
+            f'/api/orders/{order.id}/action/',
             {
-                'tailor_status': 'ready_for_delivery',
-                'assigned_rider_id': self.measurement_rider.id,
-                'rider_assignment_type': 'delivery',
+                'action': 'mark_ready',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.measurement_rider.id,
+                    'rider_assignment_type': 'delivery',
+                },
             },
             format='json',
         )
@@ -313,12 +391,15 @@ class TailorRiderRoleAssignmentTest(TestCase):
         order.save()
 
         self.client.force_authenticate(user=self.tailor)
-        assign_response = self.client.patch(
-            f'/api/tailors/orders/{order.id}/update-status/',
+        assign_response = self.client.post(
+            f'/api/orders/{order.id}/action/',
             {
-                'tailor_status': 'ready_for_delivery',
-                'delivery_rider_id': self.delivery_rider.id,
-                'rider_assignment_type': 'delivery',
+                'action': 'mark_ready',
+                'role': 'TAILOR',
+                'data': {
+                    'delivery_rider_id': self.delivery_rider.id,
+                    'rider_assignment_type': 'delivery',
+                },
             },
             format='json',
         )
@@ -365,7 +446,11 @@ class TailorRiderRoleAssignmentTest(TestCase):
         self.assertIsNotNone(order_item)
         self.assertEqual(order_item['rider_assignment_type'], 'delivery')
 
-        accept_response = self.client.post(f'/api/riders/orders/{order.id}/accept/')
+        accept_response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {'action': 'accept_order', 'role': 'RIDER'},
+            format='json',
+        )
         self.assertEqual(accept_response.status_code, 200, accept_response.data)
         order.refresh_from_db()
         self.assertEqual(order.delivery_rider, open_delivery_rider)
@@ -440,7 +525,11 @@ class TailorRiderRoleAssignmentTest(TestCase):
         order.save()
 
         self.client.force_authenticate(user=self.delivery_rider)
-        response = self.client.post(f'/api/riders/orders/{order.id}/accept/')
+        response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {'action': 'accept_order', 'role': 'RIDER'},
+            format='json',
+        )
 
         self.assertEqual(response.status_code, 200, response.data)
         order.refresh_from_db()
@@ -477,10 +566,14 @@ class TailorRiderRoleAssignmentTest(TestCase):
 
         self.client.force_authenticate(user=self.tailor)
         accept_response = self.client.post(
-            f'/api/tailors/orders/{order.id}/accept/',
+            f'/api/orders/{order.id}/action/',
             {
-                'assigned_rider_id': self.measurement_rider.id,
-                'rider_assignment_type': 'measurement',
+                'action': 'accept_order',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.measurement_rider.id,
+                    'rider_assignment_type': 'measurement',
+                },
             },
             format='json',
         )
@@ -581,3 +674,135 @@ class TailorRiderRoleAssignmentTest(TestCase):
         self.assertEqual(order.rider, self.delivery_rider)
         self.assertEqual(order.status, 'delivered')
         self.assertEqual(order.rider_status, 'delivered')
+
+    def test_measurement_rider_has_no_actions_after_recording_measurements(self):
+        order = self._create_stitching_order()
+
+        self.client.force_authenticate(user=self.tailor)
+        accept_response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {
+                'action': 'accept_order',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.measurement_rider.id,
+                    'rider_assignment_type': 'measurement',
+                },
+            },
+            format='json',
+        )
+        self.assertEqual(accept_response.status_code, 200, accept_response.data)
+
+        self.client.force_authenticate(user=self.measurement_rider)
+        self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {'action': 'accept_order', 'role': 'RIDER'},
+            format='json',
+        )
+        self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {'action': 'start_measuring', 'role': 'RIDER'},
+            format='json',
+        )
+        measurements_response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {
+                'action': 'record_measurements',
+                'role': 'RIDER',
+                'data': {'measurements': {'chest': 42, 'length': 58}},
+            },
+            format='json',
+        )
+        self.assertEqual(measurements_response.status_code, 200, measurements_response.data)
+
+        detail_response = self.client.get(f'/api/riders/orders/{order.id}/')
+        self.assertEqual(detail_response.status_code, 200, detail_response.data)
+        self.assertEqual(
+            detail_response.data['data']['status_info']['available_actions'],
+            [],
+        )
+
+    def test_delivery_rider_notification_targets_new_rider_after_measurement_complete(self):
+        order = self._create_stitching_order()
+
+        self.client.force_authenticate(user=self.tailor)
+        accept_response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {
+                'action': 'accept_order',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.measurement_rider.id,
+                    'rider_assignment_type': 'measurement',
+                },
+            },
+            format='json',
+        )
+        self.assertEqual(accept_response.status_code, 200, accept_response.data)
+
+        self.client.force_authenticate(user=self.measurement_rider)
+        self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {'action': 'accept_order', 'role': 'RIDER'},
+            format='json',
+        )
+        self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {'action': 'start_measuring', 'role': 'RIDER'},
+            format='json',
+        )
+        measurements_response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {
+                'action': 'record_measurements',
+                'role': 'RIDER',
+                'data': {'measurements': {'chest': 42, 'length': 58}},
+            },
+            format='json',
+        )
+        self.assertEqual(measurements_response.status_code, 200, measurements_response.data)
+
+        self.mock_send_tailor_status_notification.reset_mock()
+        self.mock_send_rider_status_notification.reset_mock()
+
+        self.client.force_authenticate(user=self.tailor)
+        start_stitching_response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {
+                'action': 'start_stitching',
+                'role': 'TAILOR',
+                'data': {'stitching_completion_date': '2026-06-30'},
+            },
+            format='json',
+        )
+        self.assertEqual(start_stitching_response.status_code, 200, start_stitching_response.data)
+
+        finish_stitching_response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {'action': 'finish_stitching', 'role': 'TAILOR'},
+            format='json',
+        )
+        self.assertEqual(finish_stitching_response.status_code, 200, finish_stitching_response.data)
+
+        with patch('apps.notifications.services.NotificationService.send_order_status_notification') as mock_status_notification:
+            mark_ready_response = self.client.post(
+                f'/api/orders/{order.id}/action/',
+                {
+                    'action': 'mark_ready',
+                    'role': 'TAILOR',
+                    'data': {
+                        'assigned_rider_id': self.delivery_rider.id,
+                        'rider_assignment_type': 'delivery',
+                    },
+                },
+                format='json',
+            )
+        self.assertEqual(mark_ready_response.status_code, 200, mark_ready_response.data)
+
+        mock_status_notification.assert_called_once()
+        notification_args = mock_status_notification.call_args[0]
+        self.assertEqual(notification_args[0], order)
+        self.assertEqual(notification_args[1], 'in_progress')
+        self.assertEqual(notification_args[2], 'ready_for_delivery')
+        order.refresh_from_db()
+        self.assertEqual(order.rider, self.delivery_rider)

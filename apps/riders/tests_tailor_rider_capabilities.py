@@ -146,12 +146,15 @@ class TailorRiderCapabilityTest(TestCase):
         order.save(update_fields=['tailor_status', 'status', 'updated_at'])
 
         self.client.force_authenticate(user=self.tailor)
-        response = self.client.patch(
-            f'/api/tailors/orders/{order.id}/update-status/',
+        response = self.client.post(
+            f'/api/orders/{order.id}/action/',
             {
-                'tailor_status': 'ready_for_delivery',
-                'assigned_rider_id': self.rider.id,
-                'rider_assignment_type': 'delivery',
+                'action': 'mark_ready',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.rider.id,
+                    'rider_assignment_type': 'delivery',
+                },
             },
             format='json',
         )
@@ -167,10 +170,14 @@ class TailorRiderCapabilityTest(TestCase):
 
         self.client.force_authenticate(user=self.tailor)
         response = self.client.post(
-            f'/api/tailors/orders/{order.id}/accept/',
+            f'/api/orders/{order.id}/action/',
             {
-                'assigned_rider_id': self.rider.id,
-                'rider_assignment_type': 'measurement',
+                'action': 'accept_order',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.rider.id,
+                    'rider_assignment_type': 'measurement',
+                },
             },
             format='json',
         )
