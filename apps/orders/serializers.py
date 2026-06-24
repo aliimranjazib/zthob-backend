@@ -1884,7 +1884,7 @@ class OrderPaymentStatusUpdateSerializer(serializers.Serializer):
 class PayRemainingBalanceSerializer(serializers.Serializer):
     """Serializer for customer/admin online remaining-balance payment confirmation."""
     payment_method = serializers.ChoiceField(
-        choices=[('credit_card', 'Credit Card'), ('bank_transfer', 'Bank Transfer')],
+        choices=[('bank_transfer', 'Bank Transfer')],
         required=True
     )
     payment_reference = serializers.CharField(required=True, allow_blank=False)
@@ -1914,7 +1914,7 @@ class CheckoutSessionSerializer(serializers.ModelSerializer):
 class CheckoutCreateOrderSerializer(serializers.Serializer):
     bookingUniqueKey = serializers.CharField(required=True)
     payment_method = serializers.ChoiceField(
-        choices=[('cod', 'Cash on Delivery'), ('credit_card', 'Credit Card')],
+        choices=[('cod', 'Cash on Delivery')],
         required=True
     )
     payment_option = serializers.ChoiceField(
@@ -1934,23 +1934,14 @@ class CheckoutCreateOrderSerializer(serializers.Serializer):
         payment_option = attrs.get('payment_option')
 
         if not payment_option:
-            payment_option = 'pay_later' if payment_method == 'cod' else 'full'
+            payment_option = 'pay_later'
             attrs['payment_option'] = payment_option
-
-        if payment_method == 'credit_card' and payment_option == 'pay_later':
-            raise serializers.ValidationError({
-                'payment_option': 'pay_later is only available for COD orders.'
-            })
 
         if payment_method == 'cod' and payment_option != 'pay_later':
             raise serializers.ValidationError({
                 'payment_option': 'COD currently supports pay_later only.'
             })
 
-        if payment_method == 'credit_card' and not payment_reference:
-            raise serializers.ValidationError({
-                'payment_reference': 'payment_reference is required for credit card orders.'
-            })
         if payment_method == 'cod' and payment_reference:
             attrs['payment_reference'] = None
         return attrs

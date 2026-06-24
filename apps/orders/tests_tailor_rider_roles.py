@@ -107,6 +107,30 @@ class TailorRiderRoleAssignmentTest(TestCase):
         )
         return order
 
+    def _create_measurement_service_order(self, tailor=None):
+        order = Order.objects.create(
+            customer=self.customer,
+            tailor=tailor,
+            order_type='measurement_service',
+            service_mode='home_delivery',
+            status='pending',
+            tailor_status='none',
+            rider_status='none',
+            payment_status='paid',
+            total_amount=Decimal('0.00'),
+            paid_amount=Decimal('0.00'),
+            remaining_amount=Decimal('0.00'),
+            is_free_measurement=True,
+        )
+        OrderItem.objects.create(
+            order=order,
+            fabric=None,
+            quantity=1,
+            unit_price=Decimal('0.00'),
+            measurements={},
+        )
+        return order
+
     def test_tailor_accept_measured_order_does_not_assign_initial_rider(self):
         order = self._create_stitching_order(measurements={'chest': 42})
         self.client.force_authenticate(user=self.tailor)
@@ -196,6 +220,65 @@ class TailorRiderRoleAssignmentTest(TestCase):
         self.assertEqual(other_response.status_code, 200, other_response.data)
         other_order_ids = [item['id'] for item in other_response.data['data']]
         self.assertNotIn(order.id, other_order_ids)
+
+    def test_selected_tailor_measurement_service_waits_for_tailor_assignment(self):
+        order = self._create_measurement_service_order(tailor=self.tailor)
+
+        self.client.force_authenticate(user=self.measurement_rider)
+        available_response = self.client.get('/api/riders/orders/available/')
+        self.assertEqual(available_response.status_code, 200, available_response.data)
+        order_ids = [item['id'] for item in available_response.data['data']]
+        self.assertNotIn(order.id, order_ids)
+
+        accept_response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {'action': 'accept_order', 'role': 'RIDER'},
+            format='json',
+        )
+        self.assertEqual(accept_response.status_code, 400, accept_response.data)
+
+    def test_selected_tailor_measurement_service_assigned_rider_only_sees_job(self):
+        order = self._create_measurement_service_order(tailor=self.tailor)
+
+        self.client.force_authenticate(user=self.tailor)
+        response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {
+                'action': 'accept_order',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.measurement_rider.id,
+                    'rider_assignment_type': 'measurement',
+                },
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        order.refresh_from_db()
+        self.assertEqual(order.measurement_rider, self.measurement_rider)
+        self.assertEqual(order.assigned_rider, self.measurement_rider)
+        self.assertEqual(order.rider, self.measurement_rider)
+
+        self.client.force_authenticate(user=self.measurement_rider)
+        assigned_response = self.client.get('/api/riders/orders/available/')
+        self.assertEqual(assigned_response.status_code, 200, assigned_response.data)
+        assigned_order_ids = [item['id'] for item in assigned_response.data['data']]
+        self.assertIn(order.id, assigned_order_ids)
+
+        self.client.force_authenticate(user=self.delivery_rider)
+        other_response = self.client.get('/api/riders/orders/available/')
+        self.assertEqual(other_response.status_code, 200, other_response.data)
+        other_order_ids = [item['id'] for item in other_response.data['data']]
+        self.assertNotIn(order.id, other_order_ids)
+
+    def test_no_tailor_measurement_service_remains_open_to_riders(self):
+        order = self._create_measurement_service_order(tailor=None)
+
+        self.client.force_authenticate(user=self.measurement_rider)
+        available_response = self.client.get('/api/riders/orders/available/')
+        self.assertEqual(available_response.status_code, 200, available_response.data)
+        order_ids = [item['id'] for item in available_response.data['data']]
+        self.assertIn(order.id, order_ids)
 
     def test_assigned_measurement_rider_sees_new_job_in_available_orders(self):
         order = self._create_stitching_order()

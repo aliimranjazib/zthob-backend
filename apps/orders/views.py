@@ -16,7 +16,7 @@ from rest_framework.authentication import SessionAuthentication, BasicAuthentica
 from .actions import OrderActionManager
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema
-from .models import CheckoutSession, Order, OrderItem, OrderPayment, OrderStatusHistory
+from .models import CheckoutSession, Order, OrderItem, OrderPayment, OrderStatusHistory, RemainingPaymentSession
 from .serializers import(
 OrderItemSerializer,
 OrderItemCreateSerializer,
@@ -43,10 +43,12 @@ from apps.orders.payments import get_payment_option, money
 from apps.orders.alinma import (
     AlinmaConfigurationError,
     AlinmaGatewayError,
+    get_response_message,
     get_alinma_config,
     initiate_hosted_payment,
     is_successful_callback,
     parse_callback_payload,
+    response_amount,
     verify_callback_signature,
 )
 
@@ -75,6 +77,7 @@ def _create_order_from_checkout(
     payment_reference,
     collected_by,
     serializer_request=None,
+    payment_metadata=None,
 ):
     if checkout.order:
         return checkout.order
@@ -153,7 +156,7 @@ def _create_order_from_checkout(
             payment_reference=payment_reference,
             collected_by=collected_by,
             notes='Initial checkout payment',
-            metadata={'payment_option': payment_option_key},
+            metadata={'payment_option': payment_option_key, **(payment_metadata or {})},
         )
 
     checkout.order = order
@@ -208,7 +211,7 @@ def _build_alinma_customer_payload(*, checkout, user):
         payload['customerEmail'] = user.email
 
     address = None
-    request_payload = checkout.request_payload or {}
+    request_payload = checkout.request_payload if checkout is not None else {}
     address_id = request_payload.get('delivery_address')
     if address_id:
         try:
@@ -244,6 +247,101 @@ def _build_alinma_return_redirect(*, booking_key, status_value, order_id=None, p
         query['payment_reference'] = payment_reference
     separator = '&' if '?' in base_url else '?'
     return f'{base_url}{separator}{urlencode(query)}'
+
+
+def _payload_currency(payload):
+    amount_details = payload.get('amountDetails') or {}
+    return str(amount_details.get('currency') or payload.get('currency') or '').upper()
+
+
+def _gateway_metadata(payload):
+    card_details = payload.get('cardDetails') or {}
+    amount_details = payload.get('amountDetails') or {}
+    return {
+        'gateway': 'alinma',
+        'response_code': str(payload.get('responseCode') or ''),
+        'response_description': payload.get('responseDescription'),
+        'result': payload.get('result') or payload.get('status'),
+        'transaction_datetime': payload.get('transactionDateTime'),
+        'auth_code': payload.get('authCode'),
+        'rrn': payload.get('rrn'),
+        'terminal_id': payload.get('terminalId'),
+        'masked_card': card_details.get('maskedCard'),
+        'card_brand': card_details.get('cardBrand'),
+        'issuer_name': payload.get('issuerName'),
+        'amount': amount_details.get('amount') or payload.get('amount'),
+        'original_amount': amount_details.get('originalAmount'),
+    }
+
+
+def _verify_alinma_terminal(request, payload):
+    expected_terminal_id = get_alinma_config().terminal_id
+    callback_terminal_id = (
+        request.data.get('termId')
+        or request.query_params.get('termId')
+        or payload.get('terminalId')
+    )
+    return str(callback_terminal_id or '') == str(expected_terminal_id)
+
+
+def _record_remaining_payment(*, order, amount, payment_method, payment_reference, collected_by, notes, metadata=None):
+    reference_used = (
+        Order.objects.filter(payment_reference=payment_reference).exclude(id=order.id).exists()
+        or CheckoutSession.objects.filter(payment_reference=payment_reference).exists()
+        or RemainingPaymentSession.objects.filter(payment_reference=payment_reference).exists()
+        or OrderPayment.objects.filter(payment_reference=payment_reference).exists()
+    )
+    if reference_used:
+        raise ValidationError("This payment reference has already been used.")
+
+    old_payment_status = order.payment_status
+    OrderPayment.objects.create(
+        order=order,
+        amount=amount,
+        payment_method=payment_method,
+        payment_type='remaining_balance' if order.paid_amount > Decimal('0.00') else 'full_payment',
+        status='paid',
+        payment_reference=payment_reference,
+        collected_by=collected_by,
+        notes=notes,
+        metadata={'previous_payment_status': old_payment_status, **(metadata or {})},
+    )
+
+    if not order.payment_reference:
+        order.payment_reference = payment_reference
+    order.apply_payment_summary(order.paid_amount + amount, save=False)
+    order.save(update_fields=[
+        'payment_reference',
+        'payment_status',
+        'paid_amount',
+        'remaining_amount',
+        'updated_at',
+    ])
+
+    OrderStatusHistory.objects.create(
+        order=order,
+        status=order.status,
+        previous_status=order.status,
+        changed_by=collected_by,
+        notes=(
+            f"Remaining payment of {amount} collected via {payment_method}. "
+            f"Payment status changed from {old_payment_status} to {order.payment_status}."
+        ),
+    )
+
+    if order.payment_status != old_payment_status:
+        try:
+            from apps.notifications.services import NotificationService
+            NotificationService.send_payment_status_notification(
+                order=order,
+                old_status=old_payment_status,
+                new_status=order.payment_status,
+            )
+        except Exception as exc:
+            logger.error("Failed to send remaining payment notification: %s", str(exc))
+
+    return old_payment_status
+
 
 class OrderListView(APIView):
     permission_classes=[IsAuthenticated]
@@ -605,8 +703,8 @@ class CheckoutCreateOrderView(APIView):
         responses={201: OrderSerializer},
         summary="Create order from checkout",
         description=(
-            "Create the real order from a bookingUniqueKey. COD creates a pending-payment "
-            "order. Credit card requires payment_reference and creates a paid order."
+            "Create the real order from a bookingUniqueKey for COD/pay-later checkouts. "
+            "Credit card orders are created only by verified Alinma Pay callbacks."
         ),
         tags=["Checkout"]
     )
@@ -707,9 +805,17 @@ class CheckoutAlinmaCallbackView(APIView):
             logger.exception('Failed to parse Alinma callback')
             return HttpResponse(str(exc), status=400)
 
-        if payload.get('signature') and not verify_callback_signature(payload):
+        if not payload.get('signature'):
+            logger.warning('Rejected Alinma callback with missing signature')
+            return HttpResponse('Missing signature', status=400)
+
+        if not verify_callback_signature(payload):
             logger.warning('Rejected Alinma callback with invalid signature')
             return HttpResponse('Invalid signature', status=400)
+
+        if not _verify_alinma_terminal(request, payload):
+            logger.warning('Rejected Alinma callback with invalid terminal id')
+            return HttpResponse('Invalid terminal', status=400)
 
         order_details = payload.get('orderDetails') or {}
         booking_key = order_details.get('orderId')
@@ -725,6 +831,17 @@ class CheckoutAlinmaCallbackView(APIView):
 
         if not booking_key:
             return HttpResponse('Missing order reference', status=400)
+
+        remaining_session = RemainingPaymentSession.objects.select_for_update().select_related(
+            'order',
+            'customer',
+        ).filter(booking_unique_key=booking_key).first()
+        if remaining_session:
+            return self._handle_remaining_payment_callback(
+                session=remaining_session,
+                booking_key=booking_key,
+                payload=payload,
+            )
 
         checkout = CheckoutSession.objects.select_for_update().select_related('customer').filter(
             booking_unique_key=booking_key
@@ -746,6 +863,45 @@ class CheckoutAlinmaCallbackView(APIView):
 
         if is_successful_callback(payload):
             payment_option_key = checkout.payment_option or 'full'
+            checkout_total = (checkout.pricing_snapshot or {}).get('total_amount', '0.00')
+            selected_payment_option = get_payment_option(checkout_total, payment_option_key)
+            if not selected_payment_option:
+                logger.warning(
+                    'Rejected Alinma callback for checkout %s with unavailable payment option %s',
+                    booking_key,
+                    payment_option_key,
+                )
+                checkout.status = 'payment_failed'
+                checkout.save(update_fields=['status', 'updated_at'])
+                return HttpResponseRedirect(
+                    _build_alinma_return_redirect(
+                        booking_key=booking_key,
+                        status_value='failed',
+                    )
+                )
+
+            expected_amount = money(selected_payment_option['pay_now_amount'])
+            actual_amount = money(response_amount(payload))
+            expected_currency = get_alinma_config().currency.upper()
+            actual_currency = _payload_currency(payload)
+            if actual_amount != expected_amount or actual_currency != expected_currency:
+                logger.warning(
+                    'Rejected Alinma callback for checkout %s due to amount/currency mismatch: expected=%s %s actual=%s %s',
+                    booking_key,
+                    expected_amount,
+                    expected_currency,
+                    actual_amount,
+                    actual_currency or 'missing',
+                )
+                checkout.status = 'payment_failed'
+                checkout.save(update_fields=['status', 'updated_at'])
+                return HttpResponseRedirect(
+                    _build_alinma_return_redirect(
+                        booking_key=booking_key,
+                        status_value='failed',
+                    )
+                )
+
             try:
                 _create_order_from_checkout(
                     checkout=checkout,
@@ -754,6 +910,7 @@ class CheckoutAlinmaCallbackView(APIView):
                     payment_option_key=payment_option_key,
                     payment_reference=transaction_id or booking_key,
                     collected_by=None,
+                    payment_metadata=_gateway_metadata(payload),
                 )
             except ValidationError as exc:
                 logger.exception('Failed to finalize checkout %s after successful Alinma callback', booking_key)
@@ -766,6 +923,11 @@ class CheckoutAlinmaCallbackView(APIView):
                     )
                 )
         else:
+            logger.info(
+                'Alinma checkout payment failed for %s: %s',
+                booking_key,
+                get_response_message(payload.get('responseCode'), payload.get('responseDescription')),
+            )
             checkout.status = 'payment_failed'
             checkout.payment_method = 'credit_card'
             checkout.payment_reference = transaction_id or None
@@ -786,6 +948,103 @@ class CheckoutAlinmaCallbackView(APIView):
                 booking_key=booking_key,
                 status_value='failed',
                 payment_reference=checkout.payment_reference,
+            )
+        )
+
+    def _handle_remaining_payment_callback(self, *, session, booking_key, payload):
+        if session.status == 'payment_completed':
+            return HttpResponseRedirect(
+                _build_alinma_return_redirect(
+                    booking_key=booking_key,
+                    status_value='success',
+                    order_id=session.order_id,
+                    payment_reference=session.payment_reference,
+                )
+            )
+
+        transaction_id = str(payload.get('transactionId') or '')
+        if is_successful_callback(payload):
+            expected_amount = money(session.amount)
+            actual_amount = money(response_amount(payload))
+            expected_currency = session.currency.upper()
+            actual_currency = _payload_currency(payload)
+            if actual_amount != expected_amount or actual_currency != expected_currency:
+                logger.warning(
+                    'Rejected Alinma remaining payment callback %s due to amount/currency mismatch: expected=%s %s actual=%s %s',
+                    booking_key,
+                    expected_amount,
+                    expected_currency,
+                    actual_amount,
+                    actual_currency or 'missing',
+                )
+                session.status = 'payment_failed'
+                session.save(update_fields=['status', 'updated_at'])
+                return HttpResponseRedirect(
+                    _build_alinma_return_redirect(
+                        booking_key=booking_key,
+                        status_value='failed',
+                    )
+                )
+
+            try:
+                _record_remaining_payment(
+                    order=session.order,
+                    amount=expected_amount,
+                    payment_method='credit_card',
+                    payment_reference=transaction_id or booking_key,
+                    collected_by=None,
+                    notes='Remaining balance paid online via Alinma Pay.',
+                    metadata={
+                        'source': 'alinma_remaining_callback',
+                        'session': booking_key,
+                        **_gateway_metadata(payload),
+                    },
+                )
+            except ValidationError:
+                logger.exception('Failed to finalize remaining payment session %s after successful Alinma callback', booking_key)
+                session.status = 'payment_failed'
+                session.save(update_fields=['status', 'updated_at'])
+                return HttpResponseRedirect(
+                    _build_alinma_return_redirect(
+                        booking_key=booking_key,
+                        status_value='failed',
+                    )
+                )
+
+            session.status = 'payment_completed'
+            session.payment_reference = transaction_id or booking_key
+            session.payment_confirmed_at = timezone.now()
+            session.save(update_fields=[
+                'status',
+                'payment_reference',
+                'payment_confirmed_at',
+                'updated_at',
+            ])
+        else:
+            logger.info(
+                'Alinma remaining payment failed for %s: %s',
+                booking_key,
+                get_response_message(payload.get('responseCode'), payload.get('responseDescription')),
+            )
+            session.status = 'payment_failed'
+            session.payment_reference = transaction_id or None
+            session.save(update_fields=['status', 'payment_reference', 'updated_at'])
+
+        if session.status == 'payment_completed':
+            return HttpResponseRedirect(
+                _build_alinma_return_redirect(
+                    booking_key=booking_key,
+                    status_value='success',
+                    order_id=session.order_id,
+                    payment_reference=session.payment_reference,
+                )
+            )
+
+        return HttpResponseRedirect(
+            _build_alinma_return_redirect(
+                booking_key=booking_key,
+                status_value='failed',
+                payment_reference=session.payment_reference,
             )
         )
 
@@ -1502,60 +1761,173 @@ class PayRemainingBalanceView(APIView):
         payment_method = serializer.validated_data['payment_method']
         payment_reference = serializer.validated_data['payment_reference']
 
-        reference_used = (
-            Order.objects.filter(payment_reference=payment_reference).exclude(id=order.id).exists()
-            or CheckoutSession.objects.filter(payment_reference=payment_reference).exists()
-            or OrderPayment.objects.filter(payment_reference=payment_reference).exists()
-        )
-        if reference_used:
+        amount = money(order.remaining_amount)
+        try:
+            _record_remaining_payment(
+                order=order,
+                amount=amount,
+                payment_method=payment_method,
+                payment_reference=payment_reference,
+                collected_by=request.user,
+                notes='Remaining balance paid by bank transfer.',
+                metadata={'source': 'manual_remaining_payment_endpoint'},
+            )
+        except ValidationError as exc:
             return api_response(
                 success=False,
-                message="This payment reference has already been used.",
+                message="Remaining payment failed.",
+                errors={'detail': str(exc)},
                 status_code=status.HTTP_400_BAD_REQUEST
             )
-
-        amount = money(order.remaining_amount)
-        old_payment_status = order.payment_status
-
-        OrderPayment.objects.create(
-            order=order,
-            amount=amount,
-            payment_method=payment_method,
-            payment_type='remaining_balance' if order.paid_amount > Decimal('0.00') else 'full_payment',
-            status='paid',
-            payment_reference=payment_reference,
-            collected_by=request.user,
-            notes='Remaining balance paid online by customer.',
-            metadata={'previous_payment_status': old_payment_status},
-        )
-
-        if not order.payment_reference:
-            order.payment_reference = payment_reference
-        order.apply_payment_summary(order.paid_amount + amount, save=False)
-        order.save(update_fields=[
-            'payment_reference',
-            'payment_status',
-            'paid_amount',
-            'remaining_amount',
-            'updated_at',
-        ])
-
-        OrderStatusHistory.objects.create(
-            order=order,
-            status=order.status,
-            previous_status=order.status,
-            changed_by=request.user,
-            notes=(
-                f"Remaining balance paid online ({amount}). "
-                f"Payment status changed from {old_payment_status} to {order.payment_status}."
-            )
-        )
 
         response_serializer = OrderSerializer(order, context={'request': request})
         return api_response(
             success=True,
             message="Remaining payment paid successfully.",
             data=response_serializer.data,
+            status_code=status.HTTP_200_OK
+        )
+
+
+class RemainingBalanceInitiatePaymentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, order_id):
+        order = get_object_or_404(Order.objects.select_for_update(), id=order_id)
+
+        if not request.user.is_admin and order.customer != request.user:
+            return api_response(
+                success=False,
+                message="You can only pay remaining balance for your own order.",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+
+        if order.status == 'cancelled':
+            return api_response(
+                success=False,
+                message="Cannot pay remaining balance for a cancelled order.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if order.payment_status == 'refunded':
+            return api_response(
+                success=False,
+                message="Cannot pay remaining balance for a refunded order.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not order.has_remaining_balance:
+            return api_response(
+                success=False,
+                message="No remaining balance to pay.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        amount = money(order.remaining_amount)
+        session = RemainingPaymentSession.objects.create(
+            booking_unique_key=self._generate_booking_key(),
+            customer=order.customer,
+            order=order,
+            status='active',
+            amount=amount,
+            currency=getattr(settings, 'ALINMAPAY_CURRENCY', 'SAR'),
+            expires_at=timezone.now() + timezone.timedelta(minutes=30),
+        )
+
+        try:
+            config = get_alinma_config()
+            receipt_url = f"{config.receipt_base_url.rstrip('/')}/api/orders/checkout/alinma/callback/"
+            gateway_response = initiate_hosted_payment(
+                track_id=session.booking_unique_key,
+                amount=str(amount),
+                order_id=session.booking_unique_key,
+                description=f'Remaining payment for order {order.order_number}',
+                receipt_url=receipt_url,
+                customer=_build_alinma_customer_payload(checkout=None, user=order.customer),
+                user_data={
+                    'bookingUniqueKey': session.booking_unique_key,
+                    'paymentType': 'remaining_balance',
+                    'orderId': order.id,
+                    'customerId': order.customer_id,
+                },
+            )
+        except AlinmaConfigurationError as exc:
+            return api_response(
+                success=False,
+                message=str(exc),
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except AlinmaGatewayError as exc:
+            return api_response(
+                success=False,
+                message=str(exc),
+                status_code=status.HTTP_502_BAD_GATEWAY
+            )
+
+        gateway_transaction_id = str(gateway_response.get('transactionId') or '')
+        link_url = ((gateway_response.get('paymentLink') or {}).get('linkUrl') or '').strip()
+        if not gateway_transaction_id or not link_url:
+            return api_response(
+                success=False,
+                message="Alinma Pay did not return a valid payment link.",
+                status_code=status.HTTP_502_BAD_GATEWAY
+            )
+
+        session.status = 'payment_initiated'
+        session.save(update_fields=['status', 'updated_at'])
+
+        return api_response(
+            success=True,
+            message="Alinma remaining payment initiated successfully",
+            data={
+                'bookingUniqueKey': session.booking_unique_key,
+                'payment_option': 'remaining_balance',
+                'gateway_transaction_id': gateway_transaction_id,
+                'payment_url': f'{link_url}{gateway_transaction_id}',
+                'amount': str(amount),
+                'currency': config.currency,
+                'status': 'initiated',
+            },
+            status_code=status.HTTP_200_OK
+        )
+
+    def _generate_booking_key(self):
+        while True:
+            key = f"rem_{uuid.uuid4().hex[:24]}"
+            if not RemainingPaymentSession.objects.filter(booking_unique_key=key).exists():
+                return key
+
+
+class RemainingPaymentStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, booking_unique_key):
+        session = get_object_or_404(
+            RemainingPaymentSession.objects.select_related('order', 'customer'),
+            booking_unique_key=booking_unique_key,
+            customer=request.user,
+        )
+
+        if session.status in {'active', 'payment_initiated'} and session.is_expired:
+            session.status = 'expired'
+            session.save(update_fields=['status', 'updated_at'])
+
+        frontend_status = 'order_created' if session.status == 'payment_completed' else session.status
+        return api_response(
+            success=True,
+            message="Remaining payment status retrieved successfully",
+            data={
+                'bookingUniqueKey': session.booking_unique_key,
+                'status': frontend_status,
+                'pricing_summary': {'total_amount': str(session.amount)},
+                'expires_at': session.expires_at.isoformat(),
+                'payment_method': 'credit_card',
+                'payment_plan': session.order.payment_plan,
+                'payment_option': 'remaining_balance',
+                'payment_reference': session.payment_reference,
+                'order_id': session.order_id,
+            },
             status_code=status.HTTP_200_OK
         )
 

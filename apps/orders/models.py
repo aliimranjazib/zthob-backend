@@ -976,6 +976,70 @@ class CheckoutSession(BaseModel):
         return f"{self.booking_unique_key} - {self.status}"
 
 
+class RemainingPaymentSession(BaseModel):
+    """
+    Gateway-confirmed payment session for an existing order's outstanding balance.
+    """
+    STATUS_CHOICES = (
+        ('active', 'Active'),
+        ('payment_initiated', 'Payment Initiated'),
+        ('payment_completed', 'Payment Completed'),
+        ('expired', 'Expired'),
+        ('cancelled', 'Cancelled'),
+        ('payment_failed', 'Payment Failed'),
+    )
+
+    booking_unique_key = models.CharField(
+        max_length=40,
+        unique=True,
+        db_index=True,
+        help_text="Public remaining-balance payment key sent to the payment gateway/frontend"
+    )
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='remaining_payment_sessions',
+        help_text="Customer who owns this payment session"
+    )
+    order = models.ForeignKey(
+        'orders.Order',
+        on_delete=models.CASCADE,
+        related_name='remaining_payment_sessions',
+        help_text="Order whose remaining balance is being paid"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='active',
+        db_index=True
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default='SAR')
+    payment_reference = models.CharField(
+        max_length=150,
+        null=True,
+        blank=True,
+        unique=True,
+        help_text="Gateway transaction/reference supplied after verified payment"
+    )
+    payment_confirmed_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['order', 'status']),
+            models.Index(fields=['customer', 'status']),
+        ]
+
+    @property
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f"{self.booking_unique_key} - {self.order_id} - {self.status}"
+
+
 class OrderStatusHistory(BaseModel):
     """
     Track status changes over time for audit trail

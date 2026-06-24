@@ -1,12 +1,14 @@
 from decimal import Decimal
+from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.customers.models import Address
-from apps.orders.models import Order, OrderItem, OrderPayment
+from apps.orders.models import Order, OrderItem, OrderPayment, RemainingPaymentSession
 from apps.riders.models import RiderProfile, RiderProfileReview
 from apps.tailors.models import Fabric, FabricCategory, TailorProfile
 
@@ -161,7 +163,7 @@ class CODOrderFlowTest(TestCase):
         self.assertIn(cod_order.id, order_ids)
         self.assertEqual(len(order_ids), 1)
 
-    def test_customer_can_pay_remaining_balance_online(self):
+    def test_customer_credit_card_remaining_balance_is_rejected_without_gateway_callback(self):
         order = self._create_order(
             payment_method='credit_card',
             payment_status='partially_paid',
@@ -181,6 +183,32 @@ class CODOrderFlowTest(TestCase):
             format='json',
         )
 
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, 'partially_paid')
+        self.assertEqual(order.remaining_amount, Decimal('67.50'))
+        self.assertEqual(OrderPayment.objects.filter(order=order).count(), 0)
+
+    def test_customer_can_pay_remaining_balance_by_bank_transfer_reference(self):
+        order = self._create_order(
+            payment_method='credit_card',
+            payment_status='partially_paid',
+            payment_plan='partial',
+            payment_option='advance_50',
+            deposit_amount=Decimal('67.50'),
+            paid_amount=Decimal('67.50'),
+            remaining_amount=Decimal('67.50'),
+        )
+
+        response = self.customer_client.post(
+            f'/api/orders/{order.id}/pay-remaining/',
+            data={
+                'payment_method': 'bank_transfer',
+                'payment_reference': 'bank_remaining_001',
+            },
+            format='json',
+        )
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         order.refresh_from_db()
         self.assertEqual(order.payment_status, 'paid')
@@ -190,7 +218,107 @@ class CODOrderFlowTest(TestCase):
             OrderPayment.objects.filter(
                 order=order,
                 payment_type='remaining_balance',
-                payment_reference='txn_remaining_online_001',
+                payment_reference='bank_remaining_001',
+            ).count(),
+            1,
+        )
+
+    @override_settings(
+        ALINMAPAY_TERMINAL_ID='TERM123',
+        ALINMAPAY_TERMINAL_PASSWORD='term-password',
+        ALINMAPAY_MERCHANT_KEY='00112233445566778899aabbccddeeff',
+        ALINMAPAY_REQUEST_URL='https://example.com/pay-request',
+        ALINMAPAY_RECEIPT_BASE_URL='https://app.mgask.net',
+        ALINMAPAY_CURRENCY='SAR',
+    )
+    @patch('apps.orders.alinma.requests.post')
+    def test_customer_can_initiate_remaining_balance_alinma_payment(self, mock_post):
+        order = self._create_order(
+            payment_method='credit_card',
+            payment_status='partially_paid',
+            payment_plan='partial',
+            payment_option='advance_50',
+            deposit_amount=Decimal('67.50'),
+            paid_amount=Decimal('67.50'),
+            remaining_amount=Decimal('67.50'),
+        )
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'responseCode': '000',
+            'transactionId': 'remaining_gateway_txn',
+            'paymentLink': {'linkUrl': 'https://pg.alinmapay.com.sa/direct.htm?paymentId='},
+        }
+        mock_post.return_value = mock_response
+
+        response = self.customer_client.post(
+            f'/api/orders/{order.id}/pay-remaining/initiate-payment/',
+            data={},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['data']['bookingUniqueKey'].startswith('rem_'))
+        self.assertEqual(response.data['data']['amount'], '67.50')
+        session = RemainingPaymentSession.objects.get(order=order)
+        self.assertEqual(session.status, 'payment_initiated')
+
+    @override_settings(
+        ALINMAPAY_TERMINAL_ID='TERM123',
+        ALINMAPAY_TERMINAL_PASSWORD='term-password',
+        ALINMAPAY_MERCHANT_KEY='00112233445566778899aabbccddeeff',
+        ALINMAPAY_REQUEST_URL='https://example.com/pay-request',
+        ALINMAPAY_CURRENCY='SAR',
+    )
+    @patch('apps.orders.views.verify_callback_signature', return_value=True)
+    @patch('apps.orders.views.parse_callback_payload')
+    def test_remaining_balance_alinma_callback_marks_order_paid(self, mock_parse_callback_payload, _mock_verify):
+        order = self._create_order(
+            payment_method='credit_card',
+            payment_status='partially_paid',
+            payment_plan='partial',
+            payment_option='advance_50',
+            deposit_amount=Decimal('67.50'),
+            paid_amount=Decimal('67.50'),
+            remaining_amount=Decimal('67.50'),
+        )
+        session = RemainingPaymentSession.objects.create(
+            booking_unique_key='rem_test_remaining_success',
+            customer=self.customer,
+            order=order,
+            status='payment_initiated',
+            amount=Decimal('67.50'),
+            currency='SAR',
+            expires_at=timezone.now() + timezone.timedelta(minutes=30),
+        )
+        mock_parse_callback_payload.return_value = {
+            'transactionId': 'remaining_alinma_txn_001',
+            'responseCode': '000',
+            'result': 'SUCCESS',
+            'signature': 'valid-signature',
+            'terminalId': 'TERM123',
+            'amountDetails': {'amount': '67.50', 'currency': 'SAR'},
+            'orderDetails': {'orderId': session.booking_unique_key},
+        }
+
+        response = self.customer_client.post(
+            '/api/orders/checkout/alinma/callback/',
+            data={'data': 'encrypted-payload-placeholder'},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn('status=success', response['Location'])
+        order.refresh_from_db()
+        session.refresh_from_db()
+        self.assertEqual(order.payment_status, 'paid')
+        self.assertEqual(order.remaining_amount, Decimal('0.00'))
+        self.assertEqual(session.status, 'payment_completed')
+        self.assertEqual(session.payment_reference, 'remaining_alinma_txn_001')
+        self.assertEqual(
+            OrderPayment.objects.filter(
+                order=order,
+                payment_type='remaining_balance',
+                payment_reference='remaining_alinma_txn_001',
             ).count(),
             1,
         )
@@ -227,7 +355,7 @@ class CODOrderFlowTest(TestCase):
         OrderPayment.objects.create(
             order=first_order,
             amount=Decimal('85.00'),
-            payment_method='credit_card',
+            payment_method='bank_transfer',
             payment_type='remaining_balance',
             payment_reference='txn_duplicate_remaining',
             collected_by=self.customer,
@@ -236,7 +364,7 @@ class CODOrderFlowTest(TestCase):
         response = self.customer_client.post(
             f'/api/orders/{second_order.id}/pay-remaining/',
             data={
-                'payment_method': 'credit_card',
+                'payment_method': 'bank_transfer',
                 'payment_reference': 'txn_duplicate_remaining',
             },
             format='json',
@@ -254,7 +382,7 @@ class CODOrderFlowTest(TestCase):
         response = self.customer_client.post(
             f'/api/orders/{order.id}/pay-remaining/',
             data={
-                'payment_method': 'credit_card',
+                'payment_method': 'bank_transfer',
                 'payment_reference': 'txn_no_balance',
             },
             format='json',

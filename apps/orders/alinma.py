@@ -23,6 +23,19 @@ class AlinmaGatewayError(Exception):
     """Raised when Alinma returns an invalid or failed response."""
 
 
+ALINMA_RESPONSE_MESSAGES = {
+    '000': 'Transaction Successful',
+    '001': 'Transaction Initiated',
+    '624': 'Transaction cancelled by the user.',
+    '625': '3D Secure check failed.',
+    '699': 'Transaction timed out from bank.',
+    '901': 'Transaction failed.',
+    '903': 'Request message not framed correctly or invalid message.',
+    '904': 'Invalid checksum/signature for request.',
+    '905': 'Invalid checksum/signature for response.',
+}
+
+
 @dataclass(frozen=True)
 class AlinmaConfig:
     terminal_id: str
@@ -41,7 +54,7 @@ def get_alinma_config() -> AlinmaConfig:
     request_url = getattr(settings, 'ALINMAPAY_REQUEST_URL', '')
     currency = getattr(settings, 'ALINMAPAY_CURRENCY', 'SAR')
     receipt_base_url = getattr(settings, 'ALINMAPAY_RECEIPT_BASE_URL', '')
-    request_timeout = int(getattr(settings, 'ALINMAPAY_TIMEOUT_SECONDS', 30))
+    request_timeout = int(getattr(settings, 'ALINMAPAY_TIMEOUT_SECONDS', 60))
 
     if not terminal_id or not terminal_password or not merchant_key or not request_url:
         raise AlinmaConfigurationError(
@@ -198,6 +211,74 @@ def initiate_hosted_payment(
     return data
 
 
+def get_response_message(response_code: str, fallback: str | None = None) -> str:
+    code = str(response_code or '')
+    return fallback or ALINMA_RESPONSE_MESSAGES.get(code) or f'Alinma Pay returned response code {code}.'
+
+
+def inquire_transaction(
+    *,
+    reference_id: str,
+    order_id: str,
+    amount: str,
+    customer: dict[str, Any] | None = None,
+    user_data: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    config = get_alinma_config()
+    signature = build_request_signature(
+        track_id=order_id,
+        amount=amount,
+        currency=config.currency,
+        config=config,
+    )
+    payload: dict[str, Any] = {
+        'referenceId': reference_id,
+        'terminalId': config.terminal_id,
+        'password': config.terminal_password,
+        'signature': signature,
+        'paymentType': '10',
+        'amount': amount,
+        'currency': config.currency,
+        'order': {'orderId': order_id},
+    }
+    if customer:
+        payload['customer'] = customer
+    if user_data:
+        payload['additionalDetails'] = {'userData': json.dumps(user_data)}
+
+    try:
+        response = requests.post(
+            config.request_url,
+            json=payload,
+            timeout=config.request_timeout,
+        )
+    except requests.RequestException as exc:
+        logger.exception(
+            'Failed to connect to Alinma Pay inquiry: reference_id=%s order_id=%s',
+            reference_id,
+            order_id,
+        )
+        raise AlinmaGatewayError('Could not connect to Alinma Pay inquiry.') from exc
+
+    try:
+        data = response.json()
+    except ValueError as exc:
+        logger.error(
+            'Alinma Pay inquiry returned non-JSON response: reference_id=%s order_id=%s status_code=%s body=%s',
+            reference_id,
+            order_id,
+            response.status_code,
+            response.text[:1000],
+        )
+        raise AlinmaGatewayError('Alinma Pay inquiry returned an unreadable response.') from exc
+
+    if response.status_code >= 400:
+        response_code = str(data.get('responseCode') or '')
+        raise AlinmaGatewayError(get_response_message(response_code, data.get('responseDescription')))
+
+    return data
+
+
 def decrypt_callback_payload(encrypted_data: str, merchant_key: str) -> str:
     key = bytes.fromhex(merchant_key)
     decoded = base64.b64decode(encrypted_data)
@@ -245,4 +326,4 @@ def verify_callback_signature(payload: dict[str, Any]) -> bool:
 def is_successful_callback(payload: dict[str, Any]) -> bool:
     response_code = str(payload.get('responseCode') or '')
     result = str(payload.get('result') or payload.get('status') or '').upper()
-    return response_code in {'00', '000', '001'} or result == 'SUCCESS'
+    return response_code in {'00', '000'} and (not result or result == 'SUCCESS')

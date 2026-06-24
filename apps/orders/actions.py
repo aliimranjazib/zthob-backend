@@ -192,6 +192,13 @@ class AcceptOrderAction(BaseOrderAction):
         elif role == 'RIDER':
             if not self._is_payment_ready():
                 raise ValidationError("Order payment must be paid or pending COD before rider can accept it.")
+            is_open_measurement_service = (
+                self.order.order_type == 'measurement_service'
+                and self.order.service_mode == 'home_delivery'
+                and self.order.tailor_id is None
+            )
+            if self.order.tailor_status == 'none' and not is_open_measurement_service:
+                raise ValidationError("Order is still pending tailor confirmation. Please wait for the tailor to accept the order.")
             is_delivery_assignment = self.order.status == 'ready_for_delivery' and self.order.delivery_rider == self.user
             if self.order.rider and self.order.rider != self.user and not is_delivery_assignment:
                 raise PermissionDenied("This order is already assigned to another rider.")
@@ -589,9 +596,9 @@ class CollectCashPaymentAction(BaseOrderAction):
 
         from apps.orders.models import OrderPayment, OrderStatusHistory
 
-        if payment_method == 'credit_card' and not payment_reference:
-            raise ValidationError("payment_reference is required for credit card collection.")
-        if payment_method not in ['cod', 'credit_card', 'bank_transfer']:
+        if payment_method == 'credit_card':
+            raise ValidationError("Credit card collection must be confirmed by the payment gateway.")
+        if payment_method not in ['cod', 'bank_transfer']:
             raise ValidationError("Invalid payment_method for collection.")
 
         if payment_reference and OrderPayment.objects.filter(payment_reference=payment_reference).exists():

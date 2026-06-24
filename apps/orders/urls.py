@@ -20,6 +20,8 @@ from .views import (
     CheckoutCreateOrderView,
     CheckoutInitiatePaymentView,
     CheckoutAlinmaCallbackView,
+    RemainingBalanceInitiatePaymentView,
+    RemainingPaymentStatusView,
 )
 from .measurement_views import MeasurementEligibilityView
 
@@ -39,6 +41,8 @@ urlpatterns = [
     path('<int:order_id>/history/', OrderHistoryView.as_view(), name='order-history'),
     path('<int:order_id>/payment-status/', OrderPaymentStatusUpdateView.as_view(), name='order-payment-status-update'),
     path('<int:order_id>/pay-remaining/', PayRemainingBalanceView.as_view(), name='order-pay-remaining'),
+    path('<int:order_id>/pay-remaining/initiate-payment/', RemainingBalanceInitiatePaymentView.as_view(), name='order-pay-remaining-initiate'),
+    path('pay-remaining/<str:booking_unique_key>/', RemainingPaymentStatusView.as_view(), name='order-pay-remaining-status'),
     path('<int:order_id>/measurements/', OrderMeasurementsDetailView.as_view(), name='order-measurements'),
     path('<int:order_id>/action/', OrderActionView.as_view(), name='order-action'),
     

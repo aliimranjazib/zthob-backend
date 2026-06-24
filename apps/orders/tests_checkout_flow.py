@@ -114,7 +114,23 @@ class CheckoutFlowTest(TestCase):
         self.fabric.refresh_from_db()
         self.assertEqual(self.fabric.stock, 9)
 
-    def test_credit_card_requires_payment_reference(self):
+    def test_credit_card_create_order_from_checkout_is_rejected(self):
+        booking_key = self._create_checkout()
+
+        response = self.client.post(
+            '/api/orders/checkout/create-order/',
+            data={
+                'bookingUniqueKey': booking_key,
+                'payment_method': 'credit_card',
+                'payment_reference': 'client_supplied_txn',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Order.objects.count(), 0)
+
+    def test_credit_card_without_reference_is_rejected(self):
         booking_key = self._create_checkout()
 
         response = self.client.post(
@@ -125,32 +141,6 @@ class CheckoutFlowTest(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Order.objects.count(), 0)
-
-    def test_credit_card_create_order_from_checkout_is_paid(self):
-        booking_key = self._create_checkout()
-
-        response = self.client.post(
-            '/api/orders/checkout/create-order/',
-            data={
-                'bookingUniqueKey': booking_key,
-                'payment_method': 'credit_card',
-                'payment_reference': 'txn_checkout_001',
-            },
-            format='json',
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        order = Order.objects.get()
-        checkout = CheckoutSession.objects.get(booking_unique_key=booking_key)
-        self.assertEqual(order.payment_method, 'credit_card')
-        self.assertEqual(order.payment_status, 'paid')
-        self.assertEqual(order.payment_plan, 'full')
-        self.assertEqual(order.paid_amount, order.total_amount)
-        self.assertEqual(order.remaining_amount, Decimal('0.00'))
-        self.assertEqual(order.payment_reference, 'txn_checkout_001')
-        self.assertEqual(OrderPayment.objects.filter(order=order, payment_type='full_payment').count(), 1)
-        self.assertEqual(checkout.status, 'order_created')
-        self.assertEqual(checkout.order, order)
 
     def test_checkout_returns_backend_payment_options(self):
         response = self.client.post(
@@ -168,7 +158,7 @@ class CheckoutFlowTest(TestCase):
         self.assertIn('advance_50', option_keys)
         self.assertIn('pay_later', option_keys)
 
-    def test_partial_payment_create_order_from_checkout_is_partially_paid(self):
+    def test_partial_credit_card_create_order_from_checkout_is_rejected(self):
         booking_key = self._create_checkout()
 
         response = self.client.post(
@@ -182,17 +172,8 @@ class CheckoutFlowTest(TestCase):
             format='json',
         )
 
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        order = Order.objects.get()
-        checkout = CheckoutSession.objects.get(booking_unique_key=booking_key)
-        self.assertEqual(order.payment_status, 'partially_paid')
-        self.assertEqual(order.payment_plan, 'partial')
-        self.assertEqual(order.payment_option, 'advance_50')
-        self.assertEqual(order.paid_amount, order.deposit_amount)
-        self.assertGreater(order.remaining_amount, Decimal('0.00'))
-        self.assertEqual(checkout.payment_plan, 'partial')
-        self.assertEqual(checkout.payment_option, 'advance_50')
-        self.assertEqual(OrderPayment.objects.filter(order=order, payment_type='deposit').count(), 1)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Order.objects.count(), 0)
 
     def test_unavailable_payment_option_is_rejected(self):
         booking_key = self._create_checkout()
@@ -211,12 +192,11 @@ class CheckoutFlowTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Order.objects.count(), 0)
 
-    def test_repeating_create_order_for_same_checkout_returns_existing_order(self):
+    def test_repeating_cod_create_order_for_same_checkout_returns_existing_order(self):
         booking_key = self._create_checkout()
         payload = {
             'bookingUniqueKey': booking_key,
-            'payment_method': 'credit_card',
-            'payment_reference': 'txn_checkout_repeat',
+            'payment_method': 'cod',
         }
 
         first_response = self.client.post('/api/orders/checkout/create-order/', data=payload, format='json')
@@ -228,7 +208,7 @@ class CheckoutFlowTest(TestCase):
         self.fabric.refresh_from_db()
         self.assertEqual(self.fabric.stock, 9)
 
-    def test_used_payment_reference_cannot_create_another_order(self):
+    def test_payment_reference_cannot_create_card_order(self):
         first_booking_key = self._create_checkout()
         response = self.client.post(
             '/api/orders/checkout/create-order/',
@@ -239,21 +219,9 @@ class CheckoutFlowTest(TestCase):
             },
             format='json',
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-        second_booking_key = self._create_checkout()
-        response = self.client.post(
-            '/api/orders/checkout/create-order/',
-            data={
-                'bookingUniqueKey': second_booking_key,
-                'payment_method': 'credit_card',
-                'payment_reference': 'txn_duplicate_ref',
-            },
-            format='json',
-        )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(Order.objects.count(), 1)
+        self.assertEqual(Order.objects.count(), 0)
 
     def test_expired_checkout_cannot_create_order(self):
         booking_key = self._create_checkout()
@@ -335,7 +303,8 @@ class CheckoutFlowTest(TestCase):
             'responseCode': '000',
             'result': 'SUCCESS',
             'signature': 'valid-signature',
-            'amountDetails': {'amount': '100.00'},
+            'terminalId': 'TERM123',
+            'amountDetails': {'amount': '135.00', 'currency': 'SAR'},
             'orderDetails': {'orderId': booking_key},
         }
 
@@ -366,6 +335,163 @@ class CheckoutFlowTest(TestCase):
         ALINMAPAY_TERMINAL_PASSWORD='term-password',
         ALINMAPAY_MERCHANT_KEY='00112233445566778899aabbccddeeff',
         ALINMAPAY_REQUEST_URL='https://example.com/pay-request',
+        ALINMAPAY_CURRENCY='SAR',
+    )
+    @patch('apps.orders.views.parse_callback_payload')
+    def test_alinma_callback_missing_signature_is_rejected(self, mock_parse_callback_payload):
+        booking_key = self._create_checkout()
+        mock_parse_callback_payload.return_value = {
+            'transactionId': 'alinma_txn_missing_signature',
+            'responseCode': '000',
+            'result': 'SUCCESS',
+            'amountDetails': {'amount': '100.00', 'currency': 'SAR'},
+            'orderDetails': {'orderId': booking_key},
+        }
+
+        response = self.client.post(
+            '/api/orders/checkout/alinma/callback/',
+            data={'data': 'encrypted-payload-placeholder'},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Order.objects.count(), 0)
+
+    @override_settings(
+        ALINMAPAY_TERMINAL_ID='TERM123',
+        ALINMAPAY_TERMINAL_PASSWORD='term-password',
+        ALINMAPAY_MERCHANT_KEY='00112233445566778899aabbccddeeff',
+        ALINMAPAY_REQUEST_URL='https://example.com/pay-request',
+        ALINMAPAY_CURRENCY='SAR',
+    )
+    @patch('apps.orders.views.verify_callback_signature', return_value=False)
+    @patch('apps.orders.views.parse_callback_payload')
+    def test_alinma_callback_invalid_signature_is_rejected(self, mock_parse_callback_payload, _mock_verify):
+        booking_key = self._create_checkout()
+        mock_parse_callback_payload.return_value = {
+            'transactionId': 'alinma_txn_invalid_signature',
+            'responseCode': '000',
+            'result': 'SUCCESS',
+            'signature': 'invalid-signature',
+            'amountDetails': {'amount': '100.00', 'currency': 'SAR'},
+            'orderDetails': {'orderId': booking_key},
+        }
+
+        response = self.client.post(
+            '/api/orders/checkout/alinma/callback/',
+            data={'data': 'encrypted-payload-placeholder'},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Order.objects.count(), 0)
+
+    @override_settings(
+        ALINMAPAY_TERMINAL_ID='TERM123',
+        ALINMAPAY_TERMINAL_PASSWORD='term-password',
+        ALINMAPAY_MERCHANT_KEY='00112233445566778899aabbccddeeff',
+        ALINMAPAY_REQUEST_URL='https://example.com/pay-request',
+        ALINMAPAY_CURRENCY='SAR',
+    )
+    @patch('apps.orders.views.verify_callback_signature', return_value=True)
+    @patch('apps.orders.views.parse_callback_payload')
+    def test_alinma_callback_amount_mismatch_does_not_create_order(self, mock_parse_callback_payload, _mock_verify):
+        booking_key = self._create_checkout()
+        checkout = CheckoutSession.objects.get(booking_unique_key=booking_key)
+        checkout.payment_option = 'full'
+        checkout.payment_method = 'credit_card'
+        checkout.save(update_fields=['payment_option', 'payment_method'])
+
+        mock_parse_callback_payload.return_value = {
+            'transactionId': 'alinma_txn_wrong_amount',
+            'responseCode': '000',
+            'result': 'SUCCESS',
+            'signature': 'valid-signature',
+            'terminalId': 'TERM123',
+            'amountDetails': {'amount': '10.00', 'currency': 'SAR'},
+            'orderDetails': {'orderId': booking_key},
+        }
+
+        response = self.client.post(
+            '/api/orders/checkout/alinma/callback/',
+            data={'data': 'encrypted-payload-placeholder'},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn('status=failed', response['Location'])
+        checkout.refresh_from_db()
+        self.assertEqual(checkout.status, 'payment_failed')
+        self.assertEqual(Order.objects.count(), 0)
+
+    @override_settings(
+        ALINMAPAY_TERMINAL_ID='TERM123',
+        ALINMAPAY_TERMINAL_PASSWORD='term-password',
+        ALINMAPAY_MERCHANT_KEY='00112233445566778899aabbccddeeff',
+        ALINMAPAY_REQUEST_URL='https://example.com/pay-request',
+        ALINMAPAY_CURRENCY='SAR',
+    )
+    @patch('apps.orders.views.verify_callback_signature', return_value=True)
+    @patch('apps.orders.views.parse_callback_payload')
+    def test_alinma_callback_initiated_code_does_not_create_paid_order(self, mock_parse_callback_payload, _mock_verify):
+        booking_key = self._create_checkout()
+        checkout = CheckoutSession.objects.get(booking_unique_key=booking_key)
+        checkout.payment_option = 'full'
+        checkout.payment_method = 'credit_card'
+        checkout.save(update_fields=['payment_option', 'payment_method'])
+
+        mock_parse_callback_payload.return_value = {
+            'transactionId': 'alinma_txn_initiated_only',
+            'responseCode': '001',
+            'result': 'SUCCESS',
+            'signature': 'valid-signature',
+            'terminalId': 'TERM123',
+            'amountDetails': {'amount': '135.00', 'currency': 'SAR'},
+            'orderDetails': {'orderId': booking_key},
+        }
+
+        response = self.client.post(
+            '/api/orders/checkout/alinma/callback/',
+            data={'data': 'encrypted-payload-placeholder'},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn('status=failed', response['Location'])
+        checkout.refresh_from_db()
+        self.assertEqual(checkout.status, 'payment_failed')
+        self.assertEqual(Order.objects.count(), 0)
+
+    @override_settings(
+        ALINMAPAY_TERMINAL_ID='TERM123',
+        ALINMAPAY_TERMINAL_PASSWORD='term-password',
+        ALINMAPAY_MERCHANT_KEY='00112233445566778899aabbccddeeff',
+        ALINMAPAY_REQUEST_URL='https://example.com/pay-request',
+        ALINMAPAY_CURRENCY='SAR',
+    )
+    @patch('apps.orders.views.verify_callback_signature', return_value=True)
+    @patch('apps.orders.views.parse_callback_payload')
+    def test_alinma_callback_terminal_mismatch_is_rejected(self, mock_parse_callback_payload, _mock_verify):
+        booking_key = self._create_checkout()
+        mock_parse_callback_payload.return_value = {
+            'transactionId': 'alinma_txn_wrong_terminal',
+            'responseCode': '000',
+            'result': 'SUCCESS',
+            'signature': 'valid-signature',
+            'terminalId': 'OTHERTERM',
+            'amountDetails': {'amount': '135.00', 'currency': 'SAR'},
+            'orderDetails': {'orderId': booking_key},
+        }
+
+        response = self.client.post(
+            '/api/orders/checkout/alinma/callback/',
+            data={'data': 'encrypted-payload-placeholder'},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Order.objects.count(), 0)
+
+    @override_settings(
+        ALINMAPAY_TERMINAL_ID='TERM123',
+        ALINMAPAY_TERMINAL_PASSWORD='term-password',
+        ALINMAPAY_MERCHANT_KEY='00112233445566778899aabbccddeeff',
+        ALINMAPAY_REQUEST_URL='https://example.com/pay-request',
     )
     @patch('apps.orders.views.verify_callback_signature', return_value=True)
     @patch('apps.orders.views.parse_callback_payload')
@@ -381,7 +507,8 @@ class CheckoutFlowTest(TestCase):
             'responseCode': '500',
             'result': 'FAILED',
             'signature': 'valid-signature',
-            'amountDetails': {'amount': '100.00'},
+            'terminalId': 'TERM123',
+            'amountDetails': {'amount': '100.00', 'currency': 'SAR'},
             'orderDetails': {'orderId': booking_key},
         }
 

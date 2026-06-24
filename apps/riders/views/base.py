@@ -616,7 +616,10 @@ class RiderAvailableOrdersView(APIView):
         measurement_service_work = (
             Q(rider_status='none')
             & Q(order_type='measurement_service', service_mode='home_delivery')
-            & (unassigned_work | measurement_assignment)
+            & (
+                (Q(tailor__isnull=True) & unassigned_work)
+                | (Q(tailor_status__in=['accepted', 'in_progress']) & measurement_assignment)
+            )
         )
 
         orders = Order.objects.filter(
@@ -783,11 +786,16 @@ class RiderOrderDetailView(APIView):
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
-        # Riders should not see orders that are still pending (not yet accepted by tailor)
-        # Unless the rider is already assigned to it (shouldn't happen normally)
-        # Exception: measurement_service orders don't require tailor acceptance for home_delivery
+        # Riders should not see orders that are still pending (not yet accepted by tailor).
+        # Legacy no-tailor measurement-service orders remain rider-driven, but selected-tailor
+        # measurement-service orders must wait for the tailor to assign a measurement rider.
         if order.tailor_status == 'none' and order.rider != request.user:
-            if order.order_type != 'measurement_service' or order.service_mode != 'home_delivery':
+            is_open_measurement_service = (
+                order.order_type == 'measurement_service'
+                and order.service_mode == 'home_delivery'
+                and order.tailor_id is None
+            )
+            if not is_open_measurement_service:
                 return api_response(
                     success=False,
                     message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
@@ -870,10 +878,16 @@ class RiderAcceptOrderView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
         
-        # Riders should not accept orders that are still pending (not yet accepted by tailor)
-        # Exception: measurement_service orders don't require tailor acceptance for home_delivery
+        # Riders should not accept orders that are still pending (not yet accepted by tailor).
+        # Legacy no-tailor measurement-service orders remain rider-driven, but selected-tailor
+        # measurement-service orders must wait for the tailor to assign a measurement rider.
         if order.tailor_status == 'none':
-            if order.order_type != 'measurement_service' or order.service_mode != 'home_delivery':
+            is_open_measurement_service = (
+                order.order_type == 'measurement_service'
+                and order.service_mode == 'home_delivery'
+                and order.tailor_id is None
+            )
+            if not is_open_measurement_service:
                 return api_response(
                     success=False,
                     message="Order is still pending tailor confirmation. Please wait for the tailor to accept the order.",
