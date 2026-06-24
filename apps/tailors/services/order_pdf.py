@@ -13,7 +13,7 @@ from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, Image
 )
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.pdfbase import pdfmetrics
@@ -142,6 +142,7 @@ _AR_LABELS = {
     'Instructions:':       'التعليمات:',
     'Measurements:':       'القياسات:',
     'Styles:':             'الأنماط:',
+    'Style Images:':       'صور الأنماط:',
     'N/A':                 'غير متاح',
     'Measured at:':        'تم القياس في:',
     'Measurement Service': 'خدمة القياس',
@@ -384,6 +385,91 @@ def _is_positive_amount(value):
         return Decimal(value or '0.00') > Decimal('0.00')
     except Exception:
         return False
+
+
+def _style_image_path(style):
+    """Resolve a custom style payload image reference to a local media file."""
+    if not isinstance(style, dict):
+        return None
+
+    path = style.get('asset_path') or style.get('image_url') or style.get('image')
+    if not path:
+        return None
+
+    path = str(path).strip()
+    media_url = getattr(settings, 'MEDIA_URL', '/media/')
+    media_root = getattr(settings, 'MEDIA_ROOT', None)
+
+    if path.startswith('http://') or path.startswith('https://'):
+        marker = media_url if media_url.startswith('/') else f'/{media_url}'
+        if marker in path:
+            path = path.split(marker, 1)[1]
+        else:
+            return None
+
+    if media_url and path.startswith(media_url):
+        path = path[len(media_url):]
+    path = path.lstrip('/')
+
+    if os.path.isabs(path):
+        candidate = path
+    elif media_root:
+        candidate = os.path.join(media_root, path)
+    else:
+        candidate = os.path.join(settings.BASE_DIR, path)
+
+    return candidate if os.path.exists(candidate) else None
+
+
+def _custom_style_image_grid(styles, page_w, s, lang='en'):
+    """Build a compact grid of customer-selected custom style images."""
+    image_cells = []
+    for style in styles:
+        image_path = _style_image_path(style)
+        if not image_path:
+            continue
+
+        label = style.get('label') or style.get('style_type') or ''
+        if style.get('style_type') and style.get('label'):
+            label = f'{style.get("style_type", "").replace("_", " ").title()}: {style.get("label", "")}'
+        if lang == 'ar':
+            label = _shape_arabic(label)
+
+        try:
+            img = Image(image_path, width=24 * mm, height=24 * mm, kind='proportional')
+        except Exception as exc:
+            logger.debug("Unable to add custom style image to PDF: %s", exc)
+            continue
+
+        image_cells.append([
+            img,
+            Paragraph(_safe_text(label), s['small']),
+        ])
+
+    if not image_cells:
+        return None
+
+    columns = 3
+    rows = []
+    for i in range(0, len(image_cells), columns):
+        row = image_cells[i:i + columns]
+        while len(row) < columns:
+            row.append('')
+        rows.append(row)
+
+    cell_width = page_w / columns
+    grid = Table(rows, colWidths=[cell_width] * columns, hAlign='LEFT')
+    grid.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BACKGROUND', (0, 0), (-1, -1), WHITE),
+        ('BOX', (0, 0), (-1, -1), 0.25, BRAND_MID),
+        ('INNERGRID', (0, 0), (-1, -1), 0.25, BRAND_MID),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    return grid
 
 
 def _status_badge_color(status):
@@ -964,6 +1050,12 @@ def generate_order_pdf(order, lang='en') -> bytes:
                         _styles_text = _shape_arabic(_styles_text)
                     style_p = Paragraph(f'<b>{_safe_text(_styles_label)}</b> {_safe_text(_styles_text)}', s['small'])
                     item_rows.append([style_p, '', '', '', '', ''])
+
+                style_image_grid = _custom_style_image_grid(item.custom_styles, page_w, s, lang)
+                if style_image_grid:
+                    image_label = Paragraph(f'<b>{_safe_text(_t("Style Images:", lang))}</b>', s['small'])
+                    item_rows.append([image_label, '', '', '', '', ''])
+                    item_rows.append([style_image_grid, '', '', '', '', ''])
 
         items_tbl = Table(item_rows, colWidths=col_widths_items, repeatRows=1)
         
