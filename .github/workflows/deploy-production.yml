@@ -126,8 +126,26 @@ jobs:
       - name: Verify production endpoint
         env:
           EXPECTED_GIT_COMMIT: ${{ env.GIT_COMMIT }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
         run: |
           set -euo pipefail
+          echo "Production server-local diagnostics:"
+          ssh -4 -i ~/.ssh/id_rsa -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "export EXPECTED_GIT_COMMIT='$EXPECTED_GIT_COMMIT'; bash -s" <<'EOF'
+            set -euo pipefail
+            cd /home/mgask-production
+            echo "--- docker compose ps ---"
+            docker compose -f docker-compose.production.yml ps
+            echo "--- container deployment metadata ---"
+            docker compose -f docker-compose.production.yml exec -T -e EXPECTED_GIT_COMMIT="$EXPECTED_GIT_COMMIT" web python manage.py shell -c "from apps.core.version import get_git_info; print(get_git_info())"
+            echo "--- host-local production port response ---"
+            curl -fsS http://127.0.0.1:8000/api/config/version/ || true
+            echo
+          EOF
+
+          echo "Public production endpoint response:"
           response="$(curl -fsS https://prod.mgask.net/api/config/version/)"
           echo "$response"
-          python -c "import json, os, sys; data = json.load(sys.stdin)['data']; expected = os.environ['EXPECTED_GIT_COMMIT']; ok = data.get('full_commit_hash') == expected and data.get('app_env') == 'production'; raise SystemExit(0 if ok else 1)" <<< "$response"
+          python -c "import json, os, sys; data = json.load(sys.stdin)['data']; expected = os.environ['EXPECTED_GIT_COMMIT']; ok = data.get('full_commit_hash') == expected and data.get('app_env') == 'production'; print('expected_full_commit_hash=', expected); print('actual_full_commit_hash=', data.get('full_commit_hash')); print('actual_app_env=', data.get('app_env')); raise SystemExit(0 if ok else 1)" <<< "$response"
