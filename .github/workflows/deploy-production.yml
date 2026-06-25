@@ -93,6 +93,7 @@ jobs:
       - name: Deploy production
         env:
           APP_IMAGE: ${{ env.APP_IMAGE }}
+          EXPECTED_GIT_COMMIT: ${{ env.GIT_COMMIT }}
           GHCR_USERNAME: ${{ github.repository_owner }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
@@ -105,8 +106,8 @@ jobs:
           fi
 
           ssh -4 -i ~/.ssh/id_rsa -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
-            "export APP_IMAGE='$APP_IMAGE' GHCR_USERNAME='$GHCR_USERNAME' GHCR_TOKEN='$GHCR_TOKEN'; bash -s" <<'EOF'
-            set -e
+            "export APP_IMAGE='$APP_IMAGE' EXPECTED_GIT_COMMIT='$EXPECTED_GIT_COMMIT' GHCR_USERNAME='$GHCR_USERNAME' GHCR_TOKEN='$GHCR_TOKEN'; bash -s" <<'EOF'
+            set -euo pipefail
             cd /home/mgask-production
             mkdir -p backups
             docker compose -f docker-compose.production.yml exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > backups/backup_$(date +%F_%H-%M).sql
@@ -114,9 +115,19 @@ jobs:
             git reset --hard origin/main
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
             docker compose -f docker-compose.production.yml pull web celery_worker
-            docker compose -f docker-compose.production.yml up -d web celery_worker
+            docker compose -f docker-compose.production.yml up -d --force-recreate --remove-orphans web celery_worker
             docker compose -f docker-compose.production.yml exec -T web python manage.py migrate
             docker compose -f docker-compose.production.yml exec -T web python manage.py collectstatic --noinput
             docker compose -f docker-compose.production.yml restart web celery_worker
+            docker compose -f docker-compose.production.yml exec -T -e EXPECTED_GIT_COMMIT="$EXPECTED_GIT_COMMIT" web python manage.py shell -c "import os; from apps.core.version import get_git_info; info = get_git_info(); print(info); raise SystemExit(0 if info.get('full_commit_hash') == os.environ['EXPECTED_GIT_COMMIT'] else 1)"
             docker compose -f docker-compose.production.yml ps
           EOF
+
+      - name: Verify production endpoint
+        env:
+          EXPECTED_GIT_COMMIT: ${{ env.GIT_COMMIT }}
+        run: |
+          set -euo pipefail
+          response="$(curl -fsS https://prod.mgask.net/api/config/version/)"
+          echo "$response"
+          python -c "import json, os, sys; data = json.load(sys.stdin)['data']; expected = os.environ['EXPECTED_GIT_COMMIT']; ok = data.get('full_commit_hash') == expected and data.get('app_env') == 'production'; raise SystemExit(0 if ok else 1)" <<< "$response"
