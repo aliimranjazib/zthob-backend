@@ -114,8 +114,12 @@ jobs:
             git fetch origin
             git reset --hard origin/main
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+            docker pull "$APP_IMAGE"
             docker compose -f docker-compose.production.yml pull web celery_worker
+            docker compose -f docker-compose.production.yml stop web celery_worker
+            docker compose -f docker-compose.production.yml rm -f web celery_worker
             docker compose -f docker-compose.production.yml up -d --force-recreate --remove-orphans web celery_worker
+            docker compose -f docker-compose.production.yml ps
             docker compose -f docker-compose.production.yml exec -T web python manage.py migrate
             docker compose -f docker-compose.production.yml exec -T web python manage.py collectstatic --noinput
             docker compose -f docker-compose.production.yml restart web celery_worker
