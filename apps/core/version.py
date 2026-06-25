@@ -29,8 +29,25 @@ def get_git_info():
     Returns dict with commit_hash, branch, and commit_date.
     """
     import subprocess
+    env_commit = os.getenv('GIT_COMMIT', '').strip()
+    env_branch = os.getenv('GIT_BRANCH', '').strip()
+    env_commit_date = os.getenv('GIT_COMMIT_DATE', '').strip()
+    if env_commit and env_commit != 'unknown':
+        return {
+            'commit_hash': env_commit[:7],
+            'full_commit_hash': env_commit,
+            'branch': env_branch or 'unknown',
+            'commit_date': env_commit_date or 'unknown',
+            'source': 'image_env',
+        }
+
     try:
         # Get commit hash
+        full_commit_hash = subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=BASE_DIR,
+            stderr=subprocess.DEVNULL
+        ).decode('utf-8').strip()
         commit_hash = subprocess.check_output(
             ['git', 'rev-parse', 'HEAD'],
             cwd=BASE_DIR,
@@ -53,16 +70,19 @@ def get_git_info():
         
         return {
             'commit_hash': commit_hash,
+            'full_commit_hash': full_commit_hash,
             'branch': branch,
             'commit_date': commit_date,
+            'source': 'git',
         }
     except Exception:
         return {
             'commit_hash': 'unknown',
+            'full_commit_hash': 'unknown',
             'branch': 'unknown',
             'commit_date': 'unknown',
+            'source': 'unknown',
         }
 
 # Current version
 __version__ = get_version()
-

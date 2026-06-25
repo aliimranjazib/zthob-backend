@@ -152,8 +152,10 @@ class VersionView(APIView):
             'properties': {
                 'version': {'type': 'string'},
                 'commit_hash': {'type': 'string'},
+                'full_commit_hash': {'type': 'string'},
                 'branch': {'type': 'string'},
                 'commit_date': {'type': 'string'},
+                'metadata_source': {'type': 'string'},
             }
         }},
         summary="Get application version",
@@ -172,8 +174,10 @@ class VersionView(APIView):
         data = {
             'version': version,
             'commit_hash': git_info.get('commit_hash', 'unknown'),
+            'full_commit_hash': git_info.get('full_commit_hash', 'unknown'),
             'branch': git_info.get('branch', 'unknown'),
             'commit_date': git_info.get('commit_date', 'unknown'),
+            'metadata_source': git_info.get('source', 'unknown'),
             'app_env': getattr(settings, 'APP_ENV', 'unknown'),
             'database_name': db_name,
         }

@@ -23,6 +23,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+ARG GIT_COMMIT=unknown
+ARG GIT_BRANCH=unknown
+ARG GIT_COMMIT_DATE=unknown
+ENV GIT_COMMIT=${GIT_COMMIT}
+ENV GIT_BRANCH=${GIT_BRANCH}
+ENV GIT_COMMIT_DATE=${GIT_COMMIT_DATE}
+
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \

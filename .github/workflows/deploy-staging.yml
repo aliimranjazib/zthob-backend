@@ -21,6 +21,12 @@ jobs:
       - name: Set image name
         run: echo "APP_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:staging" >> "$GITHUB_ENV"
 
+      - name: Set deployment metadata
+        run: |
+          echo "GIT_COMMIT=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_ENV"
+          echo "GIT_BRANCH=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_ENV"
+          echo "GIT_COMMIT_DATE=$(git log -1 --format=%cI)" >> "$GITHUB_ENV"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -37,6 +43,10 @@ jobs:
           context: .
           push: true
           tags: ${{ env.APP_IMAGE }}
+          build-args: |
+            GIT_COMMIT=${{ env.GIT_COMMIT }}
+            GIT_BRANCH=${{ env.GIT_BRANCH }}
+            GIT_COMMIT_DATE=${{ env.GIT_COMMIT_DATE }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
