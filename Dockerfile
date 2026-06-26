@@ -44,6 +44,7 @@ ARG GIT_COMMIT_DATE=unknown
 ENV GIT_COMMIT=${GIT_COMMIT} \
     GIT_BRANCH=${GIT_BRANCH} \
     GIT_COMMIT_DATE=${GIT_COMMIT_DATE}
+RUN test -n "$GIT_COMMIT" && test "$GIT_COMMIT" != "unknown"
 
 # Expose port
 EXPOSE 8000

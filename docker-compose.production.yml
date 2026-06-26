@@ -40,6 +40,9 @@ services:
     environment:
       - DB_HOST=db
       - APP_ENV=production
+      - GIT_COMMIT=${GIT_COMMIT}
+      - GIT_BRANCH=${GIT_BRANCH}
+      - GIT_COMMIT_DATE=${GIT_COMMIT_DATE}
       - REDIS_URL=redis://redis:6379/1
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
@@ -59,6 +62,9 @@ services:
       - deployment.env
     environment:
       - DB_HOST=db
+      - GIT_COMMIT=${GIT_COMMIT}
+      - GIT_BRANCH=${GIT_BRANCH}
+      - GIT_COMMIT_DATE=${GIT_COMMIT_DATE}
       - REDIS_URL=redis://redis:6379/1
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
