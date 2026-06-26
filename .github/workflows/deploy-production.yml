@@ -107,41 +107,50 @@ jobs:
             exit 1
           fi
 
-          ssh -4 -i ~/.ssh/id_rsa -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
-            "export APP_IMAGE='$APP_IMAGE' EXPECTED_GIT_COMMIT='$EXPECTED_GIT_COMMIT' GIT_BRANCH='$GIT_BRANCH' GIT_COMMIT_DATE='$GIT_COMMIT_DATE' GHCR_USERNAME='$GHCR_USERNAME' GHCR_TOKEN='$GHCR_TOKEN'; bash -s" <<'EOF'
-            set -euo pipefail
-            cd /home/mgask-production
-            mkdir -p backups
-            docker compose -f docker-compose.production.yml exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > backups/backup_$(date +%F_%H-%M).sql
-            git fetch origin
-            git reset --hard origin/main
-            if [ -f .env ]; then
-              grep -v -E '^(GIT_COMMIT|GIT_BRANCH|GIT_COMMIT_DATE|APP_IMAGE)=' .env > .env.tmp || true
-              mv .env.tmp .env
-            fi
-            COMMIT_IMAGE="${APP_IMAGE}-${EXPECTED_GIT_COMMIT}"
-            export GIT_COMMIT="$EXPECTED_GIT_COMMIT"
-            export APP_IMAGE="$COMMIT_IMAGE"
-            printf 'GIT_COMMIT=%s\nGIT_BRANCH=%s\nGIT_COMMIT_DATE=%s\nAPP_IMAGE=%s\n' \
-              "$GIT_COMMIT" "$GIT_BRANCH" "$GIT_COMMIT_DATE" "$APP_IMAGE" > deployment.env
-            echo "--- deployment.env ---"
-            cat deployment.env
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-            docker pull "$APP_IMAGE"
-            docker image inspect "$APP_IMAGE" --format 'image_id={{.Id}} created={{.Created}}'
-            COMPOSE="docker compose --env-file deployment.env -f docker-compose.production.yml"
-            $COMPOSE pull web celery_worker
-            $COMPOSE stop web celery_worker
-            $COMPOSE rm -f web celery_worker
-            $COMPOSE up -d --pull always --force-recreate --remove-orphans web celery_worker
-            $COMPOSE ps
-            echo "--- container GIT_* env ---"
-            $COMPOSE exec -T web /bin/sh -c 'env | grep -E "^GIT_" || true'
-            $COMPOSE exec -T web python manage.py migrate
-            $COMPOSE exec -T web python manage.py collectstatic --noinput
-            $COMPOSE exec -T -e EXPECTED_GIT_COMMIT="$EXPECTED_GIT_COMMIT" web python manage.py shell -c "import os; from apps.core.version import get_git_info; info = get_git_info(); print(info); raise SystemExit(0 if info.get('full_commit_hash') == os.environ['EXPECTED_GIT_COMMIT'] else 1)"
-            $COMPOSE ps
-          EOF
+          GHCR_TOKEN_B64="$(printf '%s' "$GHCR_TOKEN" | base64 | tr -d '\n')"
+          ssh -4 -i ~/.ssh/id_rsa -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" bash -s <<REMOTE_SCRIPT
+          set -euo pipefail
+          cd /home/mgask-production
+          export APP_IMAGE='${APP_IMAGE}'
+          export EXPECTED_GIT_COMMIT='${EXPECTED_GIT_COMMIT}'
+          export GIT_BRANCH='${GIT_BRANCH}'
+          export GIT_COMMIT_DATE='${GIT_COMMIT_DATE}'
+          export GHCR_USERNAME='${GHCR_USERNAME}'
+          export GHCR_TOKEN="$(printf '%s' '${GHCR_TOKEN_B64}' | base64 -d)"
+          git fetch origin
+          if ! git reset --hard origin/main; then
+            echo "::error::git reset failed. Files in /home/mgask-production are likely owned by root."
+            echo "::error::On the server run: chown -R deploy:deploy /home/mgask-production"
+            exit 1
+          fi
+          if [ -f .env ]; then
+            grep -v -E '^(GIT_COMMIT|GIT_BRANCH|GIT_COMMIT_DATE|APP_IMAGE)=' .env > .env.tmp || true
+            mv .env.tmp .env
+          fi
+          export GIT_COMMIT="\$EXPECTED_GIT_COMMIT"
+          export APP_IMAGE="\${APP_IMAGE}-\${EXPECTED_GIT_COMMIT}"
+          printf 'GIT_COMMIT=%s\nGIT_BRANCH=%s\nGIT_COMMIT_DATE=%s\nAPP_IMAGE=%s\n' \
+            "\$GIT_COMMIT" "\$GIT_BRANCH" "\$GIT_COMMIT_DATE" "\$APP_IMAGE" > deployment.env
+          mkdir -p backups
+          COMPOSE="docker compose --env-file deployment.env -f docker-compose.production.yml"
+          \$COMPOSE exec -T db sh -c 'pg_dump -U "\$POSTGRES_USER" "\$POSTGRES_DB"' > backups/backup_\$(date +%F_%H-%M).sql
+          echo "--- deployment.env ---"
+          cat deployment.env
+          printf '%s' "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USERNAME" --password-stdin
+          docker pull "\$APP_IMAGE"
+          docker image inspect "\$APP_IMAGE" --format 'image_id={{.Id}} created={{.Created}}'
+          \$COMPOSE pull web celery_worker
+          \$COMPOSE stop web celery_worker
+          \$COMPOSE rm -f web celery_worker
+          \$COMPOSE up -d --pull always --force-recreate --remove-orphans web celery_worker
+          \$COMPOSE ps
+          echo "--- container GIT_* env ---"
+          \$COMPOSE exec -T web /bin/sh -c 'env | grep -E "^GIT_" || true'
+          \$COMPOSE exec -T web python manage.py migrate
+          \$COMPOSE exec -T web python manage.py collectstatic --noinput
+          \$COMPOSE exec -T -e EXPECTED_GIT_COMMIT="\$EXPECTED_GIT_COMMIT" web python manage.py shell -c "import os; from apps.core.version import get_git_info; info = get_git_info(); print(info); raise SystemExit(0 if info.get('full_commit_hash') == os.environ['EXPECTED_GIT_COMMIT'] else 1)"
+          \$COMPOSE ps
+          REMOTE_SCRIPT
 
       - name: Verify production endpoint
         env:
@@ -153,9 +162,15 @@ jobs:
           set -euo pipefail
           echo "Production server-local diagnostics:"
           ssh -4 -i ~/.ssh/id_rsa -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
-            "export EXPECTED_GIT_COMMIT='$EXPECTED_GIT_COMMIT'; bash -s" <<'EOF'
+            "export EXPECTED_GIT_COMMIT='$EXPECTED_GIT_COMMIT' GIT_BRANCH='$GIT_BRANCH' GIT_COMMIT_DATE='$GIT_COMMIT_DATE' APP_IMAGE='$APP_IMAGE'; bash -s" <<'EOF'
             set -euo pipefail
             cd /home/mgask-production
+            if [ ! -f deployment.env ]; then
+              export GIT_COMMIT="$EXPECTED_GIT_COMMIT"
+              export APP_IMAGE="${APP_IMAGE}-${EXPECTED_GIT_COMMIT}"
+              printf 'GIT_COMMIT=%s\nGIT_BRANCH=%s\nGIT_COMMIT_DATE=%s\nAPP_IMAGE=%s\n' \
+                "$GIT_COMMIT" "$GIT_BRANCH" "$GIT_COMMIT_DATE" "$APP_IMAGE" > deployment.env
+            fi
             COMPOSE="docker compose --env-file deployment.env -f docker-compose.production.yml"
             echo "--- deployment.env ---"
             cat deployment.env || true
