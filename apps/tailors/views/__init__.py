@@ -1,6 +1,7 @@
 # apps/tailors/views/__init__.py
 from .profile import (
     TailorProfileView,
+    TailorMeasurementFeeView,
     TailorProfileSubmissionView,
     TailorProfileStatusView,
     TailorShopStatusView
@@ -69,6 +70,7 @@ __all__ = [
     
     # Profile views
     'TailorProfileView',
+    'TailorMeasurementFeeView',
     'TailorProfileSubmissionView',
     'TailorProfileStatusView',
     'TailorShopStatusView',

@@ -43,6 +43,11 @@ class RiderFinanceAPITest(TestCase):
             password='testpass123',
             role='RIDER',
         )
+        self.measurement_rider = User.objects.create_user(
+            username='finance_measurement_rider',
+            password='testpass123',
+            role='RIDER',
+        )
         self.client = APIClient()
         self.client.force_authenticate(user=self.rider)
 
@@ -52,6 +57,7 @@ class RiderFinanceAPITest(TestCase):
             'tailor': self.tailor,
             'rider': self.rider,
             'assigned_rider': self.rider,
+            'delivery_rider': self.rider,
             'service_mode': 'home_delivery',
             'status': 'delivered',
             'payment_status': 'paid',
@@ -77,6 +83,61 @@ class RiderFinanceAPITest(TestCase):
         self.assertEqual(wallet.available_balance, Decimal('25.00'))
         self.assertEqual(RiderWalletTransaction.objects.filter(order=order).count(), 1)
 
+    def test_measurement_and_delivery_earnings_are_separate_for_different_riders(self):
+        order = self._completed_delivery_order(
+            measurement_rider=self.measurement_rider,
+            status='in_progress',
+            rider_status='accepted',
+            delivery_fee=Decimal('20.00'),
+            measurement_fee=Decimal('15.00'),
+            total_amount=Decimal('138.00'),
+        )
+        order.rider_status = 'measurement_taken'
+        order.save(update_fields=['rider_status', 'updated_at'])
+        WalletService.process_measurement_rider_order_earning(order)
+        order.status = 'delivered'
+        order.save(update_fields=['status', 'updated_at'])
+
+        delivery_wallet = RiderWallet.objects.get(rider=self.rider)
+        measurement_wallet = RiderWallet.objects.get(rider=self.measurement_rider)
+        self.assertEqual(delivery_wallet.available_balance, Decimal('20.00'))
+        self.assertEqual(measurement_wallet.available_balance, Decimal('15.00'))
+        self.assertEqual(
+            RiderWalletTransaction.objects.filter(order=order, earning_type='delivery').count(),
+            1,
+        )
+        self.assertEqual(
+            RiderWalletTransaction.objects.filter(order=order, earning_type='measurement').count(),
+            1,
+        )
+
+        WalletService.process_rider_order_earning(order)
+        WalletService.process_measurement_rider_order_earning(order)
+        self.assertEqual(RiderWalletTransaction.objects.filter(order=order).count(), 2)
+
+    def test_same_rider_can_receive_measurement_and_delivery_earnings(self):
+        order = self._completed_delivery_order(
+            measurement_rider=self.rider,
+            status='in_progress',
+            rider_status='accepted',
+            delivery_fee=Decimal('20.00'),
+            measurement_fee=Decimal('15.00'),
+            total_amount=Decimal('138.00'),
+        )
+        order.rider_status = 'measurement_taken'
+        order.save(update_fields=['rider_status', 'updated_at'])
+        WalletService.process_measurement_rider_order_earning(order)
+        order.status = 'delivered'
+        order.save(update_fields=['status', 'updated_at'])
+
+        wallet = RiderWallet.objects.get(rider=self.rider)
+        self.assertEqual(wallet.available_balance, Decimal('35.00'))
+        self.assertEqual(wallet.total_earned, Decimal('35.00'))
+        self.assertEqual(
+            set(RiderWalletTransaction.objects.filter(order=order).values_list('earning_type', flat=True)),
+            {'delivery', 'measurement'},
+        )
+
     def test_rider_wallet_endpoint_returns_rider_balance(self):
         self._completed_delivery_order(delivery_fee=Decimal('30.00'))
 
@@ -95,6 +156,7 @@ class RiderFinanceAPITest(TestCase):
         results = response.data['results'] if isinstance(response.data, dict) and 'results' in response.data else response.data
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]['amount'], '18.00')
+        self.assertEqual(results[0]['earning_type'], 'delivery')
         self.assertEqual(results[0]['order']['id'], order.id)
 
     def test_rider_can_request_payout_from_available_balance(self):

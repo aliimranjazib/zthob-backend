@@ -158,6 +158,72 @@ class CheckoutFlowTest(TestCase):
         self.assertIn('advance_50', option_keys)
         self.assertIn('pay_later', option_keys)
 
+    def test_checkout_adds_measurement_fee_once_for_missing_measurements(self):
+        self.tailor_profile.measurement_fee = Decimal('25.00')
+        self.tailor_profile.save(update_fields=['measurement_fee'])
+        payload = self._checkout_payload()
+        payload['order_type'] = 'fabric_with_stitching'
+        payload['items'] = [
+            {'fabric': self.fabric.id, 'quantity': 1, 'measurements': {}},
+            {'fabric': self.fabric.id, 'quantity': 1, 'measurements': {}},
+        ]
+
+        response = self.client.post('/api/orders/checkout/', data=payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        pricing = response.data['data']['pricing_summary']
+        self.assertEqual(pricing['measurement_fee'], '25.00')
+        calculated_total = sum(
+            Decimal(pricing[key])
+            for key in [
+                'subtotal',
+                'stitching_price',
+                'tax_amount',
+                'delivery_fee',
+                'system_fee',
+                'express_fee',
+                'measurement_fee',
+            ]
+        )
+        self.assertEqual(Decimal(pricing['total_amount']), calculated_total)
+
+    def test_checkout_does_not_add_measurement_fee_when_measurements_exist(self):
+        self.tailor_profile.measurement_fee = Decimal('25.00')
+        self.tailor_profile.save(update_fields=['measurement_fee'])
+        payload = self._checkout_payload()
+        payload['order_type'] = 'fabric_with_stitching'
+        payload['items'] = [
+            {'fabric': self.fabric.id, 'quantity': 1, 'measurements': {'chest': 42}},
+        ]
+
+        response = self.client.post('/api/orders/checkout/', data=payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['data']['pricing_summary']['measurement_fee'], '0.00')
+
+    def test_checkout_create_order_stores_measurement_fee_snapshot(self):
+        self.tailor_profile.measurement_fee = Decimal('25.00')
+        self.tailor_profile.save(update_fields=['measurement_fee'])
+        payload = self._checkout_payload()
+        payload['order_type'] = 'fabric_with_stitching'
+
+        response = self.client.post('/api/orders/checkout/', data=payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        booking_key = response.data['data']['bookingUniqueKey']
+
+        self.tailor_profile.measurement_fee = Decimal('40.00')
+        self.tailor_profile.save(update_fields=['measurement_fee'])
+        create_response = self.client.post(
+            '/api/orders/checkout/create-order/',
+            data={'bookingUniqueKey': booking_key, 'payment_method': 'cod'},
+            format='json',
+        )
+
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        order = Order.objects.get()
+        self.assertEqual(order.measurement_fee, Decimal('25.00'))
+        self.assertEqual(create_response.data['data']['pricing_summary']['measurement_fee'], Decimal('25.00'))
+
     def test_partial_credit_card_create_order_from_checkout_is_rejected(self):
         booking_key = self._create_checkout()
 

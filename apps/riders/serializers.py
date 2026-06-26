@@ -395,6 +395,9 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
     pricing_summary = serializers.SerializerMethodField()
     rider_status = serializers.SerializerMethodField()
     rider_assignment_type = serializers.SerializerMethodField()
+    active_rider_info = serializers.SerializerMethodField()
+    measurement_rider_info = serializers.SerializerMethodField()
+    delivery_rider_info = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -405,6 +408,9 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'status',
             'rider_status',
             'rider_assignment_type',
+            'active_rider_info',
+            'measurement_rider_info',
+            'delivery_rider_info',
             'tailor_status',
             'payment_status',
             'payment_plan',
@@ -436,6 +442,7 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             'stitching_price': str(obj.stitching_price),
             'tax_amount': str(obj.tax_amount),
             'delivery_fee': str(obj.delivery_fee),
+            'measurement_fee': str(obj.measurement_fee),
             'total_amount': str(obj.total_amount),
             'paid_amount': str(obj.paid_amount),
             'remaining_amount': str(obj.remaining_amount),
@@ -466,6 +473,30 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
         if obj.order_type == 'measurement_service' or not obj.all_items_have_measurements:
             return 'measurement'
         return None
+
+    def _get_rider_info(self, rider):
+        if not rider:
+            return None
+
+        profile = getattr(rider, 'rider_profile', None)
+        return {
+            'id': rider.id,
+            'username': rider.username,
+            'full_name': getattr(profile, 'full_name', None) or rider.get_full_name() or rider.username,
+            'phone_number': getattr(profile, 'phone_number', None) or getattr(rider, 'phone', ''),
+            'vehicle_type': getattr(profile, 'vehicle_type', ''),
+            'rating': float(getattr(profile, 'rating', 0.0) or 0.0),
+            'is_available': bool(getattr(profile, 'is_available', False)),
+        }
+
+    def get_active_rider_info(self, obj):
+        return self._get_rider_info(obj.rider)
+
+    def get_measurement_rider_info(self, obj):
+        return self._get_rider_info(obj.measurement_rider)
+
+    def get_delivery_rider_info(self, obj):
+        return self._get_rider_info(obj.delivery_rider)
     
     def get_customer_name(self, obj):
         if not obj.customer:
@@ -572,6 +603,9 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
     pricing_summary = serializers.SerializerMethodField()
     rider_status = serializers.SerializerMethodField()
     rider_assignment_type = serializers.SerializerMethodField()
+    active_rider_info = serializers.SerializerMethodField()
+    measurement_rider_info = serializers.SerializerMethodField()
+    delivery_rider_info = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -582,6 +616,9 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'status',
             'rider_status',
             'rider_assignment_type',
+            'active_rider_info',
+            'measurement_rider_info',
+            'delivery_rider_info',
             'tailor_status',
             'payment_status',
             'payment_method',
@@ -619,6 +656,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             'stitching_price': str(obj.stitching_price),
             'tax_amount': str(obj.tax_amount),
             'delivery_fee': str(obj.delivery_fee),
+            'measurement_fee': str(obj.measurement_fee),
             'total_amount': str(obj.total_amount),
             'paid_amount': str(obj.paid_amount),
             'remaining_amount': str(obj.remaining_amount),
@@ -649,6 +687,30 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
         if obj.order_type == 'measurement_service' or not obj.all_items_have_measurements:
             return 'measurement'
         return None
+
+    def _get_rider_info(self, rider):
+        if not rider:
+            return None
+
+        profile = getattr(rider, 'rider_profile', None)
+        return {
+            'id': rider.id,
+            'username': rider.username,
+            'full_name': getattr(profile, 'full_name', None) or rider.get_full_name() or rider.username,
+            'phone_number': getattr(profile, 'phone_number', None) or getattr(rider, 'phone', ''),
+            'vehicle_type': getattr(profile, 'vehicle_type', ''),
+            'rating': float(getattr(profile, 'rating', 0.0) or 0.0),
+            'is_available': bool(getattr(profile, 'is_available', False)),
+        }
+
+    def get_active_rider_info(self, obj):
+        return self._get_rider_info(obj.rider)
+
+    def get_measurement_rider_info(self, obj):
+        return self._get_rider_info(obj.measurement_rider)
+
+    def get_delivery_rider_info(self, obj):
+        return self._get_rider_info(obj.delivery_rider)
     
     def get_customer_info(self, obj):
         if obj.customer:

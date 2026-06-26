@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from .models import (
     TailorWallet, WalletTransaction, PayoutRequest,
@@ -74,14 +75,17 @@ class WalletService:
         Credits rider earning when a home-delivery order is completed.
         Formula: delivery_fee.
         """
-        rider = order.rider or order.assigned_rider
+        rider = order.delivery_rider or order.rider or order.assigned_rider
         if not rider:
             return None
 
         if order.service_mode != 'home_delivery':
             return None
 
-        if RiderWalletTransaction.objects.filter(order=order, transaction_type='credit').exists():
+        if RiderWalletTransaction.objects.filter(
+            order=order,
+            transaction_type='credit',
+        ).filter(Q(earning_type='delivery') | Q(earning_type__isnull=True)).exists():
             return None
 
         delivery_fee = order.delivery_fee or Decimal('0.00')
@@ -93,6 +97,7 @@ class WalletService:
             wallet=wallet,
             transaction_type='credit',
             source='order',
+            earning_type='delivery',
             amount=delivery_fee,
             order=order,
             description=f"Delivery earning for Order {order.order_number} (Delivery fee: {delivery_fee})",
@@ -101,6 +106,56 @@ class WalletService:
 
         wallet.available_balance += delivery_fee
         wallet.total_earned += delivery_fee
+        wallet.save()
+
+        return transaction_entry
+
+    @classmethod
+    @transaction.atomic
+    def process_measurement_rider_order_earning(cls, order):
+        """
+        Credits the measurement rider when paid measurement work is complete.
+        Formula: measurement_fee.
+        """
+        rider = order.measurement_rider
+        if not rider:
+            return None
+
+        if order.service_mode != 'home_delivery':
+            return None
+
+        measurement_fee = order.measurement_fee or Decimal('0.00')
+        if measurement_fee <= Decimal('0.00'):
+            return None
+
+        measurement_complete = (
+            order.rider_status == 'measurement_taken'
+            or (order.order_items.exists() and order.all_items_have_measurements)
+        )
+        if not measurement_complete:
+            return None
+
+        if RiderWalletTransaction.objects.filter(
+            order=order,
+            transaction_type='credit',
+            earning_type='measurement',
+        ).exists():
+            return None
+
+        wallet = cls.get_or_create_rider_wallet(rider)
+        transaction_entry = RiderWalletTransaction.objects.create(
+            wallet=wallet,
+            transaction_type='credit',
+            source='order',
+            earning_type='measurement',
+            amount=measurement_fee,
+            order=order,
+            description=f"Measurement earning for Order {order.order_number} (Measurement fee: {measurement_fee})",
+            running_balance=wallet.available_balance + measurement_fee
+        )
+
+        wallet.available_balance += measurement_fee
+        wallet.total_earned += measurement_fee
         wallet.save()
 
         return transaction_entry

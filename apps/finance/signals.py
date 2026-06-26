@@ -12,7 +12,11 @@ def handle_order_financials(sender, instance, created, **kwargs):
     Signal receiver to process tailor earnings when an order is completed.
     Completed statuses: 'delivered' (Home Delivery) or 'collected' (Walk-In).
     """
-    # We only process if the order is paid and reached a final completed status
+    # Measurement rider can be credited once paid measurement work is complete.
+    if instance.payment_status == 'paid':
+        WalletService.process_measurement_rider_order_earning(instance)
+
+    # Tailor and delivery rider earnings are credited on final completed status.
     if instance.status in ['delivered', 'collected'] and instance.payment_status == 'paid':
         WalletService.process_order_earning(instance)
         WalletService.process_rider_order_earning(instance)

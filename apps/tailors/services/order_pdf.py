@@ -65,11 +65,13 @@ _AR_LABELS = {
     'NOTES & INSTRUCTIONS':'الملاحظات والتعليمات',
     'ORDER ITEMS':         'عناصر الطلب',
     'RIDER MEASUREMENTS':  'قياسات المندوب',
+    'COMMENTS':            'التعليقات',
     'PRICING SUMMARY':     'ملخص التسعير',
     'PAYMENT SUMMARY':     'ملخص الدفع',
     'PAYMENT HISTORY':     'سجل المدفوعات',
     'STATUS HISTORY':      'سجل الحالة',
     # Order info labels
+    'Order ID':            'معرف الطلب',
     'Order Number':        'رقم الطلب',
     'Order Type':          'نوع الطلب',
     'Service Mode':        'طريقة الخدمة',
@@ -94,11 +96,15 @@ _AR_LABELS = {
     'Extra Info':          'معلومات إضافية',
     'For (Family)':        'لصالح (عائلة)',
     'Relationship':        'صلة القرابة',
+    'Customer':            'العميل',
     # Tailor labels
     'Shop Name':           'اسم المحل',
     'Tailor':              'الخياط',
     'Contact':             'التواصل',
     'Assigned Rider':      'المندوب المخصص',
+    'Active Rider':        'المندوب الحالي',
+    'Measurement Rider':   'مندوب القياس',
+    'Delivery Rider':      'مندوب التوصيل',
     # Notes labels
     'Special Instructions:': 'تعليمات خاصة:',
     'Internal Notes:':       'ملاحظات داخلية:',
@@ -109,6 +115,7 @@ _AR_LABELS = {
     'Unit Price':          'سعر الوحدة',
     'Total Price':         'السعر الإجمالي',
     'Ready':               'جاهز',
+    'Comment':             'تعليق',
     # Statuses
     'Status:':             'الحالة:',
     'Tailor Status:':      'حالة الخياط:',
@@ -529,6 +536,23 @@ def _kv_table(rows, col_widths=None, lang='en'):
     return tbl
 
 
+def _rider_label(rider):
+    if not rider:
+        return None
+
+    profile = getattr(rider, 'rider_profile', None)
+    name = getattr(profile, 'full_name', None) or rider.get_full_name() or rider.username
+    phone = getattr(profile, 'phone_number', None) or getattr(rider, 'phone', None)
+    vehicle_type = getattr(profile, 'vehicle_type', None)
+
+    details = [name]
+    if phone:
+        details.append(str(phone))
+    if vehicle_type:
+        details.append(str(vehicle_type))
+    return ' | '.join(details)
+
+
 def _t(text, lang):
     """Translate a label to Arabic and shape it for RTL rendering if lang='ar'."""
     if lang != 'ar':
@@ -824,19 +848,16 @@ def generate_order_pdf(order, lang='en') -> bytes:
     story.append(status_tbl)
     story.append(Spacer(1, 5 * mm))
 
-    # ── Two-column: Order Info + Customer Info ────────────────────────────────
+    # ── Order Info ────────────────────────────────────────────────────────────
     # Order Info
     order_type_display = _choice_display(order.order_type, order.ORDER_TYPE_CHOICES, lang)
     service_mode_display = _choice_display(order.service_mode, order.SERVICE_MODE_CHOICES, lang)
-    payment_status_display = _choice_display(order.payment_status, order.PAYMENT_STATUS_CHOICES, lang)
-    payment_method_display = _choice_display(order.payment_method, order.PAYMENT_METHOD_CHOICES, lang)
 
     order_info_rows = [
+        ('Order ID',         str(order.id)),
         ('Order Number',     order.order_number, True),
         ('Order Type',       order_type_display, True),
         ('Service Mode',     service_mode_display, True),
-        ('Payment Method',   payment_method_display, True),
-        ('Payment Status',   payment_status_display, True),
         ('Items Count',      str(order.items_count)),
     ]
     if order.estimated_delivery_date:
@@ -851,66 +872,9 @@ def generate_order_pdf(order, lang='en') -> bytes:
     if order.stitching_completion_date:
         order_info_rows.append(('Stitching Done', _fmt_date(order.stitching_completion_date)))
 
-    # Customer Info
-    customer = order.customer
-    customer_name = customer.get_full_name() or customer.username if customer else '—'
-    customer_phone = getattr(customer, 'phone', None) or '—'
-    customer_email = getattr(customer, 'email', '') or '—'
-
-    # Delivery address
-    addr_text = '—'
-    if order.delivery_formatted_address:
-        addr_text = order.delivery_formatted_address
-    elif order.delivery_address:
-        a = order.delivery_address
-        parts = filter(None, [a.street, a.city, a.country])
-        addr_text = ', '.join(parts)
-    elif order.delivery_street:
-        parts = filter(None, [order.delivery_street, order.delivery_city])
-        addr_text = ', '.join(parts)
-
-    customer_rows = [
-        ('Customer Name',  customer_name),
-        ('Phone',          customer_phone, True),
-        ('Email',          customer_email, True),
-        ('Delivery Addr.', addr_text, True),  # True = skip shaping/translation for English address
-    ]
-    if order.delivery_extra_info:
-        customer_rows.append(('Extra Info', order.delivery_extra_info))
-
-    # Family member
-    if order.family_member:
-        fm = order.family_member
-        customer_rows.append(('For (Family)', fm.name))
-        if fm.relationship:
-            customer_rows.append(('Relationship', fm.relationship))
-
-    col_half = page_w / 2 - 3 * mm
-
-    def _section_block(title_str, kv_rows, col_w):
-        inner = []
-        inner.append(Paragraph(_t(title_str, lang), s['section_header']))
-        inner.append(HRFlowable(width=col_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
-        inner.append(_kv_table(kv_rows, col_widths=[col_w * 0.42, col_w * 0.58], lang=lang))
-        return inner
-
-    # Combine in 2-col table (swap columns for Arabic RTL)
-    order_block    = _section_block('ORDER DETAILS', order_info_rows, col_half)
-    customer_block = _section_block('CUSTOMER DETAILS', customer_rows, col_half)
-    left_cell, right_cell = (customer_block, order_block) if is_ar else (order_block, customer_block)
-
-    two_col = Table([[left_cell, right_cell]], colWidths=[col_half, col_half + 6 * mm])
-    two_col.setStyle(TableStyle([
-        ('VALIGN',       (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING',  (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ('TOPPADDING',   (0, 0), (-1, -1), 0),
-        ('BOTTOMPADDING',(0, 0), (-1, -1), 0),
-        ('LINEAFTER',    (0, 0), (0, -1),  0.5, BRAND_MID),
-        ('RIGHTPADDING', (0, 0), (0, -1),  6),
-        ('LEFTPADDING',  (1, 0), (1, -1),  6),
-    ]))
-    story.append(two_col)
+    story.append(Paragraph(_t('ORDER DETAILS', lang), s['section_header']))
+    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
+    story.append(_kv_table(order_info_rows, col_widths=[page_w * 0.30, page_w * 0.70], lang=lang))
     story.append(Spacer(1, 5 * mm))
 
     # ── Tailor Info ───────────────────────────────────────────────────────────
@@ -935,9 +899,22 @@ def generate_order_pdf(order, lang='en') -> bytes:
             ('Tailor',     tailor_name),
             ('Contact',    tailor_contact, True),
         ]
-        if order.assigned_rider:
-            rider = order.assigned_rider
-            tailor_rows.append(('Assigned Rider', rider.get_full_name() or rider.username))
+        rider_rows = [
+            ('Measurement Rider', _rider_label(getattr(order, 'measurement_rider', None)), True),
+            ('Delivery Rider', _rider_label(getattr(order, 'delivery_rider', None)), True),
+        ]
+        active_rider = getattr(order, 'rider', None)
+        assigned_rider = getattr(order, 'assigned_rider', None)
+        role_specific_rider_ids = {
+            rider.id
+            for rider in [getattr(order, 'measurement_rider', None), getattr(order, 'delivery_rider', None)]
+            if rider
+        }
+        if active_rider and active_rider.id not in role_specific_rider_ids:
+            rider_rows.append(('Active Rider', _rider_label(active_rider), True))
+        if assigned_rider and assigned_rider.id not in role_specific_rider_ids and assigned_rider != active_rider:
+            rider_rows.append(('Assigned Rider', _rider_label(assigned_rider), True))
+        tailor_rows.extend(row for row in rider_rows if row[1])
 
         story.append(_kv_table(tailor_rows, lang=lang))
         story.append(Spacer(1, 4 * mm))
@@ -965,20 +942,14 @@ def generate_order_pdf(order, lang='en') -> bytes:
 
     if items:
         col_widths_items = [
-            page_w * 0.28,  # Item / Fabric
-            page_w * 0.18,  # For (recipient)
-            page_w * 0.08,  # Qty
-            page_w * 0.15,  # Unit Price
-            page_w * 0.15,  # Total Price
-            page_w * 0.16,  # Status
+            page_w * 0.65,  # Item / Fabric
+            page_w * 0.15,  # Qty
+            page_w * 0.20,  # Status
         ]
 
         item_headers = [
             Paragraph(_t('Item / Fabric', lang), s['table_header']),
-            Paragraph(_t('For', lang), s['table_header']),
             Paragraph(_t('Qty', lang), s['table_header']),
-            Paragraph(_t('Unit Price', lang), s['table_header']),
-            Paragraph(_t('Total Price', lang), s['table_header']),
             Paragraph(_t('Ready', lang), s['table_header']),
         ]
         if is_ar:
@@ -993,12 +964,6 @@ def generate_order_pdf(order, lang='en') -> bytes:
                 s['table_cell']
             )
 
-            recipient = '—'
-            if item.family_member:
-                recipient = item.family_member.name
-            elif customer:
-                recipient = customer_name
-
             is_ready = ('✓ ' + (_shape_arabic('نعم') if is_ar else 'Yes')) if item.is_ready \
                   else ('✗ ' + (_shape_arabic('لا')  if is_ar else 'No'))
             ready_color = colors.HexColor('#4CAF50') if item.is_ready else colors.HexColor('#F44336')
@@ -1006,10 +971,7 @@ def generate_order_pdf(order, lang='en') -> bytes:
 
             row = [
                 fabric_cell,
-                Paragraph(_safe_text(_shape_arabic(recipient) if is_ar else recipient), s['table_cell']),
                 Paragraph(_safe_text(str(item.quantity)), s['table_cell']),
-                Paragraph(_safe_text(_fmt_amount(item.unit_price)), s['table_cell']),
-                Paragraph(_safe_text(_fmt_amount(item.total_price)), s['table_cell']),
                 Paragraph(is_ready, ParagraphStyle(
                     f'is_ready_{lang}', parent=s['table_cell'],
                     textColor=ready_color, fontName=_item_font_bold
@@ -1020,14 +982,14 @@ def generate_order_pdf(order, lang='en') -> bytes:
             item_rows.append(row)
 
             # Extra info rows (Instructions, Measurements, Styles)
-            # We use an empty list for spanned columns [Content, '', '', '', '', '']
+            # We use an empty list for spanned columns [Content, '', '', '']
             
             # 1. Custom instructions row
             if item.custom_instructions:
                 _instr_label = _t('Instructions:', lang)
                 _instr_text  = _shape_arabic(item.custom_instructions) if is_ar else item.custom_instructions
                 instr_p = Paragraph(f'<b>{_safe_text(_instr_label)}</b> {_safe_text(_instr_text)}', s['small'])
-                item_rows.append([instr_p, '', '', '', '', ''])
+                item_rows.append([instr_p, '', ''])
 
             # 2. Measurements row — rendered as a professional grid
             if item.measurements and isinstance(item.measurements, dict):
@@ -1035,7 +997,7 @@ def generate_order_pdf(order, lang='en') -> bytes:
                 if meas_pairs:
                     meas_title = item.measurements.get('title', '')
                     grid = _measurements_grid(meas_pairs, page_w, s, lang, title=meas_title)
-                    item_rows.append([grid, '', '', '', '', ''])
+                    item_rows.append([grid, '', ''])
 
             # 3. Custom styles row
             if item.custom_styles and isinstance(item.custom_styles, list):
@@ -1049,13 +1011,13 @@ def generate_order_pdf(order, lang='en') -> bytes:
                     if is_ar:
                         _styles_text = _shape_arabic(_styles_text)
                     style_p = Paragraph(f'<b>{_safe_text(_styles_label)}</b> {_safe_text(_styles_text)}', s['small'])
-                    item_rows.append([style_p, '', '', '', '', ''])
+                    item_rows.append([style_p, '', ''])
 
                 style_image_grid = _custom_style_image_grid(item.custom_styles, page_w, s, lang)
                 if style_image_grid:
                     image_label = Paragraph(f'<b>{_safe_text(_t("Style Images:", lang))}</b>', s['small'])
-                    item_rows.append([image_label, '', '', '', '', ''])
-                    item_rows.append([style_image_grid, '', '', '', '', ''])
+                    item_rows.append([image_label, '', ''])
+                    item_rows.append([style_image_grid, '', ''])
 
         items_tbl = Table(item_rows, colWidths=col_widths_items, repeatRows=1)
         
@@ -1073,22 +1035,22 @@ def generate_order_pdf(order, lang='en') -> bytes:
         for idx, row in enumerate(item_rows):
             if idx == 0: continue # Header
             # Check if this is an info row (has only one real content in index 0 or index -1 for RTL)
-            # In our case we always put content in index 0 then reverse, so content is at idx 0 or 5.
+            # In our case we always put content in index 0 then reverse, so content is at an edge column.
             # But the SPAN logic in ReportLab always uses absolute indices 0..N.
             
-            # Simple heuristic: if index 1..4 are empty strings, it's a spanned row
-            if row[1] == '' and row[2] == '' and row[3] == '' and row[4] == '':
-                tbl_style.append(('SPAN', (0, idx), (5, idx)))
+            # Simple heuristic: if every column after the first is empty, it's a spanned row.
+            if row[1] == '' and row[2] == '':
+                tbl_style.append(('SPAN', (0, idx), (-1, idx)))
                 # Set background for measurement grid to distinguish it
                 if not isinstance(row[0], Paragraph):
-                    tbl_style.append(('BACKGROUND', (0, idx), (5, idx), BRAND_LIGHT))
-                    tbl_style.append(('TOPPADDING',    (0, idx), (5, idx), 2))
-                    tbl_style.append(('BOTTOMPADDING', (0, idx), (5, idx), 2))
+                    tbl_style.append(('BACKGROUND', (0, idx), (-1, idx), BRAND_LIGHT))
+                    tbl_style.append(('TOPPADDING',    (0, idx), (-1, idx), 2))
+                    tbl_style.append(('BOTTOMPADDING', (0, idx), (-1, idx), 2))
                 else:
                     # It's a text info row (Instructions/Styles)
-                    tbl_style.append(('LEFTPADDING', (0, idx), (5, idx), 15))
-                    tbl_style.append(('TOPPADDING',    (0, idx), (5, idx), 2))
-                    tbl_style.append(('BOTTOMPADDING', (0, idx), (5, idx), 2))
+                    tbl_style.append(('LEFTPADDING', (0, idx), (-1, idx), 15))
+                    tbl_style.append(('TOPPADDING',    (0, idx), (-1, idx), 2))
+                    tbl_style.append(('BOTTOMPADDING', (0, idx), (-1, idx), 2))
             else:
                 # Main item row
                 bg_color = WHITE if (idx % 2 == 1) else BRAND_LIGHT
@@ -1114,170 +1076,6 @@ def generate_order_pdf(order, lang='en') -> bytes:
         meas_pairs = _format_measurement_pairs(order.rider_measurements, lang, measurement_fields)
         story.append(_measurements_grid(meas_pairs, page_w, s, lang))
         story.append(Spacer(1, 5 * mm))
-
-
-
-    # ── Pricing Summary ───────────────────────────────────────────────────────
-    story.append(Paragraph(_t('PRICING SUMMARY', lang), s['section_header']))
-    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
-
-    price_rows = []
-
-    def _price_row(label, amount, bold=False, accent=False):
-        font_b = _AR_FONT_BOLD if (is_ar and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
-        font_r = _AR_FONT_REGULAR if (is_ar and _ARABIC_FONT_AVAILABLE) else 'Helvetica'
-        
-        lbl_style = ParagraphStyle('pl', parent=s['label'], alignment=TA_RIGHT,
-                                    fontName=font_b if bold else font_r)
-        val_style = ParagraphStyle('pv', parent=s['value'], alignment=TA_RIGHT,
-                                    fontSize=10 if bold else 9,
-                                    textColor=BRAND_ACCENT if accent else BRAND_TEXT,
-                                    fontName=font_b if bold else font_r)
-        
-        # For pricing summary, layout is fixed [Empty padding, Label, Value]. No need to reverse columns
-        # because the numbers naturally stay on the right.
-        return [Paragraph('', s['label']), Paragraph(label, lbl_style), Paragraph(_fmt_amount(amount), val_style)]
-
-
-    price_rows.append(_price_row(_t('Subtotal', lang), order.subtotal))
-    if order.stitching_price:
-        price_rows.append(_price_row(_t('Stitching Price', lang), order.stitching_price))
-    if order.tax_amount:
-        price_rows.append(_price_row(_t('Tax', lang), order.tax_amount))
-    if order.delivery_fee:
-        price_rows.append(_price_row(_t('Delivery Fee', lang), order.delivery_fee))
-    if order.system_fee:
-        price_rows.append(_price_row(_t('Platform Fee', lang), order.system_fee))
-    if order.express_fee:
-        price_rows.append(_price_row(_t('Express Fee', lang), order.express_fee))
-
-    # Divider row
-    price_rows.append([
-        Paragraph('', s['label']),
-        HRFlowable(width=page_w * 0.35, color=BRAND_MID, thickness=0.5),
-        HRFlowable(width=page_w * 0.25, color=BRAND_MID, thickness=0.5),
-    ])
-    price_rows.append(_price_row(_t('TOTAL AMOUNT', lang), order.total_amount, bold=True, accent=True))
-
-    pricing_tbl = Table(
-        price_rows,
-        colWidths=[page_w * 0.40, page_w * 0.35, page_w * 0.25],
-        hAlign='RIGHT'
-    )
-    pricing_tbl.setStyle(TableStyle([
-        ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING',    (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('LEFTPADDING',   (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING',  (0, 0), (-1, -1), 0),
-        ('BACKGROUND',    (0, -1), (-1, -1), BRAND_LIGHT),
-    ]))
-    story.append(pricing_tbl)
-    story.append(Spacer(1, 6 * mm))
-
-    # ── Payment Summary + History ────────────────────────────────────────────
-    story.append(Paragraph(_t('PAYMENT SUMMARY', lang), s['section_header']))
-    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
-
-    payment_plan_display = _choice_display(order.payment_plan, order.PAYMENT_PLAN_CHOICES, lang)
-    payment_summary_rows = [
-        ('Payment Plan', payment_plan_display, True),
-        ('Payment Method', payment_method_display, True),
-        ('Payment Status', payment_status_display, True),
-        ('Paid Amount', _fmt_amount(order.paid_amount), True),
-        ('Remaining Amount', _fmt_amount(order.remaining_amount), True),
-    ]
-    if order.payment_option:
-        payment_summary_rows.insert(1, ('Payment Option', order.payment_option, True))
-    if _is_positive_amount(order.deposit_amount):
-        payment_summary_rows.append(('Deposit Amount', _fmt_amount(order.deposit_amount), True))
-
-    story.append(_kv_table(payment_summary_rows, lang=lang))
-
-    if _is_positive_amount(order.remaining_amount):
-        due_label = _t('Amount Due', lang)
-        due_tbl = Table([[
-            Paragraph(_safe_text(due_label), s['total_label']),
-            Paragraph(_safe_text(_fmt_amount(order.remaining_amount)), s['total_value']),
-        ]], colWidths=[page_w * 0.65, page_w * 0.35])
-        due_tbl.setStyle(TableStyle([
-            ('BACKGROUND',    (0, 0), (-1, -1), colors.HexColor('#FFF8E1')),
-            ('BOX',           (0, 0), (-1, -1), 0.7, BRAND_ACCENT),
-            ('TOPPADDING',    (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('LEFTPADDING',   (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING',  (0, 0), (-1, -1), 8),
-        ]))
-        story.append(Spacer(1, 2 * mm))
-        story.append(due_tbl)
-
-    payments = list(order.payments.select_related('collected_by').order_by('created_at'))
-    story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph(_t('PAYMENT HISTORY', lang), s['section_header']))
-    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
-
-    if payments:
-        pay_headers = [
-            Paragraph(_t('Date & Time', lang), s['table_header']),
-            Paragraph(_t('Payment Type', lang), s['table_header']),
-            Paragraph(_t('Method', lang), s['table_header']),
-            Paragraph(_t('Status', lang), s['table_header']),
-            Paragraph(_t('Amount', lang), s['table_header']),
-            Paragraph(_t('Collected By', lang), s['table_header']),
-            Paragraph(_t('Reference', lang), s['table_header']),
-        ]
-        if is_ar:
-            pay_headers.reverse()
-        pay_rows = [pay_headers]
-
-        for payment in payments:
-            collected_by = (
-                payment.collected_by.get_full_name() or payment.collected_by.username
-                if payment.collected_by else '—'
-            )
-            pay_row = [
-                Paragraph(_safe_text(_fmt_datetime(payment.created_at)), s['small']),
-                Paragraph(_safe_text(_choice_display(payment.payment_type, payment.PAYMENT_TYPE_CHOICES, lang)), s['small']),
-                Paragraph(_safe_text(_choice_display(payment.payment_method, order.PAYMENT_METHOD_CHOICES, lang)), s['small']),
-                Paragraph(_safe_text(_choice_display(payment.status, payment.PAYMENT_STATUS_CHOICES, lang)), s['small']),
-                Paragraph(_safe_text(_fmt_amount(payment.amount)), s['small']),
-                Paragraph(_safe_text(_shape_arabic(collected_by) if is_ar else collected_by), s['small']),
-                Paragraph(_safe_text(_short_reference(payment.payment_reference)), s['small']),
-            ]
-            if is_ar:
-                pay_row.reverse()
-            pay_rows.append(pay_row)
-
-        pay_tbl = Table(
-            pay_rows,
-            colWidths=[
-                page_w * 0.18,
-                page_w * 0.15,
-                page_w * 0.14,
-                page_w * 0.12,
-                page_w * 0.13,
-                page_w * 0.16,
-                page_w * 0.12,
-            ],
-            repeatRows=1
-        )
-        pay_tbl.setStyle(TableStyle([
-            ('BACKGROUND',    (0, 0), (-1, 0),  BRAND_PRIMARY),
-            ('TOPPADDING',    (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LEFTPADDING',   (0, 0), (-1, -1), 4),
-            ('RIGHTPADDING',  (0, 0), (-1, -1), 4),
-            ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
-            ('GRID',          (0, 0), (-1, -1), 0.3, BRAND_MID),
-            ('LINEBELOW',     (0, 0), (-1, 0),  1,   BRAND_ACCENT),
-            ('ROWBACKGROUNDS',(0, 1), (-1, -1), [WHITE, BRAND_LIGHT]),
-        ]))
-        story.append(pay_tbl)
-    else:
-        story.append(Paragraph(_t('No payment records found.', lang), s['value']))
-
-    story.append(Spacer(1, 6 * mm))
-
     # ── Status History ────────────────────────────────────────────────────────
     history_qs = order.status_history.select_related('changed_by').order_by('created_at')[:20]
     history = list(history_qs)
@@ -1297,7 +1095,10 @@ def generate_order_pdf(order, lang='en') -> bytes:
         hist_rows = [hist_headers]
 
         for h in history:
-            changed_by = h.changed_by.get_full_name() or h.changed_by.username if h.changed_by else '—'
+            if h.changed_by and order.customer_id and h.changed_by_id == order.customer_id:
+                changed_by = _AR_LABELS['Customer'] if is_ar else 'Customer'
+            else:
+                changed_by = h.changed_by.get_full_name() or h.changed_by.username if h.changed_by else '—'
             hist_row = [
                 Paragraph(_fmt_datetime(h.created_at), s['small']),
                 Paragraph(h.get_status_display(), s['small']),
@@ -1326,6 +1127,21 @@ def generate_order_pdf(order, lang='en') -> bytes:
         ]))
         story.append(hist_tbl)
         story.append(Spacer(1, 5 * mm))
+
+    # ── Comments ──────────────────────────────────────────────────────────────
+    story.append(Paragraph(_t('COMMENTS', lang), s['section_header']))
+    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
+    comments_tbl = Table([['']], colWidths=[page_w], rowHeights=[28 * mm])
+    comments_tbl.setStyle(TableStyle([
+        ('BOX',           (0, 0), (-1, -1), 0.7, BRAND_MID),
+        ('BACKGROUND',    (0, 0), (-1, -1), WHITE),
+        ('TOPPADDING',    (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 8),
+    ]))
+    story.append(comments_tbl)
+    story.append(Spacer(1, 5 * mm))
 
     # ── Footer ────────────────────────────────────────────────────────────────
     story.append(HRFlowable(width=page_w, color=BRAND_MID, thickness=0.5, spaceAfter=4))

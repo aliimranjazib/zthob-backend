@@ -1,4 +1,6 @@
 # apps/tailors/serializers/profile.py
+from decimal import Decimal
+
 from rest_framework import serializers
 from apps.accounts.serializers import UserProfileSerializer
 from apps.customers.models import Address
@@ -38,6 +40,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             'avg_overall_satisfaction', 'rating_count',
             'average_stitching_time_days', 'completed_stitching_orders_count',
             'is_express_delivery_enabled', 'is_express', 'express_delivery_days', 'express_delivery_fee',
+            'measurement_fee',
         ]
 
     def _get_stitching_time_stats(self, obj):
@@ -163,8 +166,19 @@ class TailorProfileUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'shop_name', 'establishment_year', 'tailor_experience', 
             'working_hours', 'contact_number', 'address', 'shop_status',
-            'shop_image', 'is_express_delivery_enabled', 'express_delivery_days', 'express_delivery_fee'
+            'shop_image', 'is_express_delivery_enabled', 'express_delivery_days', 'express_delivery_fee',
         ]
+
+class TailorMeasurementFeeSerializer(serializers.ModelSerializer):
+    measurement_fee = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal('0.00'),
+    )
+
+    class Meta:
+        model = TailorProfile
+        fields = ['measurement_fee']
 
 class TailorProfileSubmissionSerializer(serializers.ModelSerializer):
     """Serializer for tailor profile submission for review."""
