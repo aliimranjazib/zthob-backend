@@ -162,6 +162,37 @@ class OrderCalculationService:
         return Decimal('0.00')
 
     @staticmethod
+    def calculate_measurement_fee(tailor, order_type, service_mode, items_data):
+        """
+        Calculate the one-time measurement rider fee for orders that need
+        home measurement. This is charged once per order, never per item.
+        """
+        if service_mode != 'home_delivery' or not tailor:
+            return Decimal('0.00')
+
+        if order_type not in ['fabric_with_stitching', 'stitching_only', 'measurement_service']:
+            return Decimal('0.00')
+
+        needs_measurement = order_type == 'measurement_service'
+        if not needs_measurement:
+            needs_measurement = any(
+                item.get('measurements') in (None, {})
+                for item in items_data
+            )
+
+        if not needs_measurement:
+            return Decimal('0.00')
+
+        try:
+            fee = tailor.tailor_profile.measurement_fee or Decimal('0.00')
+        except TailorProfile.DoesNotExist:
+            return Decimal('0.00')
+
+        if fee <= Decimal('0.00'):
+            return Decimal('0.00')
+        return Decimal(fee).quantize(Decimal('0.01'))
+
+    @staticmethod
     def calculate_all_totals(items_data, distance_km=None, delivery_address=None, tailor=None, tax_rate=None, order_type='fabric_only', service_mode='home_delivery', delivery_latitude=None, delivery_longitude=None, is_express=False, manual_stitching_price=None):
         """
         Calculate all order totals.
@@ -178,15 +209,24 @@ class OrderCalculationService:
             delivery_longitude: Delivery longitude (optional)
             is_express: Whether this is an express delivery order (optional)
         """ 
-        # For measurement service orders, all costs are zero
+        # Measurement service orders only charge the tailor-configured
+        # measurement fee when a selected tailor has one.
         if order_type == 'measurement_service':
+            measurement_fee = OrderCalculationService.calculate_measurement_fee(
+                tailor=tailor,
+                order_type=order_type,
+                service_mode=service_mode,
+                items_data=items_data,
+            )
             return {
                 'subtotal': Decimal('0.00'),
                 'stitching_price': Decimal('0.00'),
                 'tax_amount': Decimal('0.00'),
                 'delivery_fee': Decimal('0.00'),
                 'system_fee': Decimal('0.00'),
-                'total_amount': Decimal('0.00'),
+                'measurement_fee': measurement_fee,
+                'express_fee': Decimal('0.00'),
+                'total_amount': measurement_fee,
             }
         
         subtotal = OrderCalculationService.calculate_subtotal(items_data)
@@ -224,9 +264,16 @@ class OrderCalculationService:
         
         # Calculate express delivery fee
         express_fee = OrderCalculationService.calculate_express_fee(tailor, is_express)
+
+        measurement_fee = OrderCalculationService.calculate_measurement_fee(
+            tailor=tailor,
+            order_type=order_type,
+            service_mode=service_mode,
+            items_data=items_data,
+        )
         
-        # Total includes: subtotal (fabric) + stitching_price + tax + delivery_fee + system_fee + express_fee
-        total_amount = subtotal + stitching_price + tax_amount + delivery_fee + system_fee + express_fee
+        # Total includes order-level fees. Measurement fee is one-time per order.
+        total_amount = subtotal + stitching_price + tax_amount + delivery_fee + system_fee + express_fee + measurement_fee
         
         return {
             'subtotal': subtotal,
@@ -234,6 +281,7 @@ class OrderCalculationService:
             'tax_amount': tax_amount,
             'delivery_fee': delivery_fee,
             'system_fee': system_fee,
+            'measurement_fee': measurement_fee,
             'express_fee': express_fee,
             'total_amount': total_amount.quantize(Decimal('0.01'))
         }

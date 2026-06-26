@@ -631,7 +631,11 @@ class RiderAvailableOrdersView(APIView):
         ).distinct().select_related(
             'customer',
             'tailor',
-            'delivery_address'
+            'delivery_address',
+            'rider__rider_profile',
+            'assigned_rider__rider_profile',
+            'measurement_rider__rider_profile',
+            'delivery_rider__rider_profile',
         ).prefetch_related('order_items__fabric').order_by('-created_at')
         
         # Filter by status if provided
@@ -709,7 +713,11 @@ class RiderMyOrdersView(APIView):
         ).select_related(
             'customer',
             'tailor',
-            'delivery_address'
+            'delivery_address',
+            'rider__rider_profile',
+            'assigned_rider__rider_profile',
+            'measurement_rider__rider_profile',
+            'delivery_rider__rider_profile',
         ).prefetch_related('order_items__fabric').distinct().order_by('-created_at')
         
         # Filter by status if provided
@@ -749,7 +757,10 @@ class RiderOrderDetailView(APIView):
                 'customer',
                 'tailor',
                 'delivery_address',
-                'rider',
+                'rider__rider_profile',
+                'assigned_rider__rider_profile',
+                'measurement_rider__rider_profile',
+                'delivery_rider__rider_profile',
                 'family_member'  # Prefetch family_member for order_recipient
             ).prefetch_related(
                 'order_items__fabric',

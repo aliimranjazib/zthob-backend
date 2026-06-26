@@ -69,12 +69,14 @@ class RiderWalletTransactionSerializer(serializers.ModelSerializer):
     order = OrderSummarySerializer(read_only=True)
     transaction_type_display = serializers.CharField(source='get_transaction_type_display', read_only=True)
     source_display = serializers.CharField(source='get_source_display', read_only=True)
+    earning_type_display = serializers.CharField(source='get_earning_type_display', read_only=True)
 
     class Meta:
         model = RiderWalletTransaction
         fields = [
             'id', 'transaction_type', 'transaction_type_display',
-            'source', 'source_display', 'amount', 'running_balance',
+            'source', 'source_display', 'earning_type', 'earning_type_display',
+            'amount', 'running_balance',
             'description', 'created_at', 'order'
         ]
 

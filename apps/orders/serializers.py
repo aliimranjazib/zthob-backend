@@ -199,6 +199,10 @@ class OrderSerializer(serializers.ModelSerializer):
     rider_phone=serializers.SerializerMethodField()
     measurement_rider_name=serializers.SerializerMethodField()
     delivery_rider_name=serializers.SerializerMethodField()
+    active_rider_info=serializers.SerializerMethodField()
+    measurement_rider_info=serializers.SerializerMethodField()
+    delivery_rider_info=serializers.SerializerMethodField()
+    assigned_rider_info=serializers.SerializerMethodField()
     family_member_name=serializers.SerializerMethodField()
     order_recipient=serializers.SerializerMethodField()
     all_recipients=serializers.SerializerMethodField()
@@ -231,10 +235,15 @@ class OrderSerializer(serializers.ModelSerializer):
             'rider',
             'rider_name',
             'rider_phone',
+            'active_rider_info',
             'measurement_rider',
             'measurement_rider_name',
+            'measurement_rider_info',
             'delivery_rider',
             'delivery_rider_name',
+            'delivery_rider_info',
+            'assigned_rider',
+            'assigned_rider_info',
             'order_type',
             'service_mode',
             'status',
@@ -246,6 +255,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'tax_amount',
             'delivery_fee',
             'system_fee',
+            'measurement_fee',
             'total_amount',
             'payment_plan',
             'payment_option',
@@ -320,6 +330,33 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_rider_phone(self, obj):
         """Get rider phone (verified phone from user account)"""
         return obj.rider.phone if obj.rider else None
+
+    def _get_rider_info(self, rider):
+        if not rider:
+            return None
+
+        profile = getattr(rider, 'rider_profile', None)
+        return {
+            'id': rider.id,
+            'username': rider.username,
+            'full_name': getattr(profile, 'full_name', None) or rider.get_full_name() or rider.username,
+            'phone_number': getattr(profile, 'phone_number', None) or getattr(rider, 'phone', ''),
+            'vehicle_type': getattr(profile, 'vehicle_type', ''),
+            'rating': float(getattr(profile, 'rating', 0.0) or 0.0),
+            'is_available': bool(getattr(profile, 'is_available', False)),
+        }
+
+    def get_active_rider_info(self, obj):
+        return self._get_rider_info(obj.rider)
+
+    def get_measurement_rider_info(self, obj):
+        return self._get_rider_info(obj.measurement_rider)
+
+    def get_delivery_rider_info(self, obj):
+        return self._get_rider_info(obj.delivery_rider)
+
+    def get_assigned_rider_info(self, obj):
+        return self._get_rider_info(obj.assigned_rider)
 
     def _get_rider_display_name(self, rider):
         if not rider:
@@ -754,6 +791,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'tax_amount': obj.tax_amount,
             'delivery_fee': obj.delivery_fee,
             'system_fee': obj.system_fee,
+            'measurement_fee': obj.measurement_fee,
             'express_fee': obj.express_fee,
             'total_amount': obj.total_amount,
             'payment_plan': obj.payment_plan,
@@ -1159,6 +1197,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'tax_amount': str(totals.get('tax_amount', Decimal('0.00'))),
             'delivery_fee': str(totals.get('delivery_fee', Decimal('0.00'))),
             'system_fee': str(totals.get('system_fee', Decimal('0.00'))),
+            'measurement_fee': str(totals.get('measurement_fee', Decimal('0.00'))),
             'express_fee': str(totals.get('express_fee', Decimal('0.00'))),
             'total_amount': str(total_amount),
             'items_count': len(items_with_fabrics),
@@ -1304,15 +1343,26 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         
         # Handle measurement service orders differently
         if order_type == 'measurement_service':
-            # Auto-mark as paid (free)
-            order.is_free_measurement = True
-            order.payment_status = 'paid'
-            order.payment_method = 'cod'
-            order.total_amount = Decimal('0.00')
+            # Keep legacy free behavior only when no tailor measurement fee applies.
+            is_free_measurement = order.measurement_fee <= Decimal('0.00')
+            order.is_free_measurement = is_free_measurement
+            if is_free_measurement:
+                order.payment_status = 'paid'
+                order.payment_method = 'cod'
+                order.total_amount = Decimal('0.00')
             order.subtotal = Decimal('0.00')
             order.delivery_fee = Decimal('0.00')
             order.system_fee = Decimal('0.00')
-            order.save()
+            order.save(update_fields=[
+                'is_free_measurement',
+                'payment_status',
+                'payment_method',
+                'total_amount',
+                'subtotal',
+                'delivery_fee',
+                'system_fee',
+                'updated_at',
+            ])
             
             # Create order items (each represents a person to measure)
             for item_data in items_with_fabrics:
@@ -1596,6 +1646,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'tailor_status',
             'tailor_status_display',
             'stitching_price',
+            'measurement_fee',
             'total_amount',
             'pricing_summary',
             'payment_method',
@@ -1653,6 +1704,8 @@ class OrderListSerializer(serializers.ModelSerializer):
             'stitching_price': str(obj.stitching_price),
             'tax_amount': str(obj.tax_amount),
             'delivery_fee': str(obj.delivery_fee),
+            'system_fee': str(obj.system_fee),
+            'measurement_fee': str(obj.measurement_fee),
             'express_fee': str(obj.express_fee),
             'total_amount': str(obj.total_amount),
             'payment_plan': obj.payment_plan,

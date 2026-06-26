@@ -248,6 +248,12 @@ class Order(BaseModel):
     help_text="Fixed system fee (SAR)"
     )
 
+    measurement_fee=models.DecimalField(
+    max_digits=10,
+    decimal_places=2,
+    default=Decimal('0.00'),
+    help_text="One-time measurement rider fee snapshot for this order"
+    )
 
     total_amount=models.DecimalField(
     max_digits=10,
@@ -593,9 +599,10 @@ class Order(BaseModel):
         self.tax_amount = totals['tax_amount']
         self.delivery_fee = totals['delivery_fee']
         self.system_fee = totals.get('system_fee', Decimal('0.00'))
+        self.measurement_fee = totals.get('measurement_fee', Decimal('0.00'))
         self.express_fee = totals.get('express_fee', Decimal('0.00'))
         self.total_amount = totals['total_amount']
-        self.save(update_fields=['subtotal', 'stitching_price', 'tax_amount', 'delivery_fee', 'system_fee', 'express_fee', 'total_amount'])
+        self.save(update_fields=['subtotal', 'stitching_price', 'tax_amount', 'delivery_fee', 'system_fee', 'measurement_fee', 'express_fee', 'total_amount'])
 
     def __str__(self):
         # Get tailor name from profile if available

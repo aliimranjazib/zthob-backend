@@ -116,6 +116,23 @@ def _create_order_from_checkout(
         raise ValidationError(order_serializer.errors)
 
     order = order_serializer.save()
+    pricing_snapshot = checkout.pricing_snapshot or {}
+    pricing_fields = [
+        'subtotal',
+        'stitching_price',
+        'tax_amount',
+        'delivery_fee',
+        'system_fee',
+        'measurement_fee',
+        'express_fee',
+        'total_amount',
+    ]
+    pricing_update_fields = []
+    for field in pricing_fields:
+        if field in pricing_snapshot:
+            setattr(order, field, money(pricing_snapshot[field]))
+            pricing_update_fields.append(field)
+
     selected_payment_option = get_payment_option(order.total_amount, payment_option_key)
     if not selected_payment_option:
         raise ValidationError(
@@ -143,6 +160,7 @@ def _create_order_from_checkout(
         'deposit_amount',
         'paid_amount',
         'remaining_amount',
+        *pricing_update_fields,
         'updated_at',
     ])
 
@@ -1061,11 +1079,28 @@ class OrderDetailView(APIView):
 
     def get_object(self, order_id,request):
 
-        order=get_object_or_404(Order, id=order_id)
+        order=get_object_or_404(
+            Order.objects.select_related(
+                'customer',
+                'tailor',
+                'delivery_address',
+                'rider__rider_profile',
+                'assigned_rider__rider_profile',
+                'measurement_rider__rider_profile',
+                'delivery_rider__rider_profile',
+                'family_member',
+            ).prefetch_related('order_items__fabric', 'order_items__family_member'),
+            id=order_id
+        )
         # Resource-based permission check
         is_customer = order.customer == request.user
         is_tailor = order.tailor == request.user
-        is_rider = order.rider == request.user
+        is_rider = (
+            order.rider == request.user
+            or order.assigned_rider == request.user
+            or order.measurement_rider == request.user
+            or order.delivery_rider == request.user
+        )
         is_admin = request.user.is_admin
 
         if not (is_customer or is_tailor or is_rider or is_admin):
@@ -1363,7 +1398,14 @@ class TailorAvailableOrdersView(APIView):
             tailor=tailor_user
         ).exclude(
             status__in=['delivered', 'cancelled']
-        ).select_related('customer', 'delivery_address', 'rider').prefetch_related('order_items__fabric').order_by('-created_at')
+        ).select_related(
+            'customer',
+            'delivery_address',
+            'rider__rider_profile',
+            'assigned_rider__rider_profile',
+            'measurement_rider__rider_profile',
+            'delivery_rider__rider_profile',
+        ).prefetch_related('order_items__fabric').order_by('-created_at')
         
         # Filter by payment status
         payment_status = request.query_params.get('payment_status')
@@ -1407,7 +1449,14 @@ class TailorOrderListView(APIView):
         # Base queryset: All orders for this tailor
         orders = Order.objects.filter(
             tailor=tailor_user
-        ).select_related('customer', 'delivery_address', 'rider').prefetch_related('order_items__fabric').order_by('-created_at')
+        ).select_related(
+            'customer',
+            'delivery_address',
+            'rider__rider_profile',
+            'assigned_rider__rider_profile',
+            'measurement_rider__rider_profile',
+            'delivery_rider__rider_profile',
+        ).prefetch_related('order_items__fabric').order_by('-created_at')
         
         # Filters
         status_filter = request.query_params.get('status')
@@ -1531,7 +1580,10 @@ class TailorPaidOrdersView(APIView):
         ).select_related(
             'customer',
             'delivery_address',
-            'rider'
+            'rider__rider_profile',
+            'assigned_rider__rider_profile',
+            'measurement_rider__rider_profile',
+            'delivery_rider__rider_profile',
         ).prefetch_related('order_items').order_by('-created_at')
         
         # Filter by status if provided
@@ -1577,7 +1629,10 @@ class TailorOrderDetailView(APIView):
             Order.objects.select_related(
                 'customer',
                 'delivery_address',
-                'rider',
+                'rider__rider_profile',
+                'assigned_rider__rider_profile',
+                'measurement_rider__rider_profile',
+                'delivery_rider__rider_profile',
                 'family_member'
             ).prefetch_related('order_items__fabric', 'status_history'),
             id=order_id,

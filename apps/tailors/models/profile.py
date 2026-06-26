@@ -2,6 +2,7 @@
 from django.db import models
 from django.conf import settings
 from django.core.validators import FileExtensionValidator
+from decimal import Decimal
 
 class TailorProfile(models.Model):
     """Model representing a tailor's profile information."""
@@ -105,6 +106,12 @@ class TailorProfile(models.Model):
         blank=True,
         null=True,
         help_text="Extra fee for express delivery"
+    )
+    measurement_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="One-time fee charged when this tailor sends a rider for measurements"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

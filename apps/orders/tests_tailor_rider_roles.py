@@ -60,10 +60,14 @@ class TailorRiderRoleAssignmentTest(TestCase):
             username=username,
             password='testpass123',
             role='RIDER',
+            phone=f'5000{User.objects.count():05d}',
         )
         profile, _ = RiderProfile.objects.get_or_create(user=rider)
         profile.full_name = username
-        profile.save(update_fields=['full_name'])
+        profile.vehicle_type = 'bike'
+        profile.rating = Decimal('4.50')
+        profile.is_available = True
+        profile.save(update_fields=['full_name', 'vehicle_type', 'rating', 'is_available'])
         review, _ = RiderProfileReview.objects.get_or_create(profile=profile)
         review.review_status = 'approved'
         review.save(update_fields=['review_status'])
@@ -384,6 +388,51 @@ class TailorRiderRoleAssignmentTest(TestCase):
         self.assertEqual(order.rider, self.delivery_rider)
         self.assertEqual(order.rider_status, 'none')
         self.assertEqual(order.measurement_rider, self.measurement_rider)
+
+    def test_tailor_order_detail_returns_active_measurement_and_delivery_rider_info(self):
+        order = self._create_stitching_order(measurements={'chest': 42})
+        order.tailor_status = 'stitched'
+        order.status = 'ready_for_delivery'
+        order.rider_status = 'none'
+        order.measurement_rider = self.measurement_rider
+        order.delivery_rider = self.delivery_rider
+        order.assigned_rider = self.delivery_rider
+        order.rider = self.delivery_rider
+        order.save()
+
+        self.client.force_authenticate(user=self.tailor)
+        response = self.client.get(f'/api/orders/tailor/{order.id}/')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        data = response.data['data']
+        self.assertEqual(data['active_rider_info']['id'], self.delivery_rider.id)
+        self.assertEqual(data['assigned_rider_info']['id'], self.delivery_rider.id)
+        self.assertEqual(data['measurement_rider_info']['id'], self.measurement_rider.id)
+        self.assertEqual(data['measurement_rider_info']['full_name'], 'measurement_rider')
+        self.assertEqual(data['delivery_rider_info']['id'], self.delivery_rider.id)
+        self.assertEqual(data['delivery_rider_info']['full_name'], 'delivery_rider')
+        self.assertEqual(data['rider'], self.delivery_rider.id)
+        self.assertEqual(data['measurement_rider'], self.measurement_rider.id)
+        self.assertEqual(data['delivery_rider'], self.delivery_rider.id)
+
+    def test_generic_order_detail_allows_role_specific_rider_access(self):
+        order = self._create_stitching_order(measurements={'chest': 42})
+        order.tailor_status = 'stitched'
+        order.status = 'ready_for_delivery'
+        order.rider_status = 'none'
+        order.measurement_rider = self.measurement_rider
+        order.delivery_rider = self.delivery_rider
+        order.assigned_rider = self.delivery_rider
+        order.rider = self.delivery_rider
+        order.save()
+
+        self.client.force_authenticate(user=self.measurement_rider)
+        response = self.client.get(f'/api/orders/{order.id}/')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        data = response.data['data']
+        self.assertEqual(data['measurement_rider_info']['id'], self.measurement_rider.id)
+        self.assertEqual(data['delivery_rider_info']['id'], self.delivery_rider.id)
 
     def test_delivery_rider_sees_order_in_my_orders_after_tailor_assignment(self):
         order = self._create_stitching_order(measurements={'chest': 42})

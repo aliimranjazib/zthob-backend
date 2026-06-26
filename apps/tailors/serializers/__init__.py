@@ -2,7 +2,8 @@
 from .profile import (
     TailorProfileSerializer,
     TailorProfileUpdateSerializer,
-    TailorProfileSubmissionSerializer
+    TailorProfileSubmissionSerializer,
+    TailorMeasurementFeeSerializer
 )
 from .catalog import (
     FabricSerializer,
@@ -53,6 +54,7 @@ __all__ = [
     'TailorProfileSerializer',
     'TailorProfileUpdateSerializer',
     'TailorProfileSubmissionSerializer',
+    'TailorMeasurementFeeSerializer',
     
     # Catalog serializers
     'FabricSerializer',

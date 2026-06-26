@@ -4,6 +4,7 @@ from apps.core.views import SendOTPView, VerifyOTPView
 from apps.tailors.views import (
     # Profile views
     TailorProfileView,
+    TailorMeasurementFeeView,
     TailorProfileSubmissionView,
     TailorProfileStatusView,
     TailorShopStatusView,
@@ -71,6 +72,7 @@ urlpatterns = [
 
     # Profile URLs
     path('profile/', TailorProfileView.as_view(), name='tailor-profile'),
+    path('measurement-fee/', TailorMeasurementFeeView.as_view(), name='tailor-measurement-fee'),
     path('profile/submit/', TailorProfileSubmissionView.as_view(), name='tailor-profile-submit'),
     path('profile/status/', TailorProfileStatusView.as_view(), name='tailor-profile-status'),
     path('shop/status/', TailorShopStatusView.as_view(), name='tailor-shop-status'),

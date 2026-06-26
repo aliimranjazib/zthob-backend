@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 from decimal import Decimal
@@ -171,6 +172,10 @@ class RiderWalletTransaction(BaseModel):
     """
     TRANSACTION_TYPE_CHOICES = WalletTransaction.TRANSACTION_TYPE_CHOICES
     SOURCE_CHOICES = WalletTransaction.SOURCE_CHOICES
+    EARNING_TYPE_CHOICES = (
+        ('delivery', _('Delivery')),
+        ('measurement', _('Measurement')),
+    )
 
     wallet = models.ForeignKey(
         RiderWallet,
@@ -185,6 +190,14 @@ class RiderWalletTransaction(BaseModel):
     source = models.CharField(
         max_length=20,
         choices=SOURCE_CHOICES
+    )
+    earning_type = models.CharField(
+        max_length=20,
+        choices=EARNING_TYPE_CHOICES,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_("Rider earning category for order credits")
     )
     amount = models.DecimalField(
         max_digits=12,
@@ -221,6 +234,13 @@ class RiderWalletTransaction(BaseModel):
         verbose_name = _("Rider Wallet Transaction")
         verbose_name_plural = _("Rider Wallet Transactions")
         ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['wallet', 'order', 'transaction_type', 'earning_type'],
+                name='uniq_rider_wallet_order_earning_type',
+                condition=Q(order__isnull=False, earning_type__isnull=False),
+            )
+        ]
 
     def __str__(self):
         return f"{self.transaction_type.upper()} | {self.amount} | {self.wallet.rider.username}"

@@ -9,6 +9,43 @@ from .serializers import TailorProfileSubmissionSerializer
 
 User = get_user_model()
 
+class TailorMeasurementFeeAPITest(APITestCase):
+    def setUp(self):
+        self.tailor = User.objects.create_user(
+            username='measurement_fee_tailor',
+            password='testpass123',
+            role='TAILOR',
+        )
+        self.profile, _ = TailorProfile.objects.get_or_create(
+            user=self.tailor,
+            defaults={
+                'shop_name': 'Measurement Fee Tailor',
+                'shop_status': True,
+            },
+        )
+        self.client.force_authenticate(user=self.tailor)
+
+    def test_tailor_can_update_measurement_fee(self):
+        response = self.client.patch(
+            '/api/tailors/measurement-fee/',
+            data={'measurement_fee': '25.00'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertEqual(str(self.profile.measurement_fee), '25.00')
+        self.assertEqual(response.data['data']['measurement_fee'], '25.00')
+
+    def test_negative_measurement_fee_is_rejected(self):
+        response = self.client.patch(
+            '/api/tailors/measurement-fee/',
+            data={'measurement_fee': '-1.00'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
 class TailorProfileSubmissionSerializerTest(TestCase):
     """Test cases for TailorProfileSubmissionSerializer validation."""
     

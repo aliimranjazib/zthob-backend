@@ -364,6 +364,9 @@ class RecordMeasurementsAction(BaseOrderAction):
             self.order.tailor_status = 'accepted'
             
         self.order.save()
+        if role in ['RIDER', 'ADMIN'] and self.order.payment_status == 'paid':
+            from apps.finance.services import WalletService
+            WalletService.process_measurement_rider_order_earning(self.order)
         return "Measurements recorded successfully."
 
 

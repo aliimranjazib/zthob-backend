@@ -11,7 +11,8 @@ from ..models import TailorProfile
 from ..serializers import (
     TailorProfileSerializer, 
     TailorProfileUpdateSerializer,
-    TailorProfileSubmissionSerializer
+    TailorProfileSubmissionSerializer,
+    TailorMeasurementFeeSerializer
 )
 from ..permissions import IsTailor
 from .base import BaseTailorAuthenticatedView
@@ -107,7 +108,8 @@ class TailorProfileView(BaseTailorAuthenticatedView):
             errors=serializer.errors, 
             status_code=status.HTTP_400_BAD_REQUEST
         )
-    
+
+
     def patch(self, request):
         """PATCH method for partial updates - same logic as PUT but explicitly for partial updates."""
         if hasattr(request.user, 'tailor_employee') and not self.employee_has_permission(request.user, 'can_manage_shop_profile'):
@@ -174,6 +176,66 @@ class TailorProfileView(BaseTailorAuthenticatedView):
             success=False, 
             message="Validation failed", 
             errors=serializer.errors, 
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+
+@extend_schema(
+    tags=["Tailor Profile"],
+    request=TailorMeasurementFeeSerializer,
+    responses=TailorMeasurementFeeSerializer,
+    description="Read or update the tailor's one-time home measurement fee."
+)
+class TailorMeasurementFeeView(BaseTailorAuthenticatedView):
+    serializer_class = TailorMeasurementFeeSerializer
+
+    def get(self, request):
+        profile = self.get_tailor_profile(request.user)
+        if not profile:
+            return api_response(
+                success=False,
+                message='Tailor profile not found',
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = self.serializer_class(profile)
+        return api_response(
+            success=True,
+            message='Measurement fee retrieved successfully',
+            data={**serializer.data, 'currency': 'SAR'},
+            status_code=status.HTTP_200_OK
+        )
+
+    def patch(self, request):
+        if hasattr(request.user, 'tailor_employee') and not self.employee_has_permission(request.user, 'can_manage_shop_profile'):
+            return api_response(
+                success=False,
+                message='Permission denied',
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+
+        profile = self.get_tailor_profile(request.user)
+        if not profile:
+            return api_response(
+                success=False,
+                message='Tailor profile not found',
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = self.serializer_class(profile, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return api_response(
+                success=True,
+                message='Measurement fee updated successfully',
+                data={**serializer.data, 'currency': 'SAR'},
+                status_code=status.HTTP_200_OK
+            )
+
+        return api_response(
+            success=False,
+            message='Validation failed',
+            errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
         )
 
