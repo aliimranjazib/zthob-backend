@@ -39,7 +39,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.APP_IMAGE }}
+          tags: |
+            ${{ env.APP_IMAGE }}
+            ${{ env.APP_IMAGE }}-${{ env.GIT_COMMIT }}
           build-args: |
             GIT_COMMIT=${{ env.GIT_COMMIT }}
             GIT_BRANCH=${{ env.GIT_BRANCH }}
@@ -94,6 +96,8 @@ jobs:
         env:
           APP_IMAGE: ${{ env.APP_IMAGE }}
           EXPECTED_GIT_COMMIT: ${{ env.GIT_COMMIT }}
+          GIT_BRANCH: ${{ env.GIT_BRANCH }}
+          GIT_COMMIT_DATE: ${{ env.GIT_COMMIT_DATE }}
           GHCR_USERNAME: ${{ github.repository_owner }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
@@ -106,19 +110,21 @@ jobs:
           fi
 
           ssh -4 -i ~/.ssh/id_rsa -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
-            "export APP_IMAGE='$APP_IMAGE' EXPECTED_GIT_COMMIT='$EXPECTED_GIT_COMMIT' GHCR_USERNAME='$GHCR_USERNAME' GHCR_TOKEN='$GHCR_TOKEN'; bash -s" <<'EOF'
+            "export APP_IMAGE='$APP_IMAGE' EXPECTED_GIT_COMMIT='$EXPECTED_GIT_COMMIT' GIT_BRANCH='$GIT_BRANCH' GIT_COMMIT_DATE='$GIT_COMMIT_DATE' GHCR_USERNAME='$GHCR_USERNAME' GHCR_TOKEN='$GHCR_TOKEN'; bash -s" <<'EOF'
             set -euo pipefail
             cd /home/mgask-production
             mkdir -p backups
             docker compose -f docker-compose.production.yml exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > backups/backup_$(date +%F_%H-%M).sql
             git fetch origin
             git reset --hard origin/main
+            printf 'GIT_COMMIT=%s\nGIT_BRANCH=%s\nGIT_COMMIT_DATE=%s\nAPP_IMAGE=%s\n' \
+              "$EXPECTED_GIT_COMMIT" "$GIT_BRANCH" "$GIT_COMMIT_DATE" "$APP_IMAGE" > deployment.env
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
             docker pull "$APP_IMAGE"
             docker compose -f docker-compose.production.yml pull web celery_worker
             docker compose -f docker-compose.production.yml stop web celery_worker
             docker compose -f docker-compose.production.yml rm -f web celery_worker
-            docker compose -f docker-compose.production.yml up -d --force-recreate --remove-orphans web celery_worker
+            docker compose -f docker-compose.production.yml up -d --pull always --force-recreate --remove-orphans web celery_worker
             docker compose -f docker-compose.production.yml ps
             docker compose -f docker-compose.production.yml exec -T web python manage.py migrate
             docker compose -f docker-compose.production.yml exec -T web python manage.py collectstatic --noinput
