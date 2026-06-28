@@ -550,27 +550,45 @@ def _style_image_from_db(style):
     return None
 
 
+def _custom_style_caption_html(style, lang='en'):
+    """Build style label + optional customer comment HTML for PDF rendering."""
+    label = style.get('label') or style.get('style_type') or ''
+    if style.get('style_type') and style.get('label'):
+        label = f'{style.get("style_type", "").replace("_", " ").title()}: {style.get("label", "")}'
+
+    parts = []
+    if label:
+        parts.append(_format_user_text_html(label, lang))
+    comment = (style.get('text') or '').strip()
+    if comment:
+        comment_lbl = _t('Comment', lang)
+        parts.append(_format_user_text_html(f'{comment_lbl}: {comment}', lang))
+    return '<br/>'.join(parts)
+
+
 def _custom_style_image_grid(styles, page_w, s, lang='en'):
     """Build a compact grid of customer-selected custom style images."""
     image_cells = []
     for style in styles:
-        image_path = _style_image_path(style)
-        if not image_path:
+        caption_html = _custom_style_caption_html(style, lang)
+        if not caption_html:
             continue
 
-        label = style.get('label') or style.get('style_type') or ''
-        if style.get('style_type') and style.get('label'):
-            label = f'{style.get("style_type", "").replace("_", " ").title()}: {style.get("label", "")}'
+        image_path = _style_image_path(style)
+        if not image_path:
+            image_cells.append([Paragraph(caption_html, s['small'])])
+            continue
 
         try:
             img = Image(image_path, width=24 * mm, height=24 * mm, kind='proportional')
         except Exception as exc:
             logger.debug("Unable to add custom style image to PDF: %s", exc)
+            image_cells.append([Paragraph(caption_html, s['small'])])
             continue
 
         image_cells.append([
             img,
-            Paragraph(_format_user_text_html(label, lang), s['small']),
+            Paragraph(caption_html, s['small']),
         ])
 
     if not image_cells:
@@ -603,11 +621,9 @@ def _custom_style_labels_fallback(styles, s, lang='en'):
     """Text-only fallback when style image files are unavailable."""
     labels = []
     for style in styles:
-        label = style.get('label') or style.get('style_type') or ''
-        if style.get('style_type') and style.get('label'):
-            label = f'{style.get("style_type", "").replace("_", " ").title()}: {style.get("label", "")}'
-        if label:
-            labels.append(_format_user_text_html(label, lang))
+        caption_html = _custom_style_caption_html(style, lang)
+        if caption_html:
+            labels.append(caption_html)
 
     if not labels:
         return None

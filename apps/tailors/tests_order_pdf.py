@@ -9,9 +9,11 @@ from apps.tailors.models import Fabric, FabricCategory, TailorProfile
 from apps.tailors.services.order_pdf import (
     _ARABIC_FONT_AVAILABLE,
     _contains_arabic,
+    _custom_style_caption_html,
     _format_recipient_html,
     _format_user_text_html,
     _item_recipient_display,
+    _t,
     generate_order_pdf,
 )
 
@@ -131,3 +133,36 @@ class OrderPDFServiceTest(TestCase):
 
         pdf_bytes = generate_order_pdf(self.order, lang='en')
         self.assertTrue(pdf_bytes.startswith(b'%PDF'))
+
+    def test_custom_style_caption_includes_comment_in_english(self):
+        html = _custom_style_caption_html({
+            'style_type': 'collar',
+            'label': 'Classic Collar',
+            'text': 'Keep collar firm',
+        }, lang='en')
+        self.assertIn('Classic Collar', html)
+        self.assertIn('Comment:', html)
+        self.assertIn('Keep collar firm', html)
+
+    def test_custom_style_caption_translates_comment_label_in_arabic(self):
+        html = _custom_style_caption_html({
+            'style_type': 'collar',
+            'label': 'Classic Collar',
+            'text': 'Keep collar firm',
+        }, lang='ar')
+        self.assertIn('Keep collar firm', html)
+        self.assertIn(_t('Comment', 'ar'), html)
+
+    def test_generate_pdf_with_custom_style_comment(self):
+        item = self.order.order_items.first()
+        item.custom_styles = [{
+            'style_type': 'collar',
+            'label': 'Classic Collar',
+            'asset_path': 'custom_styles/missing.png',
+            'text': 'Keep collar firm',
+        }]
+        item.save(update_fields=['custom_styles'])
+
+        pdf_bytes = generate_order_pdf(self.order, lang='en')
+        self.assertTrue(pdf_bytes.startswith(b'%PDF'))
+        self.assertGreater(len(pdf_bytes), 1000)
