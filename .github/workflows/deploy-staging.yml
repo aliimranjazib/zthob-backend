@@ -101,21 +101,28 @@ jobs:
       - name: Deploy staging
         env:
           APP_IMAGE: ${{ env.APP_IMAGE }}
+          EXPECTED_GIT_COMMIT: ${{ env.GIT_COMMIT }}
+          GIT_BRANCH: ${{ env.GIT_BRANCH }}
+          GIT_COMMIT_DATE: ${{ env.GIT_COMMIT_DATE }}
           GHCR_USERNAME: ${{ github.repository_owner }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
           SSH_USER: ${{ secrets.SSH_USER }}
         run: |
+          set -euo pipefail
           if [ -z "${GHCR_TOKEN:-}" ]; then
             echo "::error::GHCR_TOKEN secret is missing for the staging environment"
             exit 1
           fi
 
-          ssh -4 -i ~/.ssh/id_rsa -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" bash -s <<EOF
-          $(printf 'export APP_IMAGE=%q\n' "$APP_IMAGE")
-          $(printf 'export GHCR_USERNAME=%q\n' "$GHCR_USERNAME")
-          $(printf 'export GHCR_TOKEN=%q\n' "$GHCR_TOKEN")
+          ssh -4 -i ~/.ssh/id_rsa -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" bash -s <<REMOTE
+          export APP_IMAGE=$(printf %q "$APP_IMAGE")
+          export EXPECTED_GIT_COMMIT=$(printf %q "$EXPECTED_GIT_COMMIT")
+          export GIT_BRANCH=$(printf %q "$GIT_BRANCH")
+          export GIT_COMMIT_DATE=$(printf %q "$GIT_COMMIT_DATE")
+          export GHCR_USERNAME=$(printf %q "$GHCR_USERNAME")
+          export GHCR_TOKEN=$(printf %q "$GHCR_TOKEN")
           set -euo pipefail
           cd /home/mgask-staging
           git fetch origin
@@ -123,29 +130,6 @@ jobs:
             echo "::error::git reset failed. Run on server as root: chown -R deploy:deploy /home/mgask-staging"
             exit 1
           fi
-          COMPOSE="docker compose -f docker-compose.staging.yml"
-          printf '%s' "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USERNAME" --password-stdin
-          echo "--- pulling images ---"
-          \$COMPOSE pull web celery_worker
-          pulled_image_id="\$(docker image inspect --format='{{.Id}}' "\$APP_IMAGE")"
-          echo "pulled_image_id=\$pulled_image_id"
-          echo "--- migration plan ---"
-          \$COMPOSE run --rm web python manage.py migrate --plan
-          echo "--- running migrations (new image, before recreate) ---"
-          \$COMPOSE run --rm web python manage.py migrate --noinput
-          echo "--- replacing app containers ---"
-          \$COMPOSE stop web celery_worker || true
-          \$COMPOSE rm -f web celery_worker || true
-          \$COMPOSE up -d --pull always --force-recreate --remove-orphans web celery_worker
-          running_container_id="\$(\$COMPOSE ps -q web | head -n1)"
-          running_image_id="\$(docker inspect --format='{{.Image}}' "\$running_container_id")"
-          echo "running_image_id=\$running_image_id"
-          if [ "\$running_image_id" != "\$pulled_image_id" ]; then
-            echo "::error::web container is not running the pulled image"
-            docker inspect "\$running_container_id" --format='Created={{.Created}} ConfigImage={{.Config.Image}}'
-            exit 1
-          fi
-          echo "--- collectstatic ---"
-          \$COMPOSE exec -T web python manage.py collectstatic --noinput
-          \$COMPOSE ps
-          EOF
+          chmod +x scripts/deploy-staging-remote.sh
+          exec ./scripts/deploy-staging-remote.sh
+          REMOTE

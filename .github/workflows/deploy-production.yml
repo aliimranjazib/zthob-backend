@@ -75,15 +75,13 @@ jobs:
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          echo "Checking SSH TCP connectivity for production server..."
           if ! nc -4 -vz -w 20 "$SSH_HOST" "$SSH_PORT"; then
-            echo "::error::Cannot reach SSH_HOST on SSH_PORT from the GitHub runner. Check DNS, port, server firewall/security group, and whether GitHub-hosted runner IPs are allowed."
+            echo "::error::Cannot reach SSH_HOST on SSH_PORT"
             exit 1
           fi
 
-          echo "Scanning SSH host key for production server..."
           if ! ssh-keyscan -4 -H -T 20 -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts 2>ssh-keyscan.err; then
-            echo "::error::ssh-keyscan failed. Check SSH_HOST, SSH_PORT, firewall, and whether the server allows GitHub-hosted runners."
+            echo "::error::ssh-keyscan failed"
             cat ssh-keyscan.err
             exit 1
           fi
@@ -111,97 +109,32 @@ jobs:
             exit 1
           fi
 
-          ssh -4 -i ~/.ssh/id_rsa -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" bash -s <<EOF
-          $(printf 'export APP_IMAGE=%q\n' "$APP_IMAGE")
-          $(printf 'export EXPECTED_GIT_COMMIT=%q\n' "$EXPECTED_GIT_COMMIT")
-          $(printf 'export GIT_BRANCH=%q\n' "$GIT_BRANCH")
-          $(printf 'export GIT_COMMIT_DATE=%q\n' "$GIT_COMMIT_DATE")
-          $(printf 'export GHCR_USERNAME=%q\n' "$GHCR_USERNAME")
-          $(printf 'export GHCR_TOKEN=%q\n' "$GHCR_TOKEN")
+          ssh -4 -i ~/.ssh/id_rsa -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" bash -s <<REMOTE
+          export APP_IMAGE=$(printf %q "$APP_IMAGE")
+          export EXPECTED_GIT_COMMIT=$(printf %q "$EXPECTED_GIT_COMMIT")
+          export GIT_BRANCH=$(printf %q "$GIT_BRANCH")
+          export GIT_COMMIT_DATE=$(printf %q "$GIT_COMMIT_DATE")
+          export GHCR_USERNAME=$(printf %q "$GHCR_USERNAME")
+          export GHCR_TOKEN=$(printf %q "$GHCR_TOKEN")
           set -euo pipefail
           cd /home/mgask-production
           git fetch origin
           if ! git reset --hard origin/main; then
-            echo "::error::git reset failed. Run on server as root: chown -R deploy:deploy /home/mgask-production"
+            echo "::error::git reset failed. Run as root: chown -R deploy:deploy /home/mgask-production"
             exit 1
           fi
-          if [ -f .env ]; then
-            grep -v -E '^(GIT_COMMIT|GIT_BRANCH|GIT_COMMIT_DATE|APP_IMAGE)=' .env > .env.tmp || true
-            mv .env.tmp .env
-          fi
-          export GIT_COMMIT="\$EXPECTED_GIT_COMMIT"
-          printf 'GIT_COMMIT=%s\nGIT_BRANCH=%s\nGIT_COMMIT_DATE=%s\nAPP_IMAGE=%s\n' \
-            "\$GIT_COMMIT" "\$GIT_BRANCH" "\$GIT_COMMIT_DATE" "\$APP_IMAGE" > deployment.env
-          COMPOSE="docker compose --env-file .env --env-file deployment.env -f docker-compose.production.yml"
-          echo "--- deployment.env ---"
-          cat deployment.env
-          printf '%s' "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USERNAME" --password-stdin
-          echo "--- pulling images ---"
-          \$COMPOSE pull web celery_worker
-          pulled_image_id="\$(docker image inspect --format='{{.Id}}' "\$APP_IMAGE")"
-          echo "pulled_image_id=\$pulled_image_id"
-          mkdir -p backups
-          echo "--- database backup ---"
-          \$COMPOSE exec -T db sh -c 'pg_dump -U "\$POSTGRES_USER" "\$POSTGRES_DB"' > backups/backup_\$(date +%F_%H-%M).sql
-          echo "--- migration plan ---"
-          \$COMPOSE run --rm web python manage.py migrate --plan
-          echo "--- running migrations (new image, before recreate) ---"
-          \$COMPOSE run --rm web python manage.py migrate --noinput
-          echo "--- replacing app containers ---"
-          \$COMPOSE stop web celery_worker || true
-          \$COMPOSE rm -f web celery_worker || true
-          \$COMPOSE up -d --pull always --force-recreate --remove-orphans web celery_worker
-          \$COMPOSE ps
-          running_container_id="\$(\$COMPOSE ps -q web | head -n1)"
-          running_image_id="\$(docker inspect --format='{{.Image}}' "\$running_container_id")"
-          echo "running_image_id=\$running_image_id"
-          if [ "\$running_image_id" != "\$pulled_image_id" ]; then
-            echo "::error::web container is not running the pulled image"
-            docker inspect "\$running_container_id" --format='Created={{.Created}} ConfigImage={{.Config.Image}}'
-            exit 1
-          fi
-          echo "--- collectstatic ---"
-          \$COMPOSE exec -T web python manage.py collectstatic --noinput
-          echo "--- container GIT_* env ---"
-          \$COMPOSE exec -T web /bin/sh -c 'env | grep -E "^GIT_" || true'
-          \$COMPOSE exec -T -e EXPECTED_GIT_COMMIT="\$EXPECTED_GIT_COMMIT" web python manage.py shell -c "import os; from apps.core.version import get_git_info; info = get_git_info(); print(info); raise SystemExit(0 if info.get('full_commit_hash') == os.environ['EXPECTED_GIT_COMMIT'] else 1)"
-          EOF
+          chmod +x scripts/deploy-production-remote.sh
+          exec ./scripts/deploy-production-remote.sh
+          REMOTE
 
       - name: Verify production endpoint
         env:
-          APP_IMAGE: ${{ env.APP_IMAGE }}
           EXPECTED_GIT_COMMIT: ${{ env.GIT_COMMIT }}
-          GIT_BRANCH: ${{ env.GIT_BRANCH }}
-          GIT_COMMIT_DATE: ${{ env.GIT_COMMIT_DATE }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
           SSH_USER: ${{ secrets.SSH_USER }}
         run: |
           set -euo pipefail
-          echo "Production server-local diagnostics:"
-          ssh -4 -i ~/.ssh/id_rsa -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" bash -s <<EOF
-          $(printf 'export APP_IMAGE=%q\n' "$APP_IMAGE")
-          $(printf 'export EXPECTED_GIT_COMMIT=%q\n' "$EXPECTED_GIT_COMMIT")
-          $(printf 'export GIT_BRANCH=%q\n' "$GIT_BRANCH")
-          $(printf 'export GIT_COMMIT_DATE=%q\n' "$GIT_COMMIT_DATE")
-          set -euo pipefail
-          cd /home/mgask-production
-          export GIT_COMMIT="\$EXPECTED_GIT_COMMIT"
-          printf 'GIT_COMMIT=%s\nGIT_BRANCH=%s\nGIT_COMMIT_DATE=%s\nAPP_IMAGE=%s\n' \
-            "\$GIT_COMMIT" "\$GIT_BRANCH" "\$GIT_COMMIT_DATE" "\$APP_IMAGE" > deployment.env
-          COMPOSE="docker compose --env-file .env --env-file deployment.env -f docker-compose.production.yml"
-          echo "--- deployment.env ---"
-          cat deployment.env
-          echo "--- docker compose ps ---"
-          \$COMPOSE ps
-          echo "--- container deployment metadata ---"
-          \$COMPOSE exec -T -e EXPECTED_GIT_COMMIT="\$EXPECTED_GIT_COMMIT" web python manage.py shell -c "from apps.core.version import get_git_info; print(get_git_info())"
-          echo "--- host-local production port response ---"
-          curl -fsS http://127.0.0.1:8000/api/config/version/ || true
-          echo
-          EOF
-
-          echo "Public production endpoint response:"
           response="$(curl -fsS https://prod.mgask.net/api/config/version/)"
           echo "$response"
-          python -c "import json, os, sys; data = json.load(sys.stdin)['data']; expected = os.environ['EXPECTED_GIT_COMMIT']; ok = data.get('full_commit_hash') == expected and data.get('app_env') == 'production'; print('expected_full_commit_hash=', expected); print('actual_full_commit_hash=', data.get('full_commit_hash')); print('actual_app_env=', data.get('app_env')); raise SystemExit(0 if ok else 1)" <<< "$response"
+          python -c "import json, os, sys; data = json.load(sys.stdin)['data']; expected = os.environ['EXPECTED_GIT_COMMIT']; ok = data.get('full_commit_hash') == expected and data.get('app_env') == 'production'; print('expected=', expected); print('actual=', data.get('full_commit_hash')); raise SystemExit(0 if ok else 1)" <<< "$response"
