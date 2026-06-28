@@ -133,13 +133,17 @@ jobs:
           printf '%s' "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USERNAME" --password-stdin
           echo "--- pulling images ---"
           \$COMPOSE pull web celery_worker
+          mkdir -p backups
+          echo "--- database backup ---"
+          \$COMPOSE exec -T db sh -c 'pg_dump -U "\$POSTGRES_USER" "\$POSTGRES_DB"' > backups/backup_\$(date +%F_%H-%M).sql
+          echo "--- migration plan ---"
+          \$COMPOSE run --rm web python manage.py migrate --plan
+          echo "--- running migrations (new image, before recreate) ---"
+          \$COMPOSE run --rm web python manage.py migrate --noinput
           echo "--- recreating containers ---"
           \$COMPOSE up -d --force-recreate --remove-orphans web celery_worker
           \$COMPOSE ps
-          mkdir -p backups
-          \$COMPOSE exec -T db sh -c 'pg_dump -U "\$POSTGRES_USER" "\$POSTGRES_DB"' > backups/backup_\$(date +%F_%H-%M).sql
-          echo "--- running migrations ---"
-          \$COMPOSE exec -T web python manage.py migrate
+          echo "--- collectstatic ---"
           \$COMPOSE exec -T web python manage.py collectstatic --noinput
           echo "--- container GIT_* env ---"
           \$COMPOSE exec -T web /bin/sh -c 'env | grep -E "^GIT_" || true'

@@ -107,17 +107,28 @@ jobs:
             exit 1
           fi
 
-          ssh -4 -i ~/.ssh/id_rsa -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
-            "export APP_IMAGE='$APP_IMAGE' GHCR_USERNAME='$GHCR_USERNAME' GHCR_TOKEN='$GHCR_TOKEN'; bash -s" <<'EOF'
-            set -e
-            cd /home/mgask-staging
-            git fetch origin
-            git reset --hard origin/main
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-            docker compose -f docker-compose.staging.yml pull web celery_worker
-            docker compose -f docker-compose.staging.yml up -d web celery_worker
-            docker compose -f docker-compose.staging.yml exec -T web python manage.py migrate
-            docker compose -f docker-compose.staging.yml exec -T web python manage.py collectstatic --noinput
-            docker compose -f docker-compose.staging.yml restart web celery_worker
-            docker compose -f docker-compose.staging.yml ps
+          ssh -4 -i ~/.ssh/id_rsa -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" bash -s <<EOF
+          $(printf 'export APP_IMAGE=%q\n' "$APP_IMAGE")
+          $(printf 'export GHCR_USERNAME=%q\n' "$GHCR_USERNAME")
+          $(printf 'export GHCR_TOKEN=%q\n' "$GHCR_TOKEN")
+          set -euo pipefail
+          cd /home/mgask-staging
+          git fetch origin
+          if ! git reset --hard origin/main; then
+            echo "::error::git reset failed. Run on server as root: chown -R deploy:deploy /home/mgask-staging"
+            exit 1
+          fi
+          COMPOSE="docker compose -f docker-compose.staging.yml"
+          printf '%s' "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USERNAME" --password-stdin
+          echo "--- pulling images ---"
+          \$COMPOSE pull web celery_worker
+          echo "--- migration plan ---"
+          \$COMPOSE run --rm web python manage.py migrate --plan
+          echo "--- running migrations (new image, before recreate) ---"
+          \$COMPOSE run --rm web python manage.py migrate --noinput
+          echo "--- recreating containers ---"
+          \$COMPOSE up -d --force-recreate --remove-orphans web celery_worker
+          echo "--- collectstatic ---"
+          \$COMPOSE exec -T web python manage.py collectstatic --noinput
+          \$COMPOSE ps
           EOF
