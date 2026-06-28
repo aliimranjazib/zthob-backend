@@ -9,6 +9,7 @@ from apps.tailors.models import Fabric, FabricCategory, TailorProfile
 from apps.tailors.services.order_pdf import (
     _ARABIC_FONT_AVAILABLE,
     _contains_arabic,
+    _format_recipient_html,
     _format_user_text_html,
     _item_recipient_display,
     generate_order_pdf,
@@ -83,6 +84,24 @@ class OrderPDFServiceTest(TestCase):
     def test_english_pdf_embeds_arabic_font_for_arabic_user_content(self):
         html = _format_user_text_html('قماش قطني', lang='en')
         self.assertIn('IBMPlexSansArabic-Regular', html)
+
+    def test_mixed_arabic_english_preserves_latin_name(self):
+        html = _format_user_text_html('لصالح: farhan', lang='ar')
+        self.assertIn('farhan', html)
+
+    def test_pre_shaped_arabic_is_not_double_processed(self):
+        from apps.tailors.services.order_pdf import _shape_arabic, _t
+        once = _t('Fabric + Stitching', lang='ar')
+        html = _format_user_text_html(once, lang='ar', reshape=False)
+        self.assertIn('IBMPlexSansArabic-Regular', html)
+        twice = _shape_arabic(_shape_arabic('قماش مع خياطة'))
+        self.assertNotEqual(once, twice)
+
+    def test_format_recipient_html_keeps_family_name_readable(self):
+        item = self.order.order_items.select_related('family_member').first()
+        html = _format_recipient_html(item, self.order, lang='ar')
+        self.assertIn('Ali', html)
+        self.assertIn('son', html)
 
     def test_item_recipient_display_uses_family_member(self):
         item = self.order.order_items.select_related('family_member').first()

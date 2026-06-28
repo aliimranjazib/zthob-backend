@@ -42,6 +42,12 @@ except Exception as e:
 
 # ─── Arabic text shaping helper ───────────────────────────────────────────────
 _ARABIC_RE = re.compile(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]')
+_SCRIPT_RUN_RE = re.compile(
+    r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+|'
+    r'[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+',
+    re.UNICODE,
+)
+_LRM = '\u200e'
 
 
 def _contains_arabic(text):
@@ -74,22 +80,42 @@ def _safe_text(value):
     return escape(str(value))
 
 
-def _format_user_text_html(text, lang='en'):
+def _format_user_text_html(text, lang='en', *, reshape=True):
     """
     Prepare user-generated text for ReportLab Paragraphs.
-    Arabic script is shaped and rendered with the Arabic font even in English PDFs.
+    Arabic runs are shaped individually so Latin text in mixed strings stays readable.
+    Set reshape=False when the value was already shaped (e.g. via _t()).
     """
     if text is None or text == '':
         return '—'
     text = str(text)
-    if _contains_arabic(text):
-        if _ARABIC_FONT_AVAILABLE:
-            shaped = _shape_arabic(text)
-            return f'<font name="{_AR_FONT_REGULAR}">{_safe_text(shaped)}</font>'
+    runs = _SCRIPT_RUN_RE.findall(text)
+    if not runs:
         return _safe_text(text)
-    if lang == 'ar' and _ARABIC_FONT_AVAILABLE:
-        return _safe_text(_shape_arabic(text))
-    return _safe_text(text)
+
+    has_arabic = any(_contains_arabic(run) for run in runs)
+    if not has_arabic:
+        return _safe_text(text)
+
+    has_latin = any(run.strip() and not _contains_arabic(run) for run in runs)
+    if not has_latin:
+        display = _shape_arabic(text) if reshape else text
+        if _ARABIC_FONT_AVAILABLE:
+            return f'<font name="{_AR_FONT_REGULAR}">{_safe_text(display)}</font>'
+        return _safe_text(display)
+
+    parts = []
+    for run in runs:
+        if _contains_arabic(run):
+            display = _shape_arabic(run) if reshape else run
+            if _ARABIC_FONT_AVAILABLE:
+                parts.append(f'<font name="{_AR_FONT_REGULAR}">{_safe_text(display)}</font>')
+            else:
+                parts.append(_safe_text(display))
+        else:
+            latin = f'{_LRM}{run}{_LRM}' if lang == 'ar' else run
+            parts.append(_safe_text(latin))
+    return ''.join(parts)
 
 
 def _customer_display_name(customer):
@@ -251,6 +277,20 @@ _AR_LABELS = {
     'Front Width':         'عرض الصدر',
     'Bicep':               'العضلة',
     'Wrist':               'المعصم',
+    # Measurement fields (fallback when DB has no Arabic label)
+    'Placket Length':      'طول الكمر',
+    'Pocket Height':       'ارتفاع الجيب',
+    'Bottom Width':        'عرض الأسفل',
+    'Chest Front':         'الصدر الأمامي',
+    'Back Length':         'طول الظهر',
+    'Neck Width':          'عرض الرقبة',
+    'Chest Side':          'الصدر الجانبي',
+    'Chest Back':          'الصدر الخلفي',
+    # Status history notes
+    'Order created':       'تم إنشاء الطلب',
+    'Payment status changed from pending to paid': 'تم تغيير حالة الدفع من قيد الانتظار إلى مدفوع',
+    'Payment status changed from partially paid to paid': 'تم تغيير حالة الدفع من مدفوع جزئياً إلى مدفوع',
+    'Payment status changed from pending to partially paid': 'تم تغيير حالة الدفع من قيد الانتظار إلى مدفوع جزئياً',
 }
 
 
@@ -461,7 +501,53 @@ def _style_image_path(style):
     else:
         candidate = os.path.join(settings.BASE_DIR, path)
 
-    return candidate if os.path.exists(candidate) else None
+    return candidate if os.path.exists(candidate) else _style_image_from_db(style)
+
+
+def _style_image_from_db(style):
+    """Resolve style image via CustomStyle when stored asset_path is missing on disk."""
+    if not isinstance(style, dict):
+        return None
+
+    try:
+        from apps.customization.models import CustomStyle, CustomStyleCategory
+
+        style_type = style.get('style_type')
+        if not style_type:
+            return None
+
+        category = CustomStyleCategory.objects.filter(name=style_type).first()
+        if not category:
+            return None
+
+        queryset = CustomStyle.objects.filter(
+            category=category,
+            is_active=True,
+        ).order_by('display_order', 'id')
+
+        label = style.get('label')
+        if label:
+            match = queryset.filter(name=label).first()
+            if match and match.image:
+                path = match.image.path
+                if os.path.exists(path):
+                    return path
+
+        index = style.get('index')
+        if index is not None:
+            styles = list(queryset)
+            try:
+                style_obj = styles[int(index)]
+            except (IndexError, TypeError, ValueError):
+                style_obj = None
+            if style_obj and style_obj.image:
+                path = style_obj.image.path
+                if os.path.exists(path):
+                    return path
+    except Exception as exc:
+        logger.debug("Unable to resolve custom style image from DB: %s", exc)
+
+    return None
 
 
 def _custom_style_image_grid(styles, page_w, s, lang='en'):
@@ -513,6 +599,30 @@ def _custom_style_image_grid(styles, page_w, s, lang='en'):
     return grid
 
 
+def _custom_style_labels_fallback(styles, s, lang='en'):
+    """Text-only fallback when style image files are unavailable."""
+    labels = []
+    for style in styles:
+        label = style.get('label') or style.get('style_type') or ''
+        if style.get('style_type') and style.get('label'):
+            label = f'{style.get("style_type", "").replace("_", " ").title()}: {style.get("label", "")}'
+        if label:
+            labels.append(_format_user_text_html(label, lang))
+
+    if not labels:
+        return None
+
+    return Paragraph('<br/>'.join(labels), s['small'])
+
+
+def _custom_style_section(styles, page_w, s, lang='en'):
+    """Prefer image grid; fall back to labels when images are missing."""
+    grid = _custom_style_image_grid(styles, page_w, s, lang)
+    if grid:
+        return grid
+    return _custom_style_labels_fallback(styles, s, lang)
+
+
 def _status_badge_color(status):
     """Return background color for status badge."""
     mapping = {
@@ -552,10 +662,12 @@ def _kv_table(rows, col_widths=None, lang='en'):
 
         if not val:
             val_html = '—'
-        elif skip_trans or lang == 'en':
+        elif skip_trans:
+            val_html = _format_user_text_html(val, lang, reshape=False)
+        elif lang == 'en':
             val_html = _format_user_text_html(val, lang)
         else:
-            val_html = _safe_text(_t(val, lang))
+            val_html = _format_user_text_html(_t(val, lang), lang, reshape=False)
         val_p = Paragraph(val_html, s['value'])
 
         if is_ar:
@@ -615,6 +727,34 @@ def _item_recipient_display(item, order, lang='en'):
     return ''
 
 
+def _format_recipient_html(item, order, lang='en'):
+    """Render recipient line without corrupting mixed Arabic/English text."""
+    for_label = _t('For', lang)
+    if item.family_member_id and item.family_member:
+        fm = item.family_member
+        name_html = _format_user_text_html(fm.name or '—', lang)
+        if fm.relationship:
+            rel_html = _format_user_text_html(fm.relationship, lang)
+            body = f'{name_html} ({rel_html})'
+        else:
+            body = name_html
+    else:
+        customer_name = _customer_display_name(getattr(order, 'customer', None)) or '—'
+        body = _format_user_text_html(customer_name, lang)
+
+    label = _safe_text(for_label)
+    if lang == 'ar':
+        return f'<font color="#990404"><b>{label}: {_LRM}{body}{_LRM}</b></font>'
+    return f'<font color="#990404"><b>{label}: {body}</b></font>'
+
+
+def _localized_note(note, lang='en'):
+    """Translate known status-history notes for Arabic PDFs."""
+    if not note or lang != 'ar':
+        return note or '—'
+    return _AR_LABELS.get(str(note), str(note))
+
+
 def _measurement_field_map():
     """
     Return active measurement field metadata keyed by JSON field name.
@@ -657,7 +797,9 @@ def _format_measurement_pairs(measurements, lang='en', field_map=None):
         meta = field_map.get(key, {})
         fallback = str(key).replace('_', ' ').title()
         if lang == 'ar':
-            raw_label = meta.get('label_ar') or _AR_LABELS.get(fallback, fallback)
+            raw_label = meta.get('label_ar') or meta.get('label_en') or fallback
+            if not _contains_arabic(raw_label):
+                raw_label = _AR_LABELS.get(raw_label, _AR_LABELS.get(fallback, raw_label))
             label = _shape_arabic(raw_label)
         else:
             label = meta.get('label_en') or fallback
@@ -1012,18 +1154,37 @@ def generate_order_pdf(order, lang='en') -> bytes:
         ]
         if is_ar:
             item_headers.reverse()
-        item_rows = [item_headers]
 
-        for item in items:
-            fabric_name = item.fabric.name if item.fabric else _localized_value('Measurement Service', lang)
-            fabric_sku = f'SKU: {item.fabric.sku}' if item.fabric and item.fabric.sku else ''
-            recipient_line = _item_recipient_display(item, order, lang)
-            fabric_parts = []
-            if recipient_line:
-                fabric_parts.append(
-                    f'<font color="#990404"><b>{_format_user_text_html(recipient_line, lang)}</b></font>'
+        header_tbl = Table([item_headers], colWidths=col_widths_items)
+        header_tbl.setStyle(TableStyle([
+            ('BACKGROUND',    (0, 0), (-1, -1), BRAND_PRIMARY),
+            ('TOPPADDING',    (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID',          (0, 0), (-1, -1), 0.3, BRAND_MID),
+            ('LINEBELOW',     (0, 0), (-1, 0),  1,   BRAND_ACCENT),
+        ]))
+        story.append(header_tbl)
+
+        for item_index, item in enumerate(items):
+            if item_index > 0:
+                story.append(Spacer(1, 3 * mm))
+
+            if item.fabric:
+                fabric_name = item.fabric.name
+                fabric_name_html = _format_user_text_html(fabric_name, lang)
+            else:
+                fabric_name_html = _format_user_text_html(
+                    _localized_value('Measurement Service', lang),
+                    lang,
+                    reshape=False,
                 )
-            fabric_parts.append(_format_user_text_html(fabric_name, lang))
+            fabric_sku = f'SKU: {item.fabric.sku}' if item.fabric and item.fabric.sku else ''
+            fabric_parts = []
+            recipient_html = _format_recipient_html(item, order, lang)
+            if recipient_html:
+                fabric_parts.append(recipient_html)
+            fabric_parts.append(fabric_name_html)
             if fabric_sku:
                 fabric_parts.append(f'<font color="#888888" size="7">{_safe_text(fabric_sku)}</font>')
             fabric_cell = Paragraph('<br/>'.join(fabric_parts), s['table_cell'])
@@ -1043,12 +1204,8 @@ def generate_order_pdf(order, lang='en') -> bytes:
             ]
             if is_ar:
                 row.reverse()
-            item_rows.append(row)
+            item_rows = [row]
 
-            # Extra info rows (Instructions, Measurements, Styles)
-            # We use an empty list for spanned columns [Content, '', '', '']
-            
-            # 1. Custom instructions row
             if item.custom_instructions:
                 _instr_label = _t('Instructions:', lang)
                 instr_p = Paragraph(
@@ -1057,7 +1214,6 @@ def generate_order_pdf(order, lang='en') -> bytes:
                 )
                 item_rows.append([instr_p, '', ''])
 
-            # 2. Measurements row — rendered as a professional grid
             if item.measurements and isinstance(item.measurements, dict):
                 meas_pairs = _format_measurement_pairs(item.measurements, lang, measurement_fields)
                 if meas_pairs:
@@ -1065,53 +1221,35 @@ def generate_order_pdf(order, lang='en') -> bytes:
                     grid = _measurements_grid(meas_pairs, page_w, s, lang, title=meas_title)
                     item_rows.append([grid, '', ''])
 
-            # 3. Custom style images (text list removed — images + labels are enough)
             if item.custom_styles and isinstance(item.custom_styles, list):
-                style_image_grid = _custom_style_image_grid(item.custom_styles, page_w, s, lang)
-                if style_image_grid:
+                style_section = _custom_style_section(item.custom_styles, page_w, s, lang)
+                if style_section:
                     styles_heading = Paragraph(f'<b>{_safe_text(_t("Styles:", lang))}</b>', s['small'])
                     item_rows.append([styles_heading, '', ''])
-                    item_rows.append([style_image_grid, '', ''])
+                    item_rows.append([style_section, '', ''])
 
-        items_tbl = Table(item_rows, colWidths=col_widths_items, repeatRows=1)
-        
-        # Build style list
-        tbl_style = [
-            ('BACKGROUND',    (0, 0), (-1, 0),  BRAND_PRIMARY),
-            ('TOPPADDING',    (0, 0), (-1, 0),  6),
-            ('BOTTOMPADDING', (0, 0), (-1, 0),  6),
-            ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
-            ('GRID',          (0, 0), (-1, -1), 0.3, BRAND_MID),
-            ('LINEBELOW',     (0, 0), (-1, 0),  1,   BRAND_ACCENT),
-        ]
-
-        # Apply SPAN and special styling for info rows
-        for idx, row in enumerate(item_rows):
-            if idx == 0: continue # Header
-            # Check if this is an info row (has only one real content in index 0 or index -1 for RTL)
-            # In our case we always put content in index 0 then reverse, so content is at an edge column.
-            # But the SPAN logic in ReportLab always uses absolute indices 0..N.
-            
-            # Simple heuristic: if every column after the first is empty, it's a spanned row.
-            if row[1] == '' and row[2] == '':
-                tbl_style.append(('SPAN', (0, idx), (-1, idx)))
-                # Set background for measurement grid to distinguish it
-                if not isinstance(row[0], Paragraph):
-                    tbl_style.append(('BACKGROUND', (0, idx), (-1, idx), BRAND_LIGHT))
-                    tbl_style.append(('TOPPADDING',    (0, idx), (-1, idx), 2))
-                    tbl_style.append(('BOTTOMPADDING', (0, idx), (-1, idx), 2))
+            tbl_style = [
+                ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+                ('GRID',          (0, 0), (-1, -1), 0.3, BRAND_MID),
+            ]
+            for idx, detail_row in enumerate(item_rows):
+                if detail_row[1] == '' and detail_row[2] == '':
+                    tbl_style.append(('SPAN', (0, idx), (-1, idx)))
+                    if not isinstance(detail_row[0], Paragraph):
+                        tbl_style.append(('BACKGROUND', (0, idx), (-1, idx), BRAND_LIGHT))
+                        tbl_style.append(('TOPPADDING',    (0, idx), (-1, idx), 2))
+                        tbl_style.append(('BOTTOMPADDING', (0, idx), (-1, idx), 2))
+                    else:
+                        tbl_style.append(('LEFTPADDING', (0, idx), (-1, idx), 15))
+                        tbl_style.append(('TOPPADDING',    (0, idx), (-1, idx), 2))
+                        tbl_style.append(('BOTTOMPADDING', (0, idx), (-1, idx), 2))
                 else:
-                    # It's a text info row (Instructions/Styles)
-                    tbl_style.append(('LEFTPADDING', (0, idx), (-1, idx), 15))
-                    tbl_style.append(('TOPPADDING',    (0, idx), (-1, idx), 2))
-                    tbl_style.append(('BOTTOMPADDING', (0, idx), (-1, idx), 2))
-            else:
-                # Main item row
-                bg_color = WHITE if (idx % 2 == 1) else BRAND_LIGHT
-                tbl_style.append(('BACKGROUND', (0, idx), (-1, idx), bg_color))
+                    bg_color = WHITE if (item_index % 2 == 0) else BRAND_LIGHT
+                    tbl_style.append(('BACKGROUND', (0, idx), (-1, idx), bg_color))
 
-        items_tbl.setStyle(TableStyle(tbl_style))
-        story.append(items_tbl)
+            item_tbl = Table(item_rows, colWidths=col_widths_items)
+            item_tbl.setStyle(TableStyle(tbl_style))
+            story.append(item_tbl)
     else:
         story.append(Paragraph(_t('No items found for this order.', lang), s['value']))
 
@@ -1153,11 +1291,13 @@ def generate_order_pdf(order, lang='en') -> bytes:
                 changed_by = _AR_LABELS['Customer'] if is_ar else 'Customer'
             else:
                 changed_by = h.changed_by.get_full_name() or h.changed_by.username if h.changed_by else '—'
+            status_display = _choice_display(h.status, order.ORDER_STATUS_CHOICES, lang)
+            note_text = _localized_note(h.notes, lang)
             hist_row = [
                 Paragraph(_fmt_datetime(h.created_at), s['small']),
-                Paragraph(h.get_status_display(), s['small']),
-                Paragraph(_format_user_text_html(changed_by, lang), s['small']),
-                Paragraph(_format_user_text_html(h.notes or '—', lang), s['small']),
+                Paragraph(_format_user_text_html(status_display, lang, reshape=False), s['small']),
+                Paragraph(_format_user_text_html(changed_by, lang, reshape=False), s['small']),
+                Paragraph(_format_user_text_html(note_text, lang), s['small']),
             ]
             if is_ar:
                 hist_row.reverse()
