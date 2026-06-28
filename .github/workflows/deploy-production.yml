@@ -16,7 +16,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set image name
-        run: echo "APP_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:production" >> "$GITHUB_ENV"
+        run: |
+          repo="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "APP_IMAGE=${repo}:${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "APP_IMAGE_ALIAS=${repo}:production" >> "$GITHUB_ENV"
 
       - name: Set deployment metadata
         run: |
@@ -39,7 +42,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.APP_IMAGE }}
+          tags: |
+            ${{ env.APP_IMAGE }}
+            ${{ env.APP_IMAGE_ALIAS }}
           build-args: |
             GIT_COMMIT=${{ env.GIT_COMMIT }}
             GIT_BRANCH=${{ env.GIT_BRANCH }}
@@ -133,6 +138,8 @@ jobs:
           printf '%s' "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USERNAME" --password-stdin
           echo "--- pulling images ---"
           \$COMPOSE pull web celery_worker
+          pulled_image_id="\$(docker image inspect --format='{{.Id}}' "\$APP_IMAGE")"
+          echo "pulled_image_id=\$pulled_image_id"
           mkdir -p backups
           echo "--- database backup ---"
           \$COMPOSE exec -T db sh -c 'pg_dump -U "\$POSTGRES_USER" "\$POSTGRES_DB"' > backups/backup_\$(date +%F_%H-%M).sql
@@ -140,9 +147,19 @@ jobs:
           \$COMPOSE run --rm web python manage.py migrate --plan
           echo "--- running migrations (new image, before recreate) ---"
           \$COMPOSE run --rm web python manage.py migrate --noinput
-          echo "--- recreating containers ---"
-          \$COMPOSE up -d --force-recreate --remove-orphans web celery_worker
+          echo "--- replacing app containers ---"
+          \$COMPOSE stop web celery_worker || true
+          \$COMPOSE rm -f web celery_worker || true
+          \$COMPOSE up -d --pull always --force-recreate --remove-orphans web celery_worker
           \$COMPOSE ps
+          running_container_id="\$(\$COMPOSE ps -q web | head -n1)"
+          running_image_id="\$(docker inspect --format='{{.Image}}' "\$running_container_id")"
+          echo "running_image_id=\$running_image_id"
+          if [ "\$running_image_id" != "\$pulled_image_id" ]; then
+            echo "::error::web container is not running the pulled image"
+            docker inspect "\$running_container_id" --format='Created={{.Created}} ConfigImage={{.Config.Image}}'
+            exit 1
+          fi
           echo "--- collectstatic ---"
           \$COMPOSE exec -T web python manage.py collectstatic --noinput
           echo "--- container GIT_* env ---"
