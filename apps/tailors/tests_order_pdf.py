@@ -10,10 +10,12 @@ from apps.tailors.services.order_pdf import (
     _ARABIC_FONT_AVAILABLE,
     _contains_arabic,
     _custom_style_caption_html,
+    _custom_style_comment_html,
     _format_recipient_html,
     _format_user_text_html,
     _item_recipient_display,
     _t,
+    _truncate_style_comment,
     generate_order_pdf,
 )
 
@@ -152,6 +154,18 @@ class OrderPDFServiceTest(TestCase):
         }, lang='ar')
         self.assertIn('Keep collar firm', html)
         self.assertIn(_t('Comment', 'ar'), html)
+
+    def test_truncate_style_comment_limits_very_long_text(self):
+        long_text = 'word ' * 80
+        truncated = _truncate_style_comment(long_text)
+        self.assertLessEqual(len(truncated), 120)
+        self.assertTrue(truncated.endswith('…'))
+
+    def test_custom_style_comment_html_uses_truncated_text(self):
+        long_text = 'Please ' + ('make this very detailed ' * 10)
+        html = _custom_style_comment_html({'text': long_text}, lang='en')
+        self.assertIn('Comment:', html)
+        self.assertIn('…', html)
 
     def test_generate_pdf_with_custom_style_comment(self):
         item = self.order.order_items.first()

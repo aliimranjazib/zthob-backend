@@ -365,6 +365,26 @@ def _styles(lang='en'):
             textColor=BRAND_SUBTEXT,
             alignment=body_align,
         ),
+        'style_card_label': ParagraphStyle(
+            f'StyleCardLabel_{lang}',
+            parent=base['Normal'],
+            fontSize=7.5,
+            fontName=font_bold,
+            textColor=BRAND_TEXT,
+            alignment=TA_CENTER,
+            leading=9,
+            spaceBefore=2,
+        ),
+        'style_card_comment': ParagraphStyle(
+            f'StyleCardComment_{lang}',
+            parent=base['Normal'],
+            fontSize=6.5,
+            fontName=font_regular,
+            textColor=BRAND_SUBTEXT,
+            alignment=TA_CENTER,
+            leading=8,
+            spaceBefore=1,
+        ),
         'footer': ParagraphStyle(
             f'Footer_{lang}',
             parent=base['Normal'],
@@ -550,67 +570,112 @@ def _style_image_from_db(style):
     return None
 
 
-def _custom_style_caption_html(style, lang='en'):
-    """Build style label + optional customer comment HTML for PDF rendering."""
+_STYLE_COMMENT_MAX_CHARS = 120
+
+
+def _truncate_style_comment(text, max_chars=_STYLE_COMMENT_MAX_CHARS):
+    """Keep long customer comments readable without blowing up grid cell height."""
+    normalized = ' '.join(str(text or '').split())
+    if not normalized:
+        return ''
+    if len(normalized) <= max_chars:
+        return normalized
+    return f'{normalized[: max_chars - 1].rstrip()}…'
+
+
+def _custom_style_label_text(style):
+    """Plain-text style label for card captions."""
     label = style.get('label') or style.get('style_type') or ''
     if style.get('style_type') and style.get('label'):
         label = f'{style.get("style_type", "").replace("_", " ").title()}: {style.get("label", "")}'
+    return str(label).strip()
 
-    parts = []
-    if label:
-        parts.append(_format_user_text_html(label, lang))
-    comment = (style.get('text') or '').strip()
-    if comment:
-        comment_lbl = _t('Comment', lang)
-        parts.append(_format_user_text_html(f'{comment_lbl}: {comment}', lang))
+
+def _custom_style_label_html(style, lang='en'):
+    label = _custom_style_label_text(style)
+    if not label:
+        return None
+    return _format_user_text_html(label, lang)
+
+
+def _custom_style_comment_html(style, lang='en'):
+    comment = _truncate_style_comment((style.get('text') or '').strip())
+    if not comment:
+        return None
+    comment_lbl = _t('Comment', lang)
+    return _format_user_text_html(f'{comment_lbl}: {comment}', lang)
+
+
+def _custom_style_caption_html(style, lang='en'):
+    """Combined caption for simple text-only layouts."""
+    parts = [p for p in (_custom_style_label_html(style, lang), _custom_style_comment_html(style, lang)) if p]
     return '<br/>'.join(parts)
 
 
-def _custom_style_image_grid(styles, page_w, s, lang='en'):
-    """Build a compact grid of customer-selected custom style images."""
-    image_cells = []
-    for style in styles:
-        caption_html = _custom_style_caption_html(style, lang)
-        if not caption_html:
-            continue
-
-        image_path = _style_image_path(style)
-        if not image_path:
-            image_cells.append([Paragraph(caption_html, s['small'])])
-            continue
-
-        try:
-            img = Image(image_path, width=24 * mm, height=24 * mm, kind='proportional')
-        except Exception as exc:
-            logger.debug("Unable to add custom style image to PDF: %s", exc)
-            image_cells.append([Paragraph(caption_html, s['small'])])
-            continue
-
-        image_cells.append([
-            img,
-            Paragraph(caption_html, s['small']),
-        ])
-
-    if not image_cells:
+def _custom_style_card(style, cell_width, s, lang='en'):
+    """One centered mini-card: image, bold label, optional comment."""
+    label_html = _custom_style_label_html(style, lang)
+    comment_html = _custom_style_comment_html(style, lang)
+    if not label_html and not comment_html:
         return None
 
-    columns = 3
+    inner_width = max(cell_width - 10, 30 * mm)
     rows = []
-    for i in range(0, len(image_cells), columns):
-        row = image_cells[i:i + columns]
+
+    image_path = _style_image_path(style)
+    if image_path:
+        try:
+            img = Image(image_path, width=22 * mm, height=22 * mm, kind='proportional')
+            rows.append([img])
+        except Exception as exc:
+            logger.debug("Unable to add custom style image to PDF card: %s", exc)
+
+    if label_html:
+        rows.append([Paragraph(label_html, s['style_card_label'])])
+    if comment_html:
+        rows.append([Paragraph(comment_html, s['style_card_comment'])])
+
+    card = Table(rows, colWidths=[inner_width])
+    card.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    return card
+
+
+def _custom_style_image_grid(styles, page_w, s, lang='en'):
+    """Build a compact grid of customer-selected custom style cards."""
+    columns = 3
+    cell_width = page_w / columns
+    cards = []
+    for style in styles:
+        card = _custom_style_card(style, cell_width, s, lang)
+        if card:
+            cards.append(card)
+
+    if not cards:
+        return None
+
+    rows = []
+    for i in range(0, len(cards), columns):
+        row = cards[i:i + columns]
         while len(row) < columns:
             row.append('')
         rows.append(row)
 
-    cell_width = page_w / columns
     grid = Table(rows, colWidths=[cell_width] * columns, hAlign='LEFT')
     grid.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('BACKGROUND', (0, 0), (-1, -1), WHITE),
         ('BOX', (0, 0), (-1, -1), 0.25, BRAND_MID),
         ('INNERGRID', (0, 0), (-1, -1), 0.25, BRAND_MID),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ('LEFTPADDING', (0, 0), (-1, -1), 4),
         ('RIGHTPADDING', (0, 0), (-1, -1), 4),
     ]))
@@ -619,16 +684,42 @@ def _custom_style_image_grid(styles, page_w, s, lang='en'):
 
 def _custom_style_labels_fallback(styles, s, lang='en'):
     """Text-only fallback when style image files are unavailable."""
-    labels = []
+    blocks = []
     for style in styles:
-        caption_html = _custom_style_caption_html(style, lang)
-        if caption_html:
-            labels.append(caption_html)
+        label_html = _custom_style_label_html(style, lang)
+        comment_html = _custom_style_comment_html(style, lang)
+        if not label_html and not comment_html:
+            continue
 
-    if not labels:
+        style_rows = []
+        if label_html:
+            style_rows.append([Paragraph(label_html, s['label'])])
+        if comment_html:
+            style_rows.append([Paragraph(comment_html, s['small'])])
+        block = Table(style_rows, colWidths=[160 * mm])
+        block.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'RIGHT' if lang == 'ar' else 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        blocks.append(block)
+
+    if not blocks:
         return None
 
-    return Paragraph('<br/>'.join(labels), s['small'])
+    if len(blocks) == 1:
+        return blocks[0]
+
+    stack = Table([[block] for block in blocks], colWidths=[160 * mm])
+    stack.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    return stack
 
 
 def _custom_style_section(styles, page_w, s, lang='en'):
