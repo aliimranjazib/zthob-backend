@@ -31,7 +31,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy installed dependencies from builder
 COPY --from=builder /install /usr/local
 
-# Copy project files
+# Copy Arabic PDF fonts and project files
+COPY fonts/ fonts/
 COPY . .
 
 # Create logs and static directories

@@ -6,6 +6,7 @@ Requires: reportlab, arabic-reshaper, python-bidi
 """
 import io
 import os
+import re
 from decimal import Decimal
 from xml.sax.saxutils import escape
 from reportlab.lib.pagesizes import A4
@@ -40,6 +41,16 @@ except Exception as e:
 
 
 # ─── Arabic text shaping helper ───────────────────────────────────────────────
+_ARABIC_RE = re.compile(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]')
+
+
+def _contains_arabic(text):
+    """Return True when text includes Arabic script characters."""
+    if not text:
+        return False
+    return bool(_ARABIC_RE.search(str(text)))
+
+
 def _shape_arabic(text):
     """
     Shape and reorder Arabic text for correct RTL rendering in ReportLab.
@@ -54,6 +65,38 @@ def _shape_arabic(text):
         return get_display(reshaped)
     except Exception:
         return text
+
+
+def _safe_text(value):
+    """Escape text before inserting it into a ReportLab Paragraph."""
+    if value is None:
+        return '—'
+    return escape(str(value))
+
+
+def _format_user_text_html(text, lang='en'):
+    """
+    Prepare user-generated text for ReportLab Paragraphs.
+    Arabic script is shaped and rendered with the Arabic font even in English PDFs.
+    """
+    if text is None or text == '':
+        return '—'
+    text = str(text)
+    if _contains_arabic(text):
+        if _ARABIC_FONT_AVAILABLE:
+            shaped = _shape_arabic(text)
+            return f'<font name="{_AR_FONT_REGULAR}">{_safe_text(shaped)}</font>'
+        return _safe_text(text)
+    if lang == 'ar' and _ARABIC_FONT_AVAILABLE:
+        return _safe_text(_shape_arabic(text))
+    return _safe_text(text)
+
+
+def _customer_display_name(customer):
+    if not customer:
+        return None
+    full_name = (customer.get_full_name() or '').strip()
+    return full_name or customer.username
 
 
 # ─── Translation dictionary ───────────────────────────────────────────────────
@@ -359,13 +402,6 @@ def _fmt_amount(value, currency='SAR'):
         return f'{currency} {value}'
 
 
-def _safe_text(value):
-    """Escape text before inserting it into a ReportLab Paragraph."""
-    if value is None:
-        return '—'
-    return escape(str(value))
-
-
 def _choice_display(value, choices, lang='en'):
     """Return a localized display label for a Django choice value."""
     display = dict(choices).get(value, value or '—')
@@ -439,8 +475,6 @@ def _custom_style_image_grid(styles, page_w, s, lang='en'):
         label = style.get('label') or style.get('style_type') or ''
         if style.get('style_type') and style.get('label'):
             label = f'{style.get("style_type", "").replace("_", " ").title()}: {style.get("label", "")}'
-        if lang == 'ar':
-            label = _shape_arabic(label)
 
         try:
             img = Image(image_path, width=24 * mm, height=24 * mm, kind='proportional')
@@ -450,7 +484,7 @@ def _custom_style_image_grid(styles, page_w, s, lang='en'):
 
         image_cells.append([
             img,
-            Paragraph(_safe_text(label), s['small']),
+            Paragraph(_format_user_text_html(label, lang), s['small']),
         ])
 
     if not image_cells:
@@ -515,14 +549,18 @@ def _kv_table(rows, col_widths=None, lang='en'):
         skip_trans = row[2] if len(row) > 2 else False
         
         lbl_p = Paragraph(_safe_text(_t(lbl, lang) if is_ar else lbl), s['label'])
-        
+
+        if not val:
+            val_html = '—'
+        elif skip_trans or lang == 'en':
+            val_html = _format_user_text_html(val, lang)
+        else:
+            val_html = _safe_text(_t(val, lang))
+        val_p = Paragraph(val_html, s['value'])
+
         if is_ar:
-            val_text = str(val) if skip_trans else _t(val, lang)
-            val_p = Paragraph(_safe_text(val_text if val else '—'), s['value'])
             data.append([val_p, lbl_p])
         else:
-            val_text = str(val) if val else '—'
-            val_p = Paragraph(_safe_text(val_text), s['value'])
             data.append([lbl_p, val_p])
 
     tbl = Table(data, colWidths=col_widths, hAlign='RIGHT' if is_ar else 'LEFT')
@@ -559,6 +597,22 @@ def _t(text, lang):
         return str(text) if text else '—'
     arabic = _AR_LABELS.get(str(text), str(text)) if text else '—'
     return _shape_arabic(arabic)
+
+
+def _item_recipient_display(item, order, lang='en'):
+    """Return a clear 'For: …' line for the order item recipient."""
+    for_label = _t('For', lang)
+    if item.family_member_id and item.family_member:
+        fm = item.family_member
+        name = fm.name or '—'
+        if fm.relationship:
+            return f'{for_label}: {name} ({fm.relationship})'
+        return f'{for_label}: {name}'
+
+    customer_name = _customer_display_name(getattr(order, 'customer', None))
+    if customer_name:
+        return f'{for_label}: {customer_name}'
+    return ''
 
 
 def _measurement_field_map():
@@ -925,13 +979,17 @@ def generate_order_pdf(order, lang='en') -> bytes:
         story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
         if order.special_instructions:
             _si_label = _t('Special Instructions:', lang)
-            _si_text  = _shape_arabic(order.special_instructions) if is_ar else order.special_instructions
-            story.append(Paragraph(f'<b>{_si_label}</b> {_si_text}', s['value']))
+            story.append(Paragraph(
+                f'<b>{_safe_text(_si_label)}</b> {_format_user_text_html(order.special_instructions, lang)}',
+                s['value'],
+            ))
             story.append(Spacer(1, 2 * mm))
         if order.notes:
             _n_label = _t('Internal Notes:', lang)
-            _n_text  = _shape_arabic(order.notes) if is_ar else order.notes
-            story.append(Paragraph(f'<b>{_n_label}</b> {_n_text}', s['value']))
+            story.append(Paragraph(
+                f'<b>{_safe_text(_n_label)}</b> {_format_user_text_html(order.notes, lang)}',
+                s['value'],
+            ))
         story.append(Spacer(1, 4 * mm))
 
     # ── Order Items table ─────────────────────────────────────────────────────
@@ -958,11 +1016,17 @@ def generate_order_pdf(order, lang='en') -> bytes:
 
         for item in items:
             fabric_name = item.fabric.name if item.fabric else _localized_value('Measurement Service', lang)
-            fabric_sku  = f'SKU: {item.fabric.sku}' if item.fabric and item.fabric.sku else ''
-            fabric_cell = Paragraph(
-                f'{_safe_text(fabric_name)}<br/><font color="#888888" size="7">{_safe_text(fabric_sku)}</font>',
-                s['table_cell']
-            )
+            fabric_sku = f'SKU: {item.fabric.sku}' if item.fabric and item.fabric.sku else ''
+            recipient_line = _item_recipient_display(item, order, lang)
+            fabric_parts = []
+            if recipient_line:
+                fabric_parts.append(
+                    f'<font color="#990404"><b>{_format_user_text_html(recipient_line, lang)}</b></font>'
+                )
+            fabric_parts.append(_format_user_text_html(fabric_name, lang))
+            if fabric_sku:
+                fabric_parts.append(f'<font color="#888888" size="7">{_safe_text(fabric_sku)}</font>')
+            fabric_cell = Paragraph('<br/>'.join(fabric_parts), s['table_cell'])
 
             is_ready = ('✓ ' + (_shape_arabic('نعم') if is_ar else 'Yes')) if item.is_ready \
                   else ('✗ ' + (_shape_arabic('لا')  if is_ar else 'No'))
@@ -987,8 +1051,10 @@ def generate_order_pdf(order, lang='en') -> bytes:
             # 1. Custom instructions row
             if item.custom_instructions:
                 _instr_label = _t('Instructions:', lang)
-                _instr_text  = _shape_arabic(item.custom_instructions) if is_ar else item.custom_instructions
-                instr_p = Paragraph(f'<b>{_safe_text(_instr_label)}</b> {_safe_text(_instr_text)}', s['small'])
+                instr_p = Paragraph(
+                    f'<b>{_safe_text(_instr_label)}</b> {_format_user_text_html(item.custom_instructions, lang)}',
+                    s['small'],
+                )
                 item_rows.append([instr_p, '', ''])
 
             # 2. Measurements row — rendered as a professional grid
@@ -999,24 +1065,12 @@ def generate_order_pdf(order, lang='en') -> bytes:
                     grid = _measurements_grid(meas_pairs, page_w, s, lang, title=meas_title)
                     item_rows.append([grid, '', ''])
 
-            # 3. Custom styles row
+            # 3. Custom style images (text list removed — images + labels are enough)
             if item.custom_styles and isinstance(item.custom_styles, list):
-                style_texts = [
-                    f'{cs.get("style_type", "").replace("_", " ").title()}: {cs.get("label", "")}'
-                    for cs in item.custom_styles if cs.get('label')
-                ]
-                if style_texts:
-                    _styles_label = _t('Styles:', lang)
-                    _styles_text = ',  '.join(style_texts)
-                    if is_ar:
-                        _styles_text = _shape_arabic(_styles_text)
-                    style_p = Paragraph(f'<b>{_safe_text(_styles_label)}</b> {_safe_text(_styles_text)}', s['small'])
-                    item_rows.append([style_p, '', ''])
-
                 style_image_grid = _custom_style_image_grid(item.custom_styles, page_w, s, lang)
                 if style_image_grid:
-                    image_label = Paragraph(f'<b>{_safe_text(_t("Style Images:", lang))}</b>', s['small'])
-                    item_rows.append([image_label, '', ''])
+                    styles_heading = Paragraph(f'<b>{_safe_text(_t("Styles:", lang))}</b>', s['small'])
+                    item_rows.append([styles_heading, '', ''])
                     item_rows.append([style_image_grid, '', ''])
 
         items_tbl = Table(item_rows, colWidths=col_widths_items, repeatRows=1)
@@ -1102,8 +1156,8 @@ def generate_order_pdf(order, lang='en') -> bytes:
             hist_row = [
                 Paragraph(_fmt_datetime(h.created_at), s['small']),
                 Paragraph(h.get_status_display(), s['small']),
-                Paragraph(_shape_arabic(changed_by) if is_ar else changed_by, s['small']),
-                Paragraph(_shape_arabic(h.notes or '—') if is_ar else (h.notes or '—'), s['small']),
+                Paragraph(_format_user_text_html(changed_by, lang), s['small']),
+                Paragraph(_format_user_text_html(h.notes or '—', lang), s['small']),
             ]
             if is_ar:
                 hist_row.reverse()

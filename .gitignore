@@ -237,3 +237,4 @@ rollback.sh
 udo systemctl restart gunicorn
 config/firebase-credentials.json
 zthob-backend.code-workspace
+docs/production-launch-plan.md
