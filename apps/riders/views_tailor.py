@@ -1,9 +1,9 @@
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from apps.tailors.permissions import IsTailor
+from apps.tailors.permissions import IsShopStaff
+from apps.tailors.shop_access import get_shop_owner_user
 from zthob.utils import api_response
 from . import models
 from .serializers import (
@@ -14,16 +14,30 @@ from .serializers import (
 )
 
 
+def _resolve_tailor_user(request):
+    """Owner tailor user for shop owner or order-managing employee sessions."""
+    return get_shop_owner_user(request.user)
+
+
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated, IsTailor])
+@permission_classes([IsAuthenticated, IsShopStaff])
 def tailor_invitation_codes(request):
     """
     GET: List all invitation codes for the tailor
     POST: Create a new invitation code
     """
+    tailor_user = _resolve_tailor_user(request)
+    if not tailor_user:
+        return api_response(
+            success=False,
+            message="Tailor shop not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+            request=request,
+        )
+
     if request.method == 'GET':
         codes = models.TailorInvitationCode.objects.filter(
-            tailor=request.user
+            tailor=tailor_user
         ).order_by('-created_at')
         
         serializer = TailorInvitationCodeSerializer(codes, many=True)
@@ -62,13 +76,22 @@ def tailor_invitation_codes(request):
 
 
 @api_view(['DELETE'])
-@permission_classes([IsAuthenticated, IsTailor])
+@permission_classes([IsAuthenticated, IsShopStaff])
 def deactivate_invitation_code(request, code):
     """Deactivate an invitation code"""
+    tailor_user = _resolve_tailor_user(request)
+    if not tailor_user:
+        return api_response(
+            success=False,
+            message="Tailor shop not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+            request=request,
+        )
+
     invitation_code = get_object_or_404(
         models.TailorInvitationCode,
         code=code.upper(),
-        tailor=request.user
+        tailor=tailor_user
     )
     
     invitation_code.is_active = False
@@ -83,11 +106,20 @@ def deactivate_invitation_code(request, code):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsTailor])
+@permission_classes([IsAuthenticated, IsShopStaff])
 def tailor_my_riders(request):
     """Get list of riders associated with this tailor"""
+    tailor_user = _resolve_tailor_user(request)
+    if not tailor_user:
+        return api_response(
+            success=False,
+            message="Tailor shop not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+            request=request,
+        )
+
     associations = models.TailorRiderAssociation.objects.filter(
-        tailor=request.user,
+        tailor=tailor_user,
         is_active=True
     ).select_related(
         'rider',
@@ -125,12 +157,21 @@ def tailor_my_riders(request):
 
 
 @api_view(['PATCH', 'DELETE'])
-@permission_classes([IsAuthenticated, IsTailor])
+@permission_classes([IsAuthenticated, IsShopStaff])
 def remove_rider_from_team(request, rider_id):
     """Update or remove a rider from tailor's team"""
+    tailor_user = _resolve_tailor_user(request)
+    if not tailor_user:
+        return api_response(
+            success=False,
+            message="Tailor shop not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+            request=request,
+        )
+
     association = get_object_or_404(
         models.TailorRiderAssociation,
-        tailor=request.user,
+        tailor=tailor_user,
         rider_id=rider_id
     )
 

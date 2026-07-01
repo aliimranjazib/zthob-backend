@@ -1,9 +1,14 @@
+from decimal import Decimal
+
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from unittest.mock import patch
 from rest_framework.test import APITestCase
 from rest_framework import status
-from .models import TailorProfile, ServiceArea, TailorEmployee
+from .models import Fabric, TailorProfile, ServiceArea, TailorEmployee
+from .serializers.catalog import FabricCreateSerializer
+from rest_framework.test import APIRequestFactory
 from apps.customers.models import Address
 from .serializers import TailorProfileSubmissionSerializer
 
@@ -261,3 +266,69 @@ class TailorHomeEmployeePermissionTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['data']['address'], 'Owner Shop Address')
+
+
+class TailorEmployeeFabricCatalogTest(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username='catalog_owner',
+            password='testpass123',
+            role='TAILOR',
+            phone='0500000301',
+        )
+        self.owner_profile, _ = TailorProfile.objects.get_or_create(
+            user=self.owner,
+            defaults={'shop_name': 'Catalog Owner Shop'},
+        )
+        self.employee_user = User.objects.create_user(
+            username='catalog_employee',
+            password='testpass123',
+            role='TAILOR',
+            phone='0500000302',
+        )
+        self.employee = TailorEmployee.objects.create(
+            tailor=self.owner_profile,
+            user=self.employee_user,
+            roles=['catalog'],
+            can_manage_catalog=True,
+            is_active=True,
+        )
+        self.client.force_authenticate(user=self.employee_user)
+
+    def test_employee_created_fabric_is_saved_to_owner_shop_and_listed(self):
+        stub_profile = self.employee_user.tailor_profile
+        self.assertIsNotNone(stub_profile)
+        self.assertNotEqual(stub_profile.id, self.owner_profile.id)
+
+        request = APIRequestFactory().post('/api/tailors/fabrics/')
+        request.user = self.employee_user
+        image = SimpleUploadedFile(
+            'fabric.png',
+            (
+                b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+                b'\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'
+                b'\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01'
+                b'\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
+            ),
+            content_type='image/png',
+        )
+        serializer = FabricCreateSerializer(
+            data={
+                'name': 'Employee Catalog Fabric',
+                'price': '100.00',
+                'stock': 5,
+                'seasons': 'all_season',
+                'images': [{'image': image, 'is_primary': True, 'order': 0}],
+            },
+            context={'request': request},
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        fabric = serializer.save()
+        self.assertEqual(fabric.tailor_id, self.owner_profile.id)
+        self.assertEqual(fabric.price, Decimal('100.00'))
+
+        list_response = self.client.get('/api/tailors/fabrics/')
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        fabric_names = [item['name'] for item in list_response.data['data']]
+        self.assertIn('Employee Catalog Fabric', fabric_names)

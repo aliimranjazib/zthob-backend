@@ -35,6 +35,7 @@ OrderListSerializer,
 	)
 from apps.tailors.models import TailorProfile
 from apps.tailors.permissions import IsShopStaff
+from apps.tailors.shop_access import user_can_manage_shop_order
 from apps.customers.models import CustomerProfile, Address
 from zthob.utils import api_response 
 import uuid
@@ -1094,7 +1095,7 @@ class OrderDetailView(APIView):
         )
         # Resource-based permission check
         is_customer = order.customer == request.user
-        is_tailor = order.tailor == request.user
+        is_tailor = user_can_manage_shop_order(request.user, order)
         is_rider = (
             order.rider == request.user
             or order.assigned_rider == request.user
@@ -1162,7 +1163,7 @@ class OrderDetailView(APIView):
                         # Any other status change is not allowed
                         raise PermissionError("Customers can only cancel orders or mark walk-in orders as collected")
                         
-                elif request.user.is_tailor and order.tailor == request.user:
+                elif user_can_manage_shop_order(request.user, order):
                     # Tailors cannot cancel orders (only customers can cancel)
                     if new_status == 'cancelled':
                         raise PermissionError("Tailors cannot cancel orders. Only customers can cancel their orders.")
@@ -1252,7 +1253,7 @@ class OrderStatusUpdateView(APIView):
             
             # Role-based and Resource-based permission checks
             is_customer = order.customer == request.user
-            is_tailor = order.tailor == request.user
+            is_tailor = user_can_manage_shop_order(request.user, order)
             is_admin = request.user.is_admin
 
             if is_customer:
@@ -1327,7 +1328,7 @@ class OrderHistoryView(APIView):
             
             # Resource-based permission check
             is_customer = order.customer == request.user
-            is_tailor = order.tailor == request.user
+            is_tailor = user_can_manage_shop_order(request.user, order)
             is_admin = request.user.is_admin
 
             if not (is_customer or is_tailor or is_admin):
@@ -2113,7 +2114,7 @@ class WorkOrderPDFView(APIView):
             return api_response(success=False, message='Order not found',
                               status_code=status.HTTP_404_NOT_FOUND, request=request)
         
-        if not request.user.is_tailor or order.tailor != request.user:
+        if not user_can_manage_shop_order(request.user, order):
             return api_response(success=False,
                               message='You do not have permission to access this work order',
                               status_code=status.HTTP_403_FORBIDDEN, request=request)

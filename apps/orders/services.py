@@ -7,6 +7,8 @@ from django.utils import timezone
 from django.db.models import Count, Sum, Avg
 from apps.tailors.models import Fabric,TailorProfile
 from apps.core.models import SystemSettings
+from apps.tailors.shop_access import user_can_manage_shop_order, user_has_tailor_order_visibility, user_is_pos_only_for_order
+
 
 class OrderCalculationService:
 
@@ -656,11 +658,9 @@ class OrderStatusTransitionService:
         elif user.is_rider and (order.rider is None or order.rider == user):
             # Prioritize RIDER role if user has a rider profile and order is available
             user_role = OrderStatusTransitionService.ROLE_RIDER
-        elif order.tailor == user:
-            user_role = OrderStatusTransitionService.ROLE_TAILOR
         elif order.customer == user:
             user_role = OrderStatusTransitionService.ROLE_USER
-        elif user.is_tailor:
+        elif user_has_tailor_order_visibility(user, order):
             user_role = OrderStatusTransitionService.ROLE_TAILOR
         else:
             user_role = OrderStatusTransitionService.ROLE_USER
@@ -673,7 +673,8 @@ class OrderStatusTransitionService:
             return OrderStatusTransitionService._get_measurement_service_transitions(order, user_role)
         
         if order.service_mode == 'walk_in':
-            return OrderStatusTransitionService._get_walk_in_transitions(order, user_role)
+            transitions = OrderStatusTransitionService._get_walk_in_transitions(order, user_role)
+            return OrderStatusTransitionService._filter_pos_only_transitions(order, user, transitions)
         
         if order.order_type == 'fabric_only':
             return OrderStatusTransitionService._get_fabric_only_transitions(order, user_role)
@@ -939,6 +940,26 @@ class OrderStatusTransitionService:
         return transitions
 
     @staticmethod
+    def _filter_pos_only_transitions(order, user, transitions):
+        """POS staff may only see measurement-related actions on walk-in orders."""
+        if not user_is_pos_only_for_order(user, order):
+            return transitions
+
+        allowed_tailor_statuses = {'record_measurements', 'measurements_complete'}
+        transitions['status'] = []
+        transitions['rider_status'] = []
+        transitions['tailor_status'] = [
+            status for status in transitions.get('tailor_status', [])
+            if status in allowed_tailor_statuses
+        ]
+        custom_actions = transitions.get('custom_actions') or []
+        transitions['custom_actions'] = [
+            action for action in custom_actions
+            if action.get('value') == 'record_measurements'
+        ]
+        return transitions
+
+    @staticmethod
     def _get_walk_in_transitions(order, user_role):
         """Get transitions for walk-in orders (no rider involvement)"""
         transitions = {'status': [], 'rider_status': [], 'tailor_status': []}
@@ -1056,13 +1077,11 @@ class OrderStatusTransitionService:
             user_role = OrderStatusTransitionService.ROLE_USER
         elif user.is_admin:
             user_role = OrderStatusTransitionService.ROLE_ADMIN
-        elif order.tailor == user:
-            user_role = OrderStatusTransitionService.ROLE_TAILOR
         elif order.rider == user:
             user_role = OrderStatusTransitionService.ROLE_RIDER
         elif order.customer == user:
             user_role = OrderStatusTransitionService.ROLE_USER
-        elif user.is_tailor:
+        elif user_has_tailor_order_visibility(user, order):
             user_role = OrderStatusTransitionService.ROLE_TAILOR
         elif user.is_rider:
             user_role = OrderStatusTransitionService.ROLE_RIDER
@@ -1075,7 +1094,7 @@ class OrderStatusTransitionService:
         
         # Role-based access checks
         if user_role == OrderStatusTransitionService.ROLE_TAILOR:
-            if order.tailor != user:
+            if not user_can_manage_shop_order(user, order):
                 return False, "You can only update orders assigned to you"
         elif user_role == OrderStatusTransitionService.ROLE_RIDER:
             if order.rider != user:

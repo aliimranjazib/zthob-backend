@@ -1050,7 +1050,12 @@ class CreateInvitationCodeSerializer(serializers.Serializer):
         from django.utils import timezone
         from datetime import timedelta
         
-        tailor = self.context['request'].user
+        from apps.tailors.shop_access import get_shop_owner_user
+
+        request = self.context['request']
+        tailor = get_shop_owner_user(request.user)
+        if not tailor:
+            raise serializers.ValidationError("Tailor shop not found.")
         code = models.TailorInvitationCode.generate_unique_code(tailor.id)
         
         expires_at = None

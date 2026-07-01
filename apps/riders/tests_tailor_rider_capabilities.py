@@ -7,7 +7,7 @@ from rest_framework.test import APIClient
 
 from apps.orders.models import Order, OrderItem
 from apps.riders.models import RiderProfile, RiderProfileReview, TailorRiderAssociation
-from apps.tailors.models import TailorProfile
+from apps.tailors.models import TailorEmployee, TailorProfile
 
 
 User = get_user_model()
@@ -184,3 +184,112 @@ class TailorRiderCapabilityTest(TestCase):
 
         self.assertEqual(response.status_code, 400, response.data)
         self.assertIn('not enabled for measurement', response.data['message'].lower())
+
+
+class TailorEmployeeRiderTeamAccessTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.notification_patchers = [
+            patch('apps.notifications.tasks.send_order_status_notification_task.delay'),
+            patch('apps.notifications.tasks.send_rider_status_notification_task.delay'),
+            patch('apps.notifications.tasks.send_tailor_status_notification_task.delay'),
+            patch('apps.notifications.services.NotificationService.send_new_order_broadcast'),
+        ]
+        for patcher in self.notification_patchers:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+        self.customer = User.objects.create_user(
+            username='emp_rider_customer',
+            password='testpass123',
+            role='USER',
+        )
+        self.owner = User.objects.create_user(
+            username='emp_rider_owner',
+            password='testpass123',
+            role='TAILOR',
+        )
+        self.owner_profile, _ = TailorProfile.objects.get_or_create(
+            user=self.owner,
+            defaults={'shop_name': 'Employee Rider Shop', 'shop_status': True},
+        )
+        self.employee_user = User.objects.create_user(
+            username='emp_rider_staff',
+            password='testpass123',
+            role='TAILOR',
+        )
+        self.employee = TailorEmployee.objects.create(
+            tailor=self.owner_profile,
+            user=self.employee_user,
+            roles=['manager'],
+            can_manage_orders=True,
+            is_active=True,
+        )
+        self.rider = User.objects.create_user(
+            username='emp_team_rider',
+            password='testpass123',
+            role='RIDER',
+        )
+        profile, _ = RiderProfile.objects.get_or_create(user=self.rider)
+        profile.full_name = 'Employee Team Rider'
+        profile.save(update_fields=['full_name'])
+        review, _ = RiderProfileReview.objects.get_or_create(profile=profile)
+        review.review_status = 'approved'
+        review.save(update_fields=['review_status'])
+        self.association = TailorRiderAssociation.objects.create(
+            tailor=self.owner,
+            rider=self.rider,
+            is_active=True,
+            can_take_measurements=True,
+            can_do_delivery=True,
+        )
+
+    def test_employee_sees_owner_shop_riders(self):
+        self.client.force_authenticate(user=self.employee_user)
+
+        response = self.client.get('/api/riders/tailor/my-riders/')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        rider_ids = [item['id'] for item in response.data['data']['riders']]
+        self.assertIn(self.rider.id, rider_ids)
+
+    def test_employee_can_assign_delivery_rider_when_marking_ready(self):
+        order = Order.objects.create(
+            customer=self.customer,
+            tailor=self.owner,
+            order_type='fabric_with_stitching',
+            service_mode='home_delivery',
+            status='in_progress',
+            tailor_status='stitched',
+            rider_status='measurement_taken',
+            payment_status='paid',
+            total_amount=Decimal('100.00'),
+            paid_amount=Decimal('100.00'),
+            remaining_amount=Decimal('0.00'),
+        )
+        OrderItem.objects.create(
+            order=order,
+            quantity=1,
+            unit_price=Decimal('100.00'),
+            total_price=Decimal('100.00'),
+            measurements={'chest': 42},
+        )
+        self.client.force_authenticate(user=self.employee_user)
+
+        response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            {
+                'action': 'mark_ready',
+                'role': 'TAILOR',
+                'data': {
+                    'assigned_rider_id': self.rider.id,
+                    'delivery_rider_id': self.rider.id,
+                },
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'ready_for_delivery')
+        self.assertEqual(order.delivery_rider_id, self.rider.id)

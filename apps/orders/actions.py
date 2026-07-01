@@ -5,6 +5,11 @@ from django.utils import timezone
 from django.db.models import Q
 from apps.customers.models import FamilyMember
 from apps.orders.payments import money
+from apps.tailors.shop_access import (
+    get_shop_owner_user,
+    user_can_manage_shop_order,
+    user_can_record_shop_measurements,
+)
 from zthob.translations import get_language_from_request, translate_message
 
 
@@ -184,7 +189,7 @@ class AcceptOrderAction(BaseOrderAction):
         if role == 'TAILOR':
             if not self._is_payment_ready():
                 raise ValidationError("Order payment must be paid or pending COD before tailor can accept it.")
-            if self.order.tailor and self.order.tailor != self.user:
+            if self.order.tailor and not user_can_manage_shop_order(self.user, self.order):
                 raise PermissionDenied("This order is already assigned to another tailor.")
             if self.order.tailor_status != 'none':
                 raise ValidationError("Order is already accepted by a tailor.")
@@ -220,7 +225,7 @@ class AcceptOrderAction(BaseOrderAction):
         if role == 'TAILOR':
             # Assign the tailor if not already assigned
             if not self.order.tailor:
-                self.order.tailor = self.user
+                self.order.tailor = get_shop_owner_user(self.user) or self.user
             
             self.order.tailor_status = 'accepted'
             if self.order.status == 'pending':
@@ -236,7 +241,11 @@ class AcceptOrderAction(BaseOrderAction):
                 if self.order.all_items_have_measurements:
                     raise ValidationError("Measurements already exist for this order. Assign a delivery rider when marking ready for delivery.")
                 assigned_rider = _get_assignable_rider(assigned_rider_id)
-                _validate_tailor_rider_capability(self.user, assigned_rider, 'measurement')
+                _validate_tailor_rider_capability(
+                    get_shop_owner_user(self.user) or self.user,
+                    assigned_rider,
+                    'measurement',
+                )
                 self.order.measurement_rider = assigned_rider
                 self.order.assigned_rider = assigned_rider
                 self.order.rider = assigned_rider
@@ -322,8 +331,8 @@ class RecordMeasurementsAction(BaseOrderAction):
                 raise ValidationError("Family member must belong to the order customer.")
         
         if role == 'TAILOR':
-            if self.order.tailor != self.user and not self.user.is_admin:
-                raise PermissionDenied("You are not the assigned tailor for this order.")
+            if not self.user.is_admin and not user_can_record_shop_measurements(self.user, self.order):
+                raise PermissionDenied("You are not allowed to record measurements for this order.")
             if self.order.service_mode == 'home_delivery':
                 raise ValidationError("Rider must record measurements for home delivery orders.")
         
@@ -437,7 +446,11 @@ class MarkReadyAction(BaseOrderAction):
             )
             if assigned_rider_id:
                 assigned_rider = _get_assignable_rider(assigned_rider_id)
-                _validate_tailor_rider_capability(self.user, assigned_rider, 'delivery')
+                _validate_tailor_rider_capability(
+                    get_shop_owner_user(self.user) or self.user,
+                    assigned_rider,
+                    'delivery',
+                )
                 self.order.delivery_rider = assigned_rider
                 self.order.assigned_rider = assigned_rider
                 self.order.rider = assigned_rider
@@ -528,7 +541,7 @@ class CollectOrderAction(BaseOrderAction):
         # 2. Permission check
         if self.user.is_admin or self.user.is_tailor:
             # Admins and the assigned Tailor can always mark as collected
-            if self.user.is_tailor and self.order.tailor != self.user:
+            if self.user.is_tailor and not user_can_manage_shop_order(self.user, self.order):
                 raise PermissionDenied("Only the assigned tailor can mark this order as collected.")
             return
         
@@ -582,7 +595,7 @@ class CollectCashPaymentAction(BaseOrderAction):
         if self.order.service_mode == 'walk_in':
             if role != 'TAILOR':
                 raise PermissionDenied("Only the assigned tailor can collect cash for walk-in orders.")
-            if self.order.tailor != self.user:
+            if not user_can_manage_shop_order(self.user, self.order):
                 raise PermissionDenied("You are not the assigned tailor for this order.")
             if self.order.status not in ['ready_for_pickup', 'collected']:
                 raise ValidationError("Cash can be collected when the walk-in order is ready for pickup.")

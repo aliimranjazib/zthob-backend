@@ -218,8 +218,12 @@ class FabricCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         request = self.context.get("request")
-        tailor_profile = getattr(request.user, "tailor_profile", None)
-        
+        from ..shop_access import get_tailor_profile
+
+        tailor_profile = get_tailor_profile(request.user)
+        if not tailor_profile:
+            raise serializers.ValidationError("Tailor shop profile not found.")
+
         # Extract images and tags data
         images_data = validated_data.pop('images', [])
         tags_data = validated_data.pop('tags', [])
