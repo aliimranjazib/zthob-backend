@@ -13,6 +13,7 @@ from zthob.utils import api_response
 
 
 from apps.tailors.permissions import IsShopStaff
+from apps.tailors.shop_access import get_shop_owner_user
 
 
 def _get_rider_or_404(rider_id):
@@ -141,7 +142,11 @@ class TailorAcceptOrderView(APIView):
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
             try:
-                _validate_tailor_rider_capability(request.user, assigned_rider, 'measurement')
+                _validate_tailor_rider_capability(
+                    get_shop_owner_user(request.user),
+                    assigned_rider,
+                    'measurement',
+                )
             except ValueError as exc:
                 return api_response(
                     success=False,
@@ -241,7 +246,11 @@ class TailorUpdateOrderStatusView(APIView):
                         status_code=status.HTTP_400_BAD_REQUEST
                     )
                 try:
-                    _validate_tailor_rider_capability(request.user, assigned_rider, rider_assignment_type)
+                    _validate_tailor_rider_capability(
+                        get_shop_owner_user(request.user),
+                        assigned_rider,
+                        rider_assignment_type,
+                    )
                 except ValueError as exc:
                     return api_response(
                         success=False,
@@ -331,7 +340,8 @@ class TailorUpdateOrderStatusView(APIView):
 class TailorAddMeasurementsView(APIView):
     """Tailor adds measurements for orders (especially Walk-In orders)"""
     permission_classes = [IsAuthenticated, IsShopStaff]
-    required_employee_permission = 'can_manage_orders'
+    required_employee_permissions = ('can_manage_orders', 'can_manage_pos')
+    allow_pos_measurements = True
 
     
     @extend_schema(

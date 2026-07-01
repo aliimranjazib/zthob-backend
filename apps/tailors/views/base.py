@@ -12,15 +12,8 @@ class BaseTailorAPIView(APIView):
     
     def get_tailor_profile(self, user):
         """Helper method to get tailor profile (handles owners and employees)."""
-        from ..models import TailorProfile
-        # Prioritize active employee context over any stub tailor profile on the user.
-        if hasattr(user, 'tailor_employee') and user.tailor_employee.is_active:
-            return user.tailor_employee.tailor
-        # Check if owner
-        profile = TailorProfile.objects.filter(user=user).first()
-        if profile:
-            return profile
-        return None
+        from ..shop_access import get_tailor_profile
+        return get_tailor_profile(user)
 
     def get_tailor_owner_user(self, user):
         """Return the owner user for the resolved tailor shop."""

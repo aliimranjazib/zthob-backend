@@ -512,6 +512,39 @@ class OrderSerializer(serializers.ModelSerializer):
                 style['asset_path'] = request.build_absolute_uri(full_path)
                 
         return processed_styles
+
+    @staticmethod
+    def _build_rider_assignment_flags(obj, user_role):
+        can_assign_delivery = (
+            user_role == 'TAILOR'
+            and obj.service_mode == 'home_delivery'
+            and obj.delivery_rider_id is None
+            and (
+                obj.status == 'ready_for_delivery'
+                or (
+                    obj.tailor_status == 'stitched'
+                    and obj.status in ('pending', 'confirmed', 'in_progress')
+                )
+            )
+        )
+        return {
+            'needs_measurement': not obj.all_items_have_measurements,
+            'can_assign_measurement_rider': (
+                user_role == 'TAILOR'
+                and obj.service_mode == 'home_delivery'
+                and obj.tailor_status != 'none'
+                and not obj.all_items_have_measurements
+                and obj.measurement_rider_id is None
+            ),
+            'can_assign_delivery_rider': can_assign_delivery,
+            'is_waiting_for_rider': (
+                user_role == 'TAILOR'
+                and obj.service_mode == 'home_delivery'
+                and obj.tailor_status != 'none'
+                and obj.rider_status == 'none'
+                and not obj.all_items_have_measurements
+            ),
+        }
     
     def get_status_info(self, obj):
         """Get status information including next available actions"""
@@ -525,9 +558,10 @@ class OrderSerializer(serializers.ModelSerializer):
         allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user, requested_role=requested_role)
         
         # Determine effective role for labeling purposes
+        from apps.tailors.shop_access import user_has_tailor_order_visibility
         if request.user.is_admin:
             user_role = 'ADMIN'
-        elif obj.tailor == request.user:
+        elif user_has_tailor_order_visibility(request.user, obj):
             user_role = 'TAILOR'
         elif obj.rider == request.user:
             user_role = 'RIDER'
@@ -622,6 +656,8 @@ class OrderSerializer(serializers.ModelSerializer):
                     'remaining_items': items_without_measurements,
                 }
         
+        rider_flags = OrderSerializer._build_rider_assignment_flags(obj, user_role)
+
         return {
             'current_status': obj.status,
             'current_rider_status': obj.rider_status,
@@ -638,27 +674,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'cancel_reason': cancel_reason,
             'status_progress': status_progress,
             'measurement_status': measurement_status,
-            'needs_measurement': not obj.all_items_have_measurements,
-            'can_assign_measurement_rider': (
-                user_role == 'TAILOR'
-                and obj.service_mode == 'home_delivery'
-                and obj.tailor_status != 'none'
-                and not obj.all_items_have_measurements
-                and obj.measurement_rider_id is None
-            ),
-            'can_assign_delivery_rider': (
-                user_role == 'TAILOR'
-                and obj.service_mode == 'home_delivery'
-                and obj.status == 'ready_for_delivery'
-                and obj.delivery_rider_id is None
-            ),
-            'is_waiting_for_rider': (
-                user_role == 'TAILOR'
-                and obj.service_mode == 'home_delivery'
-                and obj.tailor_status != 'none'
-                and obj.rider_status == 'none'
-                and not obj.all_items_have_measurements
-            ),
+            **rider_flags,
         }
     
     def _build_status_action(self, action_type, value, user_role):
@@ -1776,9 +1792,10 @@ class OrderListSerializer(serializers.ModelSerializer):
         allowed_transitions = OrderStatusTransitionService.get_allowed_transitions(obj, request.user, requested_role=requested_role)
         
         # Determine effective role for labeling purposes
+        from apps.tailors.shop_access import user_has_tailor_order_visibility
         if request.user.is_admin:
             user_role = 'ADMIN'
-        elif obj.tailor == request.user:
+        elif user_has_tailor_order_visibility(request.user, obj):
             user_role = 'TAILOR'
         elif obj.rider == request.user:
             user_role = 'RIDER'
@@ -1873,6 +1890,8 @@ class OrderListSerializer(serializers.ModelSerializer):
                     'remaining_items': items_without_measurements,
                 }
         
+        rider_flags = OrderSerializer._build_rider_assignment_flags(obj, user_role)
+
         return {
             'current_status': obj.status,
             'current_rider_status': obj.rider_status,
@@ -1889,7 +1908,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'cancel_reason': cancel_reason,
             'status_progress': status_progress,
             'measurement_status': measurement_status,
-            'is_waiting_for_rider': (user_role == 'TAILOR' and obj.service_mode == 'home_delivery' and obj.tailor_status != 'none' and obj.rider_status == 'none'),
+            **rider_flags,
         }
 
 class OrderStatusUpdateResponseSerializer(OrderSerializer):

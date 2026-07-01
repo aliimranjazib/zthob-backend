@@ -7,6 +7,7 @@ from drf_spectacular.utils import extend_schema
 from zthob.utils import api_response
 
 from apps.orders.models import Order
+from apps.tailors.shop_access import user_can_manage_shop_order
 from apps.deliveries.models import DeliveryTracking, LocationHistory
 from apps.deliveries.serializers import (
     DeliveryTrackingSerializer,
@@ -361,7 +362,7 @@ class AdminTrackingView(APIView):
         
         # Check permissions
         is_admin = request.user.is_admin
-        is_assigned_tailor = request.user.is_tailor and order.tailor == request.user
+        is_assigned_tailor = user_can_manage_shop_order(request.user, order)
         is_assigned_rider = request.user.is_rider and order.rider == request.user
         
         if not (is_admin or is_assigned_tailor or is_assigned_rider):
@@ -428,7 +429,7 @@ class AdminTrackingRouteView(APIView):
         
         # Check permissions (admin or tailor)
         is_admin = request.user.is_admin
-        is_assigned_tailor = request.user.is_tailor and order.tailor == request.user
+        is_assigned_tailor = user_can_manage_shop_order(request.user, order)
 
         if not (is_admin or is_assigned_tailor):
             return api_response(
