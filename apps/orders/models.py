@@ -684,16 +684,20 @@ class Order(BaseModel):
     @property
     def all_items_have_measurements(self):
         """Check if all order items have measurements"""
+        from apps.orders.measurement_utils import has_measurement_values
+
         # For fabric_only orders, measurements not required
         if self.order_type == 'fabric_only':
             return True
-        
-        # For measurement_service, fabric_with_stitching, and stitching_only, check measurements
-        items_without_measurements = self.order_items.filter(
-            Q(measurements__isnull=True) | Q(measurements={})
-        )
-        
-        return items_without_measurements.count() == 0
+
+        if not self.order_items.exists():
+            return False
+
+        for item in self.order_items.all().only('measurements'):
+            if not has_measurement_values(item.measurements):
+                return False
+
+        return True
     
     def get_allowed_status_transitions(self, user_role=None):
         """

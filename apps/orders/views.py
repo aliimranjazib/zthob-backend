@@ -2152,7 +2152,8 @@ class OrderActionView(APIView):
         description=(
             "Generic endpoint to perform various actions on an order (e.g., accept, "
             "record_measurements, pickup). For record_measurements, send data as "
-            "{family_member: int|null, measurements: object}. For start_stitching, "
+            "{unit: 'cm'|'inches', family_member: int|null, measurements: object}. "
+            "Unit defaults to cm when omitted. For start_stitching, "
             "you can pass stitching_completion_date and stitching_completion_time."
         ),
         tags=["Orders"]

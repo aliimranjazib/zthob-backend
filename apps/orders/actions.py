@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.db.models import Q
 from apps.customers.models import FamilyMember
 from apps.orders.payments import money
+from apps.orders.measurement_utils import prepare_measurements_payload
 from apps.tailors.shop_access import (
     get_shop_owner_user,
     user_can_manage_shop_order,
@@ -343,9 +344,14 @@ class RecordMeasurementsAction(BaseOrderAction):
                 raise ValidationError("Invalid state to record measurements.")
 
     def execute(self):
-        measurements = self.data.get('measurements')
-        if not measurements:
+        raw_measurements = self.data.get('measurements')
+        if not raw_measurements:
             raise ValidationError("Measurement data is required.")
+        measurements = prepare_measurements_payload(
+            raw_measurements,
+            unit=self.data.get('unit'),
+            title=self.data.get('title'),
+        )
         family_member_id = self.data.get('family_member')
 
         # Update only selected recipient items (family member OR customer/self).

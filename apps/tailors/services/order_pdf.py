@@ -898,7 +898,7 @@ def _format_measurement_pairs(measurements, lang='en', field_map=None):
     unknown_base_order = len(field_map) + 1000
 
     for idx, (key, value) in enumerate(measurements.items()):
-        if key == 'title' or value in (None, '', 'null'):
+        if key in ('title', 'unit', 'recorded_unit') or value in (None, '', 'null'):
             continue
 
         meta = field_map.get(key, {})
@@ -911,11 +911,12 @@ def _format_measurement_pairs(measurements, lang='en', field_map=None):
         else:
             label = meta.get('label_en') or fallback
 
+        snapshot_unit = measurements.get('unit') if isinstance(measurements, dict) else None
         formatted.append((
             meta.get('order', unknown_base_order + idx),
             label,
             value,
-            meta.get('unit', 'cm'),
+            snapshot_unit or meta.get('unit', 'cm'),
         ))
 
     formatted.sort(key=lambda item: item[0])

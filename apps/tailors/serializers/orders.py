@@ -44,12 +44,20 @@ class TailorAddMeasurementsSerializer(serializers.Serializer):
     """Serializer for tailor adding measurements"""
     family_member = serializers.IntegerField(required=False, allow_null=True, help_text="ID of family member being measured. Null means customer.")
     title = serializers.CharField(required=False, allow_blank=True, help_text="Title for measurements (e.g. 'Wedding Thobe')")
+    unit = serializers.ChoiceField(
+        choices=[('cm', 'Centimeters'), ('inches', 'Inches')],
+        required=False,
+        default='cm',
+        help_text="Unit used for numeric measurement values (cm or inches). Defaults to cm.",
+    )
     measurements = serializers.JSONField(required=True)
     notes = serializers.CharField(required=False, allow_blank=True)
     
     def validate_measurements(self, value):
+        from apps.orders.measurement_utils import has_measurement_values
+
         if not isinstance(value, dict):
             raise serializers.ValidationError("Measurements must be a dictionary/JSON object")
-        if not value:
+        if not has_measurement_values(value):
             raise serializers.ValidationError("Measurements cannot be empty")
         return value

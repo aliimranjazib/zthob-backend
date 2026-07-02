@@ -1021,14 +1021,15 @@ class RiderAddMeasurementsView(APIView):
         
         serializer = RiderAddMeasurementsSerializer(data=request.data)
         if serializer.is_valid():
-            measurements_data = serializer.validated_data['measurements']
+            from apps.orders.measurement_utils import prepare_measurements_payload
+
+            measurements_data = prepare_measurements_payload(
+                serializer.validated_data['measurements'],
+                unit=serializer.validated_data.get('unit'),
+                title=serializer.validated_data.get('title'),
+            )
             family_member_id = serializer.validated_data.get('family_member')
-            title = serializer.validated_data.get('title')
-            
-            # Add title to measurements if provided
-            if title:
-                measurements_data['title'] = title
-            
+
             # Add measurements to order level (deprecated but kept for compatibility)
             order.rider_measurements = measurements_data
             order.measurement_taken_at = timezone.now()

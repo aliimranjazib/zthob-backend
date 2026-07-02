@@ -371,17 +371,17 @@ class TailorAddMeasurementsView(APIView):
         
         serializer = TailorAddMeasurementsSerializer(data=request.data)
         if serializer.is_valid():
-            measurements_data = serializer.validated_data['measurements']
+            from apps.orders.measurement_utils import prepare_measurements_payload
+
+            measurements_data = prepare_measurements_payload(
+                serializer.validated_data['measurements'],
+                unit=serializer.validated_data.get('unit'),
+                title=serializer.validated_data.get('title'),
+            )
             family_member_id = serializer.validated_data.get('family_member')
-            title = serializer.validated_data.get('title')
-            
-            # Add title to measurements if provided
-            if title:
-                measurements_data['title'] = title
-            
-            # Save measurement timestamp
+
             order.measurement_taken_at = timezone.now()
-            
+
             # Identify the recipient and update profiles/items
             recipient_name = None
             if family_member_id:
