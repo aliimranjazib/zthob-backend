@@ -28,6 +28,7 @@ OrderListSerializer,
 	OrderPaymentStatusUpdateSerializer,
     PayRemainingBalanceSerializer,
 	OrderStatusUpdateResponseSerializer,
+    TailorOrderHistorySerializer,
     CheckoutCreateOrderSerializer,
     CheckoutSessionSerializer,
     CheckoutInitiatePaymentSerializer,
@@ -41,6 +42,10 @@ from zthob.utils import api_response
 import uuid
 from decimal import Decimal
 from apps.orders.payments import get_payment_option, money
+from apps.orders.history_utils import (
+    DEFAULT_PERIOD,
+    get_tailor_completed_orders,
+)
 from apps.orders.alinma import (
     AlinmaConfigurationError,
     AlinmaGatewayError,
@@ -1552,6 +1557,86 @@ class TailorOrderListView(APIView):
             message="Your tailor orders retrieved successfully",
             data=serializer.data,
             status_code=status.HTTP_200_OK
+        )
+
+
+class TailorOrderHistoryView(APIView):
+    """Get completed orders for tailor shop with period-based filters."""
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permission = 'can_manage_orders'
+
+    @extend_schema(
+        responses=TailorOrderHistorySerializer(many=True),
+        summary="Get completed tailor order history",
+        description=(
+            "Retrieve all completed orders (delivered or collected) for the tailor shop. "
+            "No pagination. Filter by period: today, yesterday, this_week, this_month, "
+            "past_6_months, or custom (with from_date and to_date as YYYY-MM-DD)."
+        ),
+        tags=["Tailor Orders"],
+    )
+    def get(self, request):
+        tailor_user = _get_tailor_owner_user(request)
+        if not tailor_user:
+            return api_response(
+                success=False,
+                message="User is not a tailor",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        period = request.query_params.get('period', DEFAULT_PERIOD)
+        from_date = request.query_params.get('from_date')
+        to_date = request.query_params.get('to_date')
+
+        try:
+            orders, start, end = get_tailor_completed_orders(
+                tailor_user,
+                period=period,
+                from_date=from_date,
+                to_date=to_date,
+            )
+        except ValidationError as exc:
+            return api_response(
+                success=False,
+                message="Invalid history filter",
+                errors=exc.detail,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service_mode = request.query_params.get('service_mode')
+        if service_mode:
+            orders = orders.filter(service_mode=service_mode)
+
+        order_type = request.query_params.get('order_type')
+        if order_type:
+            orders = orders.filter(order_type=order_type)
+
+        search = (request.query_params.get('search') or '').strip()
+        if search:
+            orders = orders.filter(
+                Q(order_number__icontains=search)
+                | Q(customer__first_name__icontains=search)
+                | Q(customer__last_name__icontains=search)
+                | Q(customer__username__icontains=search)
+            )
+
+        serializer = TailorOrderHistorySerializer(
+            orders,
+            many=True,
+            context={'request': request, 'role': 'TAILOR'},
+        )
+
+        return api_response(
+            success=True,
+            message="Completed orders retrieved successfully",
+            data={
+                'period': period,
+                'from': start.isoformat(),
+                'to': end.isoformat(),
+                'count': len(serializer.data),
+                'orders': serializer.data,
+            },
+            status_code=status.HTTP_200_OK,
         )
 
 

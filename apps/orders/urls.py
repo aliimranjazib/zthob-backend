@@ -7,6 +7,7 @@ from .views import (
     OrderHistoryView,
     CustomerOrderListView,
     TailorOrderListView,
+    TailorOrderHistoryView,
     TailorAvailableOrdersView,
     TailorPaidOrdersView,
     TailorOrderDetailView,
@@ -55,6 +56,7 @@ urlpatterns = [
     # Tailor endpoints
     path('tailor/available-orders/', TailorAvailableOrdersView.as_view(), name='tailor-available-orders'),
     path('tailor/my-orders/', TailorOrderListView.as_view(), name='tailor-orders'),
+    path('tailor/history/', TailorOrderHistoryView.as_view(), name='tailor-order-history'),
     path('tailor/paid-orders/', TailorPaidOrdersView.as_view(), name='tailor-paid-orders'),
     path('tailor/<int:order_id>/', TailorOrderDetailView.as_view(), name='tailor-order-detail'),
     
