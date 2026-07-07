@@ -1911,6 +1911,29 @@ class OrderListSerializer(serializers.ModelSerializer):
             **rider_flags,
         }
 
+
+class TailorOrderHistorySerializer(OrderListSerializer):
+    """Completed tailor orders with completion timestamp for history screens."""
+
+    completed_at = serializers.SerializerMethodField()
+
+    class Meta(OrderListSerializer.Meta):
+        fields = OrderListSerializer.Meta.fields + ['completed_at']
+
+    def get_completed_at(self, obj):
+        annotated = getattr(obj, 'completed_at', None)
+        if annotated is not None:
+            return annotated
+        history = (
+            obj.status_history.filter(status__in=('delivered', 'collected'))
+            .order_by('-created_at')
+            .first()
+        )
+        if history:
+            return history.created_at
+        return obj.updated_at
+
+
 class OrderStatusUpdateResponseSerializer(OrderSerializer):
     """Lightweight serializer for order status update responses - only returns essential fields"""
     
