@@ -1637,6 +1637,7 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
 
 class OrderListSerializer(serializers.ModelSerializer):
     customer_name=serializers.SerializerMethodField()
+    customer_phone=serializers.CharField(source='customer.phone', read_only=True)
     tailor_name = serializers.SerializerMethodField()
     items_count = serializers.IntegerField(read_only=True)
     custom_styles = serializers.SerializerMethodField()
@@ -1654,6 +1655,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'id',
             'order_number',
             'customer_name',
+            'customer_phone',
             'tailor_name',
             'order_type',
             'service_mode',
