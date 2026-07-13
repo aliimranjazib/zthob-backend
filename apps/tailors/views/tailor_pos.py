@@ -13,6 +13,7 @@ from apps.tailors.serializers.tailor_pos import (
 from apps.customers.models import CustomerProfile
 from apps.orders.models import Order
 from apps.orders.serializers import OrderListSerializer, OrderSerializer
+from apps.tailors.services.pos_customer_styles import get_customer_order_styles
 from zthob.utils import api_response
 
 User = get_user_model()
@@ -79,6 +80,8 @@ class TailorCustomerListView(BaseTailorAPIView):
             for cp in CustomerProfile.objects.filter(user_id__in=all_user_ids)
         }
 
+        styles_map = get_customer_order_styles(owner_user, all_user_ids, request)
+
         results = []
 
         # Add order-based customers
@@ -95,6 +98,7 @@ class TailorCustomerListView(BaseTailorAPIView):
                 'total_orders': stats['total_orders'],
                 'last_order_date': stats['last_order_date'],
                 'measurements': profile.measurements if profile else None,
+                'order_styles': styles_map.get(user_id, []),
             })
 
         # Add POS-created, zero-order customers
@@ -110,6 +114,7 @@ class TailorCustomerListView(BaseTailorAPIView):
                 'total_orders': 0,
                 'last_order_date': None,
                 'measurements': profile.measurements,
+                'order_styles': styles_map.get(user.id, []),
             })
 
         # Sort: customers with orders first (by last_order_date), then zero-order at the end

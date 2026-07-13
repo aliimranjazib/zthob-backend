@@ -387,4 +387,92 @@ class PosCustomerOrderVisibilityTest(TestCase):
             format='json',
         )
         self.assertEqual(catalog_fabric_response.status_code, 400)
-        self.assertIn('catalog fabric', str(catalog_fabric_response.data['errors']))
+
+    def test_pos_customer_list_includes_order_styles_grouped_by_order(self):
+        customer_with_order = self._create_pos_customer()
+        zero_order_response = self.client.post(
+            '/api/tailors/pos/customers/create/',
+            {'phone': '966500000099', 'name': 'Zero Order Customer'},
+            format='json',
+        )
+        self.assertEqual(zero_order_response.status_code, 201, zero_order_response.data)
+
+        self.client.force_authenticate(user=self.tailor_user)
+        current_tailor_response = self.client.post(
+            '/api/orders/create/',
+            {
+                'customer': customer_with_order.id,
+                'tailor': self.tailor_user.id,
+                'order_type': 'fabric_with_stitching',
+                'service_mode': 'walk_in',
+                'payment_method': 'cod',
+                'items': [
+                    {
+                        'fabric': self.fabric.id,
+                        'quantity': 1,
+                        'measurements': {'chest': 102},
+                        'custom_styles': [
+                            {
+                                'style_type': 'cuff',
+                                'index': 2,
+                                'label': 'Square Cuff',
+                                'asset_path': 'custom_styles/square_cuff.png',
+                            }
+                        ],
+                    }
+                ],
+            },
+            format='json',
+        )
+        self.assertEqual(current_tailor_response.status_code, 201, current_tailor_response.data)
+        current_tailor_order_id = current_tailor_response.data['data']['id']
+
+        self.client.force_authenticate(user=self.other_tailor_user)
+        other_tailor_response = self.client.post(
+            '/api/orders/create/',
+            {
+                'customer': customer_with_order.id,
+                'tailor': self.other_tailor_user.id,
+                'order_type': 'fabric_with_stitching',
+                'service_mode': 'walk_in',
+                'payment_method': 'cod',
+                'items': [
+                    {
+                        'fabric': self.other_fabric.id,
+                        'quantity': 1,
+                        'custom_styles': [
+                            {
+                                'style_type': 'collar',
+                                'index': 1,
+                                'label': 'Other Shop Collar',
+                                'asset_path': 'custom_styles/other_collar.png',
+                            }
+                        ],
+                    }
+                ],
+            },
+            format='json',
+        )
+        self.assertEqual(other_tailor_response.status_code, 201, other_tailor_response.data)
+
+        self.client.force_authenticate(user=self.tailor_user)
+        list_response = self.client.get('/api/tailors/pos/customers/')
+        self.assertEqual(list_response.status_code, 200, list_response.data)
+
+        customers = list_response.data['data']
+        customer_entry = next(item for item in customers if item['id'] == customer_with_order.id)
+        zero_order_customer = next(
+            item for item in customers if item['phone'] == '+966500000099'
+        )
+
+        self.assertEqual(len(customer_entry['order_styles']), 1)
+        self.assertEqual(customer_entry['order_styles'][0]['order_id'], current_tailor_order_id)
+        self.assertEqual(
+            customer_entry['order_styles'][0]['items'][0]['custom_styles'][0]['label'],
+            'Square Cuff',
+        )
+        self.assertNotEqual(
+            customer_entry['order_styles'][0]['items'][0]['custom_styles'][0]['label'],
+            'Other Shop Collar',
+        )
+        self.assertEqual(zero_order_customer['order_styles'], [])

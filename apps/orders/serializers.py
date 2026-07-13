@@ -81,6 +81,34 @@ def attach_custom_style_ids(styles):
     return styles
 
 
+def format_custom_styles_for_response(styles, request=None):
+    """Return custom_styles with style IDs and absolute image URLs when possible."""
+    styles = styles if styles is not None else []
+    if not styles:
+        return []
+
+    if not request:
+        return styles
+
+    import copy
+    from django.conf import settings
+
+    processed_styles = copy.deepcopy(styles)
+    processed_styles = attach_custom_style_ids(processed_styles)
+
+    media_url = getattr(settings, 'MEDIA_URL', '/media/')
+    for style in processed_styles:
+        asset_path = style.get('asset_path')
+        if asset_path and not (asset_path.startswith('http://') or asset_path.startswith('https://')):
+            if not asset_path.startswith(media_url) and not asset_path.startswith('/'):
+                full_path = media_url + asset_path
+            else:
+                full_path = asset_path
+            style['asset_path'] = request.build_absolute_uri(full_path)
+
+    return processed_styles
+
+
 class OrderItemSerializer(serializers.ModelSerializer):
 
     fabric_name = serializers.CharField(source='fabric.name', read_only=True)
@@ -127,31 +155,10 @@ class OrderItemSerializer(serializers.ModelSerializer):
     
     def get_custom_styles(self, obj):
         """Return custom_styles with absolute URLs for images"""
-        styles = obj.custom_styles if obj.custom_styles is not None else []
-        if not styles:
-            return []
-            
-        request = self.context.get('request')
-        if not request:
-            return styles
-            
-        import copy
-        processed_styles = copy.deepcopy(styles)
-        processed_styles = attach_custom_style_ids(processed_styles)
-        
-        from django.conf import settings
-        media_url = getattr(settings, 'MEDIA_URL', '/media/')
-        
-        for style in processed_styles:
-            asset_path = style.get('asset_path')
-            if asset_path and not (asset_path.startswith('http://') or asset_path.startswith('https://')):
-                if not asset_path.startswith(media_url) and not asset_path.startswith('/'):
-                    full_path = media_url + asset_path
-                else:
-                    full_path = asset_path
-                style['asset_path'] = request.build_absolute_uri(full_path)
-                
-        return processed_styles
+        return format_custom_styles_for_response(
+            obj.custom_styles,
+            self.context.get('request'),
+        )
 
 class OrderItemCreateSerializer(serializers.ModelSerializer):
 

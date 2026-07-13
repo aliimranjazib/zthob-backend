@@ -6,6 +6,19 @@ from apps.customers.models import CustomerProfile
 User = get_user_model()
 
 
+class POSCustomerOrderStyleItemSerializer(serializers.Serializer):
+    item_id = serializers.IntegerField()
+    family_member_name = serializers.CharField(allow_null=True)
+    custom_styles = serializers.ListField(child=serializers.DictField())
+
+
+class POSCustomerOrderStyleGroupSerializer(serializers.Serializer):
+    order_id = serializers.IntegerField()
+    order_number = serializers.CharField()
+    order_date = serializers.DateTimeField()
+    items = POSCustomerOrderStyleItemSerializer(many=True)
+
+
 class TailorCustomerSerializer(serializers.Serializer):
     """
     Serializes customer info for the tailor's POS customer list.
@@ -16,8 +29,9 @@ class TailorCustomerSerializer(serializers.Serializer):
     phone = serializers.CharField()
     email = serializers.EmailField(allow_null=True)
     total_orders = serializers.IntegerField()
-    last_order_date = serializers.DateTimeField()
+    last_order_date = serializers.DateTimeField(allow_null=True)
     measurements = serializers.JSONField(allow_null=True)
+    order_styles = POSCustomerOrderStyleGroupSerializer(many=True)
 
 
 class CreateCustomerSerializer(serializers.Serializer):
