@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import SystemSettings, PhoneVerification, Slider
+from apps.core.media_utils import build_public_media_url
 
 class PhoneVerificationSerializer(serializers.Serializer):
     phone_number = serializers.CharField(max_length=20, required=True)
@@ -68,6 +69,6 @@ class SliderSerializer(serializers.ModelSerializer):
     def get_image_url(self, obj):
         """Return full image URL"""
         request = self.context.get('request')
-        if obj.image and request:
-            return request.build_absolute_uri(obj.image.url)
-        return obj.image.url if obj.image else None
+        if obj.image:
+            return build_public_media_url(request, obj.image.url)
+        return None

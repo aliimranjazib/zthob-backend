@@ -4,6 +4,7 @@ from .models import (
     MeasurementTemplate, MeasurementField
 )
 from zthob.translations import translate_message, get_language_from_request
+from apps.core.media_utils import build_public_media_url
 
 
 class CustomStyleSerializer(serializers.ModelSerializer):
@@ -39,13 +40,11 @@ class CustomStyleSerializer(serializers.ModelSerializer):
     def get_image_url(self, obj):
         """
         Convert image path to full URL.
-        Returns: Full URL like 'https://yourbackend.com/media/custom_styles/collar_1.png'
+        Returns: Full URL like 'https://yourbackend.com/api/media/custom_styles/collar_1.png'
         """
         if obj.image:
             request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.image.url)
-            return obj.image.url
+            return build_public_media_url(request, obj.image.url)
         return None
 
 
@@ -132,9 +131,7 @@ class CustomStyleListSerializer(serializers.ModelSerializer):
         """
         if obj.image:
             request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.image.url)
-            return obj.image.url
+            return build_public_media_url(request, obj.image.url)
         return None
 class UserStylePresetSerializer(serializers.ModelSerializer):
     """
@@ -181,7 +178,10 @@ class UserStylePresetSerializer(serializers.ModelSerializer):
                         'style_id': style.id,
                         'style_name': style.name,
                         'style_code': style.code,
-                        'image_url': self.context['request'].build_absolute_uri(style.image.url) if style.image else None
+                        'image_url': build_public_media_url(
+                            self.context.get('request'),
+                            style.image.url,
+                        ) if style.image else None
                     })
                 except CustomStyle.DoesNotExist:
                     pass

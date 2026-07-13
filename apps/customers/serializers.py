@@ -10,6 +10,7 @@ from apps.tailors.serializers.catalog import (
     FabricTypeBasicSerializer,
 )
 from apps.tailors.services.stitching_time import get_average_stitching_time_stats
+from apps.core.media_utils import build_public_media_url
 from apps.customers.models import Address, CustomerProfile, FamilyMember, FabricFavorite
 
 # ============================================================================
@@ -56,9 +57,7 @@ class TailorHomeSerializer(serializers.ModelSerializer):
     def get_shop_image_url(self, obj):
         if obj.shop_image:
             request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.shop_image.url)
-            return obj.shop_image.url
+            return build_public_media_url(request, obj.shop_image.url)
         return None
 
     def get_city(self, obj):
@@ -127,10 +126,7 @@ class FabricCategoryHomeSerializer(serializers.ModelSerializer):
                 img = primary.image
             
             if img:
-                image_url = img.url
-                if request:
-                    image_url = request.build_absolute_uri(image_url)
-                images.append(image_url)
+                images.append(build_public_media_url(request, img.url))
         
         return images
 
@@ -155,9 +151,7 @@ class FabricHomeSerializer(serializers.ModelSerializer):
             first_image = gallery[0]
             if first_image.image:
                 request = self.context.get('request')
-                if request:
-                    return request.build_absolute_uri(first_image.image.url)
-                return first_image.image.url
+                return build_public_media_url(request, first_image.image.url)
         return None
 
 

@@ -6,6 +6,7 @@ from apps.accounts.serializers import UserProfileSerializer
 from apps.customers.models import Address
 from ..models import TailorProfile
 from ..services.stitching_time import get_average_stitching_time_stats
+from apps.core.media_utils import build_public_media_url
 
 class TailorProfileSerializer(serializers.ModelSerializer):
     user = UserProfileSerializer(read_only=True)
@@ -60,9 +61,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
         """Get the full URL of the shop image."""
         if obj.shop_image:
             request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.shop_image.url)
-            return obj.shop_image.url
+            return build_public_media_url(request, obj.shop_image.url)
         return None
     
     def get_address(self, obj):
