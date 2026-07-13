@@ -6,6 +6,7 @@ from ..models import (
 )
 from ..models.base import SEASON_CHOICES
 from .base import ImageWithMetadataSerializer
+from apps.core.media_utils import build_public_media_url
 
 # Fabric Type Serializers
 class FabricTypeSerializer(serializers.ModelSerializer):
@@ -72,9 +73,9 @@ class FabricImageSerializer(serializers.ModelSerializer):
 
     def get_image(self, obj) -> str | None:
         request = self.context.get("request", None)
-        if request:
-            return request.build_absolute_uri(obj.image.url) if obj.image else None
-        return obj.image.url if obj.image else None
+        if obj.image:
+            return build_public_media_url(request, obj.image.url)
+        return None
 
 # Fabric Serializers
 class FabricSerializer(serializers.ModelSerializer):

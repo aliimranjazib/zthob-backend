@@ -27,6 +27,7 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
     SpectacularRedocView,
 )
+from apps.core.views import PublicMediaServeView
 
 # Customize admin site
 admin.site.site_header = "Mgask Administration"
@@ -215,6 +216,7 @@ def payment_result_view(request):
 
 # API URL Patterns (shared between legacy and v1)
 api_patterns = [
+    re_path(r'^media/(?P<path>.*)$', PublicMediaServeView.as_view(), name='public-media'),
     path('accounts/', include('apps.accounts.urls')),
     path('tailors/', include('apps.tailors.urls')),
     path('customers/', include('apps.customers.urls')),

@@ -9,6 +9,7 @@ from django.db import transaction
 from apps.orders.services import OrderCalculationService
 from apps.orders.payments import build_payment_options
 from zthob.translations import get_language_from_request, translate_message
+from apps.core.media_utils import build_public_media_url
 from .actions import OrderActionManager
 
 
@@ -82,7 +83,7 @@ def attach_custom_style_ids(styles):
 
 
 def format_custom_styles_for_response(styles, request=None):
-    """Return custom_styles with style IDs and absolute image URLs when possible."""
+    """Return custom_styles with style IDs and CORS-friendly image URLs when possible."""
     styles = styles if styles is not None else []
     if not styles:
         return []
@@ -91,20 +92,19 @@ def format_custom_styles_for_response(styles, request=None):
         return styles
 
     import copy
-    from django.conf import settings
 
     processed_styles = copy.deepcopy(styles)
     processed_styles = attach_custom_style_ids(processed_styles)
 
-    media_url = getattr(settings, 'MEDIA_URL', '/media/')
     for style in processed_styles:
         asset_path = style.get('asset_path')
-        if asset_path and not (asset_path.startswith('http://') or asset_path.startswith('https://')):
-            if not asset_path.startswith(media_url) and not asset_path.startswith('/'):
-                full_path = media_url + asset_path
-            else:
-                full_path = asset_path
-            style['asset_path'] = request.build_absolute_uri(full_path)
+        if not asset_path:
+            continue
+        if asset_path.startswith(('http://', 'https://')):
+            if '/api/media/' not in asset_path and '/media/' in asset_path:
+                style['asset_path'] = build_public_media_url(request, asset_path)
+        else:
+            style['asset_path'] = build_public_media_url(request, asset_path)
 
     return processed_styles
 
@@ -147,10 +147,8 @@ class OrderItemSerializer(serializers.ModelSerializer):
             return None
         
         if obj.fabric.primary_image:
-            request=self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.fabric.primary_image.url)
-            return obj.fabric.primary_image.url
+            request = self.context.get('request')
+            return build_public_media_url(request, obj.fabric.primary_image.url)
         return None
     
     def get_custom_styles(self, obj):
@@ -494,31 +492,10 @@ class OrderSerializer(serializers.ModelSerializer):
     
     def get_custom_styles(self, obj):
         """Return custom_styles with absolute URLs for images"""
-        styles = obj.custom_styles if obj.custom_styles is not None else []
-        if not styles:
-            return []
-            
-        request = self.context.get('request')
-        if not request:
-            return styles
-            
-        import copy
-        processed_styles = copy.deepcopy(styles)
-        processed_styles = attach_custom_style_ids(processed_styles)
-        
-        from django.conf import settings
-        media_url = getattr(settings, 'MEDIA_URL', '/media/')
-        
-        for style in processed_styles:
-            asset_path = style.get('asset_path')
-            if asset_path and not (asset_path.startswith('http://') or asset_path.startswith('https://')):
-                if not asset_path.startswith(media_url) and not asset_path.startswith('/'):
-                    full_path = media_url + asset_path
-                else:
-                    full_path = asset_path
-                style['asset_path'] = request.build_absolute_uri(full_path)
-                
-        return processed_styles
+        return format_custom_styles_for_response(
+            obj.custom_styles,
+            self.context.get('request'),
+        )
 
     @staticmethod
     def _build_rider_assignment_flags(obj, user_role):
@@ -1762,31 +1739,10 @@ class OrderListSerializer(serializers.ModelSerializer):
     
     def get_custom_styles(self, obj):
         """Return custom_styles with absolute URLs for images"""
-        styles = obj.custom_styles if obj.custom_styles is not None else []
-        if not styles:
-            return []
-            
-        request = self.context.get('request')
-        if not request:
-            return styles
-            
-        import copy
-        processed_styles = copy.deepcopy(styles)
-        processed_styles = attach_custom_style_ids(processed_styles)
-        
-        from django.conf import settings
-        media_url = getattr(settings, 'MEDIA_URL', '/media/')
-        
-        for style in processed_styles:
-            asset_path = style.get('asset_path')
-            if asset_path and not (asset_path.startswith('http://') or asset_path.startswith('https://')):
-                if not asset_path.startswith(media_url) and not asset_path.startswith('/'):
-                    full_path = media_url + asset_path
-                else:
-                    full_path = asset_path
-                style['asset_path'] = request.build_absolute_uri(full_path)
-                
-        return processed_styles
+        return format_custom_styles_for_response(
+            obj.custom_styles,
+            self.context.get('request'),
+        )
     
     def get_status_info(self, obj):
         """Get status information including next available actions - reuse from OrderSerializer"""

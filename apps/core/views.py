@@ -9,6 +9,10 @@ from .version import get_version, get_git_info
 from zthob.utils import api_response
 from rest_framework import status
 from django.core.cache import cache
+from django.conf import settings
+from django.http import FileResponse, Http404
+import mimetypes
+import os
 
 class BasePhoneVerificationView(APIView):
     """Base view for phone verification - can be used by any app"""
@@ -188,3 +192,25 @@ class VersionView(APIView):
             data=data,
             status_code=status.HTTP_200_OK
         )
+
+
+@extend_schema(tags=["Media"])
+class PublicMediaServeView(APIView):
+    """Serve uploaded media files with CORS headers for cross-origin web clients."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, path):
+        normalized = os.path.normpath(path)
+        if normalized.startswith('..') or normalized == '.':
+            raise Http404('Invalid media path')
+
+        media_root = os.path.abspath(settings.MEDIA_ROOT)
+        full_path = os.path.abspath(os.path.join(media_root, normalized))
+        if not full_path.startswith(media_root) or not os.path.isfile(full_path):
+            raise Http404('Media file not found')
+
+        content_type, _ = mimetypes.guess_type(full_path)
+        response = FileResponse(open(full_path, 'rb'), content_type=content_type or 'application/octet-stream')
+        response['Cache-Control'] = 'public, max-age=86400'
+        return response
