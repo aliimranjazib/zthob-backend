@@ -6,8 +6,6 @@ set -euo pipefail
 : "${EXPECTED_GIT_COMMIT:?EXPECTED_GIT_COMMIT is required}"
 : "${GIT_BRANCH:?GIT_BRANCH is required}"
 : "${GIT_COMMIT_DATE:?GIT_COMMIT_DATE is required}"
-: "${GHCR_USERNAME:?GHCR_USERNAME is required}"
-: "${GHCR_TOKEN:?GHCR_TOKEN is required}"
 
 DEPLOY_DIR="${DEPLOY_DIR:-/home/mgask-production}"
 cd "$DEPLOY_DIR"
@@ -22,17 +20,25 @@ printf 'GIT_COMMIT=%s\nGIT_BRANCH=%s\nGIT_COMMIT_DATE=%s\nAPP_IMAGE=%s\n' \
   "$GIT_COMMIT" "$GIT_BRANCH" "$GIT_COMMIT_DATE" "$APP_IMAGE" > deployment.env
 
 COMPOSE=(docker compose --project-name mgask-production --env-file .env --env-file deployment.env -f docker-compose.production.yml)
+export APP_IMAGE
 
 echo "--- deployment.env ---"
 cat deployment.env
 
-printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-
-echo "--- pulling images ---"
-"${COMPOSE[@]}" pull web celery_worker
+if [ "${IMAGE_PRELOADED:-}" = "true" ]; then
+  echo "--- using CI-preloaded image (skipping GHCR login/pull) ---"
+  PULL_POLICY="never"
+else
+  : "${GHCR_USERNAME:?GHCR_USERNAME is required when IMAGE_PRELOADED is not true}"
+  : "${GHCR_TOKEN:?GHCR_TOKEN is required when IMAGE_PRELOADED is not true}"
+  printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+  echo "--- pulling images ---"
+  "${COMPOSE[@]}" pull web celery_worker
+  PULL_POLICY="always"
+fi
 
 if ! docker image inspect "$APP_IMAGE" >/dev/null 2>&1; then
-  echo "::error::Image not found locally after pull: $APP_IMAGE"
+  echo "::error::Image not found locally: $APP_IMAGE"
   exit 1
 fi
 
@@ -66,7 +72,7 @@ for service in web celery_worker; do
 done
 
 echo "--- starting app containers ---"
-"${COMPOSE[@]}" up -d --no-deps --force-recreate --pull always web celery_worker
+"${COMPOSE[@]}" up -d --no-deps --force-recreate --pull "$PULL_POLICY" web celery_worker
 
 "${COMPOSE[@]}" ps
 
