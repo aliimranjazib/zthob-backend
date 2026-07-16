@@ -84,14 +84,18 @@ def _create_order_from_checkout(
     collected_by,
     serializer_request=None,
     payment_metadata=None,
+    allow_expired=False,
 ):
     if checkout.order:
         return checkout.order
 
-    if checkout.status not in {'active', 'payment_initiated'}:
+    allowed_statuses = {'active', 'payment_initiated'}
+    if allow_expired:
+        allowed_statuses.update({'expired', 'payment_failed'})
+    if checkout.status not in allowed_statuses:
         raise ValidationError(f"Checkout is not active. Current status: {checkout.status}")
 
-    if checkout.is_expired:
+    if checkout.is_expired and not allow_expired:
         checkout.status = 'expired'
         checkout.save(update_fields=['status', 'updated_at'])
         raise ValidationError("Checkout has expired. Please create a new checkout.")
