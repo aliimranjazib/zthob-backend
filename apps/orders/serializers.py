@@ -2028,4 +2028,26 @@ class CheckoutInitiatePaymentResponseSerializer(serializers.Serializer):
     amount = serializers.CharField()
     currency = serializers.CharField()
     status = serializers.CharField()
+
+
+class MyFatoorahPreparePaymentSerializer(serializers.Serializer):
+    bookingUniqueKey = serializers.CharField(required=True)
+    payment_option = serializers.ChoiceField(
+        choices=[
+            ('full', 'Pay Full Amount'),
+            ('advance_50', 'Pay 50% Advance'),
+            ('advance_30', 'Pay 30% Advance'),
+        ],
+        default='full',
+    )
+    idempotency_key = serializers.CharField(required=True, max_length=100)
+
+
+class MyFatoorahConfirmPaymentSerializer(serializers.Serializer):
+    attempt_reference = serializers.CharField(required=True, max_length=40)
+    invoice_id = serializers.CharField(required=True, max_length=100)
+
+
+class MyFatoorahRemainingPrepareSerializer(serializers.Serializer):
+    idempotency_key = serializers.CharField(required=True, max_length=100)
             

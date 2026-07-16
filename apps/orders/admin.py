@@ -7,7 +7,14 @@ from django.contrib import messages
 from django.http import HttpResponse
 import csv
 from datetime import datetime
-from .models import CheckoutSession, Order, OrderItem, OrderStatusHistory
+from .models import (
+    CheckoutPaymentAttempt,
+    CheckoutSession,
+    MyFatoorahWebhookEvent,
+    Order,
+    OrderItem,
+    OrderStatusHistory,
+)
 
 
 # ============================================================================
@@ -1042,3 +1049,55 @@ class CheckoutSessionAdmin(admin.ModelAdmin):
         'created_at',
         'updated_at',
     ]
+
+
+@admin.register(CheckoutPaymentAttempt)
+class CheckoutPaymentAttemptAdmin(admin.ModelAdmin):
+    list_display = [
+        'attempt_reference',
+        'purpose',
+        'customer',
+        'expected_amount',
+        'currency',
+        'status',
+        'invoice_id',
+        'payment_id',
+        'created_at',
+    ]
+    list_filter = ['purpose', 'status', 'currency', 'gateway_payment_method', 'created_at']
+    search_fields = [
+        'attempt_reference',
+        'invoice_id',
+        'payment_id',
+        'customer__username',
+        'customer__email',
+    ]
+    readonly_fields = [field.name for field in CheckoutPaymentAttempt._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(MyFatoorahWebhookEvent)
+class MyFatoorahWebhookEventAdmin(admin.ModelAdmin):
+    list_display = [
+        'event_reference',
+        'event_name',
+        'invoice_id',
+        'payment_id',
+        'transaction_status',
+        'attempts',
+        'processed_at',
+    ]
+    list_filter = ['event_name', 'transaction_status', 'processed_at', 'created_at']
+    search_fields = ['event_reference', 'invoice_id', 'payment_id']
+    readonly_fields = [field.name for field in MyFatoorahWebhookEvent._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

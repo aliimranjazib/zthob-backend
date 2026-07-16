@@ -1051,6 +1051,107 @@ class RemainingPaymentSession(BaseModel):
         return f"{self.booking_unique_key} - {self.order_id} - {self.status}"
 
 
+class CheckoutPaymentAttempt(BaseModel):
+    """A single MyFatoorah invoice attempt for checkout or remaining payment."""
+
+    PURPOSE_CHOICES = (
+        ('checkout', 'Checkout'),
+        ('remaining_balance', 'Remaining Balance'),
+    )
+    STATUS_CHOICES = (
+        ('prepared', 'Prepared'),
+        ('invoice_created', 'Invoice Created'),
+        ('pending', 'Pending'),
+        ('succeeded', 'Succeeded'),
+        ('requires_review', 'Requires Review'),
+        ('failed', 'Failed'),
+        ('expired', 'Expired'),
+    )
+
+    attempt_reference = models.CharField(max_length=40, unique=True, db_index=True)
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='checkout_payment_attempts',
+    )
+    checkout = models.ForeignKey(
+        CheckoutSession,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='payment_attempts',
+    )
+    remaining_session = models.ForeignKey(
+        RemainingPaymentSession,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='payment_attempts',
+    )
+    purpose = models.CharField(max_length=30, choices=PURPOSE_CHOICES)
+    provider = models.CharField(max_length=30, default='myfatoorah')
+    payment_option = models.CharField(max_length=30)
+    expected_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default='SAR')
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='prepared',
+        db_index=True,
+    )
+    client_idempotency_key = models.CharField(max_length=100, null=True, blank=True)
+    invoice_id = models.CharField(max_length=100, null=True, blank=True, unique=True)
+    payment_id = models.CharField(max_length=150, null=True, blank=True, unique=True)
+    gateway_status = models.CharField(max_length=50, null=True, blank=True)
+    gateway_payment_method = models.CharField(max_length=100, null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    failure_reason = models.CharField(max_length=255, null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    expires_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['customer', 'status']),
+            models.Index(fields=['checkout', 'status']),
+            models.Index(fields=['remaining_session', 'status']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    (Q(checkout__isnull=False) & Q(remaining_session__isnull=True))
+                    | (Q(checkout__isnull=True) & Q(remaining_session__isnull=False))
+                ),
+                name='payment_attempt_has_one_parent',
+            ),
+            models.UniqueConstraint(
+                fields=['customer', 'client_idempotency_key'],
+                condition=Q(client_idempotency_key__isnull=False),
+                name='unique_customer_payment_attempt_idempotency',
+            ),
+        ]
+
+    @property
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f"{self.attempt_reference} - {self.status}"
+
+
+class MyFatoorahWebhookEvent(BaseModel):
+    """Minimal webhook receipt used for deduplication and retry tracking."""
+
+    event_reference = models.CharField(max_length=100, unique=True, db_index=True)
+    event_name = models.CharField(max_length=100)
+    invoice_id = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    payment_id = models.CharField(max_length=150, null=True, blank=True, db_index=True)
+    transaction_status = models.CharField(max_length=50, null=True, blank=True)
+    attempts = models.PositiveIntegerField(default=0)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=255, null=True, blank=True)
+
+
 class OrderStatusHistory(BaseModel):
     """
     Track status changes over time for audit trail

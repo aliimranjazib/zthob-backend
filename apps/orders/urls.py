@@ -25,6 +25,13 @@ from .views import (
     RemainingPaymentStatusView,
 )
 from .measurement_views import MeasurementEligibilityView
+from .myfatoorah_views import (
+    MyFatoorahCheckoutConfirmView,
+    MyFatoorahCheckoutPrepareView,
+    MyFatoorahRemainingConfirmView,
+    MyFatoorahRemainingPrepareView,
+    MyFatoorahWebhookView,
+)
 
 app_name = 'orders'
 
@@ -34,6 +41,9 @@ urlpatterns = [
     path('checkout/', CheckoutCreateView.as_view(), name='checkout-create'),
     path('checkout/initiate-payment/', CheckoutInitiatePaymentView.as_view(), name='checkout-initiate-payment'),
     path('checkout/alinma/callback/', CheckoutAlinmaCallbackView.as_view(), name='checkout-alinma-callback'),
+    path('checkout/myfatoorah/prepare/', MyFatoorahCheckoutPrepareView.as_view(), name='checkout-myfatoorah-prepare'),
+    path('checkout/myfatoorah/confirm/', MyFatoorahCheckoutConfirmView.as_view(), name='checkout-myfatoorah-confirm'),
+    path('checkout/myfatoorah/webhook/', MyFatoorahWebhookView.as_view(), name='checkout-myfatoorah-webhook'),
     path('checkout/create-order/', CheckoutCreateOrderView.as_view(), name='checkout-create-order'),
     path('checkout/<str:booking_unique_key>/', CheckoutStatusView.as_view(), name='checkout-status'),
     path('create/', OrderCreateView.as_view(), name='order-create'),
@@ -43,6 +53,8 @@ urlpatterns = [
     path('<int:order_id>/payment-status/', OrderPaymentStatusUpdateView.as_view(), name='order-payment-status-update'),
     path('<int:order_id>/pay-remaining/', PayRemainingBalanceView.as_view(), name='order-pay-remaining'),
     path('<int:order_id>/pay-remaining/initiate-payment/', RemainingBalanceInitiatePaymentView.as_view(), name='order-pay-remaining-initiate'),
+    path('<int:order_id>/pay-remaining/myfatoorah/prepare/', MyFatoorahRemainingPrepareView.as_view(), name='order-pay-remaining-myfatoorah-prepare'),
+    path('<int:order_id>/pay-remaining/myfatoorah/confirm/', MyFatoorahRemainingConfirmView.as_view(), name='order-pay-remaining-myfatoorah-confirm'),
     path('pay-remaining/<str:booking_unique_key>/', RemainingPaymentStatusView.as_view(), name='order-pay-remaining-status'),
     path('<int:order_id>/measurements/', OrderMeasurementsDetailView.as_view(), name='order-measurements'),
     path('<int:order_id>/action/', OrderActionView.as_view(), name='order-action'),

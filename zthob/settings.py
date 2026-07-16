@@ -421,6 +421,17 @@ ALINMAPAY_REQUEST_URL = os.getenv(
     ),
 )
 
+# MyFatoorah KSA Configuration
+MYFATOORAH_API_KEY = os.getenv('MYFATOORAH_API_KEY', '')
+MYFATOORAH_WEBHOOK_SECRET = os.getenv('MYFATOORAH_WEBHOOK_SECRET', '')
+MYFATOORAH_API_BASE_URL = os.getenv(
+    'MYFATOORAH_API_BASE_URL',
+    'https://api-sa.myfatoorah.com' if APP_ENV == 'production' else 'https://apitest.myfatoorah.com',
+)
+MYFATOORAH_TIMEOUT_SECONDS = int(os.getenv('MYFATOORAH_TIMEOUT_SECONDS', '30'))
+MYFATOORAH_COUNTRY = 'SAU'
+MYFATOORAH_CURRENCY = 'SAR'
+
 # Jazzmin Admin UI Configuration - Simplified
 JAZZMIN_SETTINGS = {
     # Simple branding
