@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -255,6 +256,11 @@ def _verify_and_process(attempt):
 class MyFatoorahCheckoutPrepareView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=MyFatoorahPreparePaymentSerializer,
+        summary='Prepare a MyFatoorah checkout payment',
+        tags=['MyFatoorah Payments'],
+    )
     def post(self, request):
         serializer = MyFatoorahPreparePaymentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -382,6 +388,11 @@ class MyFatoorahCheckoutPrepareView(APIView):
 class _MyFatoorahConfirmMixin:
     purpose = None
 
+    @extend_schema(
+        request=MyFatoorahConfirmPaymentSerializer,
+        summary='Confirm and verify a MyFatoorah payment',
+        tags=['MyFatoorah Payments'],
+    )
     def post(self, request, order_id=None):
         serializer = MyFatoorahConfirmPaymentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -495,6 +506,11 @@ class MyFatoorahCheckoutConfirmView(_MyFatoorahConfirmMixin, APIView):
 class MyFatoorahRemainingPrepareView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=MyFatoorahRemainingPrepareSerializer,
+        summary='Prepare a MyFatoorah remaining-balance payment',
+        tags=['MyFatoorah Payments'],
+    )
     def post(self, request, order_id):
         serializer = MyFatoorahRemainingPrepareSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
