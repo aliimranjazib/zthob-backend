@@ -342,33 +342,26 @@ class MobileAppVersionPolicyAdmin(admin.ModelAdmin):
     list_display = [
         'app',
         'platform',
-        'minimum_version',
         'latest_version',
+        'soft_update_enabled',
         'force_update_enabled',
         'is_active',
         'updated_at',
         'updated_by',
     ]
-    list_filter = ['app', 'platform', 'force_update_enabled', 'is_active']
-    search_fields = ['store_url', 'update_title_en', 'update_message_en']
+    list_filter = ['app', 'platform', 'soft_update_enabled', 'force_update_enabled', 'is_active']
+    list_display_links = ['app']
+    list_editable = ['latest_version', 'soft_update_enabled', 'force_update_enabled']
     readonly_fields = ['updated_at', 'updated_by']
     fieldsets = (
         ('App', {
             'fields': ('app', 'platform', 'is_active'),
         }),
-        ('Versions', {
-            'fields': ('minimum_version', 'latest_version', 'force_update_enabled'),
-            'description': 'Use semver like 2.4.0. Force update blocks clients below minimum_version.',
-        }),
-        ('Store', {
-            'fields': ('store_url',),
-        }),
-        ('Update Messages', {
-            'fields': (
-                'update_title_en',
-                'update_title_ar',
-                'update_message_en',
-                'update_message_ar',
+        ('Version control', {
+            'fields': ('latest_version', 'soft_update_enabled', 'force_update_enabled'),
+            'description': (
+                'Set latest_version to the store version (e.g. 1.0.27). '
+                'Enable soft_update for optional prompt, or force_update to block old apps.'
             ),
         }),
         ('Metadata', {

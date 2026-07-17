@@ -13,7 +13,6 @@ from .mobile_version import (
     parse_version,
 )
 from zthob.utils import api_response
-from zthob.translations import get_language_from_request
 from rest_framework import status
 from django.core.cache import cache
 from django.conf import settings
@@ -256,18 +255,12 @@ class MobileVersionView(APIView):
                 request=request,
             )
 
-        data = evaluate_mobile_version(
-            app,
-            platform,
-            version,
-            language=get_language_from_request(request),
-        )
+        data = evaluate_mobile_version(app, platform, version)
         return api_response(
             success=True,
             message="OK",
             data=data,
             status_code=status.HTTP_200_OK,
-            request=request,
         )
 
 

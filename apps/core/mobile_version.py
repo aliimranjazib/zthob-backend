@@ -67,16 +67,9 @@ def compare_versions(current: str, target: str) -> int:
 
 def policy_to_dict(policy) -> dict:
     return {
-        'app': policy.app,
-        'platform': policy.platform,
-        'minimum_version': policy.minimum_version,
         'latest_version': policy.latest_version,
+        'soft_update_enabled': policy.soft_update_enabled,
         'force_update_enabled': policy.force_update_enabled,
-        'store_url': policy.store_url,
-        'update_title_en': policy.update_title_en,
-        'update_title_ar': policy.update_title_ar,
-        'update_message_en': policy.update_message_en,
-        'update_message_ar': policy.update_message_ar,
     }
 
 
@@ -100,31 +93,21 @@ def get_version_policy(app: str, platform: str) -> dict | None:
     return payload
 
 
-def evaluate_mobile_version(app: str, platform: str, current_version: str, language: str = 'en') -> dict:
-    """Return a minimal update decision for a mobile client."""
+def evaluate_mobile_version(app: str, platform: str, current_version: str) -> dict:
+    """Return soft/force update flags for a mobile client."""
+    no_update = {'soft_update': False, 'force_update': False}
+
     policy = get_version_policy(app, platform)
     if not policy:
-        return {
-            'update_required': False,
-            'force_update': False,
-        }
+        return no_update
 
-    below_minimum = compare_versions(current_version, policy['minimum_version']) < 0
-    below_latest = compare_versions(current_version, policy['latest_version']) < 0
-    force_update = below_minimum and policy['force_update_enabled']
-    update_required = force_update or below_latest
+    if compare_versions(current_version, policy['latest_version']) >= 0:
+        return no_update
 
-    if not update_required:
-        return {
-            'update_required': False,
-            'force_update': False,
-        }
+    if policy['force_update_enabled']:
+        return {'soft_update': False, 'force_update': True}
 
-    use_ar = language == 'ar'
-    return {
-        'update_required': True,
-        'force_update': force_update,
-        'store_url': policy['store_url'] or None,
-        'title': policy['update_title_ar'] if use_ar else policy['update_title_en'],
-        'message': policy['update_message_ar'] if use_ar else policy['update_message_en'],
-    }
+    if policy['soft_update_enabled']:
+        return {'soft_update': True, 'force_update': False}
+
+    return no_update

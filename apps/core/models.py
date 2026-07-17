@@ -248,41 +248,18 @@ class MobileAppVersionPolicy(models.Model):
 
     app = models.CharField(max_length=20, choices=APP_CHOICES)
     platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
-    minimum_version = models.CharField(
-        max_length=20,
-        default='1.0.0',
-        help_text='Minimum allowed app version (semver, e.g. 2.4.0)',
-    )
     latest_version = models.CharField(
         max_length=20,
         default='1.0.0',
-        help_text='Latest published app version (semver, e.g. 2.5.0)',
+        help_text='Required app version in the store (semver, e.g. 1.0.27)',
+    )
+    soft_update_enabled = models.BooleanField(
+        default=False,
+        help_text='Show optional update when app version is below latest_version',
     )
     force_update_enabled = models.BooleanField(
         default=False,
-        help_text='Block app usage when current version is below minimum_version',
-    )
-    store_url = models.URLField(
-        blank=True,
-        help_text='App Store or Play Store URL for this app/platform',
-    )
-    update_title_en = models.CharField(
-        max_length=120,
-        default='Update required',
-        help_text='Dialog title shown when an update is available',
-    )
-    update_title_ar = models.CharField(
-        max_length=120,
-        default='التحديث مطلوب',
-        blank=True,
-    )
-    update_message_en = models.TextField(
-        default='Please update the app to continue.',
-        help_text='Message shown when an update is available',
-    )
-    update_message_ar = models.TextField(
-        default='يرجى تحديث التطبيق للمتابعة.',
-        blank=True,
+        help_text='Block app when version is below latest_version',
     )
     is_active = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
