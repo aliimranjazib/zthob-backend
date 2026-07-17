@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils import timezone
-from .models import SystemSettings, Slider, PhoneVerification
+from .models import SystemSettings, Slider, PhoneVerification, MobileAppVersionPolicy
 
 
 @admin.register(SystemSettings)
@@ -335,4 +335,52 @@ class PhoneVerificationAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """Optimize queryset"""
         return super().get_queryset(request).select_related('user')
+
+
+@admin.register(MobileAppVersionPolicy)
+class MobileAppVersionPolicyAdmin(admin.ModelAdmin):
+    list_display = [
+        'app',
+        'platform',
+        'minimum_version',
+        'latest_version',
+        'force_update_enabled',
+        'is_active',
+        'updated_at',
+        'updated_by',
+    ]
+    list_filter = ['app', 'platform', 'force_update_enabled', 'is_active']
+    search_fields = ['store_url', 'update_title_en', 'update_message_en']
+    readonly_fields = ['updated_at', 'updated_by']
+    fieldsets = (
+        ('App', {
+            'fields': ('app', 'platform', 'is_active'),
+        }),
+        ('Versions', {
+            'fields': ('minimum_version', 'latest_version', 'force_update_enabled'),
+            'description': 'Use semver like 2.4.0. Force update blocks clients below minimum_version.',
+        }),
+        ('Store', {
+            'fields': ('store_url',),
+        }),
+        ('Update Messages', {
+            'fields': (
+                'update_title_en',
+                'update_title_ar',
+                'update_message_en',
+                'update_message_ar',
+            ),
+        }),
+        ('Metadata', {
+            'fields': ('updated_by', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+    def save_model(self, request, obj, form, change):
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
+
+    def has_add_permission(self, request):
+        return False
 

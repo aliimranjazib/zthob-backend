@@ -6,7 +6,14 @@ from .services import PhoneVerificationService
 from .serializers import PhoneVerificationSerializer, OTPVerificationSerializer, SystemSettingsSerializer, SliderSerializer
 from .models import SystemSettings, Slider
 from .version import get_version, get_git_info
+from .mobile_version import (
+    MOBILE_APPS,
+    MOBILE_PLATFORMS,
+    evaluate_mobile_version,
+    parse_version,
+)
 from zthob.utils import api_response
+from zthob.translations import get_language_from_request
 from rest_framework import status
 from django.core.cache import cache
 from django.conf import settings
@@ -191,6 +198,76 @@ class VersionView(APIView):
             message="Version information retrieved successfully",
             data=data,
             status_code=status.HTTP_200_OK
+        )
+
+
+@extend_schema(tags=["System Configuration"])
+class MobileVersionView(APIView):
+    """Fast mobile app version check for customer, tailor, and rider apps."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Check mobile app version",
+        description=(
+            "Check whether a mobile app must update. "
+            "Supports customer, tailor, and rider apps on iOS and Android."
+        ),
+        tags=["System Configuration"],
+    )
+    def get(self, request):
+        app = (request.query_params.get('app') or '').strip().lower()
+        platform = (request.query_params.get('platform') or '').strip().lower()
+        version = (request.query_params.get('version') or '').strip()
+
+        if app not in MOBILE_APPS:
+            return api_response(
+                success=False,
+                message="Invalid app. Use customer, tailor, or rider.",
+                errors={'app': ['Must be one of: customer, tailor, rider']},
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request,
+            )
+
+        if platform not in MOBILE_PLATFORMS:
+            return api_response(
+                success=False,
+                message="Invalid platform. Use ios or android.",
+                errors={'platform': ['Must be one of: ios, android']},
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request,
+            )
+
+        if not version:
+            return api_response(
+                success=False,
+                message="version query parameter is required.",
+                errors={'version': ['This field is required.']},
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request,
+            )
+
+        if parse_version(version) is None:
+            return api_response(
+                success=False,
+                message="Invalid version format. Use semver like 2.4.0.",
+                errors={'version': ['Invalid semantic version.']},
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request,
+            )
+
+        data = evaluate_mobile_version(
+            app,
+            platform,
+            version,
+            language=get_language_from_request(request),
+        )
+        return api_response(
+            success=True,
+            message="OK",
+            data=data,
+            status_code=status.HTTP_200_OK,
+            request=request,
         )
 
 

@@ -225,3 +225,88 @@ class Slider(models.Model):
     
     def __str__(self):
         return f"{self.title} (Order: {self.order}, Active: {self.is_active})"
+
+
+class MobileAppVersionPolicy(models.Model):
+    """Per-app, per-platform mobile version policy for force/soft updates."""
+
+    APP_CUSTOMER = 'customer'
+    APP_TAILOR = 'tailor'
+    APP_RIDER = 'rider'
+    APP_CHOICES = [
+        (APP_CUSTOMER, 'Customer'),
+        (APP_TAILOR, 'Tailor'),
+        (APP_RIDER, 'Rider'),
+    ]
+
+    PLATFORM_IOS = 'ios'
+    PLATFORM_ANDROID = 'android'
+    PLATFORM_CHOICES = [
+        (PLATFORM_IOS, 'iOS'),
+        (PLATFORM_ANDROID, 'Android'),
+    ]
+
+    app = models.CharField(max_length=20, choices=APP_CHOICES)
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
+    minimum_version = models.CharField(
+        max_length=20,
+        default='1.0.0',
+        help_text='Minimum allowed app version (semver, e.g. 2.4.0)',
+    )
+    latest_version = models.CharField(
+        max_length=20,
+        default='1.0.0',
+        help_text='Latest published app version (semver, e.g. 2.5.0)',
+    )
+    force_update_enabled = models.BooleanField(
+        default=False,
+        help_text='Block app usage when current version is below minimum_version',
+    )
+    store_url = models.URLField(
+        blank=True,
+        help_text='App Store or Play Store URL for this app/platform',
+    )
+    update_title_en = models.CharField(
+        max_length=120,
+        default='Update required',
+        help_text='Dialog title shown when an update is available',
+    )
+    update_title_ar = models.CharField(
+        max_length=120,
+        default='التحديث مطلوب',
+        blank=True,
+    )
+    update_message_en = models.TextField(
+        default='Please update the app to continue.',
+        help_text='Message shown when an update is available',
+    )
+    update_message_ar = models.TextField(
+        default='يرجى تحديث التطبيق للمتابعة.',
+        blank=True,
+    )
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_mobile_version_policies',
+    )
+
+    class Meta:
+        verbose_name = 'Mobile App Version Policy'
+        verbose_name_plural = 'Mobile App Version Policies'
+        ordering = ['app', 'platform']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['app', 'platform'],
+                name='unique_mobile_version_policy_app_platform',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['app', 'platform', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f'{self.get_app_display()} ({self.get_platform_display()})'
