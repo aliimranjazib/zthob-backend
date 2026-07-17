@@ -22,8 +22,9 @@ MOBILE_PLATFORMS = {
     MOBILE_PLATFORM_ANDROID,
 }
 
-MOBILE_VERSION_CACHE_PREFIX = 'mobile_version_policy'
+MOBILE_VERSION_CACHE_PREFIX = 'mobile_version_policy_v2'
 MOBILE_VERSION_CACHE_TTL = 60 * 60 * 24  # 24 hours
+REQUIRED_POLICY_KEYS = frozenset({'latest_version', 'soft_update_enabled', 'force_update_enabled'})
 
 
 def mobile_version_cache_key(app: str, platform: str) -> str:
@@ -73,14 +74,26 @@ def policy_to_dict(policy) -> dict:
     }
 
 
+def normalize_policy(policy) -> dict | None:
+    """Return policy dict when cache payload matches the current schema."""
+    if not policy or not isinstance(policy, dict):
+        return None
+    if not REQUIRED_POLICY_KEYS.issubset(policy.keys()):
+        return None
+    return policy
+
+
 def get_version_policy(app: str, platform: str) -> dict | None:
     """Load active version policy from Redis cache or database."""
     from apps.core.models import MobileAppVersionPolicy
 
     cache_key = mobile_version_cache_key(app, platform)
     cached = cache.get(cache_key)
+    normalized = normalize_policy(cached)
+    if normalized is not None:
+        return normalized
     if cached is not None:
-        return cached or None
+        cache.delete(cache_key)
 
     policy = MobileAppVersionPolicy.objects.filter(
         app=app,
@@ -101,13 +114,14 @@ def evaluate_mobile_version(app: str, platform: str, current_version: str) -> di
     if not policy:
         return no_update
 
-    if compare_versions(current_version, policy['latest_version']) >= 0:
+    latest_version = policy.get('latest_version')
+    if not latest_version or compare_versions(current_version, latest_version) >= 0:
         return no_update
 
-    if policy['force_update_enabled']:
+    if policy.get('force_update_enabled'):
         return {'soft_update': False, 'force_update': True}
 
-    if policy['soft_update_enabled']:
+    if policy.get('soft_update_enabled'):
         return {'soft_update': True, 'force_update': False}
 
     return no_update

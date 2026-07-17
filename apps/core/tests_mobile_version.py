@@ -87,6 +87,30 @@ class MobileVersionUtilsTests(TestCase):
         self.assertEqual(policy['latest_version'], '4.1.0')
         self.assertIsNotNone(cache.get(mobile_version_cache_key('customer', 'android')))
 
+    def test_stale_cache_payload_is_ignored(self):
+        MobileAppVersionPolicy.objects.filter(app='customer', platform='ios').update(
+            latest_version='2.0.0',
+            soft_update_enabled=True,
+            force_update_enabled=False,
+        )
+        cache_key = mobile_version_cache_key('customer', 'ios')
+        cache.set(
+            cache_key,
+            {
+                'minimum_version': '1.0.0',
+                'latest_version': '2.0.0',
+                'force_update_enabled': False,
+            },
+            3600,
+        )
+
+        policy = get_version_policy('customer', 'ios')
+        self.assertTrue(policy['soft_update_enabled'])
+
+        result = evaluate_mobile_version('customer', 'ios', '1.0.0')
+        self.assertTrue(result['soft_update'])
+        self.assertFalse(result['force_update'])
+
 
 class MobileVersionViewTests(TestCase):
     def setUp(self):
