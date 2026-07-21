@@ -1217,7 +1217,10 @@ class StyleReferenceImage(BaseModel):
         verbose_name_plural = 'Style Reference Images'
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['uploaded_by', 'created_at']),
+            models.Index(
+                fields=['uploaded_by', 'created_at'],
+                name='orders_styl_upload__8f0a2d_idx',
+            ),
         ]
 
     def __str__(self):
