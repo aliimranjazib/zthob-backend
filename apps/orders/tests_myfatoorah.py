@@ -321,3 +321,49 @@ class MyFatoorahPaymentFlowTest(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.payment_status, 'paid')
         self.assertEqual(order.remaining_amount, Decimal('0.00'))
+
+    @patch('apps.orders.myfatoorah_views.get_payment_status')
+    def test_confirm_accepts_myfatoorah_succss_typo(self, mock_status):
+        from apps.orders.myfatoorah import normalize_payment_details
+
+        payload = {
+            'IsSuccess': True,
+            'Data': {
+                'InvoiceId': 6992026,
+                'InvoiceStatus': 'Paid',
+                'InvoiceValue': 413.0,
+                'CustomerReference': 'mfp_test',
+                'UserDefinedField': 'mfp_test',
+                'InvoiceDisplayValue': '413.000 KD',
+                'InvoiceTransactions': [{
+                    'TransactionStatus': 'Succss',
+                    'PaidCurrency': 'KD',
+                    'PaymentId': '07076992026367375974',
+                    'PaymentGateway': 'VISA/MASTER',
+                    'ReferenceId': '620119013062',
+                }],
+            },
+        }
+        details = normalize_payment_details(payload)
+        self.assertTrue(details.is_paid)
+        self.assertEqual(details.transaction_status, 'SUCCESS')
+        self.assertEqual(details.currency, 'KWD')
+
+        booking_key = self._create_checkout()
+        prepared = self._prepare(booking_key, key='idem-succss')
+        attempt = CheckoutPaymentAttempt.objects.get(
+            attempt_reference=prepared.data['data']['attempt_reference']
+        )
+        mock_status.return_value = self._details(
+            attempt,
+            transaction_status='SUCCSS',
+        )
+
+        response = self.client.post(
+            '/api/orders/checkout/myfatoorah/confirm/',
+            {'attempt_reference': attempt.attempt_reference, 'invoice_id': '900003'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Order.objects.count(), 1)

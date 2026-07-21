@@ -8,6 +8,7 @@ import io
 import os
 import re
 from decimal import Decimal
+from urllib.parse import urlparse
 from xml.sax.saxutils import escape
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -185,6 +186,7 @@ _AR_LABELS = {
     'Total Price':         'السعر الإجمالي',
     'Ready':               'جاهز',
     'Comment':             'تعليق',
+    'Reference Photos':    'صور مرجعية',
     # Statuses
     'Status:':             'الحالة:',
     'Tailor Status:':      'حالة الخياط:',
@@ -490,38 +492,59 @@ def _is_positive_amount(value):
         return False
 
 
+def _resolve_media_file_path(raw_path):
+    """Resolve a stored/API media reference to an existing local file path."""
+    if not raw_path:
+        return None
+
+    path = str(raw_path).strip()
+    if not path:
+        return None
+
+    media_root = getattr(settings, 'MEDIA_ROOT', None)
+    if not media_root:
+        return None
+
+    if path.startswith(('http://', 'https://')):
+        path = urlparse(path).path
+
+    path = path.lstrip('/')
+    if path.startswith('api/media/'):
+        path = path[len('api/media/'):]
+    elif path.startswith('media/'):
+        path = path[len('media/'):]
+
+    candidate = os.path.join(media_root, path)
+    return candidate if os.path.exists(candidate) else None
+
+
 def _style_image_path(style):
     """Resolve a custom style payload image reference to a local media file."""
     if not isinstance(style, dict):
         return None
 
     path = style.get('asset_path') or style.get('image_url') or style.get('image')
-    if not path:
-        return None
+    resolved = _resolve_media_file_path(path)
+    if resolved:
+        return resolved
+    return _style_image_from_db(style)
 
-    path = str(path).strip()
-    media_url = getattr(settings, 'MEDIA_URL', '/media/')
-    media_root = getattr(settings, 'MEDIA_ROOT', None)
 
-    if path.startswith('http://') or path.startswith('https://'):
-        marker = media_url if media_url.startswith('/') else f'/{media_url}'
-        if marker in path:
-            path = path.split(marker, 1)[1]
-        else:
-            return None
+def _style_reference_image_paths(style):
+    """Resolve customer-uploaded reference photos for a style selection."""
+    if not isinstance(style, dict):
+        return []
 
-    if media_url and path.startswith(media_url):
-        path = path[len(media_url):]
-    path = path.lstrip('/')
+    refs = style.get('reference_images') or []
+    if not isinstance(refs, list):
+        return []
 
-    if os.path.isabs(path):
-        candidate = path
-    elif media_root:
-        candidate = os.path.join(media_root, path)
-    else:
-        candidate = os.path.join(settings.BASE_DIR, path)
-
-    return candidate if os.path.exists(candidate) else _style_image_from_db(style)
+    paths = []
+    for ref in refs:
+        resolved = _resolve_media_file_path(ref)
+        if resolved:
+            paths.append(resolved)
+    return paths[:4]
 
 
 def _style_image_from_db(style):
@@ -612,23 +635,57 @@ def _custom_style_caption_html(style, lang='en'):
     return '<br/>'.join(parts)
 
 
+def _custom_style_reference_images_row(ref_paths, inner_width, s, lang='en'):
+    """Render a compact row of customer reference photos under the catalog style image."""
+    images = []
+    thumb_size = 14 * mm
+    col_width = 16 * mm
+    for ref_path in ref_paths:
+        try:
+            images.append(Image(ref_path, width=thumb_size, height=thumb_size, kind='proportional'))
+        except Exception as exc:
+            logger.debug("Unable to add style reference image to PDF card: %s", exc)
+
+    if not images:
+        return None
+
+    ref_label = _format_user_text_html(_t('Reference Photos', lang), lang)
+    ref_table = Table([images], colWidths=[col_width] * len(images))
+    ref_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    return Table(
+        [[Paragraph(ref_label, s['style_card_comment'])], [ref_table]],
+        colWidths=[inner_width],
+    )
+
+
 def _custom_style_card(style, cell_width, s, lang='en'):
-    """One centered mini-card: image, bold label, optional comment."""
+    """One centered mini-card: catalog image, reference photos, label, optional comment."""
     label_html = _custom_style_label_html(style, lang)
     comment_html = _custom_style_comment_html(style, lang)
-    if not label_html and not comment_html:
+    image_path = _style_image_path(style)
+    reference_paths = _style_reference_image_paths(style)
+    if not label_html and not comment_html and not image_path and not reference_paths:
         return None
 
     inner_width = max(cell_width - 10, 30 * mm)
     rows = []
 
-    image_path = _style_image_path(style)
     if image_path:
         try:
             img = Image(image_path, width=22 * mm, height=22 * mm, kind='proportional')
             rows.append([img])
         except Exception as exc:
             logger.debug("Unable to add custom style image to PDF card: %s", exc)
+
+    if reference_paths:
+        ref_row = _custom_style_reference_images_row(reference_paths, inner_width, s, lang)
+        if ref_row:
+            rows.append([ref_row])
 
     if label_html:
         rows.append([Paragraph(label_html, s['style_card_label'])])

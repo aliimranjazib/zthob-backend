@@ -13,6 +13,7 @@ from django.db import transaction
 from rest_framework import status
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
+from rest_framework.parsers import MultiPartParser, FormParser
 from .actions import OrderActionManager
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema
@@ -34,6 +35,10 @@ OrderListSerializer,
     CheckoutInitiatePaymentSerializer,
     CheckoutInitiatePaymentResponseSerializer,
 	)
+from apps.orders.style_reference_serializers import (
+    StyleReferenceUploadSerializer,
+    StyleReferenceUploadResponseSerializer,
+)
 from apps.tailors.models import TailorProfile
 from apps.tailors.permissions import IsShopStaff
 from apps.tailors.shop_access import user_can_manage_shop_order
@@ -2366,3 +2371,44 @@ class OrderActionView(APIView):
             'remaining_items': remaining_items,
             'remaining_recipients': pending_recipients,
         }
+
+
+@extend_schema(tags=["Orders"])
+class StyleReferenceUploadView(APIView):
+    """Upload a reference photo for a custom style selection."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        request=StyleReferenceUploadSerializer,
+        responses={201: StyleReferenceUploadResponseSerializer},
+        summary="Upload style reference image",
+        description="Upload one gallery/camera photo and use the returned id in custom_styles.reference_image_ids.",
+    )
+    def post(self, request):
+        serializer = StyleReferenceUploadSerializer(
+            data=request.data,
+            context={'request': request},
+        )
+        if serializer.is_valid():
+            image = serializer.save()
+            response_serializer = StyleReferenceUploadResponseSerializer(
+                image,
+                context={'request': request},
+            )
+            return api_response(
+                success=True,
+                message="Style reference image uploaded successfully",
+                data=response_serializer.data,
+                status_code=status.HTTP_201_CREATED,
+                request=request,
+            )
+
+        return api_response(
+            success=False,
+            message="Style reference image upload failed",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            request=request,
+        )

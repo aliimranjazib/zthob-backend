@@ -429,8 +429,8 @@ MYFATOORAH_API_BASE_URL = os.getenv(
     'https://api-sa.myfatoorah.com' if APP_ENV == 'production' else 'https://apitest.myfatoorah.com',
 )
 MYFATOORAH_TIMEOUT_SECONDS = int(os.getenv('MYFATOORAH_TIMEOUT_SECONDS', '30'))
-MYFATOORAH_COUNTRY = 'SAU'
-MYFATOORAH_CURRENCY = 'SAR'
+MYFATOORAH_COUNTRY = os.getenv('MYFATOORAH_COUNTRY', 'SAU').upper()
+MYFATOORAH_CURRENCY = os.getenv('MYFATOORAH_CURRENCY', 'SAR').upper()
 
 # Jazzmin Admin UI Configuration - Simplified
 JAZZMIN_SETTINGS = {

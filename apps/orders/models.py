@@ -3,6 +3,7 @@ from django.db.models import Q
 from django.conf import settings
 from django.utils import timezone
 from django.dispatch import receiver
+from django.core.validators import FileExtensionValidator
 from apps.core.models import BaseModel
 from decimal import Decimal
 from django_fsm import FSMField, transition
@@ -1195,6 +1196,32 @@ class OrderStatusHistory(BaseModel):
 
     def __str__(self):
         return f"{self.order.order_number} - {self.status} (changed by {self.changed_by.username})"
+
+
+class StyleReferenceImage(BaseModel):
+    """User-uploaded reference photo for a custom style selection on an order."""
+
+    image = models.ImageField(
+        upload_to='style_references/%Y/%m/',
+        validators=[FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'webp'])],
+        help_text='Customer/tailor/rider reference photo for a style selection',
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='style_reference_images',
+    )
+
+    class Meta:
+        verbose_name = 'Style Reference Image'
+        verbose_name_plural = 'Style Reference Images'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['uploaded_by', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"StyleReferenceImage #{self.pk} by {self.uploaded_by_id}"
 
 
 # ============================================================================

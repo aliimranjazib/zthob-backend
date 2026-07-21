@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+import logging
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
@@ -9,10 +10,20 @@ import requests
 from django.conf import settings
 
 
+logger = logging.getLogger(__name__)
+
+
 ALLOWED_API_HOSTS = {
     'api-sa.myfatoorah.com',
     'apitest.myfatoorah.com',
 }
+
+CURRENCY_ALIASES = {
+    'KD': 'KWD',
+}
+
+# MyFatoorah's test gateway occasionally returns the misspelled status "Succss".
+SUCCESSFUL_TRANSACTION_STATUSES = {'SUCCESS', 'SUCCSS'}
 
 
 class MyFatoorahConfigurationError(Exception):
@@ -48,7 +59,10 @@ class PaymentDetails:
 
     @property
     def is_paid(self):
-        return self.invoice_status == 'PAID' and self.transaction_status == 'SUCCESS'
+        return (
+            self.invoice_status == 'PAID'
+            and self.transaction_status in SUCCESSFUL_TRANSACTION_STATUSES
+        )
 
 
 def get_myfatoorah_config(*, require_webhook_secret=False):
@@ -73,7 +87,14 @@ def get_myfatoorah_config(*, require_webhook_secret=False):
         api_base_url=api_base_url,
         webhook_secret=webhook_secret,
         timeout_seconds=timeout_seconds,
+        currency=getattr(settings, 'MYFATOORAH_CURRENCY', 'SAR').upper(),
+        country=getattr(settings, 'MYFATOORAH_COUNTRY', 'SAU').upper(),
     )
+
+
+def _normalize_currency(value):
+    currency = str(value or '').upper().strip()
+    return CURRENCY_ALIASES.get(currency, currency)
 
 
 def _decimal(value, field_name):
@@ -83,9 +104,17 @@ def _decimal(value, field_name):
         raise MyFatoorahGatewayError(f'MyFatoorah returned an invalid {field_name}.') from exc
 
 
+def _normalize_transaction_status(value):
+    status = str(value or '').upper().strip()
+    if status == 'SUCCSS':
+        return 'SUCCESS'
+    return status
+
+
 def _successful_transaction(transactions):
     for item in transactions:
-        if str(item.get('TransactionStatus') or '').upper() == 'SUCCESS':
+        raw_status = str(item.get('TransactionStatus') or '').upper()
+        if raw_status in SUCCESSFUL_TRANSACTION_STATUSES:
             return item
     return transactions[-1] if transactions else {}
 
@@ -106,15 +135,17 @@ def normalize_payment_details(payload):
         invoice_id=invoice_id,
         invoice_status=str(data.get('InvoiceStatus') or '').upper(),
         invoice_value=_decimal(data.get('InvoiceValue'), 'invoice amount'),
-        currency=str(
+        currency=_normalize_currency(
             transaction.get('PaidCurrency')
             or transaction.get('Currency')
             or data.get('InvoiceDisplayValue', '').split(' ')[-1]
             or ''
-        ).upper(),
+        ),
         customer_reference=str(data.get('CustomerReference') or '').strip(),
         user_defined_field=str(data.get('UserDefinedField') or '').strip(),
-        transaction_status=str(transaction.get('TransactionStatus') or '').upper(),
+        transaction_status=_normalize_transaction_status(
+            transaction.get('TransactionStatus'),
+        ),
         payment_id=str(transaction.get('PaymentId') or '').strip(),
         payment_method=str(transaction.get('PaymentGateway') or '').strip(),
         gateway_reference=str(
@@ -141,7 +172,22 @@ def get_payment_status(invoice_id):
         response.raise_for_status()
     except requests.Timeout as exc:
         raise MyFatoorahGatewayError('MyFatoorah payment verification timed out.') from exc
+    except requests.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else 'unknown'
+        logger.warning(
+            'MyFatoorah GetPaymentStatus failed for invoice %s with HTTP %s',
+            invoice_id,
+            status_code,
+        )
+        raise MyFatoorahGatewayError(
+            f'Could not verify payment with MyFatoorah (HTTP {status_code}).'
+        ) from exc
     except requests.RequestException as exc:
+        logger.warning(
+            'MyFatoorah GetPaymentStatus request failed for invoice %s: %s',
+            invoice_id,
+            exc,
+        )
         raise MyFatoorahGatewayError('Could not verify payment with MyFatoorah.') from exc
 
     try:

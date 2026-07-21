@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.customers.models import CustomerProfile, FamilyMember
 from apps.orders.models import Order, OrderItem
@@ -14,6 +14,8 @@ from apps.tailors.services.order_pdf import (
     _format_recipient_html,
     _format_user_text_html,
     _item_recipient_display,
+    _resolve_media_file_path,
+    _style_reference_image_paths,
     _t,
     _truncate_style_comment,
     generate_order_pdf,
@@ -180,3 +182,65 @@ class OrderPDFServiceTest(TestCase):
         pdf_bytes = generate_order_pdf(self.order, lang='en')
         self.assertTrue(pdf_bytes.startswith(b'%PDF'))
         self.assertGreater(len(pdf_bytes), 1000)
+
+    @override_settings(MEDIA_ROOT='/tmp/zthob-style-ref-pdf-test')
+    def test_resolve_media_file_path_supports_api_media_urls(self):
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as media_root:
+            rel_path = 'style_references/2026/07/sample.png'
+            full_path = os.path.join(media_root, rel_path)
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, 'wb') as handle:
+                handle.write(b'png')
+
+            with self.settings(MEDIA_ROOT=media_root):
+                self.assertEqual(
+                    _resolve_media_file_path(rel_path),
+                    full_path,
+                )
+                self.assertEqual(
+                    _resolve_media_file_path(f'https://prod.mgask.net/api/media/{rel_path}'),
+                    full_path,
+                )
+                paths = _style_reference_image_paths({
+                    'reference_images': [
+                        rel_path,
+                        f'https://prod.mgask.net/api/media/{rel_path}',
+                    ],
+                })
+                self.assertEqual(paths, [full_path, full_path])
+
+    @override_settings(MEDIA_ROOT='/tmp/zthob-style-ref-pdf-test')
+    def test_generate_pdf_with_reference_images(self):
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as media_root:
+            rel_path = 'style_references/2026/07/reference.png'
+            full_path = os.path.join(media_root, rel_path)
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, 'wb') as handle:
+                handle.write(
+                    b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+                    b'\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'
+                    b'\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01'
+                    b'\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
+                )
+
+            item = self.order.order_items.first()
+            item.custom_styles = [{
+                'style_type': 'collar',
+                'label': 'Classic Collar',
+                'asset_path': rel_path,
+                'text': 'Match this photo',
+                'reference_images': [rel_path],
+            }]
+            item.save(update_fields=['custom_styles'])
+
+            with self.settings(MEDIA_ROOT=media_root):
+                pdf_bytes = generate_order_pdf(self.order, lang='en')
+
+            self.assertTrue(pdf_bytes.startswith(b'%PDF'))
+            self.assertGreater(len(pdf_bytes), 1000)

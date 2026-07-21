@@ -1217,7 +1217,7 @@ class RiderUpdateStyleWithConsentView(APIView):
     )
     def post(self, request, order_id):
         from apps.customization.models import CustomStyle, UserStylePreset
-        serializer = RiderUpdateStyleSerializer(data=request.data)
+        serializer = RiderUpdateStyleSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             order = get_object_or_404(
                 Order.objects.prefetch_related('order_items__family_member'),
@@ -1274,8 +1274,10 @@ class RiderUpdateStyleWithConsentView(APIView):
             styles_objs = {s.id: s for s in CustomStyle.objects.filter(id__in=style_ids).select_related('category')}
             
             # Build the custom_styles JSON for OrderItem (matching OrderCreateSerializer format)
+            from apps.orders.style_references import apply_reference_images_to_style
+
             detailed_styles = []
-            for s in styles_data:
+            for idx, s in enumerate(styles_data):
                 style_obj = styles_objs.get(s['style_id'])
                 if style_obj:
                     detailed_style = {
@@ -1286,6 +1288,12 @@ class RiderUpdateStyleWithConsentView(APIView):
                     }
                     if s.get('text') is not None:
                         detailed_style["text"] = str(s.get('text'))
+                    detailed_style = apply_reference_images_to_style(
+                        detailed_style,
+                        s.get('reference_image_ids'),
+                        request.user,
+                        idx,
+                    )
                     detailed_styles.append(detailed_style)
             
             target_item.custom_styles = detailed_styles

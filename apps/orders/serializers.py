@@ -10,18 +10,20 @@ from apps.orders.services import OrderCalculationService
 from apps.orders.payments import build_payment_options
 from zthob.translations import get_language_from_request, translate_message
 from apps.core.media_utils import build_public_media_url
+from apps.orders.style_references import apply_reference_images_to_style
 from .actions import OrderActionManager
 
 
 User = get_user_model()
 
 
-def enrich_custom_style_payload(style, idx):
+def enrich_custom_style_payload(style, idx, user=None):
     """Validate and enrich a custom style payload while preserving optional frontend text."""
     if not isinstance(style, dict):
         raise serializers.ValidationError(f"custom_styles[{idx}] must be an object")
 
     optional_text = style.get('text')
+    reference_image_ids = style.get('reference_image_ids')
 
     # Scenario 1: ID-only format {"style_id": 8, "category": "collar", "text": "..."}
     if 'style_id' in style:
@@ -40,7 +42,7 @@ def enrich_custom_style_payload(style, idx):
         }
         if optional_text is not None:
             enriched["text"] = str(optional_text)
-        return enriched
+        return apply_reference_images_to_style(enriched, reference_image_ids, user, idx)
 
     # Scenario 2: Traditional format (for backward compatibility)
     required_fields = ['style_type', 'index', 'label', 'asset_path']
@@ -49,6 +51,8 @@ def enrich_custom_style_payload(style, idx):
             raise serializers.ValidationError(
                 f"custom_styles[{idx}] must contain either 'style_id' or '{field}'"
             )
+    if reference_image_ids is not None:
+        return apply_reference_images_to_style(style, reference_image_ids, user, idx)
     return style
 
 
@@ -98,13 +102,20 @@ def format_custom_styles_for_response(styles, request=None):
 
     for style in processed_styles:
         asset_path = style.get('asset_path')
-        if not asset_path:
-            continue
-        if asset_path.startswith(('http://', 'https://')):
-            if '/api/media/' not in asset_path and '/media/' in asset_path:
+        if asset_path:
+            if asset_path.startswith(('http://', 'https://')):
+                if '/api/media/' not in asset_path and '/media/' in asset_path:
+                    style['asset_path'] = build_public_media_url(request, asset_path)
+            else:
                 style['asset_path'] = build_public_media_url(request, asset_path)
-        else:
-            style['asset_path'] = build_public_media_url(request, asset_path)
+
+        reference_images = style.get('reference_images')
+        if reference_images:
+            style['reference_images'] = [
+                build_public_media_url(request, image_path)
+                for image_path in reference_images
+                if image_path
+            ]
 
     return processed_styles
 
@@ -185,8 +196,9 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
         if not isinstance(value, list):
             raise serializers.ValidationError("custom_styles must be an array")
 
+        user = self.context.get('request').user if self.context.get('request') else None
         return [
-            enrich_custom_style_payload(style, idx)
+            enrich_custom_style_payload(style, idx, user=user)
             for idx, style in enumerate(value)
         ]
 
@@ -1060,8 +1072,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         if not isinstance(value, list):
             raise serializers.ValidationError("custom_styles must be an array")
         
+        user = self.context.get('request').user if self.context.get('request') else None
         return [
-            enrich_custom_style_payload(style, idx)
+            enrich_custom_style_payload(style, idx, user=user)
             for idx, style in enumerate(value)
         ]
 
@@ -1461,8 +1474,9 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         if not isinstance(value, list):
             raise serializers.ValidationError("custom_styles must be an array")
         
+        user = self.context.get('request').user if self.context.get('request') else None
         return [
-            enrich_custom_style_payload(style, idx)
+            enrich_custom_style_payload(style, idx, user=user)
             for idx, style in enumerate(value)
         ]
     def validate_stitching_completion_date(self, value):

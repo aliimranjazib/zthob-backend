@@ -33,6 +33,7 @@ class CustomStyleTextSerializerTest(TestCase):
         ])
 
         self.assertEqual(styles, [{
+            'style_id': self.style.id,
             'style_type': 'cuff',
             'index': 2,
             'label': 'Rounded Cuff',

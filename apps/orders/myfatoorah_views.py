@@ -2,6 +2,7 @@ import logging
 import uuid
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
@@ -37,6 +38,10 @@ from zthob.utils import api_response
 
 logger = logging.getLogger(__name__)
 TERMINAL_FAILURE_STATUSES = {'FAILED', 'CANCELED', 'CANCELLED'}
+
+
+def _myfatoorah_currency():
+    return getattr(settings, 'MYFATOORAH_CURRENCY', 'SAR').upper()
 
 
 def _new_attempt_reference():
@@ -75,7 +80,9 @@ def _validate_paid_details(attempt, details):
     if money(details.invoice_value) != money(attempt.expected_amount):
         raise ValidationError('MyFatoorah payment amount does not match the expected amount.')
     if details.currency != attempt.currency:
-        raise ValidationError('MyFatoorah payment currency must be SAR.')
+        raise ValidationError(
+            f'MyFatoorah payment currency must be {attempt.currency}.'
+        )
     if not _reference_matches(attempt, details):
         raise ValidationError('MyFatoorah payment reference does not match this payment attempt.')
 
@@ -144,10 +151,11 @@ def _reject_attempt(attempt_reference, reason):
 
 def _finalize_attempt(attempt_reference, details):
     with transaction.atomic():
-        attempt = CheckoutPaymentAttempt.objects.select_for_update().select_related(
-            'checkout__customer',
-            'remaining_session__order',
-        ).get(attempt_reference=attempt_reference)
+        # Lock the attempt row only. select_related on nullable FKs causes
+        # PostgreSQL "FOR UPDATE cannot be applied to the nullable side of an outer join".
+        attempt = CheckoutPaymentAttempt.objects.select_for_update().get(
+            attempt_reference=attempt_reference,
+        )
 
         if attempt.status == 'succeeded':
             order = attempt.checkout.order if attempt.checkout_id else attempt.remaining_session.order
@@ -351,7 +359,7 @@ class MyFatoorahCheckoutPrepareView(APIView):
                         purpose='checkout',
                         payment_option=data['payment_option'],
                         expected_amount=money(selected['pay_now_amount']),
-                        currency='SAR',
+                        currency=_myfatoorah_currency(),
                         client_idempotency_key=data['idempotency_key'],
                         expires_at=checkout.expires_at,
                     )
@@ -580,7 +588,7 @@ class MyFatoorahRemainingPrepareView(APIView):
                 order=order,
                 status='payment_initiated',
                 amount=money(order.remaining_amount),
-                currency='SAR',
+                currency=_myfatoorah_currency(),
                 expires_at=expires_at,
             )
             try:
@@ -592,7 +600,7 @@ class MyFatoorahRemainingPrepareView(APIView):
                         purpose='remaining_balance',
                         payment_option='remaining_balance',
                         expected_amount=session.amount,
-                        currency='SAR',
+                        currency=_myfatoorah_currency(),
                         client_idempotency_key=idempotency_key,
                         expires_at=expires_at,
                     )

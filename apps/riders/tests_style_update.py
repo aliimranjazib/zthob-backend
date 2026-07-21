@@ -143,6 +143,45 @@ class RiderStyleUpdateAPITest(TestCase):
             [{'category': 'collar', 'style_id': self.style.id, 'text': 'Customer wants a soft collar'}]
         )
 
+    def test_update_style_with_reference_images(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from apps.orders.models import StyleReferenceImage
+
+        test_png = SimpleUploadedFile(
+            'reference.png',
+            (
+                b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+                b'\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'
+                b'\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01'
+                b'\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
+            ),
+            content_type='image/png',
+        )
+        image_one = StyleReferenceImage.objects.create(image=test_png, uploaded_by=self.rider)
+        image_two = StyleReferenceImage.objects.create(image=test_png, uploaded_by=self.rider)
+        cache.set(f'style_consent_{self.order.id}', '1234', timeout=600)
+
+        response = self.client.post(
+            f'/api/riders/orders/{self.order.id}/update-style/',
+            data={
+                'consent_code': '1234',
+                'styles': [{
+                    'category': 'collar',
+                    'style_id': self.style.id,
+                    'text': 'Use these photos',
+                    'reference_image_ids': [image_one.id, image_two.id],
+                }],
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.item.refresh_from_db()
+        self.assertEqual(len(self.item.custom_styles[0]['reference_images']), 2)
+        self.assertTrue(
+            all(path.startswith('style_references/') for path in self.item.custom_styles[0]['reference_images'])
+        )
+
     def test_update_style_rejects_invalid_consent_code(self):
         cache.set(f'style_consent_{self.order.id}', '1234', timeout=600)
 

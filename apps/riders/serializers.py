@@ -1296,6 +1296,12 @@ class RiderStyleSelectionSerializer(serializers.Serializer):
     category = serializers.CharField(required=True)
     style_id = serializers.IntegerField(required=True)
     text = serializers.CharField(required=False, allow_blank=True)
+    reference_image_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=True,
+        max_length=4,
+    )
 
     def validate_style_id(self, value):
         if not CustomStyle.objects.filter(id=value, is_active=True).exists():
@@ -1314,3 +1320,12 @@ class RiderUpdateStyleSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError("Styles list cannot be empty")
         return value
+
+    def validate(self, attrs):
+        from apps.orders.style_references import resolve_reference_image_ids
+
+        request = self.context.get('request')
+        user = request.user if request else None
+        for idx, style in enumerate(attrs.get('styles', [])):
+            resolve_reference_image_ids(style.get('reference_image_ids'), user, idx)
+        return attrs
