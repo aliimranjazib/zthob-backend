@@ -21,6 +21,7 @@ from .serializers import (
 from .throttles import OTPRateThrottle
 from rest_framework.throttling import AnonRateThrottle
 from apps.core.services import PhoneVerificationService
+from apps.core.phone_utils import format_phone_for_display
 from apps.core.models import PhoneVerification
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
@@ -100,7 +101,7 @@ class UserProfileView(APIView):
     permission_classes=[IsAuthenticated]
 
     def get(self,request):
-        serializer=UserProfileSerializer(request.user)
+        serializer=UserProfileSerializer(request.user, context={'request': request})
         return api_response(success=True,
                             message="Profile fetched successfully",
                             data=serializer.data ,
@@ -108,7 +109,7 @@ class UserProfileView(APIView):
                             )
 
     def put(self,request):
-        serializer=UserProfileSerializer(request.user, data=request.data, partial=True)
+        serializer=UserProfileSerializer(request.user, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return api_response(success=True,
@@ -294,6 +295,9 @@ class PhoneLoginView(APIView):
         serializer = PhoneLoginSerializer(data=request.data)
         if serializer.is_valid():
             phone = serializer.validated_data['phone']
+            display_phone = format_phone_for_display(
+                PhoneVerificationService.normalize_phone_to_local(phone)
+            )
             
             # Create verification and send OTP
             try:
@@ -302,7 +306,7 @@ class PhoneLoginView(APIView):
                 )
                 
                 response_data = {
-                    "phone": phone,
+                    "phone": display_phone,
                     "sms_sent": sms_success,
                     "expires_in": 300  # 5 minutes
                 }
@@ -310,7 +314,7 @@ class PhoneLoginView(APIView):
                 if sms_success:
                     return api_response(
                         success=True,
-                        message=f"OTP sent to {phone}",
+                        message=f"OTP sent to {display_phone}",
                         data=response_data,
                         status_code=status.HTTP_200_OK,
                         request=request
@@ -321,7 +325,7 @@ class PhoneLoginView(APIView):
                     error_details = sms_message if sms_message else "Unknown error"
                     return api_response(
                         success=False,
-                        message=f"Failed to send OTP to {phone}",
+                        message=f"Failed to send OTP to {display_phone}",
                         errors=error_details,
                         data=response_data,
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -478,6 +482,9 @@ class PhoneResendOTPView(APIView):
         serializer = PhoneLoginSerializer(data=request.data)
         if serializer.is_valid():
             phone = serializer.validated_data['phone']
+            display_phone = format_phone_for_display(
+                PhoneVerificationService.normalize_phone_to_local(phone)
+            )
             
             # Create verification and send OTP
             try:
@@ -486,7 +493,7 @@ class PhoneResendOTPView(APIView):
                 )
                 
                 response_data = {
-                    "phone": phone,
+                    "phone": display_phone,
                     "sms_sent": sms_success,
                     "expires_in": 300  # 5 minutes
                 }
@@ -494,7 +501,7 @@ class PhoneResendOTPView(APIView):
                 if sms_success:
                     return api_response(
                         success=True,
-                        message=f"OTP resent to {phone}",
+                        message=f"OTP resent to {display_phone}",
                         data=response_data,
                         status_code=status.HTTP_200_OK,
                         request=request
@@ -502,7 +509,7 @@ class PhoneResendOTPView(APIView):
                 else:
                     return api_response(
                         success=True,
-                        message=f"OTP generated for {phone}, but SMS sending failed. Please check server logs.",
+                        message=f"OTP generated for {display_phone}, but SMS sending failed. Please check server logs.",
                         data=response_data,
                         status_code=status.HTTP_200_OK,
                         request=request

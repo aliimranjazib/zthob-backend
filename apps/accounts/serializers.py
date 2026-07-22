@@ -1,6 +1,7 @@
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import serializers
 from .models import CustomUser
+from apps.core.phone_utils import display_user_label, format_phone_for_display
 
 class UnifiedRefreshToken(RefreshToken):
     """
@@ -74,6 +75,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         
 class UserProfileSerializer(serializers.ModelSerializer):
     tailor_context = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
 
     class Meta:
         model=CustomUser
@@ -102,11 +104,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'is_customer',
             'is_tailor',
             'is_rider',
-            'phone',  # Phone can only be updated through phone-verify endpoint
+            'phone',
             'date_joined',
         ]
 
     all_roles = serializers.ReadOnlyField(source='get_all_roles')
+
+    def get_phone(self, user):
+        return format_phone_for_display(user.phone)
 
     def get_tailor_context(self, user):
         """

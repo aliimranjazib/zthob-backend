@@ -292,3 +292,40 @@ class StyleReferenceOrderCreateAPITest(TestCase):
         item_styles = response.data['data']['items'][0]['custom_styles']
         self.assertEqual(len(item_styles[0]['reference_images']), 1)
         self.assertIn('/api/media/style_references/', item_styles[0]['reference_images'][0])
+
+    def test_checkout_accepts_reference_image_ids_on_items(self):
+        uploaded = upload_style_reference(self.client)
+
+        response = self.client.post(
+            '/api/orders/checkout/',
+            {
+                'tailor': self.tailor_user.id,
+                'order_type': 'fabric_with_stitching',
+                'service_mode': 'walk_in',
+                'payment_method': 'cod',
+                'stitching_price': '150.00',
+                'items': [{
+                    'fabric': self.fabric.id,
+                    'quantity': 1,
+                    'custom_styles': [{
+                        'style_id': self.style.id,
+                        'text': 'Checkout reference photo',
+                        'reference_image_ids': [uploaded['id']],
+                    }],
+                }],
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        booking_key = response.data['data']['bookingUniqueKey']
+
+        create_response = self.client.post(
+            '/api/orders/checkout/create-order/',
+            {'bookingUniqueKey': booking_key, 'payment_method': 'cod'},
+            format='json',
+        )
+        self.assertEqual(create_response.status_code, 201, create_response.data)
+        item_styles = create_response.data['data']['items'][0]['custom_styles']
+        self.assertEqual(len(item_styles[0]['reference_images']), 1)
+        self.assertIn('/api/media/style_references/', item_styles[0]['reference_images'][0])

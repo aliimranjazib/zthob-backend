@@ -33,7 +33,7 @@ class PhoneAuthenticationTestCase(TestCase):
         self.assertTrue(response.data['success'])
         self.assertIn('OTP sent', response.data['message'])
         self.assertIn('data', response.data)
-        self.assertEqual(response.data['data']['phone'], self.test_phone)
+        self.assertEqual(response.data['data']['phone'], '+966501234567')
         self.assertIn('sms_sent', response.data['data'])
         self.assertIn('expires_in', response.data['data'])
         

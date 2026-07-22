@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from apps.core.phone_utils import display_user_label, format_phone_for_display
 from apps.deliveries.models import DeliveryTracking, LocationHistory
 from apps.orders.models import Order
 
@@ -105,9 +106,11 @@ class DeliveryTrackingSerializer(serializers.ModelSerializer):
     def get_customer_phone(self, obj):
         """Get customer phone"""
         try:
-            return obj.order.customer.phone_number if obj.order and hasattr(obj.order.customer, 'phone_number') else None
-        except:
+            if obj.order and obj.order.customer and obj.order.customer.phone:
+                return format_phone_for_display(obj.order.customer.phone)
+        except Exception:
             return None
+        return None
 
 
 class DeliveryTrackingDetailSerializer(DeliveryTrackingSerializer):

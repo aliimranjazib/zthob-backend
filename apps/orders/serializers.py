@@ -10,6 +10,7 @@ from apps.orders.services import OrderCalculationService
 from apps.orders.payments import build_payment_options
 from zthob.translations import get_language_from_request, translate_message
 from apps.core.media_utils import build_public_media_url
+from apps.core.phone_utils import display_user_label, format_phone_for_display
 from apps.orders.style_references import (
     apply_reference_images_to_style,
     format_reference_image_urls,
@@ -146,7 +147,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
         try:
             # For OrderItem, order is accessible via obj.order
             customer = obj.order.customer
-            name = customer.get_full_name() or customer.username
+            name = display_user_label(customer)
             return f"{name} (Self)"
         except AttributeError:
             # Fallback for unexpected object structures
@@ -209,7 +210,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
     customer_name=serializers.SerializerMethodField()
     customer_email=serializers.CharField(source='customer.email',read_only=True)
-    customer_phone=serializers.CharField(source='customer.phone',read_only=True)
+    customer_phone=serializers.SerializerMethodField()
     tailor_name=serializers.SerializerMethodField()
     tailor_contact=serializers.SerializerMethodField()
     rider_name=serializers.SerializerMethodField()
@@ -319,8 +320,12 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_customer_name(self, obj):
         if not obj.customer:
             return 'Unknown'
-        full_name = obj.customer.get_full_name().strip()
-        return full_name if full_name else obj.customer.username
+        return display_user_label(obj.customer)
+
+    def get_customer_phone(self, obj):
+        if not obj.customer:
+            return None
+        return format_phone_for_display(obj.customer.phone)
 
     def get_tailor_name(self, obj):
         if not obj.tailor:
@@ -332,7 +337,9 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_tailor_contact(self, obj):
         """Get tailor contact (verified phone from user account)"""
-        return obj.tailor.phone if obj.tailor else None
+        if not obj.tailor:
+            return None
+        return format_phone_for_display(obj.tailor.phone)
 
     def get_rider_name(self, obj):
         if obj.rider:
@@ -346,18 +353,21 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_rider_phone(self, obj):
         """Get rider phone (verified phone from user account)"""
-        return obj.rider.phone if obj.rider else None
+        if not obj.rider:
+            return None
+        return format_phone_for_display(obj.rider.phone)
 
     def _get_rider_info(self, rider):
         if not rider:
             return None
 
         profile = getattr(rider, 'rider_profile', None)
+        raw_phone = getattr(profile, 'phone_number', None) or getattr(rider, 'phone', '')
         return {
             'id': rider.id,
             'username': rider.username,
             'full_name': getattr(profile, 'full_name', None) or rider.get_full_name() or rider.username,
-            'phone_number': getattr(profile, 'phone_number', None) or getattr(rider, 'phone', ''),
+            'phone_number': format_phone_for_display(raw_phone) if raw_phone else '',
             'vehicle_type': getattr(profile, 'vehicle_type', ''),
             'rating': float(getattr(profile, 'rating', 0.0) or 0.0),
             'is_available': bool(getattr(profile, 'is_available', False)),
@@ -404,7 +414,7 @@ class OrderSerializer(serializers.ModelSerializer):
         
         # If no family member, return customer name with (Self) tag
         try:
-            name = obj.customer.get_full_name() or obj.customer.username
+            name = display_user_label(obj.customer)
             return f"{name} (Self)"
         except AttributeError:
             return None
@@ -451,8 +461,8 @@ class OrderSerializer(serializers.ModelSerializer):
                     recipients.append({
                         'type': 'customer',
                         'id': obj.customer.id,
-                        'name': obj.customer.get_full_name() or obj.customer.username,
-                        'phone': obj.customer.phone,
+                        'name': display_user_label(obj.customer),
+                        'phone': format_phone_for_display(obj.customer.phone),
                         'email': obj.customer.email,
                     })
                     seen_recipients.add(key)
@@ -1635,7 +1645,7 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
 
 class OrderListSerializer(serializers.ModelSerializer):
     customer_name=serializers.SerializerMethodField()
-    customer_phone=serializers.CharField(source='customer.phone', read_only=True)
+    customer_phone=serializers.SerializerMethodField()
     tailor_name = serializers.SerializerMethodField()
     items_count = serializers.IntegerField(read_only=True)
     custom_styles = serializers.SerializerMethodField()
@@ -1693,8 +1703,12 @@ class OrderListSerializer(serializers.ModelSerializer):
     def get_customer_name(self, obj):
         if not obj.customer:
             return 'Unknown'
-        full_name = obj.customer.get_full_name().strip()
-        return full_name if full_name else obj.customer.username
+        return display_user_label(obj.customer)
+
+    def get_customer_phone(self, obj):
+        if not obj.customer:
+            return None
+        return format_phone_for_display(obj.customer.phone)
 
     def get_tailor_status_display(self, obj):
         """Get translated tailor status display name"""

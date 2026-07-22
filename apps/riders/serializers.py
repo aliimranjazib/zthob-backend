@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from apps.core.services import PhoneVerificationService
+from apps.core.phone_utils import display_user_label, format_phone_for_display
 from . import models
 from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
 from apps.orders.models import Order
@@ -172,7 +173,9 @@ class RiderProfileSerializer(serializers.ModelSerializer):
     
     def get_phone_number(self, obj):
         """Get verified phone number from user.phone"""
-        return obj.user.phone if obj.user else None
+        if not obj.user:
+            return None
+        return format_phone_for_display(obj.user.phone)
     
     def to_representation(self, instance):
         """Add request context to nested serializers"""
@@ -233,7 +236,9 @@ class RiderProfileUpdateSerializer(serializers.ModelSerializer):
     
     def get_phone_number(self, obj):
         """Get verified phone number from user.phone"""
-        return obj.user.phone if obj.user else None
+        if not obj.user:
+            return None
+        return format_phone_for_display(obj.user.phone)
 
 
 class RiderProfileSubmissionSerializer(serializers.ModelSerializer):
@@ -479,11 +484,12 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
             return None
 
         profile = getattr(rider, 'rider_profile', None)
+        raw_phone = getattr(profile, 'phone_number', None) or getattr(rider, 'phone', '')
         return {
             'id': rider.id,
             'username': rider.username,
             'full_name': getattr(profile, 'full_name', None) or rider.get_full_name() or rider.username,
-            'phone_number': getattr(profile, 'phone_number', None) or getattr(rider, 'phone', ''),
+            'phone_number': format_phone_for_display(raw_phone) if raw_phone else '',
             'vehicle_type': getattr(profile, 'vehicle_type', ''),
             'rating': float(getattr(profile, 'rating', 0.0) or 0.0),
             'is_available': bool(getattr(profile, 'is_available', False)),
@@ -501,11 +507,12 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
     def get_customer_name(self, obj):
         if not obj.customer:
             return 'Unknown'
-        full_name = obj.customer.get_full_name().strip()
-        return full_name if full_name else obj.customer.username
+        return display_user_label(obj.customer)
     
     def get_customer_phone(self, obj):
-        return obj.customer.phone if obj.customer else None
+        if not obj.customer:
+            return None
+        return format_phone_for_display(obj.customer.phone)
     
     def get_tailor_name(self, obj):
         try:
@@ -517,7 +524,9 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
     
     def get_tailor_phone(self, obj):
         """Get tailor phone (verified phone from user account)"""
-        return obj.tailor.phone if obj.tailor else None
+        if not obj.tailor:
+            return None
+        return format_phone_for_display(obj.tailor.phone)
     
     def get_delivery_address(self, obj):
         """Return delivery address matching customer address structure."""
@@ -693,11 +702,12 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
             return None
 
         profile = getattr(rider, 'rider_profile', None)
+        raw_phone = getattr(profile, 'phone_number', None) or getattr(rider, 'phone', '')
         return {
             'id': rider.id,
             'username': rider.username,
             'full_name': getattr(profile, 'full_name', None) or rider.get_full_name() or rider.username,
-            'phone_number': getattr(profile, 'phone_number', None) or getattr(rider, 'phone', ''),
+            'phone_number': format_phone_for_display(raw_phone) if raw_phone else '',
             'vehicle_type': getattr(profile, 'vehicle_type', ''),
             'rating': float(getattr(profile, 'rating', 0.0) or 0.0),
             'is_available': bool(getattr(profile, 'is_available', False)),
@@ -714,13 +724,12 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
     
     def get_customer_info(self, obj):
         if obj.customer:
-            full_name = obj.customer.get_full_name().strip()
             return {
                 'id': obj.customer.id,
                 'username': obj.customer.username,
-                'full_name': full_name if full_name else obj.customer.username,
+                'full_name': display_user_label(obj.customer),
                 'email': obj.customer.email,
-                'phone': obj.customer.phone,
+                'phone': format_phone_for_display(obj.customer.phone),
             }
         return None
     
@@ -779,8 +788,8 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
                         {
                             'type': 'customer',
                             'id': obj.customer.id,
-                            'name': obj.customer.get_full_name() or obj.customer.username,
-                            'phone': obj.customer.phone,
+                            'name': display_user_label(obj.customer),
+                            'phone': format_phone_for_display(obj.customer.phone),
                             'email': obj.customer.email,
                         },
                         item.measurements
@@ -826,7 +835,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
                     'id': obj.tailor.id,
                     'username': obj.tailor.username,
                     'shop_name': tailor_profile.shop_name if tailor_profile else None,
-                    'contact_number': obj.tailor.phone,
+                    'contact_number': format_phone_for_display(obj.tailor.phone),
                     'address': tailor_address,  # Structured address matching delivery_address format
                 }
             except:
@@ -1098,7 +1107,8 @@ class RiderBasicInfoSerializer(serializers.ModelSerializer):
 
     def get_phone_number(self, obj):
         profile = getattr(obj, 'rider_profile', None)
-        return getattr(profile, 'phone_number', getattr(obj, 'phone', ''))
+        raw_phone = getattr(profile, 'phone_number', getattr(obj, 'phone', ''))
+        return format_phone_for_display(raw_phone) if raw_phone else ''
 
     def get_vehicle_type(self, obj):
         profile = getattr(obj, 'rider_profile', None)
@@ -1284,7 +1294,8 @@ class TailorBasicInfoSerializer(serializers.ModelSerializer):
 
     def get_phone(self, obj):
         profile = getattr(obj, 'tailor_profile', None)
-        return (profile.contact_number if profile and profile.contact_number else getattr(obj, 'phone', ''))
+        raw_phone = profile.contact_number if profile and profile.contact_number else getattr(obj, 'phone', '')
+        return format_phone_for_display(raw_phone) if raw_phone else ''
 
 class RiderStyleConsentRequestSerializer(serializers.Serializer):
     """Empty serializer for requesting style consent OTP/Notification"""
