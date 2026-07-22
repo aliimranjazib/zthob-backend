@@ -5,6 +5,10 @@ from .models import (
 )
 from zthob.translations import translate_message, get_language_from_request
 from apps.core.media_utils import build_public_media_url
+from apps.customization.preset_styles import (
+    enrich_preset_style,
+    format_preset_styles_for_response,
+)
 
 
 class CustomStyleSerializer(serializers.ModelSerializer):
@@ -137,6 +141,7 @@ class UserStylePresetSerializer(serializers.ModelSerializer):
     """
     Serializer for user style presets with expanded style details
     """
+    styles = serializers.SerializerMethodField()
     styles_details = serializers.SerializerMethodField()
     
     class Meta:
@@ -153,6 +158,12 @@ class UserStylePresetSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = ['usage_count', 'created_at', 'updated_at']
+
+    def get_styles(self, obj):
+        return format_preset_styles_for_response(
+            obj.styles,
+            self.context.get('request'),
+        )
     
     def get_styles_details(self, obj):
         """
@@ -160,6 +171,16 @@ class UserStylePresetSerializer(serializers.ModelSerializer):
         """
         if not obj.styles:
             return []
+
+        formatted_styles = format_preset_styles_for_response(
+            obj.styles,
+            self.context.get('request'),
+        )
+        formatted_by_style_id = {
+            item.get('style_id'): item
+            for item in formatted_styles
+            if item.get('style_id') is not None
+        }
         
         result = []
         for selection in obj.styles:
@@ -172,6 +193,7 @@ class UserStylePresetSerializer(serializers.ModelSerializer):
                         id=style_id,
                         is_active=True
                     )
+                    formatted = formatted_by_style_id.get(style_id, {})
                     result.append({
                         'category': category,
                         'category_display': style.category.display_name,
@@ -181,7 +203,9 @@ class UserStylePresetSerializer(serializers.ModelSerializer):
                         'image_url': build_public_media_url(
                             self.context.get('request'),
                             style.image.url,
-                        ) if style.image else None
+                        ) if style.image else None,
+                        'text': selection.get('text'),
+                        'reference_images': formatted.get('reference_images', []),
                     })
                 except CustomStyle.DoesNotExist:
                     pass
@@ -227,12 +251,19 @@ class UserStylePresetCreateSerializer(serializers.ModelSerializer):
             except CustomStyle.DoesNotExist:
                 raise serializers.ValidationError(f"Style with id {style_id} not found or inactive")
         
-        return value
+        user = self.context.get('request').user if self.context.get('request') else None
+        return [
+            enrich_preset_style(style_selection, idx, user=user)
+            for idx, style_selection in enumerate(value)
+        ]
     
     def create(self, validated_data):
         """Auto-assign current user"""
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
+
+    def to_representation(self, instance):
+        return UserStylePresetSerializer(instance, context=self.context).data
 
 
 class MeasurementFieldSerializer(serializers.ModelSerializer):

@@ -1309,6 +1309,22 @@ class RiderUpdateStyleWithConsentView(APIView):
                 # Update or create default UserStylePreset
                 # First, unset any other defaults for this user
                 UserStylePreset.objects.filter(user=order.customer).update(is_default=False)
+
+                from apps.customization.preset_styles import enrich_preset_style
+
+                preset_styles = [
+                    enrich_preset_style(
+                        {
+                            'category': s['category'],
+                            'style_id': s['style_id'],
+                            **({'text': str(s['text'])} if s.get('text') is not None else {}),
+                            **({'reference_image_ids': s['reference_image_ids']} if s.get('reference_image_ids') is not None else {}),
+                        },
+                        idx,
+                        request.user,
+                    )
+                    for idx, s in enumerate(styles_data)
+                ]
                 
                 # Update/Create a preset named "My Style (Updated by Rider)" and make it default
                 # Use update_or_create to ensure we don't create multiple "Rider" presets
@@ -1316,7 +1332,7 @@ class RiderUpdateStyleWithConsentView(APIView):
                     user=order.customer,
                     name='My Style (Updated by Rider)',
                     defaults={
-                        'styles': styles_data,
+                        'styles': preset_styles,
                         'is_default': True
                     }
                 )
