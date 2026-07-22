@@ -10,7 +10,11 @@ from apps.orders.services import OrderCalculationService
 from apps.orders.payments import build_payment_options
 from zthob.translations import get_language_from_request, translate_message
 from apps.core.media_utils import build_public_media_url
-from apps.orders.style_references import apply_reference_images_to_style
+from apps.orders.style_references import (
+    apply_reference_images_to_style,
+    format_reference_image_urls,
+    resolve_stored_reference_image_paths,
+)
 from .actions import OrderActionManager
 
 
@@ -109,13 +113,9 @@ def format_custom_styles_for_response(styles, request=None):
             else:
                 style['asset_path'] = build_public_media_url(request, asset_path)
 
-        reference_images = style.get('reference_images')
-        if reference_images:
-            style['reference_images'] = [
-                build_public_media_url(request, image_path)
-                for image_path in reference_images
-                if image_path
-            ]
+        reference_paths = resolve_stored_reference_image_paths(style)
+        style.pop('reference_image_ids', None)
+        style['reference_images'] = format_reference_image_urls(reference_paths, request)
 
     return processed_styles
 

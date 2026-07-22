@@ -11,6 +11,8 @@ def media_path_from_url(file_url):
         path = urlparse(path).path
 
     path = path.lstrip('/')
+    if path.startswith('api/media/'):
+        path = path[len('api/media/'):]
     if path.startswith('media/'):
         path = path[len('media/'):]
     return path or None

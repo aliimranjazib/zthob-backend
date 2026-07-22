@@ -182,6 +182,35 @@ class StyleReferenceOrderSerializerTest(TestCase):
         self.assertEqual(len(formatted[0]['reference_images']), 2)
         self.assertTrue(formatted[0]['reference_images'][0].startswith('https://prod.mgask.net/api/media/'))
 
+    def test_response_resolves_legacy_reference_image_ids(self):
+        request = self.factory.get('/')
+        request.META['HTTP_HOST'] = 'prod.mgask.net'
+        request.META['wsgi.url_scheme'] = 'https'
+
+        styles = [{
+            'style_id': self.style.id,
+            'style_type': 'cuff',
+            'label': 'Rounded Cuff',
+            'asset_path': 'custom_styles/rounded_cuff.png',
+            'reference_image_ids': [self.owned_images[0].id],
+        }]
+        formatted = format_custom_styles_for_response(styles, request)
+        self.assertEqual(len(formatted[0]['reference_images']), 1)
+        self.assertIn('/api/media/style_references/', formatted[0]['reference_images'][0])
+        self.assertNotIn('reference_image_ids', formatted[0])
+
+    def test_response_always_includes_reference_images_key(self):
+        request = self.factory.get('/')
+        styles = [{
+            'style_id': self.style.id,
+            'style_type': 'cuff',
+            'label': 'Rounded Cuff',
+            'asset_path': 'custom_styles/rounded_cuff.png',
+        }]
+        formatted = format_custom_styles_for_response(styles, request)
+        self.assertIn('reference_images', formatted[0])
+        self.assertEqual(formatted[0]['reference_images'], [])
+
 
 @override_settings(
     SECURE_SSL_REDIRECT=False,

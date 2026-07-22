@@ -2,6 +2,7 @@
 
 from rest_framework import serializers
 
+from apps.core.media_utils import build_public_media_url
 from apps.orders.models import StyleReferenceImage
 
 MAX_STYLE_REFERENCE_IMAGES = 4
@@ -54,4 +55,52 @@ def apply_reference_images_to_style(style_dict, reference_image_ids, user, style
     resolved_paths = resolve_reference_image_ids(reference_image_ids, user, style_index)
     if resolved_paths is not None:
         style_dict['reference_images'] = resolved_paths
+    style_dict.pop('reference_image_ids', None)
     return style_dict
+
+
+def resolve_stored_reference_image_paths(style):
+    """Return relative storage paths from saved custom_styles/preset JSON."""
+    reference_paths = style.get('reference_images') or []
+    if reference_paths:
+        return reference_paths
+
+    reference_image_ids = style.get('reference_image_ids') or []
+    if not reference_image_ids:
+        return []
+
+    images = StyleReferenceImage.objects.filter(id__in=reference_image_ids)
+    images_by_id = {
+        image.id: image.image.name
+        for image in images
+        if image.image
+    }
+    return [
+        images_by_id[image_id]
+        for image_id in reference_image_ids
+        if image_id in images_by_id
+    ]
+
+
+def format_reference_image_urls(reference_paths, request=None):
+    """Convert stored reference image paths to public /api/media/ URLs."""
+    urls = []
+    for image_path in reference_paths or []:
+        if not image_path:
+            continue
+
+        path_str = str(image_path)
+        if path_str.startswith(('http://', 'https://')):
+            if '/api/media/' in path_str:
+                urls.append(path_str)
+                continue
+            built = build_public_media_url(request, path_str)
+            if built:
+                urls.append(built)
+            continue
+
+        built = build_public_media_url(request, path_str)
+        if built:
+            urls.append(built)
+
+    return urls

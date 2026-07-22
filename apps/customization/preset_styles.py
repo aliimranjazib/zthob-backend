@@ -2,9 +2,11 @@
 
 import copy
 
-from apps.core.media_utils import build_public_media_url
-from apps.orders.models import StyleReferenceImage
-from apps.orders.style_references import resolve_reference_image_ids
+from apps.orders.style_references import (
+    format_reference_image_urls,
+    resolve_reference_image_ids,
+    resolve_stored_reference_image_paths,
+)
 
 
 def enrich_preset_style(style, idx, user):
@@ -21,21 +23,6 @@ def enrich_preset_style(style, idx, user):
     return enriched
 
 
-def _resolve_legacy_reference_paths(style):
-    """Best-effort lookup when presets stored ids without paths."""
-    reference_image_ids = style.get('reference_image_ids')
-    if not reference_image_ids or style.get('reference_images'):
-        return style.get('reference_images') or []
-
-    images = StyleReferenceImage.objects.filter(id__in=reference_image_ids)
-    images_by_id = {image.id: image.image.name for image in images if image.image}
-    return [
-        images_by_id[image_id]
-        for image_id in reference_image_ids
-        if image_id in images_by_id
-    ]
-
-
 def format_preset_styles_for_response(styles, request=None):
     """Return preset styles with CORS-friendly reference image URLs."""
     if not styles:
@@ -46,15 +33,8 @@ def format_preset_styles_for_response(styles, request=None):
         return processed
 
     for style in processed:
-        reference_paths = style.get('reference_images') or _resolve_legacy_reference_paths(style)
+        reference_paths = resolve_stored_reference_image_paths(style)
         style.pop('reference_image_ids', None)
-        if reference_paths:
-            style['reference_images'] = [
-                build_public_media_url(request, image_path)
-                for image_path in reference_paths
-                if image_path
-            ]
-        elif 'reference_images' in style:
-            style['reference_images'] = []
+        style['reference_images'] = format_reference_image_urls(reference_paths, request)
 
     return processed
