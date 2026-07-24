@@ -549,10 +549,21 @@ class AssignEmployeeAction(BaseOrderAction):
     """
     Assign or clear stitch employee (home delivery + walk-in).
     Leave empty / null → open to all can_stitch_orders employees.
+
+    Not listed in available_actions while Start Stitching is the next step —
+    assign employee + date/time together via start_stitching instead.
     """
     key = 'assign_employee'
     label = 'Assign Employee'
     allowed_roles = ['TAILOR']
+
+    def _start_stitching_is_next_step(self):
+        """True when the primary CTA should be Start Stitching, not Assign Employee."""
+        if not order_supports_employee_stitch_assignment(self.order):
+            return False
+        if not self.order.all_items_have_measurements:
+            return False
+        return self.order.tailor_status in ['accepted', 'in_progress']
 
     def _check_requirements(self):
         if not user_can_manage_shop_order(self.user, self.order, employee_permission='can_manage_orders'):
@@ -563,6 +574,12 @@ class AssignEmployeeAction(BaseOrderAction):
             raise ValidationError("Accept the order before assigning an employee.")
         if self.order.status in ['delivered', 'collected', 'cancelled']:
             raise ValidationError("Cannot assign an employee to a finalized order.")
+        # Hide from Make Progress CTA — use start_stitching with employee + date/time
+        if self._start_stitching_is_next_step():
+            raise ValidationError(
+                "Assign the employee when starting stitching "
+                "(action=start_stitching with assigned_employee_id, date, and time)."
+            )
 
     def execute(self):
         _apply_optional_stitch_employee_assignment(
