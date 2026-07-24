@@ -221,6 +221,7 @@ class OrderSerializer(serializers.ModelSerializer):
     measurement_rider_info=serializers.SerializerMethodField()
     delivery_rider_info=serializers.SerializerMethodField()
     assigned_rider_info=serializers.SerializerMethodField()
+    assigned_employee_info=serializers.SerializerMethodField()
     family_member_name=serializers.SerializerMethodField()
     order_recipient=serializers.SerializerMethodField()
     all_recipients=serializers.SerializerMethodField()
@@ -262,6 +263,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'delivery_rider_info',
             'assigned_rider',
             'assigned_rider_info',
+            'assigned_employee',
+            'assigned_employee_info',
             'order_type',
             'service_mode',
             'status',
@@ -384,6 +387,22 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_assigned_rider_info(self, obj):
         return self._get_rider_info(obj.assigned_rider)
+
+    def get_assigned_employee_info(self, obj):
+        employee = getattr(obj, 'assigned_employee', None)
+        if not employee:
+            return None
+        user = employee.user
+        raw_phone = getattr(user, 'phone', '') or ''
+        return {
+            'id': employee.id,
+            'user_id': user.id if user else None,
+            'name': (user.get_full_name() if user else None) or (user.username if user else None),
+            'phone': format_phone_for_display(raw_phone) if raw_phone else '',
+            'roles': employee.roles or [],
+            'can_stitch_orders': bool(employee.can_stitch_orders),
+            'is_active': bool(employee.is_active),
+        }
 
     def _get_rider_display_name(self, rider):
         if not rider:
@@ -1656,6 +1675,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     pricing_summary = serializers.SerializerMethodField()
     has_rating = serializers.SerializerMethodField()
     tailor_rating = serializers.SerializerMethodField()
+    assigned_employee_info = serializers.SerializerMethodField()
 
     class Meta:
         model=Order
@@ -1690,6 +1710,8 @@ class OrderListSerializer(serializers.ModelSerializer):
             'custom_styles',
             'rider_measurements',
             'measurement_taken_at',
+            'assigned_employee',
+            'assigned_employee_info',
             'items_count',
             'items',
             'status_info',
@@ -1724,6 +1746,22 @@ class OrderListSerializer(serializers.ModelSerializer):
             return obj.tailor.tailor_profile.shop_name
         except TailorProfile.DoesNotExist:
             return obj.tailor.username
+
+    def get_assigned_employee_info(self, obj):
+        employee = getattr(obj, 'assigned_employee', None)
+        if not employee:
+            return None
+        user = employee.user
+        raw_phone = getattr(user, 'phone', '') or ''
+        return {
+            'id': employee.id,
+            'user_id': user.id if user else None,
+            'name': (user.get_full_name() if user else None) or (user.username if user else None),
+            'phone': format_phone_for_display(raw_phone) if raw_phone else '',
+            'roles': employee.roles or [],
+            'can_stitch_orders': bool(employee.can_stitch_orders),
+            'is_active': bool(employee.is_active),
+        }
     
     def get_pricing_summary(self, obj):
         """Return grouped pricing summary for consistency with detail view"""

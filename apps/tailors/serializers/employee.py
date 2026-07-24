@@ -14,6 +14,7 @@ VALID_PERMISSIONS = [
     'can_manage_shop_profile',
     'can_manage_shop_status',
     'can_manage_shop_address',
+    'can_stitch_orders',
 ]
 
 

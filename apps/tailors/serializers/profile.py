@@ -40,7 +40,8 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             'avg_stitching_quality', 'avg_on_time_delivery',
             'avg_overall_satisfaction', 'rating_count',
             'average_stitching_time_days', 'completed_stitching_orders_count',
-            'is_express_delivery_enabled', 'is_express', 'express_delivery_days', 'express_delivery_fee',
+            'is_express_delivery_enabled', 'is_express',
+            'express_delivery_unit', 'express_delivery_days', 'express_delivery_fee',
             'measurement_fee',
         ]
 
@@ -165,8 +166,41 @@ class TailorProfileUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'shop_name', 'establishment_year', 'tailor_experience', 
             'working_hours', 'contact_number', 'address', 'shop_status',
-            'shop_image', 'is_express_delivery_enabled', 'express_delivery_days', 'express_delivery_fee',
+            'shop_image', 'is_express_delivery_enabled',
+            'express_delivery_unit', 'express_delivery_days', 'express_delivery_fee',
         ]
+
+    def validate(self, attrs):
+        enabled = attrs.get(
+            'is_express_delivery_enabled',
+            getattr(self.instance, 'is_express_delivery_enabled', False) if self.instance else False,
+        )
+        unit = attrs.get(
+            'express_delivery_unit',
+            getattr(self.instance, 'express_delivery_unit', 'days') if self.instance else 'days',
+        )
+        value = attrs.get(
+            'express_delivery_days',
+            getattr(self.instance, 'express_delivery_days', None) if self.instance else None,
+        )
+
+        if not enabled:
+            return attrs
+
+        if value is None:
+            raise serializers.ValidationError({
+                'express_delivery_days': 'Express duration is required when express delivery is enabled.'
+            })
+
+        from apps.core.express_delivery import is_allowed_express_selection
+        if not is_allowed_express_selection(value, unit):
+            raise serializers.ValidationError({
+                'express_delivery_days': (
+                    'Selected express duration is not allowed. '
+                    'Choose an option from GET /api/tailors/config/ express_delivery_options.'
+                )
+            })
+        return attrs
 
 class TailorMeasurementFeeSerializer(serializers.ModelSerializer):
     measurement_fee = serializers.DecimalField(

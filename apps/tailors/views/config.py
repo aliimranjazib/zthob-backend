@@ -46,7 +46,7 @@ class TailorConfigView(APIView):
                 "default_permissions": [
                     "can_manage_orders", "can_manage_catalog", "can_view_analytics",
                     "can_manage_pos", "can_manage_shop_profile", "can_manage_shop_status",
-                    "can_manage_shop_address"
+                    "can_manage_shop_address", "can_stitch_orders"
                 ]
             },
             {
@@ -56,7 +56,7 @@ class TailorConfigView(APIView):
                     "Responsible for stitching garments. Can view and update assigned orders.",
                     language
                 ),
-                "default_permissions": ["can_manage_orders"]
+                "default_permissions": ["can_manage_orders", "can_stitch_orders"]
             },
             {
                 "key": "cutter",
@@ -65,7 +65,7 @@ class TailorConfigView(APIView):
                     "Responsible for cutting fabric. Can view catalog and assigned orders.",
                     language
                 ),
-                "default_permissions": ["can_manage_orders", "can_manage_catalog"]
+                "default_permissions": ["can_manage_orders", "can_manage_catalog", "can_stitch_orders"]
             },
             {
                 "key": "receptionist",
@@ -83,7 +83,7 @@ class TailorConfigView(APIView):
                     "Handles final touches and quality checks before delivery.",
                     language
                 ),
-                "default_permissions": ["can_manage_orders"]
+                "default_permissions": ["can_manage_orders", "can_stitch_orders"]
             },
         ]
 
@@ -94,6 +94,14 @@ class TailorConfigView(APIView):
                 "title": translate_message("Manage Orders", language),
                 "description": translate_message(
                     "Can view, accept, and update order statuses.",
+                    language
+                ),
+            },
+            {
+                "key": "can_stitch_orders",
+                "title": translate_message("Stitch Orders", language),
+                "description": translate_message(
+                    "Can be assigned to stitch orders, and can see open stitching jobs when no employee is assigned.",
                     language
                 ),
             },
@@ -155,18 +163,20 @@ class TailorConfigView(APIView):
             },
         ]
 
-        # 4. Express Delivery Options
+        # 4. Express Delivery Options (admin-managed: hours and/or days)
         from apps.core.models import SystemSettings
+        from apps.core.express_delivery import get_express_delivery_options
+
         system_settings = SystemSettings.get_active_settings()
-        max_days = system_settings.express_delivery_max_days
-        
-        express_delivery_options = []
-        for d in range(1, max_days + 1):
-            day_text = "Day" if d == 1 else "Days"
-            express_delivery_options.append({
-                "days": d,
-                "display_name": f"{d} {translate_message(day_text, language)}"
-            })
+        express_delivery_options = get_express_delivery_options(
+            system_settings,
+            language=language,
+            translate=translate_message,
+        )
+        # Keep legacy `days` key for older clients that only read day options
+        for option in express_delivery_options:
+            if option.get('unit') == 'days' and option.get('days') is not None:
+                option.setdefault('legacy_days', option['days'])
 
         config_data = {
             "statuses": statuses,

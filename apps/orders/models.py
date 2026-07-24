@@ -162,6 +162,18 @@ class Order(BaseModel):
         limit_choices_to={'role': 'RIDER'},
         help_text='Rider assigned to deliver the finished order'
     )
+    assigned_employee=models.ForeignKey(
+        'tailors.TailorEmployee',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_orders',
+        help_text=(
+            'Shop employee assigned to stitch this order. '
+            'Null means open to all employees with can_stitch_orders '
+            '(home delivery and walk-in).'
+        ),
+    )
     order_type=models.CharField(
         max_length=25,
         choices=ORDER_TYPE_CHOICES,

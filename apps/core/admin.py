@@ -47,6 +47,20 @@ class SystemSettingsAdmin(admin.ModelAdmin):
             'fields': ('free_delivery_threshold',),
             'description': 'Set the order subtotal threshold for free delivery. Set to 0 to disable.'
         }),
+        ('Express Delivery Options', {
+            'fields': (
+                'express_delivery_max_days',
+                'express_delivery_options',
+            ),
+            'description': (
+                'Options shown to tailors in GET /api/tailors/config/. '
+                'JSON example: '
+                '[{"value": 6, "unit": "hours", "label": "6 Hours"}, '
+                '{"value": 1, "unit": "days", "label": "1 Day"}, '
+                '{"value": 2, "unit": "days", "label": "2 Days"}]. '
+                'Leave express_delivery_options empty to auto-build: 6 Hours + 1..max_days.'
+            ),
+        }),
         ('Status', {
             'fields': ('is_active', 'notes')
         }),
@@ -54,7 +68,7 @@ class SystemSettingsAdmin(admin.ModelAdmin):
             'fields': ('updated_by', 'created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
-    )
+        )
     
     readonly_fields = ['created_at', 'updated_at', 'updated_by']
     

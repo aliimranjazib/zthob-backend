@@ -41,7 +41,12 @@ from apps.orders.style_reference_serializers import (
 )
 from apps.tailors.models import TailorProfile
 from apps.tailors.permissions import IsShopStaff
-from apps.tailors.shop_access import user_can_manage_shop_order
+from apps.tailors.shop_access import (
+    filter_orders_for_shop_staff,
+    user_can_manage_shop_order,
+    user_can_perform_order_stitching,
+    user_can_see_stitch_order,
+)
 from apps.customers.models import CustomerProfile, Address
 from zthob.utils import api_response 
 import uuid
@@ -1103,13 +1108,17 @@ class OrderDetailView(APIView):
                 'assigned_rider__rider_profile',
                 'measurement_rider__rider_profile',
                 'delivery_rider__rider_profile',
+                'assigned_employee__user',
                 'family_member',
             ).prefetch_related('order_items__fabric', 'order_items__family_member'),
             id=order_id
         )
         # Resource-based permission check
         is_customer = order.customer == request.user
-        is_tailor = user_can_manage_shop_order(request.user, order)
+        is_tailor = (
+            user_can_manage_shop_order(request.user, order)
+            or user_can_see_stitch_order(request.user, order)
+        )
         is_rider = (
             order.rider == request.user
             or order.assigned_rider == request.user
@@ -1392,12 +1401,16 @@ class CustomerOrderListView(APIView):
 class TailorAvailableOrdersView(APIView):
     """Get all non-completed orders assigned to tailor (includes both pending and accepted orders)"""
     permission_classes=[IsAuthenticated, IsShopStaff]
-    required_employee_permission = 'can_manage_orders'
+    required_employee_permissions = ('can_manage_orders', 'can_stitch_orders')
     
     @extend_schema(
         responses=OrderListSerializer(many=True),
         summary="Get available orders for tailor",
-        description="Retrieve all non-completed orders assigned to tailor (excludes 'delivered' and 'cancelled' statuses). Includes both pending orders and orders that tailor has already accepted, allowing frontend to manage all active orders in one screen.",
+        description=(
+            "Retrieve all non-completed orders for the shop. "
+            "Stitch-only staff see open stitching jobs plus their assigned jobs "
+            "(same pattern as open vs assigned riders)."
+        ),
         tags=["Tailor Orders"]
     )
     def get(self, request):
@@ -1420,7 +1433,10 @@ class TailorAvailableOrdersView(APIView):
             'assigned_rider__rider_profile',
             'measurement_rider__rider_profile',
             'delivery_rider__rider_profile',
+            'assigned_employee__user',
         ).prefetch_related('order_items__fabric').order_by('-created_at')
+
+        orders = filter_orders_for_shop_staff(orders, request.user)
         
         # Filter by payment status
         payment_status = request.query_params.get('payment_status')
@@ -1431,6 +1447,10 @@ class TailorAvailableOrdersView(APIView):
         order_type = request.query_params.get('order_type')
         if order_type:
             orders = orders.filter(order_type=order_type)
+
+        assigned_employee_id = request.query_params.get('assigned_employee_id')
+        if assigned_employee_id:
+            orders = orders.filter(assigned_employee_id=assigned_employee_id)
             
         serializer = OrderListSerializer(orders, many=True, context={'request': request, 'role': 'TAILOR'})
         
@@ -1444,11 +1464,13 @@ class TailorAvailableOrdersView(APIView):
 
 class TailorOrderListView(APIView):
     permission_classes=[IsAuthenticated, IsShopStaff]
-    required_employee_permission = 'can_manage_orders'
+    required_employee_permissions = ('can_manage_orders', 'can_stitch_orders')
     @extend_schema(
         responses=OrderListSerializer(many=True),
         summary="Get my tailor orders",
-        description="Retrieve all orders that tailor has accepted (tailor_status != 'none'). These are orders tailor is working on.",
+        description=(
+            "Retrieve shop orders. Stitch-only staff see open jobs plus their assigned jobs."
+        ),
         tags=["Tailor Orders"]
     )
 
@@ -1471,13 +1493,17 @@ class TailorOrderListView(APIView):
             'assigned_rider__rider_profile',
             'measurement_rider__rider_profile',
             'delivery_rider__rider_profile',
+            'assigned_employee__user',
         ).prefetch_related('order_items__fabric').order_by('-created_at')
+
+        orders = filter_orders_for_shop_staff(orders, request.user)
         
         # Filters
         status_filter = request.query_params.get('status')
         tailor_status_filter = request.query_params.get('tailor_status')
         payment_status = request.query_params.get('payment_status')
         order_type = request.query_params.get('order_type')
+        assigned_employee_id = request.query_params.get('assigned_employee_id')
 
         if status_filter:
             if status_filter == 'express':
@@ -1497,6 +1523,9 @@ class TailorOrderListView(APIView):
 
         if order_type:
             orders = orders.filter(order_type=order_type)
+
+        if assigned_employee_id:
+            orders = orders.filter(assigned_employee_id=assigned_employee_id)
 
         # Date based filters for dashboard alerts
         today = timezone.now().date()
@@ -1652,7 +1681,7 @@ class TailorOrderHistoryView(APIView):
 class TailorPaidOrdersView(APIView):
     """Get paid orders and pending COD orders for tailor"""
     permission_classes=[IsAuthenticated, IsShopStaff]
-    required_employee_permission = 'can_manage_orders'
+    required_employee_permissions = ('can_manage_orders', 'can_stitch_orders')
     
     @extend_schema(
         responses=OrderListSerializer(many=True),
@@ -1679,7 +1708,10 @@ class TailorPaidOrdersView(APIView):
             'assigned_rider__rider_profile',
             'measurement_rider__rider_profile',
             'delivery_rider__rider_profile',
+            'assigned_employee__user',
         ).prefetch_related('order_items').order_by('-created_at')
+
+        orders = filter_orders_for_shop_staff(orders, request.user)
         
         # Filter by status if provided
         status_filter = request.query_params.get('status')
@@ -1690,6 +1722,10 @@ class TailorPaidOrdersView(APIView):
         order_type = request.query_params.get('order_type')
         if order_type:
             orders = orders.filter(order_type=order_type)
+
+        assigned_employee_id = request.query_params.get('assigned_employee_id')
+        if assigned_employee_id:
+            orders = orders.filter(assigned_employee_id=assigned_employee_id)
             
         serializer = OrderListSerializer(orders, many=True, context={'request': request, 'role': 'TAILOR'})
         
@@ -1704,7 +1740,7 @@ class TailorPaidOrdersView(APIView):
 class TailorOrderDetailView(APIView):
     """Get detailed order information for tailor including rider measurements"""
     permission_classes=[IsAuthenticated, IsShopStaff]
-    required_employee_permission = 'can_manage_orders'
+    required_employee_permissions = ('can_manage_orders', 'can_stitch_orders')
     
     @extend_schema(
         responses=OrderSerializer,
@@ -1728,11 +1764,18 @@ class TailorOrderDetailView(APIView):
                 'assigned_rider__rider_profile',
                 'measurement_rider__rider_profile',
                 'delivery_rider__rider_profile',
+                'assigned_employee__user',
                 'family_member'
             ).prefetch_related('order_items__fabric', 'status_history'),
             id=order_id,
             tailor=tailor_user
         )
+        if not user_can_see_stitch_order(request.user, order) and not user_can_manage_shop_order(request.user, order):
+            return api_response(
+                success=False,
+                message="You do not have permission to view this order",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
         
         serializer = OrderSerializer(order, context={'request': request, 'role': 'TAILOR'})
         
@@ -2248,7 +2291,9 @@ class OrderActionView(APIView):
             "record_measurements, pickup). For record_measurements, send data as "
             "{unit: 'cm'|'inches', family_member: int|null, measurements: object}. "
             "Unit defaults to cm when omitted. For start_stitching, "
-            "you can pass stitching_completion_date and stitching_completion_time."
+            "you can pass stitching_completion_date, stitching_completion_time, and "
+            "optional assigned_employee_id (TailorEmployee id). Leave assigned_employee_id "
+            "empty/null to keep the job open to all employees with can_stitch_orders."
         ),
         tags=["Orders"]
     )

@@ -95,10 +95,23 @@ class TailorProfile(models.Model):
         default=False,
         help_text="Whether this tailor provides express delivery (extra fast stitching)"
     )
+    EXPRESS_UNIT_CHOICES = (
+        ('hours', 'Hours'),
+        ('days', 'Days'),
+    )
+    express_delivery_unit = models.CharField(
+        max_length=10,
+        choices=EXPRESS_UNIT_CHOICES,
+        default='days',
+        help_text="Unit for express_delivery_days value (hours or days)",
+    )
     express_delivery_days = models.PositiveIntegerField(
         blank=True,
         null=True,
-        help_text="Number of days for express delivery (e.g. 4 days)"
+        help_text=(
+            "Express duration amount. Interpreted with express_delivery_unit "
+            "(e.g. unit=hours and days=6 means 6 hours)."
+        ),
     )
     express_delivery_fee = models.DecimalField(
         max_digits=10,

@@ -8,7 +8,10 @@ from apps.orders.payments import money
 from apps.orders.measurement_utils import prepare_measurements_payload
 from apps.tailors.shop_access import (
     get_shop_owner_user,
+    order_supports_employee_stitch_assignment,
+    resolve_assignable_stitch_employee,
     user_can_manage_shop_order,
+    user_can_perform_order_stitching,
     user_can_record_shop_measurements,
 )
 from zthob.translations import get_language_from_request, translate_message
@@ -43,6 +46,50 @@ def _get_assignable_rider(rider_id):
         raise ValidationError("Assigned user is not a rider.")
 
     return rider
+
+
+def _resolve_assigned_employee_id(data):
+    return (
+        data.get('assigned_employee_id')
+        or data.get('employee_id')
+        or data.get('assigned_employee')
+    )
+
+
+def _apply_optional_stitch_employee_assignment(order, user, data, *, require_key=False):
+    """
+    Optional stitch-employee assignment (same idea as rider assignment).
+
+    - Key omitted → leave current assignment unchanged (unless require_key)
+    - Key present with null/empty → open job (all can_stitch_orders employees)
+    - Key present with id → assign that stitch-capable employee
+    """
+    has_key = (
+        'assigned_employee_id' in data
+        or 'employee_id' in data
+        or 'assigned_employee' in data
+    )
+    if not has_key:
+        if require_key:
+            raise ValidationError("assigned_employee_id is required.")
+        return False
+
+    if not order_supports_employee_stitch_assignment(order):
+        raise ValidationError("Employee assignment is only available for stitching orders.")
+
+    raw_id = _resolve_assigned_employee_id(data)
+    if raw_id in (None, '', 'null'):
+        order.assigned_employee = None
+        return True
+
+    shop_owner = get_shop_owner_user(user) or order.tailor
+    try:
+        employee = resolve_assignable_stitch_employee(shop_owner, raw_id)
+    except ValueError as exc:
+        raise ValidationError(str(exc))
+
+    order.assigned_employee = employee
+    return True
 
 
 def _is_measurement_rider(order, user):
@@ -250,6 +297,10 @@ class AcceptOrderAction(BaseOrderAction):
                 self.order.measurement_rider = assigned_rider
                 self.order.assigned_rider = assigned_rider
                 self.order.rider = assigned_rider
+
+            # Optional stitch employee (or leave empty = open to all stitch staff)
+            if order_supports_employee_stitch_assignment(self.order):
+                _apply_optional_stitch_employee_assignment(self.order, self.user, self.data)
         
         elif role == 'RIDER':
             self.order.rider = self.user
@@ -391,6 +442,8 @@ class StartStitchingAction(BaseOrderAction):
     allowed_roles = ['TAILOR']
 
     def _check_requirements(self):
+        if not user_can_perform_order_stitching(self.user, self.order):
+            raise PermissionDenied("You are not allowed to stitch this order.")
         if not self.order.all_items_have_measurements:
             raise ValidationError("Cannot start stitching. Measurements are missing.")
         
@@ -398,6 +451,11 @@ class StartStitchingAction(BaseOrderAction):
             raise ValidationError(f"Invalid tailor status: {self.order.tailor_status}")
 
     def execute(self):
+        # Optional: assign a stitch employee, or leave empty for all stitch staff.
+        # Same pattern as assigning a rider (open vs targeted).
+        if order_supports_employee_stitch_assignment(self.order):
+            _apply_optional_stitch_employee_assignment(self.order, self.user, self.data)
+
         self.order.tailor_status = 'stitching_started'
         self.order.status = 'in_progress'
         
@@ -412,6 +470,16 @@ class StartStitchingAction(BaseOrderAction):
         self.order.save()
         return "Stitching has started."
 
+    def get_available_action_data(self):
+        data = super().get_available_action_data()
+        data['employee_assignment'] = {
+            'optional': True,
+            'field': 'assigned_employee_id',
+            'leave_empty_means': 'open_to_all_stitch_employees',
+            'current_assigned_employee_id': self.order.assigned_employee_id,
+        }
+        return data
+
 
 class FinishStitchingAction(BaseOrderAction):
     key = 'finish_stitching'
@@ -419,6 +487,8 @@ class FinishStitchingAction(BaseOrderAction):
     allowed_roles = ['TAILOR']
 
     def _check_requirements(self):
+        if not user_can_perform_order_stitching(self.user, self.order):
+            raise PermissionDenied("You are not allowed to stitch this order.")
         if self.order.tailor_status != 'stitching_started':
             raise ValidationError(f"Cannot finish stitching. Current status: {self.order.tailor_status}")
 
@@ -434,6 +504,8 @@ class MarkReadyAction(BaseOrderAction):
     allowed_roles = ['TAILOR']
 
     def _check_requirements(self):
+        if not user_can_perform_order_stitching(self.user, self.order):
+            raise PermissionDenied("You are not allowed to mark this order ready.")
         if self.order.tailor_status != 'stitched':
             raise ValidationError("You must finish stitching before marking the order as ready.")
         if self.order.status in ['ready_for_delivery', 'ready_for_pickup', 'delivered', 'collected', 'cancelled']:
@@ -471,6 +543,49 @@ class MarkReadyAction(BaseOrderAction):
         
         self.order.save()
         return "Order is now ready for the next step."
+
+
+class AssignEmployeeAction(BaseOrderAction):
+    """
+    Assign or clear stitch employee (home delivery + walk-in).
+    Leave empty / null → open to all can_stitch_orders employees.
+    """
+    key = 'assign_employee'
+    label = 'Assign Employee'
+    allowed_roles = ['TAILOR']
+
+    def _check_requirements(self):
+        if not user_can_manage_shop_order(self.user, self.order, employee_permission='can_manage_orders'):
+            raise PermissionDenied("You are not allowed to assign employees for this order.")
+        if not order_supports_employee_stitch_assignment(self.order):
+            raise ValidationError("Employee assignment is only available for stitching orders.")
+        if self.order.tailor_status == 'none':
+            raise ValidationError("Accept the order before assigning an employee.")
+        if self.order.status in ['delivered', 'collected', 'cancelled']:
+            raise ValidationError("Cannot assign an employee to a finalized order.")
+
+    def execute(self):
+        _apply_optional_stitch_employee_assignment(
+            self.order, self.user, self.data, require_key=True
+        )
+        self.order.save(update_fields=['assigned_employee', 'updated_at'])
+        if self.order.assigned_employee_id:
+            name = (
+                self.order.assigned_employee.user.get_full_name()
+                or self.order.assigned_employee.user.username
+            )
+            return f"Employee {name} assigned to order."
+        return "Employee assignment cleared. Order is open to all stitching employees."
+
+    def get_available_action_data(self):
+        data = super().get_available_action_data()
+        data['employee_assignment'] = {
+            'optional': True,
+            'field': 'assigned_employee_id',
+            'leave_empty_means': 'open_to_all_stitch_employees',
+            'current_assigned_employee_id': self.order.assigned_employee_id,
+        }
+        return data
 
 
 class PickupOrderAction(BaseOrderAction):
@@ -670,6 +785,7 @@ class OrderActionManager:
         'start_stitching': StartStitchingAction,
         'finish_stitching': FinishStitchingAction,
         'mark_ready': MarkReadyAction,
+        'assign_employee': AssignEmployeeAction,
         'pickup_order': PickupOrderAction,
         'start_delivery': StartDeliveryAction,
         'mark_delivered': MarkDeliveredAction,

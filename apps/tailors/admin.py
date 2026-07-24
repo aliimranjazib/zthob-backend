@@ -202,6 +202,18 @@ class TailorProfileAdmin(admin.ModelAdmin):
         ('Shop Image', {
             'fields': ('shop_image', 'shop_image_preview')
         }),
+        ('Express Delivery', {
+            'fields': (
+                'is_express_delivery_enabled',
+                'express_delivery_unit',
+                'express_delivery_days',
+                'express_delivery_fee',
+            ),
+            'description': (
+                'express_delivery_days is the amount; express_delivery_unit is hours or days '
+                '(e.g. unit=hours and days=6 means 6 Hours). Options come from System Settings.'
+            ),
+        }),
         ('Status', {
             'fields': ('shop_status', 'is_featured')
         }),
@@ -1861,6 +1873,7 @@ class TailorEmployeeAdmin(admin.ModelAdmin):
     list_filter = [
         'is_active',
         'can_manage_orders',
+        'can_stitch_orders',
         'can_manage_catalog',
         'can_view_analytics',
         'can_manage_employees',
@@ -1891,10 +1904,14 @@ class TailorEmployeeAdmin(admin.ModelAdmin):
         ('Permissions', {
             'fields': (
                 'can_manage_orders',
+                'can_stitch_orders',
                 'can_manage_catalog',
                 'can_view_analytics',
                 'can_manage_employees',
                 'can_manage_pos',
+                'can_manage_shop_profile',
+                'can_manage_shop_status',
+                'can_manage_shop_address',
             ),
             'description': 'Granular permissions for this employee'
         }),

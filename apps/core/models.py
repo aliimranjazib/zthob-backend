@@ -108,7 +108,21 @@ class SystemSettings(models.Model):
     # Express Delivery Settings
     express_delivery_max_days = models.PositiveIntegerField(
         default=10,
-        help_text="Maximum number of days an admin allows for express delivery options (default: 10)."
+        help_text=(
+            "Fallback maximum days used when express_delivery_options is empty "
+            "(default catalog will be 6 Hours + 1..N days)."
+        ),
+    )
+    express_delivery_options = models.JSONField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Admin-managed express duration options shown in tailor config. "
+            "Example: "
+            '[{"value": 6, "unit": "hours", "label": "6 Hours"}, '
+            '{"value": 1, "unit": "days", "label": "1 Day"}]. '
+            "Leave empty to use defaults (6 Hours + 1..max_days)."
+        ),
     )
     
     # Metadata

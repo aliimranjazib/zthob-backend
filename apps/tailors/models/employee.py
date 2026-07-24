@@ -46,6 +46,11 @@ class TailorEmployee(models.Model):
     can_manage_shop_profile = models.BooleanField(default=False, db_index=True)
     can_manage_shop_status = models.BooleanField(default=False, db_index=True)
     can_manage_shop_address = models.BooleanField(default=False, db_index=True)
+    can_stitch_orders = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Can be assigned to stitch orders and see open stitching jobs",
+    )
 
     is_active = models.BooleanField(default=True, db_index=True)
     joined_at = models.DateTimeField(auto_now_add=True)
@@ -74,4 +79,5 @@ class TailorEmployee(models.Model):
             "can_manage_shop_profile": self.can_manage_shop_profile,
             "can_manage_shop_status": self.can_manage_shop_status,
             "can_manage_shop_address": self.can_manage_shop_address,
+            "can_stitch_orders": self.can_stitch_orders,
         }

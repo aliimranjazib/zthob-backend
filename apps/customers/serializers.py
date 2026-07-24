@@ -38,7 +38,7 @@ class TailorHomeSerializer(serializers.ModelSerializer):
             'id', 'shop_name', 'shop_image_url', 
             'avg_overall_satisfaction', 'rating_count', 'city', 'address',
             'average_stitching_time_days', 'completed_stitching_orders_count',
-            'is_express', 'express_delivery_days', 'express_delivery_fee'
+            'is_express', 'express_delivery_unit', 'express_delivery_days', 'express_delivery_fee'
         ]
 
     def _get_stitching_time_stats(self, obj):

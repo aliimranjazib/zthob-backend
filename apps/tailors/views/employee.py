@@ -30,6 +30,7 @@ PERMISSION_KEYS = [
     'can_manage_shop_profile',
     'can_manage_shop_status',
     'can_manage_shop_address',
+    'can_stitch_orders',
 ]
 
 
@@ -74,6 +75,9 @@ class TailorEmployeeListCreateView(BaseTailorAPIView):
             .select_related('user')   # single JOIN — no N+1
             .order_by('-joined_at')
         )
+        assignable = request.query_params.get('assignable_for_stitching')
+        if assignable is not None and str(assignable).lower() in ('1', 'true', 'yes'):
+            employees = employees.filter(is_active=True, can_stitch_orders=True)
         serializer = TailorEmployeeResponseSerializer(employees, many=True)
         return api_response(
             success=True,
