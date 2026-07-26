@@ -13,11 +13,11 @@ class PhoneVerificationSerializer(serializers.Serializer):
         return value
 
 class OTPVerificationSerializer(serializers.Serializer):
-    otp_code = serializers.CharField(max_length=6, required=True)
+    otp_code = serializers.CharField(max_length=4, required=True)
     
     def validate_otp_code(self, value):
-        if not value.isdigit() or len(value) != 6:
-            raise serializers.ValidationError('OTP must be 6 digits')
+        if not value.isdigit() or len(value) != 4:
+            raise serializers.ValidationError('OTP must be 4 digits')
         return value
 
 

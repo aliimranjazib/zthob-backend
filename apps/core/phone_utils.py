@@ -1,6 +1,6 @@
 """Shared helpers for displaying phone numbers in API responses."""
 
-from apps.core.twilio_service import TwilioSMSService
+from apps.core.phone_format import format_phone_e164
 
 
 def format_phone_for_display(phone):
@@ -12,7 +12,7 @@ def format_phone_for_display(phone):
     if not phone_text:
         return phone_text
 
-    return TwilioSMSService.format_phone_number(phone_text)
+    return format_phone_e164(phone_text)
 
 
 def display_user_label(user):

@@ -1,8 +1,9 @@
 """
 Test cases for phone-based authentication
 """
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.conf import settings
 from rest_framework.test import APIClient
 from rest_framework import status
 from apps.accounts.models import CustomUser
@@ -11,17 +12,44 @@ from django.utils import timezone
 from datetime import timedelta
 
 
+TEST_REST_FRAMEWORK = {
+    **settings.REST_FRAMEWORK,
+    'DEFAULT_THROTTLE_CLASSES': [],
+}
+
+
+@override_settings(REST_FRAMEWORK=TEST_REST_FRAMEWORK)
 class PhoneAuthenticationTestCase(TestCase):
     """Test cases for phone-based authentication endpoints"""
     
     def setUp(self):
         """Set up test data"""
+        from apps.accounts import views as account_views
+
+        self._saved_throttles = (
+            account_views.PhoneLoginView.throttle_classes,
+            account_views.PhoneVerifyView.throttle_classes,
+            account_views.PhoneResendOTPView.throttle_classes,
+        )
+        account_views.PhoneLoginView.throttle_classes = []
+        account_views.PhoneVerifyView.throttle_classes = []
+        account_views.PhoneResendOTPView.throttle_classes = []
+
         self.client = APIClient()
         self.phone_login_url = reverse('accounts:phone-login')
         self.phone_verify_url = reverse('accounts:phone-verify')
         self.phone_resend_url = reverse('accounts:phone-resend-otp')
-        self.test_phone = '0501234567'
-        self.test_phone_formatted = '+966501234567'
+        self.test_phone = '0500000000'
+        self.test_phone_formatted = '+966500000000'
+
+    def tearDown(self):
+        from apps.accounts import views as account_views
+
+        (
+            account_views.PhoneLoginView.throttle_classes,
+            account_views.PhoneVerifyView.throttle_classes,
+            account_views.PhoneResendOTPView.throttle_classes,
+        ) = self._saved_throttles
     
     def test_phone_login_send_otp_success(self):
         """Test successful OTP sending"""
@@ -33,7 +61,7 @@ class PhoneAuthenticationTestCase(TestCase):
         self.assertTrue(response.data['success'])
         self.assertIn('OTP sent', response.data['message'])
         self.assertIn('data', response.data)
-        self.assertEqual(response.data['data']['phone'], '+966501234567')
+        self.assertEqual(response.data['data']['phone'], '+966500000000')
         self.assertIn('sms_sent', response.data['data'])
         self.assertIn('expires_in', response.data['data'])
         
@@ -55,12 +83,12 @@ class PhoneAuthenticationTestCase(TestCase):
         self.assertIn('errors', response.data)
     
     def test_phone_login_accepts_different_formats(self):
-        """Test that different phone formats are accepted"""
+        """Test that different Saudi phone formats are accepted"""
         formats = [
-            '0501234567',      # Standard Saudi format
-            '501234567',       # Without leading 0
-            '+966501234567',   # E.164 format
-            '966501234567',    # With country code
+            '0500000000',
+            '500000000',
+            '+966500000000',
+            '966500000000',
         ]
         
         for phone_format in formats:
@@ -185,7 +213,7 @@ class PhoneAuthenticationTestCase(TestCase):
         # Try to verify with wrong OTP
         response = self.client.post(self.phone_verify_url, {
             'phone': self.test_phone,
-            'otp_code': '999999'  # Wrong OTP
+            'otp_code': '9999'  # Wrong OTP
         })
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

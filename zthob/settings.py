@@ -398,11 +398,10 @@ FIREBASE_CREDENTIALS_PATH = _firebase_cred_path
 # Firebase Project ID
 FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID', 'mgask-2025')
 
-# Twilio SMS Configuration
-TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID', None)
-TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN', None)
-TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER', None)
-TWILIO_VERIFY_SERVICE_SID = os.getenv('TWILIO_VERIFY_SERVICE_SID', None)
+# Taqnyat SMS / Verify Configuration
+TAQNYAT_BEARER_TOKEN = os.getenv('TAQNYAT_BEARER_TOKEN', None)
+TAQNYAT_SENDER_NAME = os.getenv('TAQNYAT_SENDER_NAME', None)
+OTP_EXPIRY_MINUTES = int(os.getenv('OTP_EXPIRY_MINUTES', '5'))
 
 # Alinma Pay Configuration
 ALINMAPAY_TERMINAL_ID = os.getenv('ALINMAPAY_TERMINAL_ID', '')
