@@ -12,6 +12,7 @@ class SystemSettingsAdmin(admin.ModelAdmin):
     list_display = [
         'id',
         'tax_rate_percentage',
+        'system_fee_amount',
         'delivery_fee_under_10km',
         'delivery_fee_10km_and_above',
         'distance_threshold_km',
@@ -46,6 +47,13 @@ class SystemSettingsAdmin(admin.ModelAdmin):
         ('Free Delivery Settings', {
             'fields': ('free_delivery_threshold',),
             'description': 'Set the order subtotal threshold for free delivery. Set to 0 to disable.'
+        }),
+        ('System Fee Settings', {
+            'fields': ('system_fee_amount',),
+            'description': (
+                'Fixed system fee (SAR) applied to fabric_with_stitching and '
+                'stitching_only home-delivery orders. Set to 0 to disable.'
+            ),
         }),
         ('Express Delivery Options', {
             'fields': (
