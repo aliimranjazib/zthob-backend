@@ -1,5 +1,6 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.conf import settings
 from rest_framework.test import APIClient
 from rest_framework import status
 from apps.accounts.models import CustomUser
@@ -9,15 +10,42 @@ from apps.tailors.models import TailorProfile
 from apps.riders.models import RiderProfile
 from apps.core.services import PhoneVerificationService
 
+TEST_REST_FRAMEWORK = {
+    **settings.REST_FRAMEWORK,
+    'DEFAULT_THROTTLE_CLASSES': [],
+}
+
+
+@override_settings(REST_FRAMEWORK=TEST_REST_FRAMEWORK)
 class MultiRoleAuthenticationTestCase(TestCase):
     """Test cases for multi-role identity management"""
     
     def setUp(self):
+        from apps.accounts import views as account_views
+
+        self._saved_throttles = (
+            account_views.PhoneLoginView.throttle_classes,
+            account_views.PhoneVerifyView.throttle_classes,
+            account_views.PhoneResendOTPView.throttle_classes,
+        )
+        account_views.PhoneLoginView.throttle_classes = []
+        account_views.PhoneVerifyView.throttle_classes = []
+        account_views.PhoneResendOTPView.throttle_classes = []
+
         self.client = APIClient()
         self.phone_login_url = reverse('accounts:phone-login')
         self.phone_verify_url = reverse('accounts:phone-verify')
         self.test_phone = '0500000000' # One of the TEST_PHONES in PhoneVerificationService
         self.test_otp = PhoneVerificationService.TEST_OTP
+
+    def tearDown(self):
+        from apps.accounts import views as account_views
+
+        (
+            account_views.PhoneLoginView.throttle_classes,
+            account_views.PhoneVerifyView.throttle_classes,
+            account_views.PhoneResendOTPView.throttle_classes,
+        ) = self._saved_throttles
         
     def test_unified_identity_lifecycle(self):
         """

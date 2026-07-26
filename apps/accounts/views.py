@@ -321,7 +321,7 @@ class PhoneLoginView(APIView):
                     )
                 else:
                     # SMS failed - return error with details
-                    # Include the error message from Twilio for debugging
+                    # Include the error message from Taqnyat for debugging
                     error_details = sms_message if sms_message else "Unknown error"
                     return api_response(
                         success=False,
