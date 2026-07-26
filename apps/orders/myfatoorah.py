@@ -20,6 +20,9 @@ ALLOWED_API_HOSTS = {
 
 CURRENCY_ALIASES = {
     'KD': 'KWD',
+    'SR': 'SAR',
+    'S.R': 'SAR',
+    'S.R.': 'SAR',
 }
 
 # MyFatoorah's test gateway occasionally returns the misspelled status "Succss".
@@ -82,19 +85,81 @@ def get_myfatoorah_config(*, require_webhook_secret=False):
             'MyFatoorah API URL must use the Saudi production or official test host.'
         )
 
+    country = getattr(settings, 'MYFATOORAH_COUNTRY', 'SAU').upper()
+    if country == 'SAU' and parsed.hostname == 'apitest.myfatoorah.com':
+        logger.warning(
+            'MyFatoorah is configured for SAU but uses the test host (%s). '
+            'Live mobile SDK invoices require MYFATOORAH_API_BASE_URL=https://api-sa.myfatoorah.com '
+            'and the matching live merchant API key.',
+            api_base_url,
+        )
+
     return MyFatoorahConfig(
         api_key=api_key,
         api_base_url=api_base_url,
         webhook_secret=webhook_secret,
         timeout_seconds=timeout_seconds,
         currency=getattr(settings, 'MYFATOORAH_CURRENCY', 'SAR').upper(),
-        country=getattr(settings, 'MYFATOORAH_COUNTRY', 'SAU').upper(),
+        country=country,
     )
 
 
 def _normalize_currency(value):
     currency = str(value or '').upper().strip()
-    return CURRENCY_ALIASES.get(currency, currency)
+    if not currency:
+        return ''
+
+    compact = currency.replace('.', '').replace(' ', '')
+    if compact in CURRENCY_ALIASES:
+        return CURRENCY_ALIASES[compact]
+    if compact in CURRENCY_ALIASES.values():
+        return compact
+    if compact == 'SR' or 'RIYAL' in currency or currency == 'SAR':
+        return 'SAR'
+    if currency in CURRENCY_ALIASES:
+        return CURRENCY_ALIASES[currency]
+    return currency
+
+
+def currencies_match(expected, actual, *, fallback=None):
+    """
+    Compare expected attempt currency with the gateway-reported currency.
+    When MyFatoorah omits currency on paid Saudi invoices, fall back to the
+    configured merchant currency if it matches the attempt.
+    """
+    expected_norm = _normalize_currency(expected)
+    actual_norm = _normalize_currency(actual)
+    if actual_norm and expected_norm:
+        return actual_norm == expected_norm
+    if not actual_norm:
+        fallback_norm = _normalize_currency(fallback)
+        return bool(fallback_norm) and fallback_norm == expected_norm
+    return False
+
+
+def _extract_currency(transaction, data):
+    transaction = transaction or {}
+    data = data or {}
+
+    candidates = [
+        transaction.get('PaidCurrency'),
+        transaction.get('Currency'),
+        transaction.get('CurrencyIso'),
+        data.get('CurrencyIso'),
+        data.get('Currency'),
+    ]
+
+    display = str(data.get('InvoiceDisplayValue') or '').strip()
+    if display:
+        for token in display.replace(',', ' ').split():
+            if any(char.isalpha() for char in token):
+                candidates.append(token)
+
+    for candidate in candidates:
+        normalized = _normalize_currency(candidate)
+        if normalized:
+            return normalized
+    return ''
 
 
 def _decimal(value, field_name):
@@ -135,12 +200,7 @@ def normalize_payment_details(payload):
         invoice_id=invoice_id,
         invoice_status=str(data.get('InvoiceStatus') or '').upper(),
         invoice_value=_decimal(data.get('InvoiceValue'), 'invoice amount'),
-        currency=_normalize_currency(
-            transaction.get('PaidCurrency')
-            or transaction.get('Currency')
-            or data.get('InvoiceDisplayValue', '').split(' ')[-1]
-            or ''
-        ),
+        currency=_extract_currency(transaction, data),
         customer_reference=str(data.get('CustomerReference') or '').strip(),
         user_defined_field=str(data.get('UserDefinedField') or '').strip(),
         transaction_status=_normalize_transaction_status(
@@ -194,6 +254,19 @@ def get_payment_status(invoice_id):
         payload = response.json()
     except ValueError as exc:
         raise MyFatoorahGatewayError('MyFatoorah returned an unreadable response.') from exc
+
+    data = payload.get('Data') or {}
+    transaction = _successful_transaction(data.get('InvoiceTransactions') or [])
+    logger.info(
+        'MyFatoorah GetPaymentStatus invoice=%s status=%s paid_currency=%r currency=%r '
+        'currency_iso=%r display=%r',
+        invoice_id,
+        data.get('InvoiceStatus'),
+        transaction.get('PaidCurrency'),
+        transaction.get('Currency'),
+        transaction.get('CurrencyIso') or data.get('CurrencyIso'),
+        data.get('InvoiceDisplayValue'),
+    )
     return normalize_payment_details(payload)
 
 

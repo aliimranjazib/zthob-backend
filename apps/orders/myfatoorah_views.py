@@ -21,6 +21,7 @@ from apps.orders.models import (
 from apps.orders.myfatoorah import (
     MyFatoorahConfigurationError,
     MyFatoorahGatewayError,
+    currencies_match,
     get_payment_status,
     payment_metadata,
     verify_webhook_signature,
@@ -79,9 +80,14 @@ def _validate_paid_details(attempt, details):
         raise ValidationError('MyFatoorah invoice does not match this payment attempt.')
     if money(details.invoice_value) != money(attempt.expected_amount):
         raise ValidationError('MyFatoorah payment amount does not match the expected amount.')
-    if details.currency != attempt.currency:
+    if not currencies_match(
+        attempt.currency,
+        details.currency,
+        fallback=_myfatoorah_currency(),
+    ):
         raise ValidationError(
-            f'MyFatoorah payment currency must be {attempt.currency}.'
+            'MyFatoorah payment currency must be '
+            f'{attempt.currency}. Gateway returned {details.currency or "unknown"}.'
         )
     if not _reference_matches(attempt, details):
         raise ValidationError('MyFatoorah payment reference does not match this payment attempt.')
