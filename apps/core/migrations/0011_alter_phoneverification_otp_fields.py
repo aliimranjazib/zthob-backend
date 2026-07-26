@@ -3,6 +3,16 @@
 from django.db import migrations, models
 
 
+def shorten_existing_otp_codes(apps, schema_editor):
+    PhoneVerification = apps.get_model('core', 'PhoneVerification')
+    PhoneVerification.objects.filter(otp_code='123456').update(otp_code='1234')
+    for row in PhoneVerification.objects.exclude(otp_code__isnull=True).iterator():
+        if len(row.otp_code) > 4:
+            PhoneVerification.objects.filter(pk=row.pk).update(
+                otp_code=row.otp_code[:4]
+            )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,6 +20,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(shorten_existing_otp_codes, migrations.RunPython.noop),
         migrations.AlterField(
             model_name='phoneverification',
             name='otp_code',
