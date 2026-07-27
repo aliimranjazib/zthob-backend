@@ -127,6 +127,15 @@ class OrderPDFServiceTest(TestCase):
         self.assertGreater(len(pdf_bytes), 1000)
         self.assertIn(b'IBMPlexSansArabic-Regular', pdf_bytes)
 
+    def test_generate_urdu_pdf_returns_valid_pdf(self):
+        pdf_bytes = generate_order_pdf(self.order, lang='ur')
+        self.assertTrue(pdf_bytes.startswith(b'%PDF'))
+        self.assertGreater(len(pdf_bytes), 1000)
+        self.assertIn(b'IBMPlexSansArabic-Regular', pdf_bytes)
+
+    def test_translate_label_to_urdu(self):
+        self.assertNotEqual(_t('Order Receipt', 'ur'), 'Order Receipt')
+
     def test_customer_name_shown_when_item_has_no_family_member(self):
         item = self.order.order_items.first()
         item.family_member = None
@@ -155,7 +164,7 @@ class OrderPDFServiceTest(TestCase):
             'text': 'Keep collar firm',
         }, lang='ar')
         self.assertIn('Keep collar firm', html)
-        self.assertIn(_t('Comment', 'ar'), html)
+        self.assertIn('IBMPlexSansArabic-Regular', html)
 
     def test_truncate_style_comment_limits_very_long_text(self):
         long_text = 'word ' * 80

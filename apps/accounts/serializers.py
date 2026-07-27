@@ -73,6 +73,9 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         user = CustomUser.objects.create_user(password=password, **validated_data)
         return user
         
+from zthob.languages import SUPPORTED_LANGUAGES
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     tailor_context = serializers.SerializerMethodField()
     phone = serializers.SerializerMethodField()
@@ -112,6 +115,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_phone(self, user):
         return format_phone_for_display(user.phone)
+
+    def validate_language(self, value):
+        if value not in SUPPORTED_LANGUAGES:
+            raise serializers.ValidationError(
+                f'Language must be one of: {", ".join(SUPPORTED_LANGUAGES)}'
+            )
+        return value
 
     def get_tailor_context(self, user):
         """

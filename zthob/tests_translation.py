@@ -14,6 +14,8 @@ from zthob.translations import (
     translate_message,
     translate_errors,
     TRANSLATIONS,
+    TRANSLATIONS_AR,
+    TRANSLATIONS_UR,
     add_translation
 )
 from zthob.utils import api_response
@@ -58,25 +60,33 @@ class LanguageDetectionTests(TestCase):
         language = get_language_from_request(request)
         self.assertEqual(language, 'ar')
     
-    def test_no_language_header_defaults_to_english(self):
-        """Test that missing Accept-Language header defaults to English"""
+    def test_no_language_header_defaults_to_arabic(self):
+        """Test that missing Accept-Language header defaults to app default (Arabic)"""
         request = self.factory.get('/api/test/')
         
         language = get_language_from_request(request)
-        self.assertEqual(language, 'en')
+        self.assertEqual(language, 'ar')
     
-    def test_empty_language_header_defaults_to_english(self):
-        """Test that empty Accept-Language header defaults to English"""
+    def test_empty_language_header_defaults_to_arabic(self):
+        """Test that empty Accept-Language header defaults to app default (Arabic)"""
         request = self.factory.get('/api/test/')
         request.META['HTTP_ACCEPT_LANGUAGE'] = ''
         
         language = get_language_from_request(request)
-        self.assertEqual(language, 'en')
+        self.assertEqual(language, 'ar')
     
     def test_none_request_returns_english(self):
         """Test that None request returns English"""
         language = get_language_from_request(None)
         self.assertEqual(language, 'en')
+
+    def test_urdu_language_detection(self):
+        """Test detection of Urdu language from Accept-Language header"""
+        request = self.factory.get('/api/test/')
+        request.META['HTTP_ACCEPT_LANGUAGE'] = 'ur'
+
+        language = get_language_from_request(request)
+        self.assertEqual(language, 'ur')
 
 
 class MessageTranslationTests(TestCase):
@@ -89,6 +99,21 @@ class MessageTranslationTests(TestCase):
         
         self.assertEqual(translated, "تم إنشاء الطلب بنجاح")
         self.assertNotEqual(translated, message)
+
+    def test_translate_simple_message_to_urdu(self):
+        """Test translation of a simple message to Urdu"""
+        message = "Order created successfully"
+        translated = translate_message(message, language='ur')
+
+        self.assertEqual(translated, "آرڈر کامیابی سے بنایا گیا")
+        self.assertNotEqual(translated, message)
+
+    def test_translate_profile_message_to_urdu(self):
+        """Test profile API message translation to Urdu"""
+        message = "Profile updated successfully"
+        translated = translate_message(message, language='ur')
+
+        self.assertEqual(translated, "پروفائل کامیابی سے اپ ڈیٹ ہو گئی")
     
     def test_translate_message_with_placeholder(self):
         """Test translation of message with placeholder"""
@@ -216,8 +241,8 @@ class APIResponseTranslationTests(TestCase):
         self.assertEqual(response_data['message'], "تم إنشاء الطلب بنجاح")
         self.assertEqual(response_data['success'], True)
     
-    def test_api_response_keeps_english_when_no_header(self):
-        """Test that api_response keeps English when no header"""
+    def test_api_response_defaults_to_arabic_when_no_header(self):
+        """Test that api_response translates to Arabic when no Accept-Language header"""
         request = self.factory.get('/api/test/')
         
         response = api_response(
@@ -228,7 +253,22 @@ class APIResponseTranslationTests(TestCase):
         )
         
         response_data = response.data
-        self.assertEqual(response_data['message'], "Order created successfully")
+        self.assertEqual(response_data['message'], "تم إنشاء الطلب بنجاح")
+
+    def test_api_response_translates_message_to_urdu(self):
+        """Test that api_response translates message to Urdu"""
+        request = self.factory.get('/api/test/')
+        request.META['HTTP_ACCEPT_LANGUAGE'] = 'ur'
+
+        response = api_response(
+            success=True,
+            message="Order created successfully",
+            data={"order_id": 123},
+            request=request
+        )
+
+        response_data = response.data
+        self.assertEqual(response_data['message'], "آرڈر کامیابی سے بنایا گیا")
     
     def test_api_response_translates_errors_to_arabic(self):
         """Test that api_response translates errors to Arabic"""
@@ -365,6 +405,13 @@ class TranslationDictionaryTests(TestCase):
         """Test that all translation values are strings"""
         for value in TRANSLATIONS.values():
             self.assertIsInstance(value, str)
+
+    def test_arabic_and_urdu_translation_key_parity(self):
+        """Every Arabic translation key must have a matching Urdu entry"""
+        missing_in_urdu = set(TRANSLATIONS_AR) - set(TRANSLATIONS_UR)
+        extra_in_urdu = set(TRANSLATIONS_UR) - set(TRANSLATIONS_AR)
+        self.assertEqual(missing_in_urdu, set(), msg=f"Missing Urdu keys: {missing_in_urdu}")
+        self.assertEqual(extra_in_urdu, set(), msg=f"Extra Urdu keys: {extra_in_urdu}")
 
 
 class IntegrationTests(TestCase):
@@ -504,8 +551,8 @@ class EdgeCaseTests(TestCase):
         request.META['HTTP_ACCEPT_LANGUAGE'] = 'invalid-header-format'
         
         language = get_language_from_request(request)
-        # Should default to English
-        self.assertEqual(language, 'en')
+        # Should default to app default (Arabic)
+        self.assertEqual(language, 'ar')
     
     def test_case_insensitive_language_detection(self):
         """Test that language detection is case insensitive"""

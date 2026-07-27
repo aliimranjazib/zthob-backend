@@ -291,6 +291,8 @@ class MeasurementFieldSerializer(serializers.ModelSerializer):
     def get_display_name(self, obj):
         request = self.context.get('request')
         language = get_language_from_request(request)
+        if language == 'ur' and obj.display_name_ur:
+            return obj.display_name_ur
         if language == 'ar' and obj.display_name_ar:
             return obj.display_name_ar
         return obj.display_name
@@ -298,6 +300,8 @@ class MeasurementFieldSerializer(serializers.ModelSerializer):
     def get_help_text(self, obj):
         request = self.context.get('request')
         language = get_language_from_request(request)
+        if language == 'ur' and obj.help_text_ur:
+            return obj.help_text_ur
         if language == 'ar' and obj.help_text_ar:
             return obj.help_text_ar
         return obj.help_text_en
@@ -325,6 +329,8 @@ class MeasurementTemplateSerializer(serializers.ModelSerializer):
     def get_display_name(self, obj):
         request = self.context.get('request')
         language = get_language_from_request(request)
+        if language == 'ur' and obj.display_name_ur:
+            return obj.display_name_ur
         if language == 'ar' and obj.display_name_ar:
             return obj.display_name_ar
         return obj.display_name

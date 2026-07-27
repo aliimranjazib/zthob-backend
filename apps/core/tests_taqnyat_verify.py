@@ -110,6 +110,15 @@ class PhoneVerificationServiceTaqnyatTestCase(TestCase):
         self.assertIsNotNone(verification.verification_sid)
         self.assertIsNone(verification.otp_code)
         mock_delay.assert_called_once()
+        self.assertEqual(mock_delay.call_args.kwargs['locale'], 'ar')
+
+    @patch('apps.core.tasks.send_verification_code_task.delay')
+    def test_create_verification_uses_english_sms_for_urdu_locale(self, mock_delay):
+        PhoneVerificationService.create_verification_for_phone(
+            phone_number=self.real_phone,
+            locale='ur',
+        )
+        self.assertEqual(mock_delay.call_args.kwargs['locale'], 'en')
 
     def test_verify_otp_for_test_phone(self):
         user = User.objects.create_user(

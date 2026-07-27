@@ -21,6 +21,7 @@ from rest_framework.permissions import IsAuthenticated
 from apps.orders.models import Order
 from apps.tailors.permissions import IsShopStaff
 from apps.tailors.services.order_pdf import generate_order_pdf
+from zthob.translations import get_language_from_request
 from zthob.utils import api_response
 from .base import BaseTailorAPIView
 
@@ -98,9 +99,9 @@ class TailorOrderDownloadPDFView(BaseTailorAPIView):
                 status_code=status.HTTP_403_FORBIDDEN,
             )
 
-        # Detect language from Accept-Language header (e.g. "ar", "ar-SA", "ar;q=0.9")
-        accept_lang = request.headers.get('Accept-Language', 'en')
-        lang = 'ar' if accept_lang.strip().lower().startswith('ar') else 'en'
+        lang = get_language_from_request(request)
+        if lang not in ('en', 'ar', 'ur'):
+            lang = 'en'
 
         # Generate PDF
         try:

@@ -160,10 +160,10 @@ class MeasurementFieldInline(admin.TabularInline):
     extra = 1
     ordering = ['display_order', 'name']
     fields = [
-        'name', 'display_name', 'display_name_ar',
+        'name', 'display_name', 'display_name_ar', 'display_name_ur',
         'field_type', 'min_value', 'max_value',
         'is_required', 'display_order', 'is_active',
-        'help_text_en', 'help_text_ar'
+        'help_text_en', 'help_text_ar', 'help_text_ur'
     ]
 
 
@@ -186,7 +186,7 @@ class MeasurementTemplateAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'display_name', 'display_name_ar', 'description')
+            'fields': ('name', 'display_name', 'display_name_ar', 'display_name_ur', 'description')
         }),
         ('Settings', {
             'fields': ('default_unit', 'display_order', 'is_active')

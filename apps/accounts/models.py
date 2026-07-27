@@ -19,6 +19,7 @@ class CustomUser(AbstractUser):
     LANGUAGE_CHOICES = (
         ('en', 'English'),
         ('ar', 'Arabic'),
+        ('ur', 'Urdu'),
     )
     language = models.CharField(max_length=2, choices=LANGUAGE_CHOICES, default='ar')
     

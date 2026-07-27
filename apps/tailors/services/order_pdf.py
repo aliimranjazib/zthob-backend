@@ -25,6 +25,9 @@ from django.utils import timezone
 from django.conf import settings
 import logging
 
+from zthob.languages import is_rtl_language
+from .pdf_labels_ur import PDF_LABELS_UR
+
 logger = logging.getLogger(__name__)
 
 # ─── Arabic font registration ─────────────────────────────────────────────────
@@ -56,6 +59,26 @@ def _contains_arabic(text):
     if not text:
         return False
     return bool(_ARABIC_RE.search(str(text)))
+
+
+def _is_rtl(lang):
+    return is_rtl_language(lang)
+
+
+def _labels_for(lang):
+    if lang == 'ur':
+        return PDF_LABELS_UR
+    if lang == 'ar':
+        return _AR_LABELS
+    return {}
+
+
+def _brand_title(lang):
+    if lang == 'ar':
+        return _shape_arabic('مقاسك')
+    if lang == 'ur':
+        return _shape_arabic('مقاسک')
+    return 'MGASK'
 
 
 def _shape_arabic(text):
@@ -114,7 +137,7 @@ def _format_user_text_html(text, lang='en', *, reshape=True):
             else:
                 parts.append(_safe_text(display))
         else:
-            latin = f'{_LRM}{run}{_LRM}' if lang == 'ar' else run
+            latin = f'{_LRM}{run}{_LRM}' if _is_rtl(lang) else run
             parts.append(_safe_text(latin))
     return ''.join(parts)
 
@@ -307,13 +330,13 @@ WHITE           = colors.white
 
 
 def _styles(lang='en'):
-    """Return a dict of named ParagraphStyles, RTL-aware when lang='ar'."""
+    """Return a dict of named ParagraphStyles, RTL-aware for Arabic/Urdu."""
     base = getSampleStyleSheet()
-    is_ar = lang == 'ar' and _ARABIC_FONT_AVAILABLE
+    is_rtl = _is_rtl(lang) and _ARABIC_FONT_AVAILABLE
 
-    font_regular = _AR_FONT_REGULAR if is_ar else 'Helvetica'
-    font_bold    = _AR_FONT_BOLD    if is_ar else 'Helvetica-Bold'
-    body_align   = TA_RIGHT if is_ar else TA_LEFT
+    font_regular = _AR_FONT_REGULAR if is_rtl else 'Helvetica'
+    font_bold    = _AR_FONT_BOLD    if is_rtl else 'Helvetica-Bold'
+    body_align   = TA_RIGHT if is_rtl else TA_LEFT
 
     return {
         'title': ParagraphStyle(
@@ -322,7 +345,7 @@ def _styles(lang='en'):
             fontSize=22,
             fontName=font_bold,
             textColor=WHITE,
-            alignment=TA_RIGHT if is_ar else TA_LEFT,
+            alignment=TA_RIGHT if is_rtl else TA_LEFT,
             spaceAfter=2,
         ),
         'subtitle': ParagraphStyle(
@@ -331,7 +354,7 @@ def _styles(lang='en'):
             fontSize=10,
             fontName=font_regular,
             textColor=colors.HexColor('#CCCCCC'),
-            alignment=TA_LEFT if is_ar else TA_LEFT,
+            alignment=TA_LEFT,
         ),
         'section_header': ParagraphStyle(
             f'SectionHeader_{lang}',
@@ -467,12 +490,12 @@ def _fmt_amount(value, currency='SAR'):
 def _choice_display(value, choices, lang='en'):
     """Return a localized display label for a Django choice value."""
     display = dict(choices).get(value, value or '—')
-    return _t(display, lang) if lang == 'ar' else str(display)
+    return _t(display, lang) if _is_rtl(lang) else str(display)
 
 
 def _localized_value(text, lang='en'):
     """Translate common display values when Arabic is requested."""
-    return _t(text, lang) if lang == 'ar' else str(text or '—')
+    return _t(text, lang) if _is_rtl(lang) else str(text or '—')
 
 
 def _short_reference(reference):
@@ -755,7 +778,7 @@ def _custom_style_labels_fallback(styles, s, lang='en'):
             style_rows.append([Paragraph(comment_html, s['small'])])
         block = Table(style_rows, colWidths=[160 * mm])
         block.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'RIGHT' if lang == 'ar' else 'LEFT'),
+            ('ALIGN', (0, 0), (-1, -1), 'RIGHT' if _is_rtl(lang) else 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 0),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
@@ -809,11 +832,11 @@ def _kv_table(rows, col_widths=None, lang='en'):
     For RTL (Arabic), columns are swapped: value on left, label on right.
     """
     s = _styles(lang)
-    is_ar = lang == 'ar'
+    is_rtl = _is_rtl(lang)
     page_w = A4[0] - 40 * mm
     col_widths = col_widths or [page_w * 0.35, page_w * 0.65]
 
-    if is_ar:
+    if is_rtl:
         col_widths = list(reversed(col_widths))
         
     data = []
@@ -822,7 +845,7 @@ def _kv_table(rows, col_widths=None, lang='en'):
         val = row[1]
         skip_trans = row[2] if len(row) > 2 else False
         
-        lbl_p = Paragraph(_safe_text(_t(lbl, lang) if is_ar else lbl), s['label'])
+        lbl_p = Paragraph(_safe_text(_t(lbl, lang) if is_rtl else lbl), s['label'])
 
         if not val:
             val_html = '—'
@@ -834,12 +857,12 @@ def _kv_table(rows, col_widths=None, lang='en'):
             val_html = _format_user_text_html(_t(val, lang), lang, reshape=False)
         val_p = Paragraph(val_html, s['value'])
 
-        if is_ar:
+        if is_rtl:
             data.append([val_p, lbl_p])
         else:
             data.append([lbl_p, val_p])
 
-    tbl = Table(data, colWidths=col_widths, hAlign='RIGHT' if is_ar else 'LEFT')
+    tbl = Table(data, colWidths=col_widths, hAlign='RIGHT' if is_rtl else 'LEFT')
     tbl.setStyle(TableStyle([
         ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
         ('TOPPADDING',    (0, 0), (-1, -1), 3),
@@ -868,11 +891,12 @@ def _rider_label(rider):
 
 
 def _t(text, lang):
-    """Translate a label to Arabic and shape it for RTL rendering if lang='ar'."""
-    if lang != 'ar':
+    """Translate a label for RTL languages and shape it for PDF rendering."""
+    if not _is_rtl(lang):
         return str(text) if text else '—'
-    arabic = _AR_LABELS.get(str(text), str(text)) if text else '—'
-    return _shape_arabic(arabic)
+    labels = _labels_for(lang)
+    translated = labels.get(str(text), str(text)) if text else '—'
+    return _shape_arabic(translated)
 
 
 def _item_recipient_display(item, order, lang='en'):
@@ -907,16 +931,16 @@ def _format_recipient_html(item, order, lang='en'):
         body = _format_user_text_html(customer_name, lang)
 
     label = _safe_text(for_label)
-    if lang == 'ar':
+    if _is_rtl(lang):
         return f'<font color="#990404"><b>{label}: {_LRM}{body}{_LRM}</b></font>'
     return f'<font color="#990404"><b>{label}: {body}</b></font>'
 
 
 def _localized_note(note, lang='en'):
-    """Translate known status-history notes for Arabic PDFs."""
-    if not note or lang != 'ar':
+    """Translate known status-history notes for RTL PDFs."""
+    if not note or not _is_rtl(lang):
         return note or '—'
-    return _AR_LABELS.get(str(note), str(note))
+    return _labels_for(lang).get(str(note), str(note))
 
 
 def _measurement_field_map():
@@ -939,6 +963,7 @@ def _measurement_field_map():
         field_map.setdefault(field.name, {
             'label_en': field.display_name or field.name.replace('_', ' ').title(),
             'label_ar': field.display_name_ar or field.display_name or field.name,
+            'label_ur': field.display_name_ur or field.display_name or field.name,
             'order': idx,
             'unit': getattr(field.template, 'default_unit', 'cm') or 'cm',
         })
@@ -960,10 +985,12 @@ def _format_measurement_pairs(measurements, lang='en', field_map=None):
 
         meta = field_map.get(key, {})
         fallback = str(key).replace('_', ' ').title()
-        if lang == 'ar':
-            raw_label = meta.get('label_ar') or meta.get('label_en') or fallback
+        if _is_rtl(lang):
+            label_attr = 'label_ur' if lang == 'ur' else 'label_ar'
+            labels = _labels_for(lang)
+            raw_label = meta.get(label_attr) or meta.get('label_en') or fallback
             if not _contains_arabic(raw_label):
-                raw_label = _AR_LABELS.get(raw_label, _AR_LABELS.get(fallback, raw_label))
+                raw_label = labels.get(raw_label, labels.get(fallback, raw_label))
             label = _shape_arabic(raw_label)
         else:
             label = meta.get('label_en') or fallback
@@ -992,10 +1019,10 @@ def _measurements_grid(pairs, page_w, s, lang='en', title=''):
       └──────────────┘
     Numeric values automatically get a 'cm' unit appended.
     """
-    is_ar = lang == 'ar'
-    font_regular = _AR_FONT_REGULAR if (is_ar and _ARABIC_FONT_AVAILABLE) else 'Helvetica'
-    font_bold    = _AR_FONT_BOLD    if (is_ar and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
-    align        = TA_RIGHT if is_ar else TA_LEFT
+    is_rtl = _is_rtl(lang)
+    font_regular = _AR_FONT_REGULAR if (is_rtl and _ARABIC_FONT_AVAILABLE) else 'Helvetica'
+    font_bold    = _AR_FONT_BOLD    if (is_rtl and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
+    align        = TA_RIGHT if is_rtl else TA_LEFT
 
     lbl_style = ParagraphStyle(
         f'MeasLbl_{lang}', fontSize=7, fontName=font_bold,
@@ -1018,7 +1045,7 @@ def _measurements_grid(pairs, page_w, s, lang='en', title=''):
             return False
 
     def _cell(lbl, val, unit=None):
-        lbl_text = lbl if lang == 'ar' else str(lbl).upper()
+        lbl_text = _t(lbl, lang) if _is_rtl(lang) else str(lbl).upper()
         val_text = str(val)
         unit_text = unit if _is_numeric(val) else ''
         inner = [
@@ -1043,7 +1070,7 @@ def _measurements_grid(pairs, page_w, s, lang='en', title=''):
 
     # Optional title header row
     if title:
-        title_text = _shape_arabic(title) if is_ar else title.upper()
+        title_text = _shape_arabic(title) if is_rtl else title.upper()
         title_cell = Paragraph(_safe_text(title_text), ParagraphStyle(
             f'MeasTitle_{lang}', fontSize=8, fontName=font_bold,
             textColor=WHITE, alignment=TA_CENTER,
@@ -1059,7 +1086,7 @@ def _measurements_grid(pairs, page_w, s, lang='en', title=''):
         # We'll prepend this manually below
 
     # Reverse order for RTL so pairs read right-to-left
-    if is_ar:
+    if is_rtl:
         pairs = list(reversed(pairs))
 
     for i in range(0, len(pairs), COLS):
@@ -1117,12 +1144,12 @@ def generate_order_pdf(order, lang='en') -> bytes:
 
     Args:
         order: apps.orders.models.Order instance (with related objects pre-fetched or lazy).
-        lang: Language code, 'en' (default) or 'ar' for Arabic RTL.
+        lang: Language code, 'en' (default), 'ar', or 'ur'.
 
     Returns:
         bytes: Raw PDF file content.
     """
-    is_ar = lang == 'ar'
+    is_rtl = _is_rtl(lang)
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -1141,16 +1168,16 @@ def generate_order_pdf(order, lang='en') -> bytes:
     measurement_fields = _measurement_field_map()
 
     # ── Header banner ─────────────────────────────────────────────────────────
-    _receipt_label = _shape_arabic(_AR_LABELS['Order Receipt']) if is_ar else 'Order Receipt'
-    _font_bold = _AR_FONT_BOLD if (is_ar and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
-    if is_ar:
+    _receipt_label = _t('Order Receipt', lang) if is_rtl else 'Order Receipt'
+    _font_bold = _AR_FONT_BOLD if (is_rtl and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
+    if is_rtl:
         header_data = [[
             Paragraph(
                 f'<b>{_receipt_label}</b><br/><font color="#CCCCCC">{order.order_number}</font>',
                 ParagraphStyle(f'hr_{lang}', parent=s['subtitle'], alignment=TA_RIGHT, fontSize=10,
                                textColor=WHITE, fontName=_font_bold)
             ),
-            Paragraph(_shape_arabic('مقاسك'), s['title']),
+            Paragraph(_brand_title(lang), s['title']),
         ]]
     else:
         header_data = [[
@@ -1178,7 +1205,7 @@ def generate_order_pdf(order, lang='en') -> bytes:
     status_display = _choice_display(order.status, order.ORDER_STATUS_CHOICES, lang)
     tailor_status_display = _choice_display(order.tailor_status, order.TAILOR_STATUS_CHOICES, lang) if order.tailor_status else _t('N/A', lang)
     status_color = _status_badge_color(order.status)
-    _sb_font = _AR_FONT_BOLD if (is_ar and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
+    _sb_font = _AR_FONT_BOLD if (is_rtl and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
 
     _status_lbl  = _t('Status:', lang)
     _tailor_lbl  = _t('Tailor Status:', lang)
@@ -1187,15 +1214,15 @@ def generate_order_pdf(order, lang='en') -> bytes:
     status_data = [[
         Paragraph(f'{_safe_text(_status_lbl)} <b>{_safe_text(status_display)}</b>',
                   ParagraphStyle(f'sb_{lang}', parent=s['value'], fontSize=9, textColor=WHITE, fontName=_sb_font,
-                                 alignment=TA_RIGHT if is_ar else TA_LEFT)),
+                                 alignment=TA_RIGHT if is_rtl else TA_LEFT)),
         Paragraph(f'{_safe_text(_tailor_lbl)} <b>{_safe_text(tailor_status_display)}</b>',
                   ParagraphStyle(f'sb2_{lang}', parent=s['value'], fontSize=9, textColor=WHITE, fontName=_sb_font,
                                  alignment=TA_CENTER)),
         Paragraph(f'{_safe_text(_placed_lbl)} <b>{_safe_text(_fmt_datetime(order.created_at))}</b>',
                   ParagraphStyle(f'sb3_{lang}', parent=s['value'], fontSize=9, textColor=WHITE, fontName=_sb_font,
-                                 alignment=TA_LEFT if is_ar else TA_RIGHT)),
+                                 alignment=TA_LEFT if is_rtl else TA_RIGHT)),
     ]]
-    if is_ar:
+    if is_rtl:
         status_data[0].reverse()
     status_tbl = Table(status_data, colWidths=[page_w / 3] * 3)
     status_tbl.setStyle(TableStyle([
@@ -1317,7 +1344,7 @@ def generate_order_pdf(order, lang='en') -> bytes:
             Paragraph(_t('Qty', lang), s['table_header']),
             Paragraph(_t('Ready', lang), s['table_header']),
         ]
-        if is_ar:
+        if is_rtl:
             item_headers.reverse()
 
         header_tbl = Table([item_headers], colWidths=col_widths_items)
@@ -1354,10 +1381,9 @@ def generate_order_pdf(order, lang='en') -> bytes:
                 fabric_parts.append(f'<font color="#888888" size="7">{_safe_text(fabric_sku)}</font>')
             fabric_cell = Paragraph('<br/>'.join(fabric_parts), s['table_cell'])
 
-            is_ready = ('✓ ' + (_shape_arabic('نعم') if is_ar else 'Yes')) if item.is_ready \
-                  else ('✗ ' + (_shape_arabic('لا')  if is_ar else 'No'))
+            is_ready = ('✓ ' + _t('Yes', lang)) if item.is_ready else ('✗ ' + _t('No', lang))
             ready_color = colors.HexColor('#4CAF50') if item.is_ready else colors.HexColor('#F44336')
-            _item_font_bold = _AR_FONT_BOLD if (is_ar and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
+            _item_font_bold = _AR_FONT_BOLD if (is_rtl and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
 
             row = [
                 fabric_cell,
@@ -1367,7 +1393,7 @@ def generate_order_pdf(order, lang='en') -> bytes:
                     textColor=ready_color, fontName=_item_font_bold
                 )),
             ]
-            if is_ar:
+            if is_rtl:
                 row.reverse()
             item_rows = [row]
 
@@ -1447,13 +1473,13 @@ def generate_order_pdf(order, lang='en') -> bytes:
             Paragraph(_t('Changed By', lang), s['table_header']),
             Paragraph(_t('Notes', lang), s['table_header']),
         ]
-        if is_ar:
+        if is_rtl:
             hist_headers.reverse()
         hist_rows = [hist_headers]
 
         for h in history:
             if h.changed_by and order.customer_id and h.changed_by_id == order.customer_id:
-                changed_by = _AR_LABELS['Customer'] if is_ar else 'Customer'
+                changed_by = _t('Customer', lang) if is_rtl else 'Customer'
             else:
                 changed_by = h.changed_by.get_full_name() or h.changed_by.username if h.changed_by else '—'
             status_display = _choice_display(h.status, order.ORDER_STATUS_CHOICES, lang)
@@ -1464,7 +1490,7 @@ def generate_order_pdf(order, lang='en') -> bytes:
                 Paragraph(_format_user_text_html(changed_by, lang, reshape=False), s['small']),
                 Paragraph(_format_user_text_html(note_text, lang), s['small']),
             ]
-            if is_ar:
+            if is_rtl:
                 hist_row.reverse()
             hist_rows.append(hist_row)
 
@@ -1505,9 +1531,9 @@ def generate_order_pdf(order, lang='en') -> bytes:
     # ── Footer ────────────────────────────────────────────────────────────────
     story.append(HRFlowable(width=page_w, color=BRAND_MID, thickness=0.5, spaceAfter=4))
     generated_time = timezone.now().strftime('%d %b %Y, %I:%M %p')
-    if is_ar:
-        _gen_label = _shape_arabic(_AR_LABELS['Generated by Mgask Platform'])
-        _order_label = _shape_arabic(_AR_LABELS['Order'])
+    if is_rtl:
+        _gen_label = _t('Generated by Mgask Platform', lang)
+        _order_label = _t('Order', lang)
         footer_text = f'{_order_label} {order.order_number}  ·  {generated_time}  ·  {_gen_label}'
     else:
         footer_text = f'Generated by Mgask Platform  ·  {generated_time}  ·  Order {order.order_number}'
