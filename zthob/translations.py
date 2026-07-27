@@ -3,8 +3,11 @@ Fast in-memory translation system for API responses.
 Uses dictionary lookups for O(1) performance - no external calls or DB queries.
 """
 
+from zthob.languages import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, TRANSLATABLE_LANGUAGES
+from zthob.translations_ur import TRANSLATIONS_UR
+
 # Translation dictionary: English -> Arabic
-TRANSLATIONS = {
+TRANSLATIONS_AR = {
     # Success messages
     "OTP sent to {phone_number}": "تم إرسال رمز التحقق إلى {phone_number}",
     "Invalid phone number": "رقم الهاتف غير صحيح",
@@ -25,6 +28,9 @@ TRANSLATIONS = {
     "User registered successfully": "تم تسجيل المستخدم بنجاح",
     "Login successful": "تم تسجيل الدخول بنجاح",
     "User profile retrieved successfully": "تم استرجاع ملف المستخدم بنجاح",
+    "Profile fetched successfully": "تم جلب الملف الشخصي بنجاح",
+    "Profile updated successfully": "تم تحديث الملف الشخصي بنجاح",
+    "Profile update failed": "فشل تحديث الملف الشخصي",
     "Password changed successfully": "تم تغيير كلمة المرور بنجاح",
     "Operation completed successfully": "تمت العملية بنجاح",
     
@@ -505,17 +511,24 @@ TRANSLATIONS = {
     "Orders ready for customer pickup": "طلبات جاهزة لاستلام العملاء",
 }
 
+TRANSLATIONS = TRANSLATIONS_AR
+
+LOCALE_TABLES = {
+    'ar': TRANSLATIONS_AR,
+    'ur': TRANSLATIONS_UR,
+}
+
 
 def get_language_from_request(request):
     """
     Detect language from request headers.
-    Checks Accept-Language header or falls back to 'en'.
-    
+    Checks Accept-Language header, authenticated user preference, then DEFAULT_LANGUAGE.
+
     Args:
         request: Django/DRF request object
-        
+
     Returns:
-        str: Language code ('ar' for Arabic, 'en' for English)
+        str: Language code ('en', 'ar', or 'ur')
     """
     if not request:
         return 'en'
@@ -527,15 +540,15 @@ def get_language_from_request(request):
     if accept_language:
         # Extract primary language (first 2 chars before comma or semicolon)
         primary_lang = accept_language.split(',')[0].split(';')[0].strip()[:2].lower()
-        if primary_lang in ['ar', 'en']:
+        if primary_lang in SUPPORTED_LANGUAGES:
             return primary_lang
-    
-    # Check if user has language preference
+
     if hasattr(request, 'user') and request.user.is_authenticated:
-        if hasattr(request.user, 'language') and request.user.language in ['ar', 'en']:
-            return request.user.language
-    
-    return 'ar'  # Default to Arabic if still undecided
+        user_language = getattr(request.user, 'language', None)
+        if user_language in SUPPORTED_LANGUAGES:
+            return user_language
+
+    return DEFAULT_LANGUAGE
 
 
 
@@ -561,8 +574,8 @@ def translate_message(message, language='en', **kwargs):
                 return message
         return message
     
-    # Look up translation
-    translated = TRANSLATIONS.get(message, None)
+    table = LOCALE_TABLES.get(language, {})
+    translated = table.get(message)
     
     if translated:
         # Apply formatting if kwargs provided
@@ -629,14 +642,11 @@ def translate_errors(errors, language='en'):
     return errors
 
 
-def add_translation(message_key, arabic_translation):
-    """
-    Dynamically add a new translation at runtime.
-    Useful for adding translations without code changes.
-    
-    Args:
-        message_key: English message string
-        arabic_translation: Arabic translation
-    """
-    TRANSLATIONS[message_key] = arabic_translation
+def add_translation(message_key, translation, language='ar'):
+    """Dynamically add a new translation at runtime."""
+    if language == 'ur':
+        TRANSLATIONS_UR[message_key] = translation
+    else:
+        TRANSLATIONS_AR[message_key] = translation
+        TRANSLATIONS[message_key] = translation
 

@@ -26,6 +26,7 @@ from apps.core.models import PhoneVerification
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from zthob.utils import api_response
+from zthob.translations import get_language_from_request
 from drf_spectacular.utils import extend_schema
 
 # Test deployment
@@ -302,7 +303,8 @@ class PhoneLoginView(APIView):
             # Create verification and send OTP
             try:
                 verification, otp_code, sms_success, sms_message, user = PhoneVerificationService.create_verification_for_phone(
-                    phone_number=phone
+                    phone_number=phone,
+                    locale=get_language_from_request(request),
                 )
                 
                 response_data = {
@@ -395,7 +397,8 @@ class PhoneVerifyView(APIView):
             # Verify OTP
             is_valid, message, user = PhoneVerificationService.verify_otp_for_phone(
                 phone_number=phone,
-                otp_code=otp_code
+                otp_code=otp_code,
+                locale=get_language_from_request(request),
             )
             
             if not is_valid or not user:
@@ -489,7 +492,8 @@ class PhoneResendOTPView(APIView):
             # Create verification and send OTP
             try:
                 verification, otp_code, sms_success, sms_message, user = PhoneVerificationService.create_verification_for_phone(
-                    phone_number=phone
+                    phone_number=phone,
+                    locale=get_language_from_request(request),
                 )
                 
                 response_data = {

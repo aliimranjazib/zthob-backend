@@ -163,6 +163,12 @@ class MeasurementTemplate(BaseModel):
         max_length=100,
         help_text="Arabic display name"
     )
+    display_name_ur = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        help_text="Urdu display name"
+    )
     description = models.TextField(
         blank=True,
         null=True,
@@ -221,6 +227,12 @@ class MeasurementField(BaseModel):
         max_length=100,
         help_text="Arabic label"
     )
+    display_name_ur = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        help_text="Urdu label"
+    )
     field_type = models.CharField(
         max_length=20,
         choices=FIELD_TYPE_CHOICES,
@@ -264,6 +276,12 @@ class MeasurementField(BaseModel):
         blank=True,
         default='',
         help_text="Arabic helper tip for tailor"
+    )
+    help_text_ur = models.CharField(
+        max_length=200,
+        blank=True,
+        default='',
+        help_text="Urdu helper tip for tailor"
     )
 
     class Meta:

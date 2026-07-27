@@ -48,7 +48,8 @@ from apps.tailors.shop_access import (
     user_can_see_stitch_order,
 )
 from apps.customers.models import CustomerProfile, Address
-from zthob.utils import api_response 
+from zthob.utils import api_response
+from zthob.translations import get_language_from_request 
 import uuid
 from decimal import Decimal
 from apps.orders.payments import get_payment_option, money
@@ -2256,8 +2257,8 @@ class WorkOrderPDFView(APIView):
                               message='You do not have permission to access this work order',
                               status_code=status.HTTP_403_FORBIDDEN, request=request)
         
-        language = request.GET.get('lang', 'ar')
-        if language not in ['ar', 'en']:
+        language = request.GET.get('lang') or get_language_from_request(request) or 'ar'
+        if language not in ['ar', 'en', 'ur']:
             language = 'ar'
         
         try:

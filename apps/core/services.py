@@ -5,6 +5,7 @@ from django.utils import timezone
 from datetime import timedelta
 from .models import PhoneVerification
 from .phone_format import format_phone_e164, normalize_phone_to_local
+from zthob.languages import taqnyat_sms_language
 from .taqnyat_service import TaqnyatVerifyService
 
 logger = logging.getLogger(__name__)
@@ -134,11 +135,12 @@ class PhoneVerificationService:
             raise
 
     @staticmethod
-    def create_verification_for_phone(phone_number, user=None):
+    def create_verification_for_phone(phone_number, user=None, locale=None):
         """
         Create phone verification for phone-based authentication.
         Uses Taqnyat Verify for real numbers and a fixed OTP for test numbers.
         """
+        sms_lang = taqnyat_sms_language(locale)
         local_phone = PhoneVerificationService.normalize_phone_to_local(phone_number)
         formatted_phone = format_phone_e164(phone_number)
 
@@ -172,7 +174,7 @@ class PhoneVerificationService:
         from .tasks import send_verification_code_task
         send_verification_code_task.delay(
             phone_number=formatted_phone,
-            locale='ar',
+            locale=sms_lang,
             verification_id=verification.id,
         )
 
@@ -180,11 +182,12 @@ class PhoneVerificationService:
         return verification, None, True, "Verification code is being sent", user
     
     @staticmethod
-    def verify_otp_for_phone(phone_number, otp_code):
+    def verify_otp_for_phone(phone_number, otp_code, locale=None):
         """
         Verify OTP for phone-based authentication.
         Uses Taqnyat Verify for real phones and manual verification for test phones.
         """
+        sms_lang = taqnyat_sms_language(locale)
         from django.contrib.auth import get_user_model
         User = get_user_model()
 
@@ -234,7 +237,7 @@ class PhoneVerificationService:
             phone_number=formatted_phone,
             request_id=verification.verification_sid,
             code=otp_code,
-            lang='ar',
+            lang=sms_lang,
         )
 
         if is_valid:
