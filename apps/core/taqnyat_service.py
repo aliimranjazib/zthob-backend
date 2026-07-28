@@ -72,9 +72,49 @@ class TaqnyatVerifyService:
         if isinstance(parsed, list) and parsed:
             parsed = parsed[0]
 
-        code = parsed.get("code") if isinstance(parsed, dict) else None
-        message = parsed.get("message", "") if isinstance(parsed, dict) else raw
-        return True, str(message), code
+        code, message = TaqnyatVerifyService._parse_verify_response(parsed, raw)
+        return True, message, code
+
+    @staticmethod
+    def _coerce_code(value: Any) -> int | None:
+        if value is None or value == "":
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _parse_verify_response(parsed: Any, raw: str) -> tuple[int | None, str]:
+        """
+        Parse Taqnyat Verify responses.
+
+        Supports the current envelope:
+          {"ResponseStatus":"success","Data":{"result":5,"MessageEn":"..."}}
+        and the legacy shape:
+          {"code":5,"message":"..."}
+        """
+        if not isinstance(parsed, dict):
+            return None, raw
+
+        # Legacy flat response
+        if "code" in parsed:
+            return (
+                TaqnyatVerifyService._coerce_code(parsed.get("code")),
+                str(parsed.get("message") or ""),
+            )
+
+        data = parsed.get("Data")
+        if isinstance(data, dict) and data.get("result") is not None:
+            message = data.get("MessageEn") or data.get("MessageAr") or ""
+            return TaqnyatVerifyService._coerce_code(data.get("result")), str(message)
+
+        error = parsed.get("Error")
+        if isinstance(error, dict):
+            message = error.get("MessageEn") or error.get("MessageAr") or ""
+            return TaqnyatVerifyService._coerce_code(error.get("ErrorCode")), str(message)
+
+        return None, raw
 
     @staticmethod
     def _build_payload(

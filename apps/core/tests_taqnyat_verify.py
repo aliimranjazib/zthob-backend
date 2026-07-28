@@ -4,7 +4,13 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from apps.core.models import PhoneVerification
 from apps.core.services import PhoneVerificationService
-from apps.core.taqnyat_service import TaqnyatVerifyService, VERIFY_CODE_SENT, VERIFY_SUCCESS, VERIFY_INCORRECT
+from apps.core.taqnyat_service import (
+    TaqnyatVerifyService,
+    VERIFY_CODE_SENT,
+    VERIFY_SUCCESS,
+    VERIFY_INCORRECT,
+    VERIFY_ALREADY_ACTIVATED,
+)
 from django.utils import timezone
 from datetime import timedelta
 
@@ -15,6 +21,34 @@ class TaqnyatVerifyServiceTestCase(TestCase):
     def setUp(self):
         self.real_phone = '0512345678'
         self.request_id = 'test-request-id-123'
+
+    def test_parse_verify_response_new_send_format(self):
+        parsed = {
+            "status": 1,
+            "ResponseStatus": "success",
+            "Data": {
+                "result": 5,
+                "MessageEn": "Verification code sent to mobile number",
+            },
+            "Error": None,
+        }
+        code, message = TaqnyatVerifyService._parse_verify_response(parsed, "")
+        self.assertEqual(code, 5)
+        self.assertIn("Verification code sent", message)
+
+    def test_parse_verify_response_new_error_format(self):
+        parsed = {
+            "status": 1,
+            "ResponseStatus": "fail",
+            "Data": None,
+            "Error": {
+                "ErrorCode": 3,
+                "MessageEn": "the number you want activate it is incorrect",
+            },
+        }
+        code, message = TaqnyatVerifyService._parse_verify_response(parsed, "")
+        self.assertEqual(code, 3)
+        self.assertIn("incorrect", message)
 
     @patch('apps.core.taqnyat_service.TaqnyatVerifyService._post_verify')
     def test_send_verification_code_success(self, mock_post):
@@ -77,6 +111,27 @@ class TaqnyatVerifyServiceTestCase(TestCase):
 
         self.assertFalse(is_valid)
         self.assertIn('invalid', message.lower())
+
+    @patch('apps.core.taqnyat_service.TaqnyatVerifyService._post_verify')
+    def test_verify_code_already_activated_new_format(self, mock_post):
+        mock_post.return_value = (
+            True,
+            'This number is activated',
+            VERIFY_ALREADY_ACTIVATED,
+        )
+
+        with self.settings(
+            TAQNYAT_BEARER_TOKEN='test_token',
+            TAQNYAT_SENDER_NAME='TestSender',
+        ):
+            is_valid, message = TaqnyatVerifyService.verify_code(
+                phone_number=self.real_phone,
+                request_id=self.request_id,
+                code='1180',
+            )
+
+        self.assertTrue(is_valid)
+        self.assertIn('verified', message.lower())
 
 
 class PhoneVerificationServiceTaqnyatTestCase(TestCase):
