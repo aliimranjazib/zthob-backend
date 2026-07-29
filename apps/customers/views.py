@@ -13,6 +13,13 @@ from apps.customers.serializers import (
     FamilyMemberMeasurementsDetailSerializer, CustomerHomeSerializer
 )
 from apps.orders.models import Order
+from apps.customers.measurement_queries import (
+    apply_current_measurements_fallback,
+    build_order_measurement_entry,
+    customer_orders_with_measurements,
+    iter_order_recipient_measurements,
+    order_has_stored_measurements,
+)
 from apps.tailors.models import Fabric, FabricCategory
 from apps.tailors.models import TailorProfile, ServiceArea
 from apps.tailors.serializers import TailorProfileSerializer
@@ -863,92 +870,35 @@ class CustomerMeasurementsListView(APIView):
                     recipients_map[fm_key]['current_measurements_note'] = 'Stored profile measurements'
 
         # 2. Fetch Order Measurements
-        orders_query = Order.objects.filter(
-            customer=request.user,
-            rider_status='measurement_taken',
-            rider_measurements__isnull=False
-        ).select_related(
-            'customer', 'tailor', 'rider'
-        ).prefetch_related(
-            'order_items__family_member', 
-            'tailor__tailor_profile'
+        orders = customer_orders_with_measurements(
+            request.user,
+            order_id=order_id,
+            family_member_id=family_member_id,
         )
-        
-        # Apply filters
-        if order_id:
-            orders_query = orders_query.filter(id=order_id)
-        
-        if family_member_id:
-             orders_query = orders_query.filter(order_items__family_member_id=family_member_id).distinct()
-        
-        orders = orders_query.order_by('-measurement_taken_at', '-created_at')
-        
-        for order in orders:
-            # Helper to add measurement to map
-            def add_measurement_to_recipient(r_type, r_id, order_obj, measurements):
-                key = f"{r_type}_{r_id}"
-                
-                # If filtered out, skip
-                if key not in recipients_map:
-                    return
 
-                # Create history entry
-                entry = {
-                    'order_id': order_obj.id,
-                    'order_number': order_obj.order_number,
-                    'order_type': order_obj.order_type,
-                    'measurements': measurements,
-                    'measurement_taken_at': order_obj.measurement_taken_at,
-                    'order_status': order_obj.status,
-                    'rider_status': order_obj.rider_status,
-                    'order_created_at': order_obj.created_at,
-                    'tailor_name': None
-                }
-                
-                # Get tailor name
-                try:
-                    if order_obj.tailor and hasattr(order_obj.tailor, 'tailor_profile'):
-                        entry['tailor_name'] = order_obj.tailor.tailor_profile.shop_name
-                    else:
-                        entry['tailor_name'] = order_obj.tailor.username if order_obj.tailor else None
-                except:
-                    pass
-                
+        for order in orders:
+            if not order_has_stored_measurements(order):
+                continue
+
+            for r_type, r_id, measurements in iter_order_recipient_measurements(order, request.user.id):
+                key = f"{r_type}_{r_id}"
+                if key not in recipients_map:
+                    continue
+
+                entry = build_order_measurement_entry(order, measurements)
                 recipients_map[key]['order_history'].append(entry)
-                
-                # Update stats
                 recipients_map[key]['stats']['total_orders'] += 1
                 current_last = recipients_map[key]['stats']['last_measured_at']
-                if not current_last or (order_obj.measurement_taken_at and order_obj.measurement_taken_at > current_last):
-                     recipients_map[key]['stats']['last_measured_at'] = order_obj.measurement_taken_at
-
-
-            # Strategy: Iterate fully distinct items in order
-            processed_in_order = set()
-            
-            for item in order.order_items.all():
-                # Determine recipient for this item
-                if item.family_member:
-                    r_type, r_id = 'family_member', item.family_member.id
-                else:
-                    r_type, r_id = 'customer', request.user.id
-                    
-                unique_key = (r_type, r_id)
-                if unique_key in processed_in_order:
-                    continue
-                
-                measurements = item.measurements or order.rider_measurements
-                
-                if measurements:
-                    add_measurement_to_recipient(r_type, r_id, order, measurements)
-                    processed_in_order.add(unique_key)
-            
-            # Edge case: Order has measurements but NO items -> Assign to Customer
-            if not processed_in_order and order.rider_measurements:
-                 add_measurement_to_recipient('customer', request.user.id, order, order.rider_measurements)
+                if not current_last or (
+                    order.measurement_taken_at and order.measurement_taken_at > current_last
+                ):
+                    recipients_map[key]['stats']['last_measured_at'] = order.measurement_taken_at
 
         # 3. Format Response
-        recipients_list = list(recipients_map.values())
+        recipients_list = [
+            apply_current_measurements_fallback(recipient)
+            for recipient in recipients_map.values()
+        ]
         
         # Calculate global summary
         total_recipients = len(recipients_list)
@@ -999,56 +949,29 @@ class FamilyMemberMeasurementsView(APIView):
             )
         
         # Get all orders with measurements for this family member
-        # Search in both order-level family_member and item-level family_member
-        from django.db.models import Q
-        orders = Order.objects.filter(
-            Q(family_member=family_member) | Q(order_items__family_member=family_member),
-            customer=request.user,
-            rider_status='measurement_taken'
-        ).select_related(
-            'customer',
-            'family_member',
-            'tailor',
-            'rider'
-        ).prefetch_related('tailor__tailor_profile', 'order_items__family_member').distinct().order_by('-measurement_taken_at', '-created_at')
-        
-        # Build order measurements list
+        orders = customer_orders_with_measurements(
+            request.user,
+            family_member_id=family_member.id,
+        )
+
         order_measurements = []
         for order in orders:
-            # Look for measurements in items for this family member
-            item_measurements = None
-            for item in order.order_items.all():
-                if item.family_member == family_member and item.measurements:
-                    item_measurements = item.measurements
+            if not order_has_stored_measurements(order):
+                continue
+
+            measurements = None
+            for r_type, r_id, payload in iter_order_recipient_measurements(order, request.user.id):
+                if r_type == 'family_member' and r_id == family_member.id:
+                    measurements = payload
                     break
-            
-            # Fallback to order-level measurements
-            measurements = item_measurements or order.rider_measurements
-            
-            if measurements:
-                measurement_data = {
-                    'order_id': order.id,
-                    'order_number': order.order_number,
-                    'order_type': order.order_type,
-                    'measurements': measurements,
-                    'measurement_taken_at': order.measurement_taken_at.isoformat() if order.measurement_taken_at else None,
-                    'order_status': order.status,
-                    'rider_status': order.rider_status,
-                    'order_created_at': order.created_at.isoformat() if order.created_at else None,
-                    'appointment_date': order.appointment_date.isoformat() if order.appointment_date else None,
-                    'appointment_time': order.appointment_time.isoformat() if order.appointment_time else None,
-                }
-                
-                # Get tailor name
-                try:
-                    if order.tailor and hasattr(order.tailor, 'tailor_profile'):
-                        measurement_data['tailor_name'] = order.tailor.tailor_profile.shop_name
-                    else:
-                        measurement_data['tailor_name'] = order.tailor.username if order.tailor else None
-                except:
-                    measurement_data['tailor_name'] = None
-                
-                order_measurements.append(measurement_data)
+
+            if not measurements:
+                continue
+
+            measurement_data = build_order_measurement_entry(order, measurements)
+            measurement_data['appointment_date'] = order.appointment_date
+            measurement_data['appointment_time'] = order.appointment_time
+            order_measurements.append(measurement_data)
         
         # Get stored profile measurements
         stored_profile_measurements = None

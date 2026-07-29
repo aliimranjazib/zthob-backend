@@ -409,6 +409,15 @@ class TailorAddMeasurementsView(APIView):
             
             # Check if all items now have measurements
             all_measured = order.all_items_have_measurements
+
+            if (
+                order.order_type == 'measurement_service'
+                and order.service_mode == 'walk_in'
+                and all_measured
+            ):
+                from apps.orders.measurement_service import MeasurementCompletionService
+
+                MeasurementCompletionService.complete_measurement_order(order)
             
             # For measurement_service orders, auto-update tailor_status when measurements are complete
             if order.order_type == 'measurement_service' and order.service_mode == 'walk_in':
