@@ -11,6 +11,7 @@ from apps.tailors.services.order_pdf import (
     _ARABIC_FONT_AVAILABLE,
     _build_order_details_section,
     _build_priority_sections,
+    _pdf_page_width,
     _contains_arabic,
     _custom_style_caption_html,
     _custom_style_comment_html,
@@ -122,11 +123,10 @@ class OrderPDFServiceTest(TestCase):
         item.measurements = {'chest': 42, 'waist': 34}
         item.save(update_fields=['measurements'])
 
-        from reportlab.lib.pagesizes import A4
         from reportlab.lib.units import mm
 
         s = _styles('en')
-        page_w = A4[0] - 40 * mm
+        page_w = _pdf_page_width()
         items = list(self.order.order_items.select_related('fabric', 'family_member').all())
         priority = _build_priority_sections(self.order, items, page_w, s, 'en', {})
         details = _build_order_details_section(self.order, page_w, s, 'en')
@@ -258,7 +258,7 @@ class OrderPDFServiceTest(TestCase):
     def test_truncate_style_comment_limits_very_long_text(self):
         long_text = 'word ' * 80
         truncated = _truncate_style_comment(long_text)
-        self.assertLessEqual(len(truncated), 120)
+        self.assertLessEqual(len(truncated), 60)
         self.assertTrue(truncated.endswith('…'))
 
     def test_custom_style_comment_html_uses_truncated_text(self):
