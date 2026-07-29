@@ -71,7 +71,25 @@ class StylePresetReferenceImagesTest(TestCase):
 
         self.assertIn('/api/media/style_references/', data['styles'][0]['reference_images'][0])
         self.assertIn('/api/media/style_references/', data['styles_details'][0]['reference_images'][0])
+        self.assertEqual(data['styles'][0]['reference_image_ids'], [self.image.id])
+        self.assertEqual(data['styles_details'][0]['reference_image_ids'], [self.image.id])
         self.assertEqual(data['styles'][0]['text'], 'Like this photo')
+
+    def test_preset_list_includes_reference_image_ids(self):
+        UserStylePreset.objects.create(
+            user=self.user,
+            name='Listed Style',
+            styles=[{
+                'category': 'collar',
+                'style_id': self.style.id,
+                'reference_images': [self.image.image.name],
+            }],
+        )
+
+        response = self.client.get('/api/customization/presets/')
+        self.assertEqual(response.status_code, 200, response.data)
+        preset_data = next(item for item in response.data if item['name'] == 'Listed Style')
+        self.assertEqual(preset_data['styles'][0]['reference_image_ids'], [self.image.id])
 
     def test_preset_create_accepts_reference_image_ids(self):
         response = self.client.post(
@@ -93,6 +111,7 @@ class StylePresetReferenceImagesTest(TestCase):
         self.assertTrue(preset.styles[0]['reference_images'][0].startswith('style_references/'))
         self.assertNotIn('reference_image_ids', preset.styles[0])
         self.assertIn('/api/media/style_references/', response.data['styles'][0]['reference_images'][0])
+        self.assertEqual(response.data['styles'][0]['reference_image_ids'], [self.image.id])
 
     def test_legacy_preset_reference_image_ids_are_resolved_on_read(self):
         preset = UserStylePreset.objects.create(
@@ -109,3 +128,5 @@ class StylePresetReferenceImagesTest(TestCase):
 
         self.assertEqual(len(data['styles'][0]['reference_images']), 1)
         self.assertIn('/api/media/style_references/', data['styles'][0]['reference_images'][0])
+        self.assertEqual(data['styles'][0]['reference_image_ids'], [self.image.id])
+        self.assertEqual(data['styles_details'][0]['reference_image_ids'], [self.image.id])

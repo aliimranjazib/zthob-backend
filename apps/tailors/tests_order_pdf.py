@@ -2,19 +2,25 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from rest_framework.test import APIClient
 
 from apps.customers.models import CustomerProfile, FamilyMember
 from apps.orders.models import Order, OrderItem
 from apps.tailors.models import Fabric, FabricCategory, TailorProfile
 from apps.tailors.services.order_pdf import (
     _ARABIC_FONT_AVAILABLE,
+    _build_order_details_section,
+    _build_priority_sections,
     _contains_arabic,
     _custom_style_caption_html,
     _custom_style_comment_html,
+    _format_measurement_pairs,
     _format_recipient_html,
     _format_user_text_html,
     _item_recipient_display,
     _resolve_media_file_path,
+    _shape_arabic,
+    _styles,
     _style_reference_image_paths,
     _t,
     _truncate_style_comment,
@@ -79,6 +85,59 @@ class OrderPDFServiceTest(TestCase):
             total_price=Decimal('100.00'),
             family_member=self.family_member,
         )
+
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.tailor_user)
+
+    def test_measurement_arabic_label_not_double_shaped(self):
+        pairs = _format_measurement_pairs(
+            {'sleeve_length': 24, 'chest_front': 42},
+            lang='ar',
+            field_map={
+                'sleeve_length': {
+                    'label_en': 'Sleeve Length',
+                    'label_ar': 'طول الكم',
+                    'order': 0,
+                    'unit': 'cm',
+                },
+                'chest_front': {
+                    'label_en': 'Chest Front',
+                    'label_ar': 'الصدر الأمامي',
+                    'order': 1,
+                    'unit': 'cm',
+                },
+            },
+        )
+        self.assertEqual(len(pairs), 2)
+        shaped_once = pairs[0][0]
+        shaped_twice = _shape_arabic(_shape_arabic('طول الكم'))
+        self.assertEqual(shaped_once, _shape_arabic('طول الكم'))
+        self.assertNotEqual(shaped_once, shaped_twice)
+
+    def test_pdf_priority_sections_appear_before_order_details(self):
+        item = self.order.order_items.first()
+        item.measurements = {'chest': 42, 'waist': 34}
+        item.save(update_fields=['measurements'])
+
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
+
+        s = _styles('en')
+        page_w = A4[0] - 40 * mm
+        items = list(self.order.order_items.select_related('fabric', 'family_member').all())
+        priority = _build_priority_sections(self.order, items, page_w, s, 'en', {})
+        details = _build_order_details_section(self.order, page_w, s, 'en')
+        self.assertGreater(len(priority), 0)
+        self.assertGreater(len(details), 0)
+
+    @override_settings(SECURE_SSL_REDIRECT=False)
+    def test_download_pdf_lang_query_param_overrides_default(self):
+        response = self.client.get(
+            f'/api/tailors/orders/{self.order.id}/download-pdf/?lang=en',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(response.content.startswith(b'%PDF'))
 
     def test_arabic_fonts_are_available(self):
         self.assertTrue(_ARABIC_FONT_AVAILABLE)

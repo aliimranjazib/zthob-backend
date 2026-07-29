@@ -3,9 +3,8 @@
 import copy
 
 from apps.orders.style_references import (
-    format_reference_image_urls,
+    format_style_reference_fields,
     resolve_reference_image_ids,
-    resolve_stored_reference_image_paths,
 )
 
 
@@ -33,8 +32,8 @@ def format_preset_styles_for_response(styles, request=None):
         return processed
 
     for style in processed:
-        reference_paths = resolve_stored_reference_image_paths(style)
-        style.pop('reference_image_ids', None)
-        style['reference_images'] = format_reference_image_urls(reference_paths, request)
+        reference_urls, reference_image_ids = format_style_reference_fields(style, request)
+        style['reference_images'] = reference_urls
+        style['reference_image_ids'] = reference_image_ids
 
     return processed

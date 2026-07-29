@@ -206,6 +206,7 @@ class UserStylePresetSerializer(serializers.ModelSerializer):
                         ) if style.image else None,
                         'text': selection.get('text'),
                         'reference_images': formatted.get('reference_images', []),
+                        'reference_image_ids': formatted.get('reference_image_ids', []),
                     })
                 except CustomStyle.DoesNotExist:
                     pass

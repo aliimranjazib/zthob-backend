@@ -2,6 +2,7 @@
 from rest_framework import serializers
 from apps.tailors.models.employee import TailorEmployee
 from apps.core.services import PhoneVerificationService
+from apps.core.phone_utils import format_phone_for_display
 
 
 VALID_ROLES = list(TailorEmployee.VALID_ROLES)
@@ -107,7 +108,9 @@ class TailorEmployeeResponseSerializer(serializers.ModelSerializer):
         return obj.user.get_full_name() or obj.user.phone or ''
 
     def get_phone(self, obj):
-        return obj.user.phone or ''
+        if not obj.user.phone:
+            return ''
+        return format_phone_for_display(obj.user.phone)
 
     def get_permissions(self, obj):
         return obj.permissions_dict

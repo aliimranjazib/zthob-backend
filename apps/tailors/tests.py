@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from unittest.mock import patch
 from rest_framework.test import APITestCase
@@ -332,3 +332,43 @@ class TailorEmployeeFabricCatalogTest(APITestCase):
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
         fabric_names = [item['name'] for item in list_response.data['data']]
         self.assertIn('Employee Catalog Fabric', fabric_names)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class TailorEmployeePhoneDisplayTest(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username='employee_phone_owner',
+            password='testpass123',
+            role='TAILOR',
+            phone='0500000401',
+        )
+        self.owner_profile, _ = TailorProfile.objects.get_or_create(
+            user=self.owner,
+            defaults={'shop_name': 'Employee Phone Shop'},
+        )
+        if not self.owner_profile.shop_name:
+            self.owner_profile.shop_name = 'Employee Phone Shop'
+            self.owner_profile.save(update_fields=['shop_name'])
+        self.employee_user = User.objects.create_user(
+            username='employee_phone_user',
+            password='testpass123',
+            role='TAILOR',
+            phone='0500000000',
+            first_name='Employee',
+            last_name='Phone',
+        )
+        TailorEmployee.objects.create(
+            tailor=self.owner_profile,
+            user=self.employee_user,
+            roles=['manager'],
+            can_manage_employees=True,
+            is_active=True,
+        )
+        self.client.force_authenticate(user=self.owner)
+
+    def test_employees_list_returns_e164_phone_numbers(self):
+        response = self.client.get('/api/tailors/employees/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        employee = next(item for item in response.data['data'] if item['phone'] == '+966500000000')
+        self.assertEqual(employee['name'], 'Employee Phone')
