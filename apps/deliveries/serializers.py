@@ -1,7 +1,29 @@
 from rest_framework import serializers
 from apps.core.phone_utils import display_user_label, format_phone_for_display
 from apps.deliveries.models import DeliveryTracking, LocationHistory
+from apps.deliveries.services import DeliveryTrackingService
 from apps.orders.models import Order
+
+
+def _build_rider_info(rider):
+    if not rider:
+        return None
+
+    profile = getattr(rider, 'rider_profile', None)
+    raw_phone = getattr(profile, 'phone_number', None) or getattr(rider, 'phone', '')
+    return {
+        'id': rider.id,
+        'username': rider.username,
+        'full_name': (
+            getattr(profile, 'full_name', None)
+            or rider.get_full_name()
+            or rider.username
+        ),
+        'phone_number': format_phone_for_display(raw_phone) if raw_phone else '',
+        'vehicle_type': getattr(profile, 'vehicle_type', ''),
+        'rating': float(getattr(profile, 'rating', 0.0) or 0.0),
+        'is_available': bool(getattr(profile, 'is_available', False)),
+    }
 
 
 class LocationHistorySerializer(serializers.ModelSerializer):
@@ -205,6 +227,9 @@ class CustomerTrackingSerializer(serializers.ModelSerializer):
     order_number = serializers.CharField(source='order.order_number', read_only=True)
     rider_name = serializers.SerializerMethodField()
     rider_phone = serializers.SerializerMethodField()
+    measurement_rider_info = serializers.SerializerMethodField()
+    delivery_rider_info = serializers.SerializerMethodField()
+    active_rider_info = serializers.SerializerMethodField()
     current_location = serializers.SerializerMethodField()
     estimated_time_minutes = serializers.SerializerMethodField()
     recent_route = serializers.SerializerMethodField()
@@ -216,6 +241,9 @@ class CustomerTrackingSerializer(serializers.ModelSerializer):
             'order_number',
             'rider_name',
             'rider_phone',
+            'measurement_rider_info',
+            'delivery_rider_info',
+            'active_rider_info',
             'current_status',
             'current_location',
             'delivery_address',
@@ -230,18 +258,32 @@ class CustomerTrackingSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id']
     
+    def _active_rider(self, obj):
+        return DeliveryTrackingService.resolve_active_tracking_rider(obj.order)
+
     def get_rider_name(self, obj):
-        """Get rider name"""
-        try:
-            if hasattr(obj.rider, 'rider_profile') and obj.rider.rider_profile:
-                return obj.rider.rider_profile.full_name or obj.rider.username
-            return obj.rider.username
-        except:
-            return obj.rider.username if obj.rider else None
+        """Active rider name for live tracking (delivery or measurement phase)."""
+        rider = self._active_rider(obj)
+        info = _build_rider_info(rider)
+        return info['full_name'] if info else None
     
     def get_rider_phone(self, obj):
-        """Get rider phone number (verified phone from user account)"""
-        return obj.rider.phone if obj.rider else None
+        """Active rider phone for live tracking."""
+        rider = self._active_rider(obj)
+        if rider and rider.phone:
+            return format_phone_for_display(rider.phone)
+        return None
+
+    def get_measurement_rider_info(self, obj):
+        """Original measurement rider — does not change when delivery rider is reassigned."""
+        return _build_rider_info(obj.order.measurement_rider)
+
+    def get_delivery_rider_info(self, obj):
+        """Current delivery rider — reflects reassignments."""
+        return _build_rider_info(obj.order.delivery_rider)
+
+    def get_active_rider_info(self, obj):
+        return _build_rider_info(self._active_rider(obj))
     
     def get_current_location(self, obj):
         """Get current rider location"""

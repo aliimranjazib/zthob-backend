@@ -221,7 +221,14 @@ class CustomerTrackingView(APIView):
         """Get tracking information for customer"""
         
         # Get order
-        order = get_object_or_404(Order, id=order_id)
+        order = get_object_or_404(
+            Order.objects.select_related(
+                'measurement_rider__rider_profile',
+                'delivery_rider__rider_profile',
+                'rider__rider_profile',
+            ),
+            id=order_id,
+        )
         
         # Verify customer owns this order
         if order.customer != request.user:
@@ -232,8 +239,8 @@ class CustomerTrackingView(APIView):
                 request=request
             )
         
-        # Check if order has a rider assigned
-        if not order.rider:
+        active_rider = DeliveryTrackingService.resolve_active_tracking_rider(order)
+        if not active_rider:
             return api_response(
                 success=False,
                 message="No rider assigned to this order yet",
@@ -241,11 +248,8 @@ class CustomerTrackingView(APIView):
                 request=request
             )
         
-        # Get tracking
-        try:
-            tracking = DeliveryTracking.objects.get(order=order, is_active=True)
-        except DeliveryTracking.DoesNotExist:
-            # Create if doesn't exist
+        tracking = DeliveryTrackingService.sync_tracking_rider_for_order(order)
+        if not tracking:
             tracking = DeliveryTrackingService.create_tracking_for_order(order)
         
         serializer = CustomerTrackingSerializer(tracking, context={'request': request})

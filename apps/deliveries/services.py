@@ -151,6 +151,45 @@ class DeliveryTrackingService:
     """
     Service for managing delivery tracking operations.
     """
+
+    @staticmethod
+    def resolve_active_tracking_rider(order):
+        """
+        Rider whose live location should be shown to the customer.
+
+        Delivery phase uses the current delivery rider; measurement phase uses
+        the originally assigned measurement rider.
+        """
+        if order.delivery_rider_id and order.status in (
+            'ready_for_delivery',
+            'delivered',
+            'in_progress',
+        ):
+            return order.delivery_rider
+        if order.measurement_rider_id:
+            return order.measurement_rider
+        return order.delivery_rider or order.rider or order.assigned_rider
+
+    @staticmethod
+    def sync_tracking_rider_for_order(order):
+        """Keep DeliveryTracking.rider aligned with the active order rider."""
+        from apps.deliveries.models import DeliveryTracking
+
+        active_rider = DeliveryTrackingService.resolve_active_tracking_rider(order)
+        if not active_rider:
+            return None
+
+        tracking = (
+            DeliveryTracking.objects.filter(order=order, is_active=True).first()
+            or DeliveryTracking.objects.filter(order=order).order_by('-created_at').first()
+        )
+        if not tracking:
+            return DeliveryTrackingService.create_tracking_for_order(order)
+
+        if tracking.rider_id != active_rider.id:
+            tracking.rider = active_rider
+            tracking.save(update_fields=['rider', 'updated_at'])
+        return tracking
     
     @staticmethod
     def create_tracking_for_order(order):
@@ -166,18 +205,23 @@ class DeliveryTrackingService:
         """
         from apps.deliveries.models import DeliveryTracking
         
-        if not order.rider:
+        active_rider = DeliveryTrackingService.resolve_active_tracking_rider(order)
+        if not active_rider:
             raise ValueError("Order must have a rider assigned")
         
         # Check if tracking already exists
         tracking, created = DeliveryTracking.objects.get_or_create(
             order=order,
             defaults={
-                'rider': order.rider,
+                'rider': active_rider,
                 'current_status': 'assigned',
                 'is_active': True,
             }
         )
+
+        if not created and tracking.rider_id != active_rider.id:
+            tracking.rider = active_rider
+            tracking.save(update_fields=['rider', 'updated_at'])
         
         if created:
             # Set pickup and delivery locations from order

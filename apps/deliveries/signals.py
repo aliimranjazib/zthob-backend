@@ -12,25 +12,25 @@ from apps.deliveries.services import DeliveryTrackingService
 @receiver(post_save, sender=Order)
 def create_delivery_tracking_on_rider_assignment(sender, instance, created, **kwargs):
     """
-    Automatically create delivery tracking when a rider is assigned to an order.
+    Automatically create or sync delivery tracking when a rider is assigned to an order.
     """
-    # Only create tracking if:
-    # 1. Order has a rider assigned
-    # 2. Tracking doesn't already exist
-    # 3. Order is not cancelled
-    if instance.rider and instance.status != 'cancelled':
-        try:
-            # Check if tracking already exists
-            DeliveryTracking.objects.get(order=instance)
-        except DeliveryTracking.DoesNotExist:
-            # Create tracking
-            try:
-                DeliveryTrackingService.create_tracking_for_order(instance)
-            except Exception as e:
-                # Log error but don't fail the order save
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Failed to create delivery tracking for order {instance.order_number}: {str(e)}")
+    if instance.status == 'cancelled':
+        return
+
+    active_rider = DeliveryTrackingService.resolve_active_tracking_rider(instance)
+    if not active_rider:
+        return
+
+    try:
+        DeliveryTrackingService.sync_tracking_rider_for_order(instance)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(
+            "Failed to create/sync delivery tracking for order %s: %s",
+            instance.order_number,
+            str(e),
+        )
 
 
 @receiver(post_save, sender=Order)
