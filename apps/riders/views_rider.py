@@ -2,6 +2,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from apps.core.phone_utils import format_phone_for_display
 from zthob.utils import api_response
 from .permissions import IsRider
 from . import models
@@ -9,6 +10,18 @@ from .serializers import (
     JoinTailorTeamSerializer,
     TailorBasicInfoSerializer,
 )
+
+
+def _tailor_phone_for_display(tailor, tailor_profile=None):
+    """Return tailor contact phone in E.164 for API responses."""
+    if tailor_profile is None:
+        tailor_profile = getattr(tailor, 'tailor_profile', None)
+    raw_phone = ''
+    if tailor_profile and tailor_profile.contact_number:
+        raw_phone = tailor_profile.contact_number
+    else:
+        raw_phone = getattr(tailor, 'phone', '') or ''
+    return format_phone_for_display(raw_phone) if raw_phone else ''
 
 
 @api_view(['POST'])
@@ -32,7 +45,7 @@ def join_tailor_team(request):
         tailor_info = {
             'id': tailor.id,
             'shop_name': getattr(tailor_profile, 'shop_name', tailor.username),
-            'phone': (tailor_profile.contact_number if tailor_profile and tailor_profile.contact_number else getattr(tailor, 'phone', '')),
+            'phone': _tailor_phone_for_display(tailor, tailor_profile),
         }
         
         message = 'Successfully joined tailor\'s team' if created else 'You are already part of this tailor\'s team'
@@ -69,7 +82,7 @@ def rider_my_tailors(request):
         tailor_data = {
             'id': assoc.tailor.id,
             'shop_name': getattr(tailor_profile, 'shop_name', assoc.tailor.username),
-            'phone': (tailor_profile.contact_number if tailor_profile and tailor_profile.contact_number else getattr(assoc.tailor, 'phone', '')),
+            'phone': _tailor_phone_for_display(assoc.tailor, tailor_profile),
             'joined_at': assoc.created_at,
             'can_take_measurements': assoc.can_take_measurements,
             'can_do_delivery': assoc.can_do_delivery,

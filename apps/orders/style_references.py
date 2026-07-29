@@ -104,3 +104,63 @@ def format_reference_image_urls(reference_paths, request=None):
             urls.append(built)
 
     return urls
+
+
+def _normalize_reference_image_path(image_path):
+    """Normalize a stored path or public URL to a relative media path."""
+    if not image_path:
+        return None
+
+    path_str = str(image_path).strip()
+    if not path_str:
+        return None
+
+    if path_str.startswith(('http://', 'https://')):
+        marker = '/api/media/'
+        if marker in path_str:
+            path_str = path_str.split(marker, 1)[1]
+        else:
+            marker = '/media/'
+            if marker in path_str:
+                path_str = path_str.split(marker, 1)[1]
+
+    return path_str.lstrip('/')
+
+
+def resolve_reference_image_ids_from_paths(reference_paths):
+    """Map stored paths/URLs back to StyleReferenceImage IDs, preserving order."""
+    if not reference_paths:
+        return []
+
+    normalized_paths = []
+    for image_path in reference_paths:
+        normalized = _normalize_reference_image_path(image_path)
+        if normalized:
+            normalized_paths.append(normalized)
+
+    if not normalized_paths:
+        return []
+
+    images = StyleReferenceImage.objects.filter(image__in=normalized_paths)
+    ids_by_path = {
+        image.image.name: image.id
+        for image in images
+        if image.image
+    }
+    return [
+        ids_by_path[path]
+        for path in normalized_paths
+        if path in ids_by_path
+    ]
+
+
+def format_style_reference_fields(style, request=None):
+    """Return public URLs and image IDs for a style's reference images."""
+    paths = resolve_stored_reference_image_paths(style)
+    urls = format_reference_image_urls(paths, request)
+    stored_ids = style.get('reference_image_ids') or []
+    if stored_ids:
+        image_ids = list(stored_ids)
+    else:
+        image_ids = resolve_reference_image_ids_from_paths(paths)
+    return urls, image_ids

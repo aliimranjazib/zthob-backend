@@ -293,3 +293,45 @@ class TailorEmployeeRiderTeamAccessTest(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.status, 'ready_for_delivery')
         self.assertEqual(order.delivery_rider_id, self.rider.id)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class RiderMyTailorsPhoneDisplayTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.tailor = User.objects.create_user(
+            username='my_tailor_phone',
+            password='testpass123',
+            role='TAILOR',
+            phone='0500000999',
+        )
+        self.tailor_profile, _ = TailorProfile.objects.get_or_create(user=self.tailor)
+        self.tailor_profile.shop_name = 'My Tailor Shop'
+        self.tailor_profile.contact_number = '0500000000'
+        self.tailor_profile.shop_status = True
+        self.tailor_profile.save(update_fields=['shop_name', 'contact_number', 'shop_status'])
+
+        self.rider = User.objects.create_user(
+            username='my_tailor_rider',
+            password='testpass123',
+            role='RIDER',
+        )
+        profile, _ = RiderProfile.objects.get_or_create(user=self.rider)
+        profile.full_name = 'my_tailor_rider'
+        profile.save(update_fields=['full_name'])
+        review, _ = RiderProfileReview.objects.get_or_create(profile=profile)
+        review.review_status = 'approved'
+        review.save(update_fields=['review_status'])
+
+        TailorRiderAssociation.objects.create(
+            tailor=self.tailor,
+            rider=self.rider,
+            is_active=True,
+        )
+        self.client.force_authenticate(user=self.rider)
+
+    def test_my_tailors_returns_e164_phone_numbers(self):
+        response = self.client.get('/api/riders/my-tailors/')
+        self.assertEqual(response.status_code, 200, response.data)
+        tailor = response.data['data']['tailors'][0]
+        self.assertEqual(tailor['phone'], '+966500000000')

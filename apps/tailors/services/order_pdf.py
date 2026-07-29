@@ -700,7 +700,7 @@ def _custom_style_card(style, cell_width, s, lang='en'):
 
     if image_path:
         try:
-            img = Image(image_path, width=22 * mm, height=22 * mm, kind='proportional')
+            img = Image(image_path, width=18 * mm, height=18 * mm, kind='proportional')
             rows.append([img])
         except Exception as exc:
             logger.debug("Unable to add custom style image to PDF card: %s", exc)
@@ -754,8 +754,8 @@ def _custom_style_image_grid(styles, page_w, s, lang='en'):
         ('BACKGROUND', (0, 0), (-1, -1), WHITE),
         ('BOX', (0, 0), (-1, -1), 0.25, BRAND_MID),
         ('INNERGRID', (0, 0), (-1, -1), 0.25, BRAND_MID),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('LEFTPADDING', (0, 0), (-1, -1), 4),
         ('RIGHTPADDING', (0, 0), (-1, -1), 4),
     ]))
@@ -1045,7 +1045,8 @@ def _measurements_grid(pairs, page_w, s, lang='en', title=''):
             return False
 
     def _cell(lbl, val, unit=None):
-        lbl_text = _t(lbl, lang) if _is_rtl(lang) else str(lbl).upper()
+        # Labels are already translated and shaped in _format_measurement_pairs for RTL.
+        lbl_text = str(lbl).upper() if not _is_rtl(lang) else str(lbl)
         val_text = str(val)
         unit_text = unit if _is_numeric(val) else ''
         inner = [
@@ -1111,10 +1112,10 @@ def _measurements_grid(pairs, page_w, s, lang='en', title=''):
     grid = Table(grid_rows, colWidths=[cell_w] * COLS)
     grid.setStyle(TableStyle([
         ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING',    (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('LEFTPADDING',   (0, 0), (-1, -1), 8),
-        ('RIGHTPADDING',  (0, 0), (-1, -1), 8),
+        ('TOPPADDING',    (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 6),
         ('GRID',          (0, 0), (-1, -1), 0.5, BRAND_MID),
         ('ROWBACKGROUNDS',(0, 0), (-1, -1), [WHITE, BRAND_LIGHT]),
         ('LINEABOVE',     (0, 0), (-1, 0),  1, BRAND_ACCENT),
@@ -1138,36 +1139,35 @@ def _measurements_grid(pairs, page_w, s, lang='en', title=''):
     return grid
 
 
-def generate_order_pdf(order, lang='en') -> bytes:
-    """
-    Generate a professional PDF for a single order.
+PDF_SECTION_SPACER = 3 * mm
+PDF_COMMENT_BOX_HEIGHT = 18 * mm
 
-    Args:
-        order: apps.orders.models.Order instance (with related objects pre-fetched or lazy).
-        lang: Language code, 'en' (default), 'ar', or 'ur'.
 
-    Returns:
-        bytes: Raw PDF file content.
-    """
+def _item_fabric_label_html(item, order, lang):
+    """Compact fabric/recipient line for priority measurement/style sections."""
+    if item.fabric:
+        fabric_name_html = _format_user_text_html(item.fabric.name, lang)
+    else:
+        fabric_name_html = _format_user_text_html(
+            _localized_value('Measurement Service', lang),
+            lang,
+            reshape=False,
+        )
+    fabric_sku = f'SKU: {item.fabric.sku}' if item.fabric and item.fabric.sku else ''
+    fabric_parts = []
+    recipient_html = _format_recipient_html(item, order, lang)
+    if recipient_html:
+        fabric_parts.append(recipient_html)
+    fabric_parts.append(fabric_name_html)
+    if fabric_sku:
+        fabric_parts.append(f'<font color="#888888" size="7">{_safe_text(fabric_sku)}</font>')
+    return '<br/>'.join(fabric_parts)
+
+
+def _build_header_section(order, page_w, s, lang):
+    """Compact header banner and status strip."""
     is_rtl = _is_rtl(lang)
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        rightMargin=20 * mm,
-        leftMargin=20 * mm,
-        topMargin=15 * mm,
-        bottomMargin=15 * mm,
-        title=f'Order {order.order_number}',
-        author='Mgask Platform',
-    )
-
-    s = _styles(lang)
-    page_w = A4[0] - 40 * mm
     story = []
-    measurement_fields = _measurement_field_map()
-
-    # ── Header banner ─────────────────────────────────────────────────────────
     _receipt_label = _t('Order Receipt', lang) if is_rtl else 'Order Receipt'
     _font_bold = _AR_FONT_BOLD if (is_rtl and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
     if is_rtl:
@@ -1192,24 +1192,22 @@ def generate_order_pdf(order, lang='en') -> bytes:
     header_tbl.setStyle(TableStyle([
         ('BACKGROUND',    (0, 0), (-1, -1), BRAND_PRIMARY),
         ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING',    (0, 0), (-1, -1), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-        ('LEFTPADDING',   (0, 0), (0, -1),  10),
-        ('RIGHTPADDING',  (-1, 0), (-1, -1), 10),
+        ('TOPPADDING',    (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('LEFTPADDING',   (0, 0), (0, -1),  8),
+        ('RIGHTPADDING',  (-1, 0), (-1, -1), 8),
         ('ROUNDEDCORNERS', [4, 4, 4, 4]),
     ]))
     story.append(header_tbl)
-    story.append(Spacer(1, 5 * mm))
+    story.append(Spacer(1, PDF_SECTION_SPACER))
 
-    # ── Status strip ──────────────────────────────────────────────────────────
     status_display = _choice_display(order.status, order.ORDER_STATUS_CHOICES, lang)
     tailor_status_display = _choice_display(order.tailor_status, order.TAILOR_STATUS_CHOICES, lang) if order.tailor_status else _t('N/A', lang)
     status_color = _status_badge_color(order.status)
     _sb_font = _AR_FONT_BOLD if (is_rtl and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
-
-    _status_lbl  = _t('Status:', lang)
-    _tailor_lbl  = _t('Tailor Status:', lang)
-    _placed_lbl  = _t('Placed:', lang)
+    _status_lbl = _t('Status:', lang)
+    _tailor_lbl = _t('Tailor Status:', lang)
+    _placed_lbl = _t('Placed:', lang)
 
     status_data = [[
         Paragraph(f'{_safe_text(_status_lbl)} <b>{_safe_text(status_display)}</b>',
@@ -1228,25 +1226,145 @@ def generate_order_pdf(order, lang='en') -> bytes:
     status_tbl.setStyle(TableStyle([
         ('BACKGROUND',    (0, 0), (-1, -1), status_color),
         ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING',    (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('LEFTPADDING',   (0, 0), (-1, -1), 8),
-        ('RIGHTPADDING',  (0, 0), (-1, -1), 8),
+        ('TOPPADDING',    (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 6),
     ]))
     story.append(status_tbl)
-    story.append(Spacer(1, 5 * mm))
+    story.append(Spacer(1, PDF_SECTION_SPACER))
+    return story
 
-    # ── Order Info ────────────────────────────────────────────────────────────
-    # Order Info
+
+def _build_priority_sections(order, items, page_w, s, lang, measurement_fields):
+    """Measurements and custom styles first — what tailors need immediately."""
+    story = []
+    has_priority = False
+
+    for item_index, item in enumerate(items):
+        item_has_content = False
+        item_story = []
+
+        if item.measurements and isinstance(item.measurements, dict):
+            meas_pairs = _format_measurement_pairs(item.measurements, lang, measurement_fields)
+            if meas_pairs:
+                item_has_content = True
+                item_story.append(Paragraph(_item_fabric_label_html(item, order, lang), s['small']))
+                item_story.append(Spacer(1, 1 * mm))
+                meas_title = item.measurements.get('title', '')
+                item_story.append(_measurements_grid(meas_pairs, page_w, s, lang, title=meas_title))
+
+        if item.custom_styles and isinstance(item.custom_styles, list):
+            style_section = _custom_style_section(item.custom_styles, page_w, s, lang)
+            if style_section:
+                item_has_content = True
+                if not (item.measurements and _format_measurement_pairs(item.measurements, lang, measurement_fields)):
+                    item_story.append(Paragraph(_item_fabric_label_html(item, order, lang), s['small']))
+                    item_story.append(Spacer(1, 1 * mm))
+                item_story.append(Paragraph(f'<b>{_safe_text(_t("Styles:", lang))}</b>', s['small']))
+                item_story.append(Spacer(1, 1 * mm))
+                item_story.append(style_section)
+
+        if item.custom_instructions and item_has_content:
+            _instr_label = _t('Instructions:', lang)
+            item_story.append(Spacer(1, 1 * mm))
+            item_story.append(Paragraph(
+                f'<b>{_safe_text(_instr_label)}</b> {_format_user_text_html(item.custom_instructions, lang)}',
+                s['small'],
+            ))
+
+        if item_has_content:
+            has_priority = True
+            if item_index > 0:
+                story.append(Spacer(1, PDF_SECTION_SPACER))
+            story.extend(item_story)
+
+    if order.rider_measurements and isinstance(order.rider_measurements, dict) and order.rider_measurements:
+        meas_pairs = _format_measurement_pairs(order.rider_measurements, lang, measurement_fields)
+        if meas_pairs:
+            has_priority = True
+            if story:
+                story.append(Spacer(1, PDF_SECTION_SPACER))
+            story.append(Paragraph(_t('RIDER MEASUREMENTS', lang), s['section_header']))
+            story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=2))
+            if order.measurement_taken_at:
+                story.append(Paragraph(
+                    f'<i>{_safe_text(_t("Measured at:", lang))} {_safe_text(_fmt_datetime(order.measurement_taken_at))}</i>',
+                    s['small'],
+                ))
+                story.append(Spacer(1, 1 * mm))
+            story.append(_measurements_grid(meas_pairs, page_w, s, lang))
+
+    if has_priority:
+        story.append(Spacer(1, PDF_SECTION_SPACER))
+    return story
+
+
+def _build_items_summary_table(items, order, page_w, s, lang):
+    """Slim items table: fabric, qty, ready — no nested measurements/styles."""
+    is_rtl = _is_rtl(lang)
+    story = []
+    story.append(Paragraph(_t('ORDER ITEMS', lang), s['section_header']))
+    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=2))
+
+    if not items:
+        story.append(Paragraph(_t('No items found for this order.', lang), s['value']))
+        return story
+
+    col_widths_items = [page_w * 0.65, page_w * 0.15, page_w * 0.20]
+    item_headers = [
+        Paragraph(_t('Item / Fabric', lang), s['table_header']),
+        Paragraph(_t('Qty', lang), s['table_header']),
+        Paragraph(_t('Ready', lang), s['table_header']),
+    ]
+    if is_rtl:
+        item_headers.reverse()
+
+    rows = [item_headers]
+    _item_font_bold = _AR_FONT_BOLD if (is_rtl and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
+
+    for item_index, item in enumerate(items):
+        fabric_cell = Paragraph(_item_fabric_label_html(item, order, lang), s['table_cell'])
+        is_ready = ('✓ ' + _t('Yes', lang)) if item.is_ready else ('✗ ' + _t('No', lang))
+        ready_color = colors.HexColor('#4CAF50') if item.is_ready else colors.HexColor('#F44336')
+        row = [
+            fabric_cell,
+            Paragraph(_safe_text(str(item.quantity)), s['table_cell']),
+            Paragraph(is_ready, ParagraphStyle(
+                f'is_ready_{lang}_{item_index}', parent=s['table_cell'],
+                textColor=ready_color, fontName=_item_font_bold,
+            )),
+        ]
+        if is_rtl:
+            row.reverse()
+        rows.append(row)
+
+    item_tbl = Table(rows, colWidths=col_widths_items, repeatRows=1)
+    tbl_style = [
+        ('BACKGROUND',    (0, 0), (-1, 0),  BRAND_PRIMARY),
+        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ('GRID',          (0, 0), (-1, -1), 0.3, BRAND_MID),
+        ('LINEBELOW',     (0, 0), (-1, 0),  1,   BRAND_ACCENT),
+        ('TOPPADDING',    (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [WHITE, BRAND_LIGHT]),
+    ]
+    item_tbl.setStyle(TableStyle(tbl_style))
+    story.append(item_tbl)
+    return story
+
+
+def _build_order_details_section(order, page_w, s, lang):
+    """Order metadata KV table."""
+    story = []
     order_type_display = _choice_display(order.order_type, order.ORDER_TYPE_CHOICES, lang)
     service_mode_display = _choice_display(order.service_mode, order.SERVICE_MODE_CHOICES, lang)
-
     order_info_rows = [
-        ('Order ID',         str(order.id)),
-        ('Order Number',     order.order_number, True),
-        ('Order Type',       order_type_display, True),
-        ('Service Mode',     service_mode_display, True),
-        ('Items Count',      str(order.items_count)),
+        ('Order ID', str(order.id)),
+        ('Order Number', order.order_number, True),
+        ('Order Type', order_type_display, True),
+        ('Service Mode', service_mode_display, True),
+        ('Items Count', str(order.items_count)),
     ]
     if order.estimated_delivery_date:
         order_info_rows.append(('Est. Delivery', _fmt_date(order.estimated_delivery_date)))
@@ -1261,275 +1379,157 @@ def generate_order_pdf(order, lang='en') -> bytes:
         order_info_rows.append(('Stitching Done', _fmt_date(order.stitching_completion_date)))
 
     story.append(Paragraph(_t('ORDER DETAILS', lang), s['section_header']))
-    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
+    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=2))
     story.append(_kv_table(order_info_rows, col_widths=[page_w * 0.30, page_w * 0.70], lang=lang))
-    story.append(Spacer(1, 5 * mm))
+    return story
 
-    # ── Tailor Info ───────────────────────────────────────────────────────────
+
+def _build_tailor_section(order, page_w, s, lang):
+    """Tailor and rider assignment details."""
+    story = []
     tailor = order.tailor
-    if tailor:
-        story.append(Paragraph(_t('TAILOR DETAILS', lang), s['section_header']))
-        story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
+    if not tailor:
+        return story
 
-        tailor_name = tailor.get_full_name() or tailor.username
-        shop_name = '—'
-        tailor_contact = getattr(tailor, 'phone', None) or '—'
+    story.append(Paragraph(_t('TAILOR DETAILS', lang), s['section_header']))
+    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=2))
 
-        try:
-            profile = tailor.tailor_profile
-            shop_name = profile.shop_name or tailor_name
-            tailor_contact = profile.contact_number or tailor_contact
-        except Exception:
-            pass
+    tailor_name = tailor.get_full_name() or tailor.username
+    shop_name = '—'
+    tailor_contact = getattr(tailor, 'phone', None) or '—'
+    try:
+        profile = tailor.tailor_profile
+        shop_name = profile.shop_name or tailor_name
+        tailor_contact = profile.contact_number or tailor_contact
+    except Exception:
+        pass
 
-        tailor_rows = [
-            ('Shop Name',  shop_name),
-            ('Tailor',     tailor_name),
-            ('Contact',    tailor_contact, True),
-        ]
-        rider_rows = [
-            ('Measurement Rider', _rider_label(getattr(order, 'measurement_rider', None)), True),
-            ('Delivery Rider', _rider_label(getattr(order, 'delivery_rider', None)), True),
-        ]
-        active_rider = getattr(order, 'rider', None)
-        assigned_rider = getattr(order, 'assigned_rider', None)
-        role_specific_rider_ids = {
-            rider.id
-            for rider in [getattr(order, 'measurement_rider', None), getattr(order, 'delivery_rider', None)]
-            if rider
-        }
-        if active_rider and active_rider.id not in role_specific_rider_ids:
-            rider_rows.append(('Active Rider', _rider_label(active_rider), True))
-        if assigned_rider and assigned_rider.id not in role_specific_rider_ids and assigned_rider != active_rider:
-            rider_rows.append(('Assigned Rider', _rider_label(assigned_rider), True))
-        tailor_rows.extend(row for row in rider_rows if row[1])
+    tailor_rows = [
+        ('Shop Name', shop_name),
+        ('Tailor', tailor_name),
+        ('Contact', tailor_contact, True),
+    ]
+    rider_rows = [
+        ('Measurement Rider', _rider_label(getattr(order, 'measurement_rider', None)), True),
+        ('Delivery Rider', _rider_label(getattr(order, 'delivery_rider', None)), True),
+    ]
+    active_rider = getattr(order, 'rider', None)
+    assigned_rider = getattr(order, 'assigned_rider', None)
+    role_specific_rider_ids = {
+        rider.id
+        for rider in [getattr(order, 'measurement_rider', None), getattr(order, 'delivery_rider', None)]
+        if rider
+    }
+    if active_rider and active_rider.id not in role_specific_rider_ids:
+        rider_rows.append(('Active Rider', _rider_label(active_rider), True))
+    if assigned_rider and assigned_rider.id not in role_specific_rider_ids and assigned_rider != active_rider:
+        rider_rows.append(('Assigned Rider', _rider_label(assigned_rider), True))
+    tailor_rows.extend(row for row in rider_rows if row[1])
+    story.append(_kv_table(tailor_rows, lang=lang))
+    return story
 
-        story.append(_kv_table(tailor_rows, lang=lang))
-        story.append(Spacer(1, 4 * mm))
 
-    # ── Special instructions / notes ──────────────────────────────────────────
-    if order.special_instructions or order.notes:
-        story.append(Paragraph(_t('NOTES & INSTRUCTIONS', lang), s['section_header']))
-        story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
-        if order.special_instructions:
-            _si_label = _t('Special Instructions:', lang)
-            story.append(Paragraph(
-                f'<b>{_safe_text(_si_label)}</b> {_format_user_text_html(order.special_instructions, lang)}',
-                s['value'],
-            ))
-            story.append(Spacer(1, 2 * mm))
-        if order.notes:
-            _n_label = _t('Internal Notes:', lang)
-            story.append(Paragraph(
-                f'<b>{_safe_text(_n_label)}</b> {_format_user_text_html(order.notes, lang)}',
-                s['value'],
-            ))
-        story.append(Spacer(1, 4 * mm))
+def _build_notes_section(order, page_w, s, lang):
+    """Special instructions and internal notes."""
+    story = []
+    if not (order.special_instructions or order.notes):
+        return story
 
-    # ── Order Items table ─────────────────────────────────────────────────────
-    story.append(Paragraph(_t('ORDER ITEMS', lang), s['section_header']))
-    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
+    story.append(Paragraph(_t('NOTES & INSTRUCTIONS', lang), s['section_header']))
+    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=2))
+    if order.special_instructions:
+        _si_label = _t('Special Instructions:', lang)
+        story.append(Paragraph(
+            f'<b>{_safe_text(_si_label)}</b> {_format_user_text_html(order.special_instructions, lang)}',
+            s['value'],
+        ))
+        story.append(Spacer(1, 1 * mm))
+    if order.notes:
+        _n_label = _t('Internal Notes:', lang)
+        story.append(Paragraph(
+            f'<b>{_safe_text(_n_label)}</b> {_format_user_text_html(order.notes, lang)}',
+            s['value'],
+        ))
+    return story
 
-    items = list(order.order_items.select_related('fabric', 'family_member').all())
 
-    if items:
-        col_widths_items = [
-            page_w * 0.65,  # Item / Fabric
-            page_w * 0.15,  # Qty
-            page_w * 0.20,  # Status
-        ]
-
-        item_headers = [
-            Paragraph(_t('Item / Fabric', lang), s['table_header']),
-            Paragraph(_t('Qty', lang), s['table_header']),
-            Paragraph(_t('Ready', lang), s['table_header']),
-        ]
-        if is_rtl:
-            item_headers.reverse()
-
-        header_tbl = Table([item_headers], colWidths=col_widths_items)
-        header_tbl.setStyle(TableStyle([
-            ('BACKGROUND',    (0, 0), (-1, -1), BRAND_PRIMARY),
-            ('TOPPADDING',    (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID',          (0, 0), (-1, -1), 0.3, BRAND_MID),
-            ('LINEBELOW',     (0, 0), (-1, 0),  1,   BRAND_ACCENT),
-        ]))
-        story.append(header_tbl)
-
-        for item_index, item in enumerate(items):
-            if item_index > 0:
-                story.append(Spacer(1, 3 * mm))
-
-            if item.fabric:
-                fabric_name = item.fabric.name
-                fabric_name_html = _format_user_text_html(fabric_name, lang)
-            else:
-                fabric_name_html = _format_user_text_html(
-                    _localized_value('Measurement Service', lang),
-                    lang,
-                    reshape=False,
-                )
-            fabric_sku = f'SKU: {item.fabric.sku}' if item.fabric and item.fabric.sku else ''
-            fabric_parts = []
-            recipient_html = _format_recipient_html(item, order, lang)
-            if recipient_html:
-                fabric_parts.append(recipient_html)
-            fabric_parts.append(fabric_name_html)
-            if fabric_sku:
-                fabric_parts.append(f'<font color="#888888" size="7">{_safe_text(fabric_sku)}</font>')
-            fabric_cell = Paragraph('<br/>'.join(fabric_parts), s['table_cell'])
-
-            is_ready = ('✓ ' + _t('Yes', lang)) if item.is_ready else ('✗ ' + _t('No', lang))
-            ready_color = colors.HexColor('#4CAF50') if item.is_ready else colors.HexColor('#F44336')
-            _item_font_bold = _AR_FONT_BOLD if (is_rtl and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
-
-            row = [
-                fabric_cell,
-                Paragraph(_safe_text(str(item.quantity)), s['table_cell']),
-                Paragraph(is_ready, ParagraphStyle(
-                    f'is_ready_{lang}', parent=s['table_cell'],
-                    textColor=ready_color, fontName=_item_font_bold
-                )),
-            ]
-            if is_rtl:
-                row.reverse()
-            item_rows = [row]
-
-            if item.custom_instructions:
-                _instr_label = _t('Instructions:', lang)
-                instr_p = Paragraph(
-                    f'<b>{_safe_text(_instr_label)}</b> {_format_user_text_html(item.custom_instructions, lang)}',
-                    s['small'],
-                )
-                item_rows.append([instr_p, '', ''])
-
-            if item.measurements and isinstance(item.measurements, dict):
-                meas_pairs = _format_measurement_pairs(item.measurements, lang, measurement_fields)
-                if meas_pairs:
-                    meas_title = item.measurements.get('title', '')
-                    grid = _measurements_grid(meas_pairs, page_w, s, lang, title=meas_title)
-                    item_rows.append([grid, '', ''])
-
-            if item.custom_styles and isinstance(item.custom_styles, list):
-                style_section = _custom_style_section(item.custom_styles, page_w, s, lang)
-                if style_section:
-                    styles_heading = Paragraph(f'<b>{_safe_text(_t("Styles:", lang))}</b>', s['small'])
-                    item_rows.append([styles_heading, '', ''])
-                    item_rows.append([style_section, '', ''])
-
-            tbl_style = [
-                ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
-                ('GRID',          (0, 0), (-1, -1), 0.3, BRAND_MID),
-            ]
-            for idx, detail_row in enumerate(item_rows):
-                if detail_row[1] == '' and detail_row[2] == '':
-                    tbl_style.append(('SPAN', (0, idx), (-1, idx)))
-                    if not isinstance(detail_row[0], Paragraph):
-                        tbl_style.append(('BACKGROUND', (0, idx), (-1, idx), BRAND_LIGHT))
-                        tbl_style.append(('TOPPADDING',    (0, idx), (-1, idx), 2))
-                        tbl_style.append(('BOTTOMPADDING', (0, idx), (-1, idx), 2))
-                    else:
-                        tbl_style.append(('LEFTPADDING', (0, idx), (-1, idx), 15))
-                        tbl_style.append(('TOPPADDING',    (0, idx), (-1, idx), 2))
-                        tbl_style.append(('BOTTOMPADDING', (0, idx), (-1, idx), 2))
-                else:
-                    bg_color = WHITE if (item_index % 2 == 0) else BRAND_LIGHT
-                    tbl_style.append(('BACKGROUND', (0, idx), (-1, idx), bg_color))
-
-            item_tbl = Table(item_rows, colWidths=col_widths_items)
-            item_tbl.setStyle(TableStyle(tbl_style))
-            story.append(item_tbl)
-    else:
-        story.append(Paragraph(_t('No items found for this order.', lang), s['value']))
-
-    story.append(Spacer(1, 6 * mm))
-
-    # ── Order-level measurements (rider measurements) ─────────────────────────
-    if order.rider_measurements and isinstance(order.rider_measurements, dict) and order.rider_measurements:
-        story.append(Paragraph(_t('RIDER MEASUREMENTS', lang), s['section_header']))
-        story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
-        if order.measurement_taken_at:
-            story.append(Paragraph(
-                f'<i>{_safe_text(_t("Measured at:", lang))} {_safe_text(_fmt_datetime(order.measurement_taken_at))}</i>',
-                s['small']
-            ))
-            story.append(Spacer(1, 2 * mm))
-        meas_pairs = _format_measurement_pairs(order.rider_measurements, lang, measurement_fields)
-        story.append(_measurements_grid(meas_pairs, page_w, s, lang))
-        story.append(Spacer(1, 5 * mm))
-    # ── Status History ────────────────────────────────────────────────────────
+def _build_status_history_section(order, page_w, s, lang):
+    """Status change history table."""
+    is_rtl = _is_rtl(lang)
+    story = []
     history_qs = order.status_history.select_related('changed_by').order_by('created_at')[:20]
     history = list(history_qs)
+    if not history:
+        return story
 
-    if history:
-        story.append(Paragraph(_t('STATUS HISTORY', lang), s['section_header']))
-        story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
+    story.append(Paragraph(_t('STATUS HISTORY', lang), s['section_header']))
+    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=2))
 
-        hist_headers = [
-            Paragraph(_t('Date & Time', lang), s['table_header']),
-            Paragraph(_t('Status', lang), s['table_header']),
-            Paragraph(_t('Changed By', lang), s['table_header']),
-            Paragraph(_t('Notes', lang), s['table_header']),
+    hist_headers = [
+        Paragraph(_t('Date & Time', lang), s['table_header']),
+        Paragraph(_t('Status', lang), s['table_header']),
+        Paragraph(_t('Changed By', lang), s['table_header']),
+        Paragraph(_t('Notes', lang), s['table_header']),
+    ]
+    if is_rtl:
+        hist_headers.reverse()
+    hist_rows = [hist_headers]
+
+    for h in history:
+        if h.changed_by and order.customer_id and h.changed_by_id == order.customer_id:
+            changed_by = _t('Customer', lang) if is_rtl else 'Customer'
+        else:
+            changed_by = h.changed_by.get_full_name() or h.changed_by.username if h.changed_by else '—'
+        status_display = _choice_display(h.status, order.ORDER_STATUS_CHOICES, lang)
+        note_text = _localized_note(h.notes, lang)
+        hist_row = [
+            Paragraph(_fmt_datetime(h.created_at), s['small']),
+            Paragraph(_format_user_text_html(status_display, lang, reshape=False), s['small']),
+            Paragraph(_format_user_text_html(changed_by, lang, reshape=False), s['small']),
+            Paragraph(_format_user_text_html(note_text, lang), s['small']),
         ]
         if is_rtl:
-            hist_headers.reverse()
-        hist_rows = [hist_headers]
+            hist_row.reverse()
+        hist_rows.append(hist_row)
 
-        for h in history:
-            if h.changed_by and order.customer_id and h.changed_by_id == order.customer_id:
-                changed_by = _t('Customer', lang) if is_rtl else 'Customer'
-            else:
-                changed_by = h.changed_by.get_full_name() or h.changed_by.username if h.changed_by else '—'
-            status_display = _choice_display(h.status, order.ORDER_STATUS_CHOICES, lang)
-            note_text = _localized_note(h.notes, lang)
-            hist_row = [
-                Paragraph(_fmt_datetime(h.created_at), s['small']),
-                Paragraph(_format_user_text_html(status_display, lang, reshape=False), s['small']),
-                Paragraph(_format_user_text_html(changed_by, lang, reshape=False), s['small']),
-                Paragraph(_format_user_text_html(note_text, lang), s['small']),
-            ]
-            if is_rtl:
-                hist_row.reverse()
-            hist_rows.append(hist_row)
+    hist_tbl = Table(
+        hist_rows,
+        colWidths=[page_w * 0.25, page_w * 0.20, page_w * 0.22, page_w * 0.33],
+        repeatRows=1,
+    )
+    hist_tbl.setStyle(TableStyle([
+        ('BACKGROUND',    (0, 0), (-1, 0),  BRAND_PRIMARY),
+        ('TOPPADDING',    (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 4),
+        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ('GRID',          (0, 0), (-1, -1), 0.3, BRAND_MID),
+        ('LINEBELOW',     (0, 0), (-1, 0),  1,   BRAND_ACCENT),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [WHITE, BRAND_LIGHT]),
+    ]))
+    story.append(hist_tbl)
+    return story
 
-        hist_tbl = Table(
-            hist_rows,
-            colWidths=[page_w * 0.25, page_w * 0.20, page_w * 0.22, page_w * 0.33],
-            repeatRows=1
-        )
-        hist_tbl.setStyle(TableStyle([
-            ('BACKGROUND',    (0, 0), (-1, 0),  BRAND_PRIMARY),
-            ('TOPPADDING',    (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LEFTPADDING',   (0, 0), (-1, -1), 5),
-            ('RIGHTPADDING',  (0, 0), (-1, -1), 5),
-            ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
-            ('GRID',          (0, 0), (-1, -1), 0.3, BRAND_MID),
-            ('LINEBELOW',     (0, 0), (-1, 0),  1,   BRAND_ACCENT),
-            ('ROWBACKGROUNDS',(0, 1), (-1, -1), [WHITE, BRAND_LIGHT]),
-        ]))
-        story.append(hist_tbl)
-        story.append(Spacer(1, 5 * mm))
 
-    # ── Comments ──────────────────────────────────────────────────────────────
+def _build_comments_and_footer(order, page_w, s, lang):
+    """Comments box and generated footer."""
+    is_rtl = _is_rtl(lang)
+    story = []
     story.append(Paragraph(_t('COMMENTS', lang), s['section_header']))
-    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=4))
-    comments_tbl = Table([['']], colWidths=[page_w], rowHeights=[28 * mm])
+    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=2))
+    comments_tbl = Table([['']], colWidths=[page_w], rowHeights=[PDF_COMMENT_BOX_HEIGHT])
     comments_tbl.setStyle(TableStyle([
         ('BOX',           (0, 0), (-1, -1), 0.7, BRAND_MID),
         ('BACKGROUND',    (0, 0), (-1, -1), WHITE),
-        ('TOPPADDING',    (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('LEFTPADDING',   (0, 0), (-1, -1), 8),
-        ('RIGHTPADDING',  (0, 0), (-1, -1), 8),
+        ('TOPPADDING',    (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 6),
     ]))
     story.append(comments_tbl)
-    story.append(Spacer(1, 5 * mm))
-
-    # ── Footer ────────────────────────────────────────────────────────────────
-    story.append(HRFlowable(width=page_w, color=BRAND_MID, thickness=0.5, spaceAfter=4))
+    story.append(Spacer(1, PDF_SECTION_SPACER))
+    story.append(HRFlowable(width=page_w, color=BRAND_MID, thickness=0.5, spaceAfter=2))
     generated_time = timezone.now().strftime('%d %b %Y, %I:%M %p')
     if is_rtl:
         _gen_label = _t('Generated by Mgask Platform', lang)
@@ -1538,8 +1538,57 @@ def generate_order_pdf(order, lang='en') -> bytes:
     else:
         footer_text = f'Generated by Mgask Platform  ·  {generated_time}  ·  Order {order.order_number}'
     story.append(Paragraph(footer_text, s['footer']))
+    return story
 
-    # Build PDF
+
+def generate_order_pdf(order, lang='en') -> bytes:
+    """
+    Generate a professional PDF for a single order.
+
+    Args:
+        order: apps.orders.models.Order instance (with related objects pre-fetched or lazy).
+        lang: Language code, 'en' (default), 'ar', or 'ur'.
+
+    Returns:
+        bytes: Raw PDF file content.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=20 * mm,
+        leftMargin=20 * mm,
+        topMargin=12 * mm,
+        bottomMargin=12 * mm,
+        title=f'Order {order.order_number}',
+        author='Mgask Platform',
+    )
+
+    s = _styles(lang)
+    page_w = A4[0] - 40 * mm
+    measurement_fields = _measurement_field_map()
+    items = list(order.order_items.select_related('fabric', 'family_member').all())
+
+    story = []
+    story.extend(_build_header_section(order, page_w, s, lang))
+    story.extend(_build_priority_sections(order, items, page_w, s, lang, measurement_fields))
+    story.extend(_build_order_details_section(order, page_w, s, lang))
+    story.append(Spacer(1, PDF_SECTION_SPACER))
+    story.extend(_build_tailor_section(order, page_w, s, lang))
+    if order.tailor:
+        story.append(Spacer(1, PDF_SECTION_SPACER))
+    notes = _build_notes_section(order, page_w, s, lang)
+    if notes:
+        story.extend(notes)
+        story.append(Spacer(1, PDF_SECTION_SPACER))
+    story.extend(_build_items_summary_table(items, order, page_w, s, lang))
+    story.append(Spacer(1, PDF_SECTION_SPACER))
+    history = _build_status_history_section(order, page_w, s, lang)
+    if history:
+        story.extend(history)
+        story.append(Spacer(1, PDF_SECTION_SPACER))
+    story.extend(_build_comments_and_footer(order, page_w, s, lang))
+
     doc.build(story)
     pdf_bytes = buffer.getvalue()
     buffer.close()

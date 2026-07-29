@@ -99,7 +99,7 @@ class TailorOrderDownloadPDFView(BaseTailorAPIView):
                 status_code=status.HTTP_403_FORBIDDEN,
             )
 
-        lang = get_language_from_request(request)
+        lang = request.GET.get('lang') or get_language_from_request(request) or 'en'
         if lang not in ('en', 'ar', 'ur'):
             lang = 'en'
 

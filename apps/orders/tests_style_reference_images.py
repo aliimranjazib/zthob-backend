@@ -7,7 +7,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.customization.models import CustomStyle, CustomStyleCategory
-from apps.orders.models import StyleReferenceImage
+from apps.orders.models import Order, StyleReferenceImage
 from apps.orders.serializers import OrderUpdateSerializer, format_custom_styles_for_response
 from apps.orders.style_references import MAX_STYLE_REFERENCE_IMAGES
 from apps.tailors.models import Fabric, FabricCategory, TailorProfile
@@ -197,7 +197,22 @@ class StyleReferenceOrderSerializerTest(TestCase):
         formatted = format_custom_styles_for_response(styles, request)
         self.assertEqual(len(formatted[0]['reference_images']), 1)
         self.assertIn('/api/media/style_references/', formatted[0]['reference_images'][0])
-        self.assertNotIn('reference_image_ids', formatted[0])
+        self.assertEqual(formatted[0]['reference_image_ids'], [self.owned_images[0].id])
+
+    def test_response_includes_reference_image_ids_from_paths(self):
+        request = self.factory.get('/')
+        request.META['HTTP_HOST'] = 'prod.mgask.net'
+        request.META['wsgi.url_scheme'] = 'https'
+
+        styles = [{
+            'style_id': self.style.id,
+            'style_type': 'cuff',
+            'label': 'Rounded Cuff',
+            'asset_path': 'custom_styles/rounded_cuff.png',
+            'reference_images': [self.owned_images[0].image.name],
+        }]
+        formatted = format_custom_styles_for_response(styles, request)
+        self.assertEqual(formatted[0]['reference_image_ids'], [self.owned_images[0].id])
 
     def test_response_always_includes_reference_images_key(self):
         request = self.factory.get('/')
@@ -210,6 +225,7 @@ class StyleReferenceOrderSerializerTest(TestCase):
         formatted = format_custom_styles_for_response(styles, request)
         self.assertIn('reference_images', formatted[0])
         self.assertEqual(formatted[0]['reference_images'], [])
+        self.assertEqual(formatted[0]['reference_image_ids'], [])
 
 
 @override_settings(
@@ -328,4 +344,100 @@ class StyleReferenceOrderCreateAPITest(TestCase):
         self.assertEqual(create_response.status_code, 201, create_response.data)
         item_styles = create_response.data['data']['items'][0]['custom_styles']
         self.assertEqual(len(item_styles[0]['reference_images']), 1)
+        self.assertIn('/api/media/style_references/', item_styles[0]['reference_images'][0])
+        self.assertEqual(item_styles[0]['reference_image_ids'], [uploaded['id']])
+
+
+@override_settings(
+    SECURE_SSL_REDIRECT=False,
+    CACHES={
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    },
+)
+class StyleReferenceOrderDetailAPITest(TestCase):
+    def setUp(self):
+        self.customer = User.objects.create_user(
+            username='style_ref_detail_customer',
+            password='testpass123',
+            role='USER',
+        )
+        self.tailor_user = User.objects.create_user(
+            username='style_ref_detail_tailor',
+            password='testpass123',
+            role='TAILOR',
+        )
+        self.tailor_profile, _ = TailorProfile.objects.get_or_create(
+            user=self.tailor_user,
+            defaults={'shop_name': 'Detail Shop', 'shop_status': True},
+        )
+        self.fabric_category = FabricCategory.objects.create(name='Fabric', slug='fabric-detail')
+        self.fabric = Fabric.objects.create(
+            tailor=self.tailor_profile,
+            name='Detail Fabric',
+            price=Decimal('100.00'),
+            stock=10,
+            is_active=True,
+            category=self.fabric_category,
+        )
+        self.category = CustomStyleCategory.objects.create(
+            name='collar',
+            display_name='Collar Styles',
+            display_order=1,
+            is_active=True,
+        )
+        self.style = CustomStyle.objects.create(
+            category=self.category,
+            name='Classic Collar',
+            code='classic_collar',
+            image='custom_styles/classic_collar.png',
+            display_order=3,
+            is_active=True,
+        )
+        self.reference_image = StyleReferenceImage.objects.create(
+            image=make_test_png('detail_reference.png'),
+            uploaded_by=self.customer,
+        )
+        self.order = Order.objects.create(
+            customer=self.customer,
+            tailor=self.tailor_user,
+            order_type='fabric_with_stitching',
+            payment_method='cod',
+            subtotal=Decimal('100.00'),
+            total_amount=Decimal('100.00'),
+        )
+        from apps.orders.models import OrderItem
+        OrderItem.objects.create(
+            order=self.order,
+            fabric=self.fabric,
+            quantity=1,
+            unit_price=Decimal('100.00'),
+            total_price=Decimal('100.00'),
+            custom_styles=[{
+                'style_id': self.style.id,
+                'style_type': 'collar',
+                'index': 3,
+                'label': 'Classic Collar',
+                'asset_path': 'custom_styles/classic_collar.png',
+                'reference_images': [self.reference_image.image.name],
+            }],
+        )
+        self.tailor_client = APIClient()
+        self.tailor_client.force_authenticate(user=self.tailor_user)
+
+    def test_tailor_order_detail_includes_reference_image_ids(self):
+        response = self.tailor_client.get(f'/api/orders/tailor/{self.order.id}/')
+        self.assertEqual(response.status_code, 200, response.data)
+        item_styles = response.data['data']['items'][0]['custom_styles']
+        self.assertEqual(item_styles[0]['reference_image_ids'], [self.reference_image.id])
+        self.assertIn('/api/media/style_references/', item_styles[0]['reference_images'][0])
+
+    def test_pos_order_detail_includes_reference_image_ids(self):
+        response = self.tailor_client.get(
+            f'/api/tailors/pos/customers/{self.customer.id}/orders/{self.order.id}/',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        item_styles = response.data['data']['items'][0]['custom_styles']
+        self.assertEqual(item_styles[0]['reference_image_ids'], [self.reference_image.id])
         self.assertIn('/api/media/style_references/', item_styles[0]['reference_images'][0])

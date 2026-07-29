@@ -13,8 +13,7 @@ from apps.core.media_utils import build_public_media_url
 from apps.core.phone_utils import display_user_label, format_phone_for_display
 from apps.orders.style_references import (
     apply_reference_images_to_style,
-    format_reference_image_urls,
-    resolve_stored_reference_image_paths,
+    format_style_reference_fields,
 )
 from .actions import OrderActionManager
 
@@ -114,9 +113,9 @@ def format_custom_styles_for_response(styles, request=None):
             else:
                 style['asset_path'] = build_public_media_url(request, asset_path)
 
-        reference_paths = resolve_stored_reference_image_paths(style)
-        style.pop('reference_image_ids', None)
-        style['reference_images'] = format_reference_image_urls(reference_paths, request)
+        reference_urls, reference_image_ids = format_style_reference_fields(style, request)
+        style['reference_images'] = reference_urls
+        style['reference_image_ids'] = reference_image_ids
 
     return processed_styles
 
