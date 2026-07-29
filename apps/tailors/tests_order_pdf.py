@@ -14,15 +14,18 @@ from apps.tailors.services.order_pdf import (
     _contains_arabic,
     _custom_style_caption_html,
     _custom_style_comment_html,
+    _format_label_html,
     _format_measurement_pairs,
     _format_recipient_html,
     _format_user_text_html,
     _item_recipient_display,
+    _normalize_rtl_text,
     _resolve_media_file_path,
     _shape_arabic,
     _styles,
     _style_reference_image_paths,
     _t,
+    _translate_label,
     _truncate_style_comment,
     generate_order_pdf,
 )
@@ -155,11 +158,38 @@ class OrderPDFServiceTest(TestCase):
         self.assertIn('farhan', html)
 
     def test_pre_shaped_arabic_is_not_double_processed(self):
-        from apps.tailors.services.order_pdf import _shape_arabic, _t
         once = _t('Fabric + Stitching', lang='ar')
         html = _format_user_text_html(once, lang='ar', reshape=False)
         self.assertIn('IBMPlexSansArabic-Regular', html)
         twice = _shape_arabic(_shape_arabic('قماش مع خياطة'))
+        self.assertNotEqual(once, twice)
+
+    def test_reference_photos_label_not_double_shaped(self):
+        logical = _translate_label('Reference Photos', lang='ar')
+        shaped_once = _shape_arabic(logical)
+        shaped_twice = _shape_arabic(shaped_once)
+        html = _format_label_html('Reference Photos', lang='ar')
+        self.assertEqual(shaped_once, _t('Reference Photos', lang='ar'))
+        self.assertNotEqual(shaped_once, shaped_twice)
+        self.assertIn('IBMPlexSansArabic-Regular', html)
+
+    def test_custom_style_comment_uses_logical_label_before_shaping(self):
+        logical_lbl = _translate_label('Comment', lang='ar')
+        shaped_lbl = _shape_arabic(logical_lbl)
+        html = _custom_style_comment_html({'text': 'تعليق تجريبي'}, lang='ar')
+        self.assertIn('IBMPlexSansArabic-Regular', html)
+        self.assertNotEqual(_shape_arabic(shaped_lbl), shaped_lbl)
+
+    def test_normalize_rtl_text_strips_zero_width_and_collapses_spaces(self):
+        dirty = 'صورة\u200c  \u200f مرجعية'
+        self.assertEqual(_normalize_rtl_text(dirty), 'صورة مرجعية')
+
+    def test_arabic_style_label_with_mixed_content_shapes_once(self):
+        html = _format_user_text_html('Collar: ياقة صينية', lang='ar')
+        once = _shape_arabic('ياقة صينية')
+        twice = _shape_arabic(once)
+        self.assertIn('Collar:', html)
+        self.assertIn('IBMPlexSansArabic-Regular', html)
         self.assertNotEqual(once, twice)
 
     def test_format_recipient_html_keeps_family_name_readable(self):

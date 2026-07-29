@@ -550,8 +550,9 @@ class AssignEmployeeAction(BaseOrderAction):
     Assign or clear stitch employee (home delivery + walk-in).
     Leave empty / null → open to all can_stitch_orders employees.
 
-    Not listed in available_actions while Start Stitching is the next step —
-    assign employee + date/time together via start_stitching instead.
+    Listed only while stitching is in progress (reassign/clear mid-stitch).
+    Initial assignment uses start_stitching; not shown while waiting on
+    measurements or after the order is ready for pickup/delivery.
     """
     key = 'assign_employee'
     label = 'Assign Employee'
@@ -574,11 +575,20 @@ class AssignEmployeeAction(BaseOrderAction):
             raise ValidationError("Accept the order before assigning an employee.")
         if self.order.status in ['delivered', 'collected', 'cancelled']:
             raise ValidationError("Cannot assign an employee to a finalized order.")
-        # Hide from Make Progress CTA — use start_stitching with employee + date/time
+        if not self.order.all_items_have_measurements:
+            raise ValidationError("Cannot assign an employee until measurements are complete.")
+        if self.order.tailor_status in ['stitched', 'measurements_complete']:
+            raise ValidationError("Cannot assign an employee after stitching is complete.")
+        if self.order.status in ['ready_for_delivery', 'ready_for_pickup']:
+            raise ValidationError("Cannot assign an employee while the order is ready for handoff.")
         if self._start_stitching_is_next_step():
             raise ValidationError(
                 "Assign the employee when starting stitching "
                 "(action=start_stitching with assigned_employee_id, date, and time)."
+            )
+        if self.order.tailor_status != 'stitching_started':
+            raise ValidationError(
+                "Employee assignment is only available while stitching is in progress."
             )
 
     def execute(self):

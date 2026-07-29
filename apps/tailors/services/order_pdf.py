@@ -7,6 +7,7 @@ Requires: reportlab, arabic-reshaper, python-bidi
 import io
 import os
 import re
+import unicodedata
 from decimal import Decimal
 from urllib.parse import urlparse
 from xml.sax.saxutils import escape
@@ -52,6 +53,38 @@ _SCRIPT_RUN_RE = re.compile(
     re.UNICODE,
 )
 _LRM = '\u200e'
+# Strip invisible bidi/control chars that break shaping when copied from mobile keyboards.
+_RTL_STRIP_RE = re.compile(r'[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]')
+# Collapse runs of whitespace (keep single spaces between words).
+_WHITESPACE_RUN_RE = re.compile(r'\s+')
+
+_reshaper_config = None
+
+
+def _get_reshaper_config():
+    """Lazy-load arabic-reshaper config with ligature support enabled."""
+    global _reshaper_config
+    if _reshaper_config is not None:
+        return _reshaper_config
+    try:
+        import arabic_reshaper
+        config = arabic_reshaper.config_for_arabic()
+        config.delete_tatweel = False
+        config.support_ligatures = True
+        config.use_unshaped_instead_of_individual_forms = False
+        _reshaper_config = config
+    except Exception:
+        _reshaper_config = False
+    return _reshaper_config
+
+
+def _normalize_rtl_text(text):
+    """Normalize Arabic/Urdu user text before shaping."""
+    if text is None:
+        return ''
+    normalized = unicodedata.normalize('NFC', str(text))
+    normalized = _RTL_STRIP_RE.sub('', normalized)
+    return _WHITESPACE_RUN_RE.sub(' ', normalized).strip()
 
 
 def _contains_arabic(text):
@@ -84,17 +117,33 @@ def _brand_title(lang):
 def _shape_arabic(text):
     """
     Shape and reorder Arabic text for correct RTL rendering in ReportLab.
-    Returns the visually-correct string.
+    Returns the visually-correct string. Applied exactly once per text run.
     """
     if not text:
         return text
+    logical = _normalize_rtl_text(text)
+    if not logical:
+        return logical
     try:
         import arabic_reshaper
         from bidi.algorithm import get_display
-        reshaped = arabic_reshaper.reshape(str(text))
+
+        config = _get_reshaper_config()
+        if config:
+            reshaped = arabic_reshaper.reshape(logical, configuration=config)
+        else:
+            reshaped = arabic_reshaper.reshape(logical)
         return get_display(reshaped)
     except Exception:
-        return text
+        return logical
+
+
+def _translate_label(text, lang):
+    """Return translated label in logical order (not shaped)."""
+    if not _is_rtl(lang):
+        return str(text) if text else '—'
+    labels = _labels_for(lang)
+    return labels.get(str(text), str(text)) if text else '—'
 
 
 def _safe_text(value):
@@ -112,7 +161,7 @@ def _format_user_text_html(text, lang='en', *, reshape=True):
     """
     if text is None or text == '':
         return '—'
-    text = str(text)
+    text = _normalize_rtl_text(text)
     runs = _SCRIPT_RUN_RE.findall(text)
     if not runs:
         return _safe_text(text)
@@ -637,6 +686,13 @@ def _custom_style_label_text(style):
     return str(label).strip()
 
 
+def _format_label_html(text, lang):
+    """Translate and shape a static label once for Paragraph HTML."""
+    if not _is_rtl(lang):
+        return _safe_text(text)
+    return _format_user_text_html(_translate_label(text, lang), lang)
+
+
 def _custom_style_label_html(style, lang='en'):
     label = _custom_style_label_text(style)
     if not label:
@@ -648,7 +704,7 @@ def _custom_style_comment_html(style, lang='en'):
     comment = _truncate_style_comment((style.get('text') or '').strip())
     if not comment:
         return None
-    comment_lbl = _t('Comment', lang)
+    comment_lbl = _translate_label('Comment', lang)
     return _format_user_text_html(f'{comment_lbl}: {comment}', lang)
 
 
@@ -672,7 +728,7 @@ def _custom_style_reference_images_row(ref_paths, inner_width, s, lang='en'):
     if not images:
         return None
 
-    ref_label = _format_user_text_html(_t('Reference Photos', lang), lang)
+    ref_label = _format_label_html('Reference Photos', lang)
     ref_table = Table([images], colWidths=[col_width] * len(images))
     ref_table.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -854,7 +910,7 @@ def _kv_table(rows, col_widths=None, lang='en'):
         elif lang == 'en':
             val_html = _format_user_text_html(val, lang)
         else:
-            val_html = _format_user_text_html(_t(val, lang), lang, reshape=False)
+            val_html = _format_user_text_html(_translate_label(val, lang), lang)
         val_p = Paragraph(val_html, s['value'])
 
         if is_rtl:
@@ -894,9 +950,7 @@ def _t(text, lang):
     """Translate a label for RTL languages and shape it for PDF rendering."""
     if not _is_rtl(lang):
         return str(text) if text else '—'
-    labels = _labels_for(lang)
-    translated = labels.get(str(text), str(text)) if text else '—'
-    return _shape_arabic(translated)
+    return _shape_arabic(_translate_label(text, lang))
 
 
 def _item_recipient_display(item, order, lang='en'):
@@ -991,7 +1045,7 @@ def _format_measurement_pairs(measurements, lang='en', field_map=None):
             raw_label = meta.get(label_attr) or meta.get('label_en') or fallback
             if not _contains_arabic(raw_label):
                 raw_label = labels.get(raw_label, labels.get(fallback, raw_label))
-            label = _shape_arabic(raw_label)
+            label = _shape_arabic(_normalize_rtl_text(raw_label))
         else:
             label = meta.get('label_en') or fallback
 

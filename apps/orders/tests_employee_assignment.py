@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from apps.customers.models import Address
+from apps.orders.actions import OrderActionManager
 from apps.orders.models import Order, OrderItem
 from apps.tailors.models import TailorEmployee, TailorProfile
 
@@ -105,6 +106,64 @@ class OptionalStitchEmployeeAssignmentTest(APITestCase):
         )
         return order
 
+    def _action_keys(self, order, *, role='TAILOR'):
+        actions = OrderActionManager.get_available_actions(order, self.owner, requested_role=role)
+        return [action['key'] for action in actions]
+
+    def _create_waiting_for_rider_measurements(self):
+        order = Order.objects.create(
+            customer=self.customer,
+            tailor=self.owner,
+            order_type='fabric_with_stitching',
+            service_mode='home_delivery',
+            payment_method='cod',
+            payment_status='pending',
+            status='confirmed',
+            tailor_status='accepted',
+            rider_status='accepted',
+            delivery_address=self.address,
+            subtotal=Decimal('100.00'),
+            total_amount=Decimal('100.00'),
+            paid_amount=Decimal('0.00'),
+            remaining_amount=Decimal('100.00'),
+        )
+        OrderItem.objects.create(
+            order=order,
+            fabric=None,
+            quantity=1,
+            unit_price=Decimal('100.00'),
+            measurements={},
+        )
+        return order
+
+    def test_assign_employee_hidden_while_waiting_for_rider_measurements(self):
+        order = self._create_waiting_for_rider_measurements()
+        self.assertNotIn('assign_employee', self._action_keys(order))
+
+    def test_assign_employee_hidden_when_ready_to_stitch(self):
+        order = self._create_ready_to_stitch()
+        keys = self._action_keys(order)
+        self.assertIn('start_stitching', keys)
+        self.assertNotIn('assign_employee', keys)
+
+    def test_assign_employee_hidden_after_mark_ready(self):
+        order = self._create_ready_to_stitch()
+        order.tailor_status = 'stitched'
+        order.status = 'ready_for_delivery'
+        order.save(update_fields=['tailor_status', 'status'])
+        self.assertNotIn('assign_employee', self._action_keys(order))
+
+    def test_assign_employee_available_during_active_stitching(self):
+        order = self._create_ready_to_stitch()
+        start = self.owner_client.post(
+            f'/api/orders/{order.id}/action/',
+            data={'action': 'start_stitching', 'role': 'TAILOR', 'data': {}},
+            format='json',
+        )
+        self.assertEqual(start.status_code, status.HTTP_200_OK, start.data)
+        order.refresh_from_db()
+        self.assertIn('assign_employee', self._action_keys(order))
+
     def test_start_stitching_with_employee_hides_from_other_stitchers(self):
         order = self._create_ready_to_stitch(service_mode='home_delivery')
 
@@ -168,7 +227,9 @@ class OptionalStitchEmployeeAssignmentTest(APITestCase):
     def test_clear_assignment_reopens_to_all_stitchers(self):
         order = self._create_ready_to_stitch(service_mode='home_delivery')
         order.assigned_employee = self.stitcher_a
-        order.save(update_fields=['assigned_employee'])
+        order.tailor_status = 'stitching_started'
+        order.status = 'in_progress'
+        order.save(update_fields=['assigned_employee', 'tailor_status', 'status'])
 
         response = self.owner_client.post(
             f'/api/orders/{order.id}/action/',
