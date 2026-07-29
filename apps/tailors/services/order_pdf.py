@@ -383,9 +383,9 @@ PDF_MARGIN_V = 8 * mm
 PDF_SECTION_SPACER = 1.5 * mm
 PDF_ITEM_SPACER = 0.5 * mm
 PDF_MEASUREMENT_COLS = 6
-PDF_STYLE_GRID_COLS = 5
-PDF_STYLE_THUMB_SIZE = 11 * mm
-PDF_REF_THUMB_SIZE = 8 * mm
+PDF_STYLE_GRID_COLS = 4
+PDF_STYLE_THUMB_SIZE = 16 * mm
+PDF_REF_THUMB_SIZE = 15 * mm
 PDF_COMMENT_BOX_HEIGHT = 8 * mm
 PDF_STATUS_HISTORY_MAX_ROWS = 4
 PDF_HR_SPACE_AFTER = 1
@@ -743,7 +743,7 @@ def _custom_style_reference_images_row(ref_paths, inner_width, s, lang='en'):
     """Render a compact row of customer reference photos under the catalog style image."""
     images = []
     thumb_size = PDF_REF_THUMB_SIZE
-    col_width = thumb_size + 2 * mm
+    col_width = thumb_size + 3 * mm
     for ref_path in ref_paths:
         try:
             images.append(Image(ref_path, width=thumb_size, height=thumb_size, kind='proportional'))
@@ -776,7 +776,7 @@ def _custom_style_card(style, cell_width, s, lang='en'):
     if not label_html and not comment_html and not image_path and not reference_paths:
         return None
 
-    inner_width = max(cell_width - 4, 12 * mm)
+    inner_width = max(cell_width - 4, PDF_REF_THUMB_SIZE + 2 * mm)
     rows = []
 
     if image_path:
