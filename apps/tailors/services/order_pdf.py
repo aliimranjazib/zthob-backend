@@ -203,6 +203,18 @@ _AR_LABELS = {
     # Section headers
     'ORDER DETAILS':       'تفاصيل الطلب',
     'CUSTOMER DETAILS':    'بيانات العميل',
+    'CUSTOMER INFORMATION':'معلومات العميل',
+    'RIDERS':              'المندوبون',
+    'ORDER ITEMS BY PERSON':'عناصر الطلب حسب الشخص',
+    'ORDER SUMMARY':       'ملخص الطلب',
+    'PERSON':              'الشخص',
+    'Name':                'الاسم',
+    'Address':             'العنوان',
+    'Fabric':              'القماش',
+    'SKU':                 'رمز المنتج',
+    'Item #':              'العنصر رقم',
+    'Page':                'صفحة',
+    'Self':                'العميل نفسه',
     'TAILOR DETAILS':      'بيانات الخياط',
     'NOTES & INSTRUCTIONS':'الملاحظات والتعليمات',
     'ORDER ITEMS':         'عناصر الطلب',
@@ -389,6 +401,8 @@ PDF_REF_THUMB_SIZE = 15 * mm
 PDF_COMMENT_BOX_HEIGHT = 8 * mm
 PDF_STATUS_HISTORY_MAX_ROWS = 4
 PDF_HR_SPACE_AFTER = 1
+PDF_PAGE_NUMBER_OFFSET = 4 * mm
+PDF_REPEAT_HEADER_H = 14 * mm
 
 
 def _pdf_page_width():
@@ -954,21 +968,62 @@ def _kv_table(rows, col_widths=None, lang='en'):
     return tbl
 
 
-def _rider_label(rider):
+def _rider_contact_details(rider):
+    """Return rider display name and phone as separate values."""
     if not rider:
-        return None
+        return None, None
 
     profile = getattr(rider, 'rider_profile', None)
     name = getattr(profile, 'full_name', None) or rider.get_full_name() or rider.username
     phone = getattr(profile, 'phone_number', None) or getattr(rider, 'phone', None)
+    return name, str(phone) if phone else None
+
+
+def _rider_label(rider):
+    if not rider:
+        return None
+
+    name, phone = _rider_contact_details(rider)
+    profile = getattr(rider, 'rider_profile', None)
     vehicle_type = getattr(profile, 'vehicle_type', None)
 
     details = [name]
     if phone:
-        details.append(str(phone))
+        details.append(phone)
     if vehicle_type:
         details.append(str(vehicle_type))
     return ' | '.join(details)
+
+
+def _customer_phone(order):
+    customer = getattr(order, 'customer', None)
+    if not customer:
+        return None
+    return getattr(customer, 'phone', None)
+
+
+def _order_delivery_address(order):
+    """Return a human-readable delivery address for the order."""
+    formatted = getattr(order, 'delivery_formatted_address', None)
+    if formatted and str(formatted).strip():
+        return str(formatted).strip()
+
+    parts = []
+    for field in ('delivery_street', 'delivery_city', 'delivery_extra_info'):
+        value = getattr(order, field, None)
+        if value:
+            parts.append(str(value))
+    if parts:
+        return ', '.join(parts)
+
+    addr = getattr(order, 'delivery_address', None)
+    if addr:
+        if getattr(addr, 'address', None):
+            return str(addr.address)
+        addr_parts = [p for p in (getattr(addr, 'street', None), getattr(addr, 'city', None)) if p]
+        if addr_parts:
+            return ', '.join(addr_parts)
+    return None
 
 
 def _t(text, lang):
@@ -1225,6 +1280,229 @@ def _item_fabric_label_html(item, order, lang):
     return '<br/>'.join(fabric_parts)
 
 
+def _person_header_text(item, order, lang, person_index):
+    """Plain-text person block title, e.g. PERSON 1 — Ali (son)."""
+    person_lbl = _translate_label('PERSON', lang)
+    if item.family_member_id and item.family_member:
+        fm = item.family_member
+        name = fm.name or '—'
+        if fm.relationship:
+            detail = f'{name} ({fm.relationship})'
+        else:
+            detail = name
+    else:
+        customer_name = _customer_display_name(getattr(order, 'customer', None)) or '—'
+        self_lbl = _translate_label('Self', lang)
+        detail = f'{customer_name} ({self_lbl})'
+    return f'{person_lbl} {person_index} — {detail}'
+
+
+def _person_header_bar(title_text, page_w, s, lang):
+    """Accent bar heading for each person block."""
+    is_rtl = _is_rtl(lang)
+    font_bold = _AR_FONT_BOLD if (is_rtl and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
+    display = _shape_arabic(title_text) if is_rtl else title_text.upper()
+    cell = Paragraph(
+        _safe_text(display),
+        ParagraphStyle(
+            f'PersonHdr_{lang}',
+            parent=s['section_header'],
+            fontSize=7.5,
+            fontName=font_bold,
+            textColor=WHITE,
+            alignment=TA_CENTER,
+            leading=9,
+        ),
+    )
+    tbl = Table([[cell]], colWidths=[page_w])
+    tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), BRAND_PRIMARY),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    return tbl
+
+
+def _item_details_html(item, order, lang, item_index):
+    """Fabric, quantity, SKU, item number, and ready status for a person block."""
+    if item.fabric:
+        fabric_name_html = _format_user_text_html(item.fabric.name, lang)
+    else:
+        fabric_name_html = _format_user_text_html(
+            _localized_value('Measurement Service', lang),
+            lang,
+            reshape=False,
+        )
+
+    fabric_lbl = _safe_text(_t('Fabric', lang))
+    qty_lbl = _safe_text(_t('Qty', lang))
+    item_num_lbl = _safe_text(_t('Item #', lang))
+    ready_lbl = _safe_text(_t('Ready', lang))
+    ready_val = _safe_text(_t('Yes', lang) if item.is_ready else _t('No', lang))
+
+    parts = [
+        f'<b>{fabric_lbl}:</b> {fabric_name_html}',
+        f'<b>{qty_lbl}:</b> {_safe_text(str(item.quantity))}',
+        f'<b>{item_num_lbl}</b> {_safe_text(str(item_index))}',
+        f'<b>{ready_lbl}:</b> {ready_val}',
+    ]
+    if item.fabric and item.fabric.sku:
+        sku_lbl = _safe_text(_t('SKU', lang))
+        parts.insert(2, f'<b>{sku_lbl}:</b> {_safe_text(item.fabric.sku)}')
+    return ' &nbsp;|&nbsp; '.join(parts)
+
+
+def _rider_info_cell(rider, lang, s):
+    """Rider name with phone on a separate line."""
+    name, phone = _rider_contact_details(rider)
+    if not name:
+        return Paragraph(_safe_text(_t('N/A', lang)), s['value'])
+
+    phone_html = ''
+    if phone:
+        phone_lbl = _safe_text(_t('Phone', lang))
+        phone_html = f'<br/><font size="6">{phone_lbl}: {_safe_text(phone)}</font>'
+    return Paragraph(
+        f'<b>{_format_user_text_html(name, lang)}</b>{phone_html}',
+        s['value'],
+    )
+
+
+def _build_customer_section(order, page_w, s, lang):
+    """Customer name, phone, address, and service mode."""
+    story = []
+    story.append(Paragraph(_t('CUSTOMER INFORMATION', lang), s['section_header']))
+    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=PDF_HR_SPACE_AFTER))
+
+    rows = [
+        ('Name', _customer_display_name(order.customer) or '—', True),
+        ('Phone', _customer_phone(order) or '—', True),
+    ]
+    address = _order_delivery_address(order)
+    if address:
+        rows.append(('Address', address, True))
+    service_mode_display = _choice_display(order.service_mode, order.SERVICE_MODE_CHOICES, lang)
+    rows.append(('Service Mode', service_mode_display, True))
+    story.append(_kv_table(rows, col_widths=[page_w * 0.22, page_w * 0.78], lang=lang))
+    return story
+
+
+def _build_riders_section(order, page_w, s, lang):
+    """Measurement and delivery riders with contact numbers."""
+    measurement_rider = getattr(order, 'measurement_rider', None)
+    delivery_rider = getattr(order, 'delivery_rider', None)
+    if not measurement_rider and not delivery_rider:
+        return []
+
+    story = []
+    story.append(Paragraph(_t('RIDERS', lang), s['section_header']))
+    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=PDF_HR_SPACE_AFTER))
+
+    col_w = page_w / 2
+    headers = [
+        Paragraph(_t('Measurement Rider', lang), s['label']),
+        Paragraph(_t('Delivery Rider', lang), s['label']),
+    ]
+    cells = [
+        _rider_info_cell(measurement_rider, lang, s),
+        _rider_info_cell(delivery_rider, lang, s),
+    ]
+    if _is_rtl(lang):
+        headers.reverse()
+        cells.reverse()
+
+    rider_tbl = Table([headers, cells], colWidths=[col_w, col_w])
+    rider_tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), BRAND_LIGHT),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('BOX', (0, 0), (-1, -1), 0.4, BRAND_MID),
+        ('LINEBELOW', (0, 0), (-1, 0), 0.5, BRAND_ACCENT),
+        ('INNERGRID', (0, 0), (-1, -1), 0.25, BRAND_MID),
+    ]))
+    story.append(rider_tbl)
+    return story
+
+
+def _build_person_blocks(order, items, page_w, s, lang, measurement_fields):
+    """Per-person item details with measurements and styles grouped together."""
+    story = []
+    blocks = []
+
+    for item_index, item in enumerate(items, start=1):
+        block = []
+        block.append(_person_header_bar(_person_header_text(item, order, lang, item_index), page_w, s, lang))
+        block.append(Spacer(1, PDF_ITEM_SPACER))
+        block.append(Paragraph(_item_details_html(item, order, lang, item_index), s['small']))
+        block.append(Spacer(1, PDF_ITEM_SPACER))
+
+        has_content = True
+        meas_pairs = []
+        if item.measurements and isinstance(item.measurements, dict):
+            meas_pairs = _format_measurement_pairs(item.measurements, lang, measurement_fields)
+
+        if meas_pairs:
+            meas_title = item.measurements.get('title', '')
+            block.append(_measurements_grid(meas_pairs, page_w, s, lang, title=meas_title))
+            block.append(Spacer(1, PDF_ITEM_SPACER))
+
+        if item.custom_styles and isinstance(item.custom_styles, list):
+            style_section = _custom_style_section(item.custom_styles, page_w, s, lang)
+            if style_section:
+                block.append(Paragraph(f'<b>{_safe_text(_t("Styles:", lang))}</b>', s['small']))
+                block.append(Spacer(1, PDF_ITEM_SPACER))
+                block.append(style_section)
+                block.append(Spacer(1, PDF_ITEM_SPACER))
+
+        if item.custom_instructions:
+            _instr_label = _t('Instructions:', lang)
+            block.append(Paragraph(
+                f'<b>{_safe_text(_instr_label)}</b> {_format_user_text_html(item.custom_instructions, lang)}',
+                s['small'],
+            ))
+
+        if has_content:
+            blocks.append(block)
+
+    if order.rider_measurements and isinstance(order.rider_measurements, dict) and order.rider_measurements:
+        meas_pairs = _format_measurement_pairs(order.rider_measurements, lang, measurement_fields)
+        if meas_pairs:
+            rider_block = [
+                Paragraph(_t('RIDER MEASUREMENTS', lang), s['section_header']),
+                HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=PDF_HR_SPACE_AFTER),
+            ]
+            if order.measurement_taken_at:
+                rider_block.append(Paragraph(
+                    f'<i>{_safe_text(_t("Measured at:", lang))} {_safe_text(_fmt_datetime(order.measurement_taken_at))}</i>',
+                    s['small'],
+                ))
+                rider_block.append(Spacer(1, PDF_ITEM_SPACER))
+            rider_block.append(_measurements_grid(meas_pairs, page_w, s, lang))
+            blocks.append(rider_block)
+
+    if not blocks:
+        return story
+
+    story.append(Paragraph(_t('ORDER ITEMS BY PERSON', lang), s['section_header']))
+    story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=PDF_HR_SPACE_AFTER))
+    for block_index, block in enumerate(blocks):
+        if block_index > 0:
+            story.append(Spacer(1, PDF_SECTION_SPACER))
+        story.extend(block)
+    story.append(Spacer(1, PDF_SECTION_SPACER))
+    return story
+
+
+def _build_priority_sections(order, items, page_w, s, lang, measurement_fields):
+    """Backward-compatible alias for per-person blocks."""
+    return _build_person_blocks(order, items, page_w, s, lang, measurement_fields)
+
+
 def _order_info_rows(order, lang):
     """Key-value rows for order metadata."""
     order_type_display = _choice_display(order.order_type, order.ORDER_TYPE_CHOICES, lang)
@@ -1270,34 +1548,18 @@ def _tailor_info_rows(order):
         ('Tailor', tailor_name),
         ('Contact', tailor_contact, True),
     ]
-    rider_rows = [
-        ('Measurement Rider', _rider_label(getattr(order, 'measurement_rider', None)), True),
-        ('Delivery Rider', _rider_label(getattr(order, 'delivery_rider', None)), True),
-    ]
-    active_rider = getattr(order, 'rider', None)
-    assigned_rider = getattr(order, 'assigned_rider', None)
-    role_specific_rider_ids = {
-        rider.id
-        for rider in [getattr(order, 'measurement_rider', None), getattr(order, 'delivery_rider', None)]
-        if rider
-    }
-    if active_rider and active_rider.id not in role_specific_rider_ids:
-        rider_rows.append(('Active Rider', _rider_label(active_rider), True))
-    if assigned_rider and assigned_rider.id not in role_specific_rider_ids and assigned_rider != active_rider:
-        rider_rows.append(('Assigned Rider', _rider_label(assigned_rider), True))
-    rows.extend(row for row in rider_rows if row[1])
     return rows
 
 
 def _build_compact_info_section(order, page_w, s, lang):
-    """Order and tailor metadata side-by-side to save vertical space."""
+    """Order summary and tailor shop details at the end of the PDF."""
     order_rows = _order_info_rows(order, lang)
     tailor_rows = _tailor_info_rows(order)
     if not order_rows and not tailor_rows:
         return []
 
     story = []
-    story.append(Paragraph(_t('ORDER DETAILS', lang), s['section_header']))
+    story.append(Paragraph(_t('ORDER SUMMARY', lang), s['section_header']))
     story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=PDF_HR_SPACE_AFTER))
 
     gap = 2 * mm
@@ -1388,70 +1650,6 @@ def _build_header_section(order, page_w, s, lang):
     ]))
     story.append(status_tbl)
     story.append(Spacer(1, PDF_SECTION_SPACER))
-    return story
-
-
-def _build_priority_sections(order, items, page_w, s, lang, measurement_fields):
-    """Measurements and custom styles first — what tailors need immediately."""
-    story = []
-    has_priority = False
-
-    for item_index, item in enumerate(items):
-        item_has_content = False
-        item_story = []
-
-        if item.measurements and isinstance(item.measurements, dict):
-            meas_pairs = _format_measurement_pairs(item.measurements, lang, measurement_fields)
-            if meas_pairs:
-                item_has_content = True
-                item_story.append(Paragraph(_item_fabric_label_html(item, order, lang), s['small']))
-                item_story.append(Spacer(1, PDF_ITEM_SPACER))
-                meas_title = item.measurements.get('title', '')
-                item_story.append(_measurements_grid(meas_pairs, page_w, s, lang, title=meas_title))
-
-        if item.custom_styles and isinstance(item.custom_styles, list):
-            style_section = _custom_style_section(item.custom_styles, page_w, s, lang)
-            if style_section:
-                item_has_content = True
-                if not (item.measurements and _format_measurement_pairs(item.measurements, lang, measurement_fields)):
-                    item_story.append(Paragraph(_item_fabric_label_html(item, order, lang), s['small']))
-                    item_story.append(Spacer(1, PDF_ITEM_SPACER))
-                item_story.append(Paragraph(f'<b>{_safe_text(_t("Styles:", lang))}</b>', s['small']))
-                item_story.append(Spacer(1, PDF_ITEM_SPACER))
-                item_story.append(style_section)
-
-        if item.custom_instructions and item_has_content:
-            _instr_label = _t('Instructions:', lang)
-            item_story.append(Spacer(1, PDF_ITEM_SPACER))
-            item_story.append(Paragraph(
-                f'<b>{_safe_text(_instr_label)}</b> {_format_user_text_html(item.custom_instructions, lang)}',
-                s['small'],
-            ))
-
-        if item_has_content:
-            has_priority = True
-            if item_index > 0:
-                story.append(Spacer(1, PDF_SECTION_SPACER))
-            story.extend(item_story)
-
-    if order.rider_measurements and isinstance(order.rider_measurements, dict) and order.rider_measurements:
-        meas_pairs = _format_measurement_pairs(order.rider_measurements, lang, measurement_fields)
-        if meas_pairs:
-            has_priority = True
-            if story:
-                story.append(Spacer(1, PDF_SECTION_SPACER))
-            story.append(Paragraph(_t('RIDER MEASUREMENTS', lang), s['section_header']))
-            story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=PDF_HR_SPACE_AFTER))
-            if order.measurement_taken_at:
-                story.append(Paragraph(
-                    f'<i>{_safe_text(_t("Measured at:", lang))} {_safe_text(_fmt_datetime(order.measurement_taken_at))}</i>',
-                    s['small'],
-                ))
-                story.append(Spacer(1, PDF_ITEM_SPACER))
-            story.append(_measurements_grid(meas_pairs, page_w, s, lang))
-
-    if has_priority:
-        story.append(Spacer(1, PDF_SECTION_SPACER))
     return story
 
 
@@ -1643,6 +1841,82 @@ def _build_comments_and_footer(order, page_w, s, lang):
     return story
 
 
+def _pdf_top_margin():
+    """Reserve space for page numbers and the continuation-page repeat header."""
+    return PDF_MARGIN_V + PDF_PAGE_NUMBER_OFFSET + PDF_REPEAT_HEADER_H
+
+
+class _OrderPDFPageContext:
+    def __init__(self, order, lang):
+        self.order = order
+        self.lang = lang
+
+
+def _canvas_page_label(lang, page_num):
+    page_lbl = _translate_label('Page', lang)
+    return f'{page_lbl} {page_num}'
+
+
+def _canvas_draw_page_number(canvas, page_num, lang):
+    font_bold = _AR_FONT_BOLD if (_is_rtl(lang) and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
+    canvas.setFont(font_bold, 8)
+    canvas.setFillColor(BRAND_SUBTEXT)
+    text = _canvas_page_label(lang, page_num)
+    y = A4[1] - PDF_MARGIN_V
+    if _is_rtl(lang):
+        display = _shape_arabic(text) if _contains_arabic(text) else text
+        canvas.drawString(PDF_MARGIN_H, y, display)
+    else:
+        canvas.drawRightString(A4[0] - PDF_MARGIN_H, y, text)
+
+
+def _canvas_compact_repeat_header(canvas, order, lang):
+    """Compact customer + rider strip on continuation pages."""
+    font = _AR_FONT_REGULAR if (_is_rtl(lang) and _ARABIC_FONT_AVAILABLE) else 'Helvetica'
+    font_bold = _AR_FONT_BOLD if (_is_rtl(lang) and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
+
+    customer_name = _customer_display_name(order.customer) or '—'
+    phone = _customer_phone(order) or '—'
+    y_line1 = A4[1] - PDF_MARGIN_V - PDF_PAGE_NUMBER_OFFSET - 2 * mm
+    y_line2 = y_line1 - 4 * mm
+
+    canvas.setFont(font_bold, 7)
+    canvas.setFillColor(BRAND_TEXT)
+    canvas.drawString(PDF_MARGIN_H, y_line1, f'{order.order_number}  |  {customer_name}  |  {phone}')
+
+    meas_name, meas_phone = _rider_contact_details(getattr(order, 'measurement_rider', None))
+    del_name, del_phone = _rider_contact_details(getattr(order, 'delivery_rider', None))
+    meas_lbl = _translate_label('Measurement Rider', lang)
+    del_lbl = _translate_label('Delivery Rider', lang)
+
+    meas_text = f'{meas_lbl}: {meas_name or "—"}'
+    if meas_phone:
+        meas_text += f' ({meas_phone})'
+    del_text = f'{del_lbl}: {del_name or "—"}'
+    if del_phone:
+        del_text += f' ({del_phone})'
+
+    canvas.setFont(font, 6.5)
+    canvas.setFillColor(BRAND_SUBTEXT)
+    canvas.drawString(PDF_MARGIN_H, y_line2, f'{meas_text}  |  {del_text}')
+
+    canvas.setStrokeColor(BRAND_MID)
+    canvas.setLineWidth(0.5)
+    canvas.line(PDF_MARGIN_H, y_line2 - 2 * mm, A4[0] - PDF_MARGIN_H, y_line2 - 2 * mm)
+
+
+def _make_pdf_page_callbacks(ctx):
+    def _draw_page(canvas, doc):
+        canvas.saveState()
+        page_num = canvas.getPageNumber()
+        _canvas_draw_page_number(canvas, page_num, ctx.lang)
+        if page_num > 1:
+            _canvas_compact_repeat_header(canvas, ctx.order, ctx.lang)
+        canvas.restoreState()
+
+    return _draw_page
+
+
 def generate_order_pdf(order, lang='en') -> bytes:
     """
     Generate a professional PDF for a single order.
@@ -1660,7 +1934,7 @@ def generate_order_pdf(order, lang='en') -> bytes:
         pagesize=A4,
         rightMargin=PDF_MARGIN_H,
         leftMargin=PDF_MARGIN_H,
-        topMargin=PDF_MARGIN_V,
+        topMargin=_pdf_top_margin(),
         bottomMargin=PDF_MARGIN_V,
         title=f'Order {order.order_number}',
         author='Mgask Platform',
@@ -1670,12 +1944,18 @@ def generate_order_pdf(order, lang='en') -> bytes:
     page_w = _pdf_page_width()
     measurement_fields = _measurement_field_map()
     items = list(order.order_items.select_related('fabric', 'family_member').all())
+    page_ctx = _OrderPDFPageContext(order, lang)
+    draw_page = _make_pdf_page_callbacks(page_ctx)
 
     story = []
     story.extend(_build_header_section(order, page_w, s, lang))
-    story.extend(_build_priority_sections(order, items, page_w, s, lang, measurement_fields))
-    story.extend(_build_items_summary_table(items, order, page_w, s, lang))
+    story.extend(_build_customer_section(order, page_w, s, lang))
     story.append(Spacer(1, PDF_SECTION_SPACER))
+    riders = _build_riders_section(order, page_w, s, lang)
+    if riders:
+        story.extend(riders)
+        story.append(Spacer(1, PDF_SECTION_SPACER))
+    story.extend(_build_person_blocks(order, items, page_w, s, lang, measurement_fields))
     story.extend(_build_compact_info_section(order, page_w, s, lang))
     notes = _build_notes_section(order, page_w, s, lang)
     if notes:
@@ -1688,7 +1968,7 @@ def generate_order_pdf(order, lang='en') -> bytes:
     story.append(Spacer(1, PDF_SECTION_SPACER))
     story.extend(_build_comments_and_footer(order, page_w, s, lang))
 
-    doc.build(story)
+    doc.build(story, onFirstPage=draw_page, onLaterPages=draw_page)
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes

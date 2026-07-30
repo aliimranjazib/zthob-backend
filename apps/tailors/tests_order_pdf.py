@@ -9,9 +9,13 @@ from apps.orders.models import Order, OrderItem
 from apps.tailors.models import Fabric, FabricCategory, TailorProfile
 from apps.tailors.services.order_pdf import (
     _ARABIC_FONT_AVAILABLE,
+    _build_customer_section,
     _build_order_details_section,
+    _build_person_blocks,
     _build_priority_sections,
+    _build_riders_section,
     _pdf_page_width,
+    _rider_contact_details,
     _contains_arabic,
     _custom_style_caption_html,
     _custom_style_comment_html,
@@ -130,8 +134,57 @@ class OrderPDFServiceTest(TestCase):
         items = list(self.order.order_items.select_related('fabric', 'family_member').all())
         priority = _build_priority_sections(self.order, items, page_w, s, 'en', {})
         details = _build_order_details_section(self.order, page_w, s, 'en')
+        customer = _build_customer_section(self.order, page_w, s, 'en')
         self.assertGreater(len(priority), 0)
         self.assertGreater(len(details), 0)
+        self.assertGreater(len(customer), 0)
+
+    def test_person_block_includes_fabric_and_quantity(self):
+        item = self.order.order_items.first()
+        item.measurements = {'chest': 42, 'waist': 34}
+        item.quantity = 2
+        item.save(update_fields=['measurements', 'quantity'])
+
+        s = _styles('en')
+        page_w = _pdf_page_width()
+        items = list(self.order.order_items.select_related('fabric', 'family_member').all())
+        blocks = _build_person_blocks(self.order, items, page_w, s, 'en', {})
+        joined = ' '.join(getattr(el, 'text', str(el)) for el in blocks)
+        self.assertIn('ALI', joined.upper())
+        self.assertIn('Qty', joined)
+
+    def test_riders_section_shows_measurement_and_delivery_contacts(self):
+        meas_rider = User.objects.create_user(
+            username='meas_rider_pdf',
+            password='testpass123',
+            role='RIDER',
+            phone='+966500000001',
+        )
+        del_rider = User.objects.create_user(
+            username='del_rider_pdf',
+            password='testpass123',
+            role='RIDER',
+            phone='+966500000002',
+        )
+        from apps.riders.models import RiderProfile
+        RiderProfile.objects.create(user=meas_rider, full_name='Khalid Meas', phone_number='+966500000001')
+        RiderProfile.objects.create(user=del_rider, full_name='Saeed Del', phone_number='+966500000002')
+        self.order.measurement_rider = meas_rider
+        self.order.delivery_rider = del_rider
+        self.order.save(update_fields=['measurement_rider', 'delivery_rider'])
+
+        s = _styles('en')
+        section = _build_riders_section(self.order, _pdf_page_width(), s, 'en')
+        joined = ' '.join(getattr(el, 'text', str(el)) for el in section)
+        self.assertIn('Khalid Meas', joined)
+        self.assertIn('Saeed Del', joined)
+        self.assertIn('+966500000001', joined)
+        self.assertIn('+966500000002', joined)
+
+    def test_pdf_includes_page_number_marker(self):
+        pdf_bytes = generate_order_pdf(self.order, lang='en')
+        self.assertTrue(pdf_bytes.startswith(b'%PDF'))
+        self.assertIn(b'Page', pdf_bytes)
 
     @override_settings(SECURE_SSL_REDIRECT=False)
     def test_download_pdf_lang_query_param_overrides_default(self):
