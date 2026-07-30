@@ -16,8 +16,10 @@ from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, Image
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, Image,
+    KeepTogether,
 )
+from reportlab.platypus.doctemplate import BaseDocTemplate, PageTemplate, Frame, NextPageTemplate
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -57,6 +59,10 @@ _LRM = '\u200e'
 _RTL_STRIP_RE = re.compile(r'[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]')
 # Collapse runs of whitespace (keep single spaces between words).
 _WHITESPACE_RUN_RE = re.compile(r'\s+')
+# Coordinate-only address strings (lat, lng) are not useful on tailor PDFs.
+_COORD_ONLY_RE = re.compile(
+    r'^\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*$'
+)
 
 _reshaper_config = None
 
@@ -78,13 +84,46 @@ def _get_reshaper_config():
     return _reshaper_config
 
 
+def _repair_spaced_script_text(text):
+    """
+    Repair Arabic/Urdu text where mobile keyboards inserted spaces between letters.
+    Example: 'ج ا ن' -> 'جان' while preserving real word boundaries.
+    """
+    if not text or not _contains_arabic(text):
+        return text
+
+    tokens = str(text).split(' ')
+    repaired = []
+    buffer = []
+
+    def _flush_buffer():
+        if not buffer:
+            return
+        if len(buffer) >= 2 and all(len(token) == 1 and _contains_arabic(token) for token in buffer):
+            repaired.append(''.join(buffer))
+        else:
+            repaired.extend(buffer)
+        buffer.clear()
+
+    for token in tokens:
+        if len(token) == 1 and _contains_arabic(token):
+            buffer.append(token)
+        else:
+            _flush_buffer()
+            if token:
+                repaired.append(token)
+    _flush_buffer()
+    return ' '.join(repaired)
+
+
 def _normalize_rtl_text(text):
     """Normalize Arabic/Urdu user text before shaping."""
     if text is None:
         return ''
     normalized = unicodedata.normalize('NFC', str(text))
     normalized = _RTL_STRIP_RE.sub('', normalized)
-    return _WHITESPACE_RUN_RE.sub(' ', normalized).strip()
+    normalized = _WHITESPACE_RUN_RE.sub(' ', normalized).strip()
+    return _repair_spaced_script_text(normalized)
 
 
 def _contains_arabic(text):
@@ -392,17 +431,20 @@ WHITE           = colors.white
 # Compact single-page layout
 PDF_MARGIN_H = 10 * mm
 PDF_MARGIN_V = 8 * mm
-PDF_SECTION_SPACER = 1.5 * mm
-PDF_ITEM_SPACER = 0.5 * mm
+PDF_SECTION_SPACER = 2.5 * mm
+PDF_ITEM_SPACER = 1.5 * mm
+PDF_PERSON_BLOCK_SPACER = 5 * mm
 PDF_MEASUREMENT_COLS = 6
-PDF_STYLE_GRID_COLS = 4
-PDF_STYLE_THUMB_SIZE = 16 * mm
-PDF_REF_THUMB_SIZE = 15 * mm
+PDF_STYLE_GRID_COLS = 5
+PDF_STYLE_THUMB_SIZE = 13 * mm
+PDF_REF_THUMB_SIZE = 11 * mm
 PDF_COMMENT_BOX_HEIGHT = 8 * mm
 PDF_STATUS_HISTORY_MAX_ROWS = 4
 PDF_HR_SPACE_AFTER = 1
 PDF_PAGE_NUMBER_OFFSET = 4 * mm
-PDF_REPEAT_HEADER_H = 14 * mm
+PDF_REPEAT_HEADER_H = 11 * mm
+PDF_FIRST_PAGE_TOP = PDF_MARGIN_V + PDF_PAGE_NUMBER_OFFSET
+PDF_LATER_PAGE_TOP = PDF_FIRST_PAGE_TOP + PDF_REPEAT_HEADER_H
 
 
 def _pdf_page_width():
@@ -704,7 +746,7 @@ def _style_image_from_db(style):
     return None
 
 
-_STYLE_COMMENT_MAX_CHARS = 60
+_STYLE_COMMENT_MAX_CHARS = 36
 
 
 def _truncate_style_comment(text, max_chars=_STYLE_COMMENT_MAX_CHARS):
@@ -744,6 +786,10 @@ def _custom_style_comment_html(style, lang='en'):
     if not comment:
         return None
     comment_lbl = _translate_label('Comment', lang)
+    if _is_rtl(lang):
+        body = _format_user_text_html(comment, lang)
+        lbl = _format_user_text_html(comment_lbl, lang, reshape=False)
+        return f'{lbl}: {body}'
     return _format_user_text_html(f'{comment_lbl}: {comment}', lang)
 
 
@@ -767,7 +813,6 @@ def _custom_style_reference_images_row(ref_paths, inner_width, s, lang='en'):
     if not images:
         return None
 
-    ref_label = _format_label_html('Reference Photos', lang)
     ref_table = Table([images], colWidths=[col_width] * len(images))
     ref_table.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -775,10 +820,7 @@ def _custom_style_reference_images_row(ref_paths, inner_width, s, lang='en'):
         ('TOPPADDING', (0, 0), (-1, -1), 0),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
     ]))
-    return Table(
-        [[Paragraph(ref_label, s['style_card_comment'])], [ref_table]],
-        colWidths=[inner_width],
-    )
+    return ref_table
 
 
 def _custom_style_card(style, cell_width, s, lang='en'):
@@ -1002,11 +1044,24 @@ def _customer_phone(order):
     return getattr(customer, 'phone', None)
 
 
+def _is_coordinate_address(text):
+    return bool(_COORD_ONLY_RE.match(str(text or '').strip()))
+
+
+def _clean_address_candidate(text):
+    candidate = str(text or '').strip()
+    if not candidate or _is_coordinate_address(candidate):
+        return None
+    return candidate
+
+
 def _order_delivery_address(order):
     """Return a human-readable delivery address for the order."""
+    candidates = []
+
     formatted = getattr(order, 'delivery_formatted_address', None)
-    if formatted and str(formatted).strip():
-        return str(formatted).strip()
+    if formatted:
+        candidates.append(formatted)
 
     parts = []
     for field in ('delivery_street', 'delivery_city', 'delivery_extra_info'):
@@ -1014,15 +1069,20 @@ def _order_delivery_address(order):
         if value:
             parts.append(str(value))
     if parts:
-        return ', '.join(parts)
+        candidates.append(', '.join(parts))
 
     addr = getattr(order, 'delivery_address', None)
     if addr:
         if getattr(addr, 'address', None):
-            return str(addr.address)
+            candidates.append(addr.address)
         addr_parts = [p for p in (getattr(addr, 'street', None), getattr(addr, 'city', None)) if p]
         if addr_parts:
-            return ', '.join(addr_parts)
+            candidates.append(', '.join(addr_parts))
+
+    for candidate in candidates:
+        cleaned = _clean_address_candidate(candidate)
+        if cleaned:
+            return cleaned
     return None
 
 
@@ -1301,9 +1361,12 @@ def _person_header_bar(title_text, page_w, s, lang):
     """Accent bar heading for each person block."""
     is_rtl = _is_rtl(lang)
     font_bold = _AR_FONT_BOLD if (is_rtl and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
-    display = _shape_arabic(title_text) if is_rtl else title_text.upper()
+    if is_rtl:
+        body_html = _format_user_text_html(title_text, lang)
+    else:
+        body_html = _safe_text(title_text.upper())
     cell = Paragraph(
-        _safe_text(display),
+        body_html,
         ParagraphStyle(
             f'PersonHdr_{lang}',
             parent=s['section_header'],
@@ -1317,6 +1380,63 @@ def _person_header_bar(title_text, page_w, s, lang):
     tbl = Table([[cell]], colWidths=[page_w])
     tbl.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), BRAND_PRIMARY),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    return tbl
+
+
+def _item_detail_cell(label, value_html, s, lang):
+    lbl = _safe_text(_t(label, lang))
+    return Paragraph(f'<b>{lbl}:</b> {value_html}', s['small'])
+
+
+def _item_details_table(item, order, page_w, s, lang, item_index):
+    """Aligned item metadata table for each person block."""
+    if item.fabric:
+        fabric_name_html = _format_user_text_html(item.fabric.name, lang)
+    else:
+        fabric_name_html = _format_user_text_html(
+            _localized_value('Measurement Service', lang),
+            lang,
+            reshape=False,
+        )
+
+    ready_val = _format_user_text_html(
+        _t('Yes', lang) if item.is_ready else _t('No', lang),
+        lang,
+        reshape=False,
+    )
+    qty_html = _safe_text(str(item.quantity))
+    item_num_html = _safe_text(str(item_index))
+
+    col_w = page_w / 3
+    row1 = [
+        _item_detail_cell('Fabric', fabric_name_html, s, lang),
+        _item_detail_cell('Qty', qty_html, s, lang),
+        _item_detail_cell('Ready', ready_val, s, lang),
+    ]
+    row2_cells = [
+        _item_detail_cell('Item #', item_num_html, s, lang),
+    ]
+    if item.fabric and item.fabric.sku:
+        row2_cells.append(_item_detail_cell('SKU', _safe_text(item.fabric.sku), s, lang))
+    while len(row2_cells) < 3:
+        row2_cells.append(Paragraph('', s['small']))
+    row2 = row2_cells
+
+    if _is_rtl(lang):
+        row1.reverse()
+        row2.reverse()
+
+    tbl = Table([row1, row2], colWidths=[col_w] * 3)
+    tbl.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BACKGROUND', (0, 0), (-1, -1), BRAND_LIGHT),
+        ('BOX', (0, 0), (-1, -1), 0.35, BRAND_MID),
+        ('INNERGRID', (0, 0), (-1, -1), 0.25, BRAND_MID),
         ('TOPPADDING', (0, 0), (-1, -1), 3),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('LEFTPADDING', (0, 0), (-1, -1), 4),
@@ -1358,7 +1478,7 @@ def _rider_info_cell(rider, lang, s):
     """Rider name with phone on a separate line."""
     name, phone = _rider_contact_details(rider)
     if not name:
-        return Paragraph(_safe_text(_t('N/A', lang)), s['value'])
+        return Paragraph(_safe_text('—'), s['value'])
 
     phone_html = ''
     if phone:
@@ -1438,7 +1558,7 @@ def _build_person_blocks(order, items, page_w, s, lang, measurement_fields):
         block = []
         block.append(_person_header_bar(_person_header_text(item, order, lang, item_index), page_w, s, lang))
         block.append(Spacer(1, PDF_ITEM_SPACER))
-        block.append(Paragraph(_item_details_html(item, order, lang, item_index), s['small']))
+        block.append(_item_details_table(item, order, page_w, s, lang, item_index))
         block.append(Spacer(1, PDF_ITEM_SPACER))
 
         has_content = True
@@ -1492,8 +1612,8 @@ def _build_person_blocks(order, items, page_w, s, lang, measurement_fields):
     story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=PDF_HR_SPACE_AFTER))
     for block_index, block in enumerate(blocks):
         if block_index > 0:
-            story.append(Spacer(1, PDF_SECTION_SPACER))
-        story.extend(block)
+            story.append(Spacer(1, PDF_PERSON_BLOCK_SPACER))
+        story.append(KeepTogether(block))
     story.append(Spacer(1, PDF_SECTION_SPACER))
     return story
 
@@ -1842,8 +1962,47 @@ def _build_comments_and_footer(order, page_w, s, lang):
 
 
 def _pdf_top_margin():
-    """Reserve space for page numbers and the continuation-page repeat header."""
-    return PDF_MARGIN_V + PDF_PAGE_NUMBER_OFFSET + PDF_REPEAT_HEADER_H
+    """Backward-compatible alias; prefer page-template specific top offsets."""
+    return PDF_LATER_PAGE_TOP
+
+
+def _canvas_prepare_text(text, lang):
+    """Shape mixed RTL/LTR strings for raw canvas drawing."""
+    if text is None:
+        return ''
+    logical = _normalize_rtl_text(text)
+    if not logical:
+        return ''
+    if not _is_rtl(lang):
+        return logical
+
+    runs = _SCRIPT_RUN_RE.findall(logical)
+    if not runs:
+        return logical
+
+    parts = []
+    for run in runs:
+        if _contains_arabic(run):
+            parts.append(_shape_arabic(run))
+        else:
+            parts.append(run)
+    return ''.join(parts)
+
+
+def _canvas_fonts(lang):
+    regular = _AR_FONT_REGULAR if (_is_rtl(lang) and _ARABIC_FONT_AVAILABLE) else 'Helvetica'
+    bold = _AR_FONT_BOLD if (_is_rtl(lang) and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
+    return regular, bold
+
+
+def _canvas_draw_line(canvas, x, y, text, lang, *, font_name, font_size, color, align='left'):
+    canvas.setFont(font_name, font_size)
+    canvas.setFillColor(color)
+    display = _canvas_prepare_text(text, lang)
+    if align == 'right':
+        canvas.drawRightString(x, y, display)
+    else:
+        canvas.drawString(x, y, display)
 
 
 class _OrderPDFPageContext:
@@ -1858,32 +2017,20 @@ def _canvas_page_label(lang, page_num):
 
 
 def _canvas_draw_page_number(canvas, page_num, lang):
-    font_bold = _AR_FONT_BOLD if (_is_rtl(lang) and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
-    canvas.setFont(font_bold, 8)
-    canvas.setFillColor(BRAND_SUBTEXT)
+    _, font_bold = _canvas_fonts(lang)
     text = _canvas_page_label(lang, page_num)
     y = A4[1] - PDF_MARGIN_V
-    if _is_rtl(lang):
-        display = _shape_arabic(text) if _contains_arabic(text) else text
-        canvas.drawString(PDF_MARGIN_H, y, display)
-    else:
-        canvas.drawRightString(A4[0] - PDF_MARGIN_H, y, text)
+    right_x = A4[0] - PDF_MARGIN_H
+    _canvas_draw_line(canvas, right_x, y, text, lang, font_name=font_bold, font_size=8, color=BRAND_SUBTEXT, align='right')
 
 
-def _canvas_compact_repeat_header(canvas, order, lang):
-    """Compact customer + rider strip on continuation pages."""
-    font = _AR_FONT_REGULAR if (_is_rtl(lang) and _ARABIC_FONT_AVAILABLE) else 'Helvetica'
-    font_bold = _AR_FONT_BOLD if (_is_rtl(lang) and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
-
+def _canvas_customer_summary_line(order, lang):
     customer_name = _customer_display_name(order.customer) or '—'
     phone = _customer_phone(order) or '—'
-    y_line1 = A4[1] - PDF_MARGIN_V - PDF_PAGE_NUMBER_OFFSET - 2 * mm
-    y_line2 = y_line1 - 4 * mm
+    return f'{order.order_number}  |  {customer_name}  |  {phone}'
 
-    canvas.setFont(font_bold, 7)
-    canvas.setFillColor(BRAND_TEXT)
-    canvas.drawString(PDF_MARGIN_H, y_line1, f'{order.order_number}  |  {customer_name}  |  {phone}')
 
+def _canvas_riders_summary_line(order, lang):
     meas_name, meas_phone = _rider_contact_details(getattr(order, 'measurement_rider', None))
     del_name, del_phone = _rider_contact_details(getattr(order, 'delivery_rider', None))
     meas_lbl = _translate_label('Measurement Rider', lang)
@@ -1895,26 +2042,87 @@ def _canvas_compact_repeat_header(canvas, order, lang):
     del_text = f'{del_lbl}: {del_name or "—"}'
     if del_phone:
         del_text += f' ({del_phone})'
+    return f'{meas_text}  |  {del_text}'
 
-    canvas.setFont(font, 6.5)
-    canvas.setFillColor(BRAND_SUBTEXT)
-    canvas.drawString(PDF_MARGIN_H, y_line2, f'{meas_text}  |  {del_text}')
 
-    canvas.setStrokeColor(BRAND_MID)
-    canvas.setLineWidth(0.5)
-    canvas.line(PDF_MARGIN_H, y_line2 - 2 * mm, A4[0] - PDF_MARGIN_H, y_line2 - 2 * mm)
+def _canvas_draw_top_band(canvas, order, lang, *, include_riders):
+    regular, bold = _canvas_fonts(lang)
+    left_x = PDF_MARGIN_H
+    right_x = A4[0] - PDF_MARGIN_H
+    y_customer = A4[1] - PDF_MARGIN_V - PDF_PAGE_NUMBER_OFFSET - 1.5 * mm
+
+    _canvas_draw_line(
+        canvas, left_x, y_customer,
+        _canvas_customer_summary_line(order, lang),
+        lang, font_name=bold, font_size=7, color=BRAND_TEXT, align='left',
+    )
+
+    if include_riders:
+        y_riders = y_customer - 4 * mm
+        _canvas_draw_line(
+            canvas, left_x, y_riders,
+            _canvas_riders_summary_line(order, lang),
+            lang, font_name=regular, font_size=6.5, color=BRAND_SUBTEXT, align='left',
+        )
+        canvas.setStrokeColor(BRAND_MID)
+        canvas.setLineWidth(0.5)
+        canvas.line(left_x, y_riders - 2 * mm, right_x, y_riders - 2 * mm)
 
 
 def _make_pdf_page_callbacks(ctx):
-    def _draw_page(canvas, doc):
+    def _draw_first_page(canvas, doc):
         canvas.saveState()
-        page_num = canvas.getPageNumber()
-        _canvas_draw_page_number(canvas, page_num, ctx.lang)
-        if page_num > 1:
-            _canvas_compact_repeat_header(canvas, ctx.order, ctx.lang)
+        _canvas_draw_page_number(canvas, canvas.getPageNumber(), ctx.lang)
+        _canvas_draw_top_band(canvas, ctx.order, ctx.lang, include_riders=False)
         canvas.restoreState()
 
-    return _draw_page
+    def _draw_later_page(canvas, doc):
+        canvas.saveState()
+        _canvas_draw_page_number(canvas, canvas.getPageNumber(), ctx.lang)
+        _canvas_draw_top_band(canvas, ctx.order, ctx.lang, include_riders=True)
+        canvas.restoreState()
+
+    return _draw_first_page, _draw_later_page
+
+
+class _OrderPDFDoc(BaseDocTemplate):
+    """PDF doc with a taller top band on continuation pages for repeat headers."""
+
+
+def _build_order_pdf_doc(buffer):
+    doc = _OrderPDFDoc(
+        buffer,
+        pagesize=A4,
+        leftMargin=PDF_MARGIN_H,
+        rightMargin=PDF_MARGIN_H,
+        bottomMargin=PDF_MARGIN_V,
+        topMargin=PDF_FIRST_PAGE_TOP,
+        title='Order PDF',
+        author='Mgask Platform',
+    )
+    first_frame = Frame(
+        doc.leftMargin,
+        doc.bottomMargin,
+        doc.width,
+        A4[1] - doc.bottomMargin - PDF_FIRST_PAGE_TOP,
+        id='first',
+        leftPadding=0,
+        rightPadding=0,
+        topPadding=0,
+        bottomPadding=0,
+    )
+    later_frame = Frame(
+        doc.leftMargin,
+        doc.bottomMargin,
+        doc.width,
+        A4[1] - doc.bottomMargin - PDF_LATER_PAGE_TOP,
+        id='later',
+        leftPadding=0,
+        rightPadding=0,
+        topPadding=0,
+        bottomPadding=0,
+    )
+    return doc, first_frame, later_frame
 
 
 def generate_order_pdf(order, lang='en') -> bytes:
@@ -1929,25 +2137,21 @@ def generate_order_pdf(order, lang='en') -> bytes:
         bytes: Raw PDF file content.
     """
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        rightMargin=PDF_MARGIN_H,
-        leftMargin=PDF_MARGIN_H,
-        topMargin=_pdf_top_margin(),
-        bottomMargin=PDF_MARGIN_V,
-        title=f'Order {order.order_number}',
-        author='Mgask Platform',
-    )
+    page_ctx = _OrderPDFPageContext(order, lang)
+    draw_first_page, draw_later_page = _make_pdf_page_callbacks(page_ctx)
+    doc, first_frame, later_frame = _build_order_pdf_doc(buffer)
+    doc.addPageTemplates([
+        PageTemplate(id='First', frames=[first_frame], onPage=draw_first_page),
+        PageTemplate(id='Later', frames=[later_frame], onPage=draw_later_page),
+    ])
+    doc.title = f'Order {order.order_number}'
 
     s = _styles(lang)
     page_w = _pdf_page_width()
     measurement_fields = _measurement_field_map()
     items = list(order.order_items.select_related('fabric', 'family_member').all())
-    page_ctx = _OrderPDFPageContext(order, lang)
-    draw_page = _make_pdf_page_callbacks(page_ctx)
 
-    story = []
+    story = [NextPageTemplate('Later')]
     story.extend(_build_header_section(order, page_w, s, lang))
     story.extend(_build_customer_section(order, page_w, s, lang))
     story.append(Spacer(1, PDF_SECTION_SPACER))
@@ -1968,7 +2172,7 @@ def generate_order_pdf(order, lang='en') -> bytes:
     story.append(Spacer(1, PDF_SECTION_SPACER))
     story.extend(_build_comments_and_footer(order, page_w, s, lang))
 
-    doc.build(story, onFirstPage=draw_page, onLaterPages=draw_page)
+    doc.build(story)
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
