@@ -786,10 +786,7 @@ def _custom_style_comment_html(style, lang='en'):
     if not comment:
         return None
     comment_lbl = _translate_label('Comment', lang)
-    if _is_rtl(lang):
-        body = _format_user_text_html(comment, lang)
-        lbl = _format_user_text_html(comment_lbl, lang, reshape=False)
-        return f'{lbl}: {body}'
+    # Shape label + body together so RTL labels (تعليق) are not reversed in the PDF.
     return _format_user_text_html(f'{comment_lbl}: {comment}', lang)
 
 

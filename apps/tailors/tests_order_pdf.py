@@ -27,6 +27,7 @@ from apps.tailors.services.order_pdf import (
     _normalize_rtl_text,
     _resolve_media_file_path,
     _shape_arabic,
+    _safe_text,
     _styles,
     _style_reference_image_paths,
     _t,
@@ -232,6 +233,14 @@ class OrderPDFServiceTest(TestCase):
         html = _custom_style_comment_html({'text': 'تعليق تجريبي'}, lang='ar')
         self.assertIn('IBMPlexSansArabic-Regular', html)
         self.assertNotEqual(_shape_arabic(shaped_lbl), shaped_lbl)
+        self.assertIn(_safe_text(shaped_lbl), html)
+
+    def test_arabic_comment_label_is_not_reversed(self):
+        html = _custom_style_comment_html({'text': 'السلام علیکم'}, lang='ar')
+        shaped_comment_label = _safe_text(_shape_arabic('تعليق'))
+        self.assertIn(shaped_comment_label, html)
+        self.assertIn(_safe_text(_shape_arabic('علیکم')), html)
+        self.assertNotIn(_safe_text(_shape_arabic('يقعلت')), html)
 
     def test_normalize_rtl_text_strips_zero_width_and_collapses_spaces(self):
         dirty = 'صورة\u200c  \u200f مرجعية'
