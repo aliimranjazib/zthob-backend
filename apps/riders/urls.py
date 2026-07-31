@@ -11,6 +11,7 @@ from .views import (
     RiderDocumentDeleteView,
     RiderAvailableOrdersView,
     RiderMyOrdersView,
+    RiderOrderHistoryView,
     RiderOrderDetailView,
     RiderAddMeasurementsView,
     RiderUpdateOrderStatusView,
@@ -58,6 +59,7 @@ urlpatterns = [
     # Orders
     path('orders/available/', RiderAvailableOrdersView.as_view(), name='available-orders'),
     path('orders/my-orders/', RiderMyOrdersView.as_view(), name='my-orders'),
+    path('orders/history/', RiderOrderHistoryView.as_view(), name='rider-order-history'),
     path('orders/<int:order_id>/', RiderOrderDetailView.as_view(), name='order-detail'),
     path('orders/<int:order_id>/measurements/', RiderAddMeasurementsView.as_view(), name='add-measurements'),
     path('orders/<int:order_id>/update-status/', RiderUpdateOrderStatusView.as_view(), name='update-status'),

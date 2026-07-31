@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -115,3 +115,76 @@ def get_tailor_completed_orders(tailor_user, period=DEFAULT_PERIOD, from_date=No
     ).prefetch_related('order_items__fabric').order_by('-completed_at')
 
     return queryset, start, end
+
+
+def rider_measurement_assignment_q(rider_user):
+    return Q(measurement_rider=rider_user) | (
+        Q(measurement_rider__isnull=True)
+        & (Q(rider=rider_user) | Q(assigned_rider=rider_user))
+    )
+
+
+def rider_delivery_assignment_q(rider_user):
+    return Q(delivery_rider=rider_user) | (
+        Q(delivery_rider__isnull=True)
+        & (Q(rider=rider_user) | Q(assigned_rider=rider_user))
+    )
+
+
+def _rider_history_select_related():
+    return (
+        'customer',
+        'tailor',
+        'delivery_address',
+        'rider__rider_profile',
+        'assigned_rider__rider_profile',
+        'measurement_rider__rider_profile',
+        'delivery_rider__rider_profile',
+    )
+
+
+def get_rider_completed_history(rider_user, period=DEFAULT_PERIOD, from_date=None, to_date=None):
+    """
+    Return completed rider work entries (measurement and/or delivery) for history screens.
+
+    Each entry is an Order with ephemeral attrs:
+    - history_work_type: 'measurement' | 'delivery'
+    - completed_at: when that work leg was completed
+    """
+    start, end = resolve_period_bounds(period, from_date=from_date, to_date=to_date)
+    select_related = _rider_history_select_related()
+    prefetch_related = ('order_items__fabric',)
+
+    measurement_orders = list(
+        Order.objects.filter(
+            rider_measurement_assignment_q(rider_user),
+            measurement_taken_at__isnull=False,
+            measurement_taken_at__gte=start,
+            measurement_taken_at__lt=end,
+        )
+        .select_related(*select_related)
+        .prefetch_related(*prefetch_related)
+    )
+    for order in measurement_orders:
+        order.history_work_type = 'measurement'
+        order.completed_at = order.measurement_taken_at
+
+    delivery_queryset = Order.objects.filter(
+        rider_delivery_assignment_q(rider_user),
+        status__in=COMPLETED_STATUSES,
+    )
+    delivery_queryset = annotate_completed_at(delivery_queryset)
+    delivery_orders = list(
+        delivery_queryset.filter(
+            completed_at__gte=start,
+            completed_at__lt=end,
+        )
+        .select_related(*select_related)
+        .prefetch_related(*prefetch_related)
+    )
+    for order in delivery_orders:
+        order.history_work_type = 'delivery'
+
+    entries = measurement_orders + delivery_orders
+    entries.sort(key=lambda order: order.completed_at, reverse=True)
+    return entries, start, end

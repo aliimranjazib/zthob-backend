@@ -598,6 +598,34 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
         return OrderSerializer._calculate_status_progress(OrderSerializer(), obj)
 
 
+class RiderOrderHistorySerializer(RiderOrderListSerializer):
+    """Completed rider work with completion timestamp and work type for history screens."""
+
+    completed_at = serializers.SerializerMethodField()
+    work_type = serializers.SerializerMethodField()
+
+    class Meta(RiderOrderListSerializer.Meta):
+        fields = RiderOrderListSerializer.Meta.fields + ['completed_at', 'work_type']
+
+    def get_completed_at(self, obj):
+        annotated = getattr(obj, 'completed_at', None)
+        if annotated is not None:
+            return annotated
+        if getattr(obj, 'history_work_type', None) == 'measurement' and obj.measurement_taken_at:
+            return obj.measurement_taken_at
+        history = (
+            obj.status_history.filter(status__in=('delivered', 'collected'))
+            .order_by('-created_at')
+            .first()
+        )
+        if history:
+            return history.created_at
+        return obj.updated_at
+
+    def get_work_type(self, obj):
+        return getattr(obj, 'history_work_type', None)
+
+
 class RiderOrderDetailSerializer(serializers.ModelSerializer):
     """Serializer for order details for riders"""
     customer_info = serializers.SerializerMethodField()

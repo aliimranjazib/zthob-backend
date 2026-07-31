@@ -47,6 +47,7 @@ try:
     RiderDocumentUploadSerializer = _serializers_module.RiderDocumentUploadSerializer
     RiderDocumentSerializer = _serializers_module.RiderDocumentSerializer
     RiderOrderListSerializer = _serializers_module.RiderOrderListSerializer
+    RiderOrderHistorySerializer = _serializers_module.RiderOrderHistorySerializer
     RiderOrderDetailSerializer = _serializers_module.RiderOrderDetailSerializer
     RiderAddMeasurementsSerializer = _serializers_module.RiderAddMeasurementsSerializer
     RiderUpdateOrderStatusSerializer = _serializers_module.RiderUpdateOrderStatusSerializer
@@ -731,6 +732,95 @@ class RiderMyOrdersView(APIView):
             message="Your orders retrieved successfully",
             data=serializer.data,
             status_code=status.HTTP_200_OK
+        )
+
+
+class RiderOrderHistoryView(APIView):
+    """Get completed rider work (measurement and delivery) with period-based filters."""
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses=RiderOrderHistorySerializer(many=True),
+        summary="Get completed rider order history",
+        description=(
+            "Retrieve completed rider work for the authenticated rider. "
+            "Includes measurement completions (measurement_taken_at) and delivery completions "
+            "(delivered or collected). Each row has work_type: measurement or delivery. "
+            "Filter by period: today, yesterday, this_week, this_month, past_6_months, "
+            "or custom (with from_date and to_date as YYYY-MM-DD)."
+        ),
+        tags=["Rider Orders"],
+    )
+    def get(self, request):
+        if not request.user.is_rider:
+            return api_response(
+                success=False,
+                message="Only riders can access this endpoint",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        from apps.orders.history_utils import DEFAULT_PERIOD, get_rider_completed_history
+        from rest_framework.exceptions import ValidationError
+
+        period = request.query_params.get('period', DEFAULT_PERIOD)
+        from_date = request.query_params.get('from_date')
+        to_date = request.query_params.get('to_date')
+
+        try:
+            entries, start, end = get_rider_completed_history(
+                request.user,
+                period=period,
+                from_date=from_date,
+                to_date=to_date,
+            )
+        except ValidationError as exc:
+            return api_response(
+                success=False,
+                message="Invalid history filter",
+                errors=exc.detail,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service_mode = request.query_params.get('service_mode')
+        if service_mode:
+            entries = [entry for entry in entries if entry.service_mode == service_mode]
+
+        order_type = request.query_params.get('order_type')
+        if order_type:
+            entries = [entry for entry in entries if entry.order_type == order_type]
+
+        search = (request.query_params.get('search') or '').strip()
+        if search:
+            search_lower = search.lower()
+            filtered_entries = []
+            for entry in entries:
+                customer = entry.customer
+                if (
+                    search_lower in (entry.order_number or '').lower()
+                    or (customer and search_lower in (customer.first_name or '').lower())
+                    or (customer and search_lower in (customer.last_name or '').lower())
+                    or (customer and search_lower in (customer.username or '').lower())
+                ):
+                    filtered_entries.append(entry)
+            entries = filtered_entries
+
+        serializer = RiderOrderHistorySerializer(
+            entries,
+            many=True,
+            context={'request': request, 'role': 'RIDER'},
+        )
+
+        return api_response(
+            success=True,
+            message="Completed orders retrieved successfully",
+            data={
+                'period': period,
+                'from': start.isoformat(),
+                'to': end.isoformat(),
+                'count': len(serializer.data),
+                'orders': serializer.data,
+            },
+            status_code=status.HTTP_200_OK,
         )
 
 
