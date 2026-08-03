@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+from django.http import HttpResponseRedirect
 from django.utils.html import format_html
 from django.urls import reverse
 from django.contrib import messages
@@ -166,6 +167,7 @@ class CustomUserAdmin(UserAdmin):
         'mark_phone_as_unverified',
         'soft_delete_users',
         'restore_deleted_users',
+        'send_message_to_selected',
         'export_users_csv',
     ]
     
@@ -336,6 +338,24 @@ class CustomUserAdmin(UserAdmin):
             messages.SUCCESS
         )
     restore_deleted_users.short_description = 'Restore deleted users'
+
+    def send_message_to_selected(self, request, queryset):
+        """Open Messaging Center compose form for selected users."""
+        if not (
+          request.user.is_superuser
+          or request.user.has_perm('messaging.send_admin_message')
+        ):
+            self.message_user(
+                request,
+                'You do not have permission to send admin messages.',
+                messages.ERROR,
+            )
+            return None
+
+        recipient_ids = ','.join(str(user.pk) for user in queryset)
+        add_url = reverse('admin:messaging_adminoutboundmessage_add')
+        return HttpResponseRedirect(f'{add_url}?audience_type=selected&recipients={recipient_ids}')
+    send_message_to_selected.short_description = 'Send message to selected users'
     
     def export_users_csv(self, request, queryset):
         """Export selected users to CSV"""

@@ -233,6 +233,9 @@ class TailorCreateCustomerView(BaseTailorAPIView):
             pos_created_by=owner_user,  # track which shop owns this customer
         )
 
+        from apps.customers.services.welcome_sms import queue_customer_welcome_sms
+        queue_customer_welcome_sms(user.id)
+
         return api_response(
             success=True,
             message="Customer created successfully",

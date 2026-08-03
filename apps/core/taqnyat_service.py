@@ -214,18 +214,23 @@ class TaqnyatVerifyService:
 
 
 class TaqnyatSMSService:
-    """Taqnyat SMS API for sending OTP messages (e.g. rider verification)."""
+    """Taqnyat SMS API (https://dev.taqnyat.sa/en/doc/sms/)."""
 
     @staticmethod
-    def send_otp_sms(phone_number: str, otp_code: str) -> tuple[bool, str]:
+    def send_sms(phone_number: str, body: str) -> tuple[bool, str, str | None]:
+        """
+        Send a plain SMS via Taqnyat.
+
+        Returns (success, message, provider_message_id).
+        """
         configured, error = TaqnyatVerifyService._is_configured()
         if not configured:
-            return False, error
+            return False, error, None
 
-        body_text = (
-            f"Your Mgask verification code is: {otp_code}. "
-            f"Valid for {getattr(settings, 'OTP_EXPIRY_MINUTES', 5)} minutes."
-        )
+        body_text = (body or '').strip()
+        if not body_text:
+            return False, "SMS body is required", None
+
         payload = json.dumps(
             {
                 "recipients": [format_phone_for_taqnyat(phone_number)],
@@ -251,16 +256,25 @@ class TaqnyatSMSService:
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8") if exc.fp else str(exc)
             logger.error("Taqnyat SMS HTTP error: %s - %s", exc.code, raw)
-            return False, f"Failed to send SMS: HTTP {exc.code}"
+            return False, f"Failed to send SMS: HTTP {exc.code}", None
         except (urllib.error.URLError, json.JSONDecodeError) as exc:
             logger.error("Taqnyat SMS error: %s", exc)
-            return False, f"Failed to send SMS: {exc}"
+            return False, f"Failed to send SMS: {exc}", None
 
         status_code = parsed.get("statusCode") if isinstance(parsed, dict) else None
         if status_code == 201:
-            message_id = parsed.get("messageId", "")
+            message_id = str(parsed.get("messageId", "") or "")
             logger.info("Taqnyat SMS sent. messageId=%s", message_id)
-            return True, f"SMS sent successfully. messageId: {message_id}"
+            return True, f"SMS sent successfully. messageId: {message_id}", message_id or None
 
         error_message = parsed.get("message", "Unknown error") if isinstance(parsed, dict) else raw
-        return False, f"Failed to send SMS: {error_message}"
+        return False, f"Failed to send SMS: {error_message}", None
+
+    @staticmethod
+    def send_otp_sms(phone_number: str, otp_code: str) -> tuple[bool, str]:
+        body_text = (
+            f"Your Mgask verification code is: {otp_code}. "
+            f"Valid for {getattr(settings, 'OTP_EXPIRY_MINUTES', 5)} minutes."
+        )
+        success, message, _message_id = TaqnyatSMSService.send_sms(phone_number, body_text)
+        return success, message

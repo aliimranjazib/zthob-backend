@@ -428,6 +428,11 @@ class PhoneVerifyView(APIView):
             # Ensure requested role profile exists (Multi-Role Logic)
             from apps.accounts.services import IdentityService
             IdentityService.ensure_profile(user, role)
+
+            was_deleted_re_register = bool(user_before_verify and user_before_verify.is_deleted)
+            if is_new_user and role == 'USER' and not was_deleted_re_register:
+                from apps.customers.services.welcome_sms import queue_customer_welcome_sms
+                queue_customer_welcome_sms(user.id)
             
             # Generate JWT tokens (Role-Aware)
             from apps.accounts.serializers import UnifiedRefreshToken
