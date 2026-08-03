@@ -74,6 +74,7 @@ INSTALLED_APPS = [
     "apps.orders",
     "apps.riders",
     "apps.notifications",
+    "apps.messaging",
     "apps.deliveries",
     "apps.customization",
     "apps.finance",
@@ -447,6 +448,7 @@ JAZZMIN_SETTINGS = {
     "topmenu_links": [
         {"name": "Dashboard", "url": "admin:index"},
         {"name": "Analytics", "url": "admin:orders-analytics", "icon": "fas fa-chart-line"},
+        {"name": "Messaging", "model": "messaging.AdminOutboundMessage", "icon": "fas fa-paper-plane"},
         {"name": "Users", "model": "accounts.CustomUser"},
     ],
 
@@ -462,7 +464,7 @@ JAZZMIN_SETTINGS = {
     "hide_models": ["auth.Group"],  # Hide groups
 
     # Organized menu order - most important first
-    "order_with_respect_to": ["accounts", "customers", "tailors", "orders", "core"],
+    "order_with_respect_to": ["accounts", "messaging", "customers", "tailors", "orders", "core"],
 
     # Simple, clear icons - comprehensive icon set for all models
     "icons": {
@@ -501,6 +503,10 @@ JAZZMIN_SETTINGS = {
         # Notifications
         "notifications.FCMDeviceToken": "fas fa-mobile-alt",
         "notifications.NotificationLog": "fas fa-bell",
+
+        # Messaging
+        "messaging.AdminOutboundMessage": "fas fa-paper-plane",
+        "messaging.AdminMessageDelivery": "fas fa-envelope-open-text",
         
         # Deliveries
         "deliveries.DeliveryTracking": "fas fa-truck",

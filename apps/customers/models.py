@@ -77,6 +77,11 @@ class CustomerProfile(models.Model):
         related_name='pos_created_customers',
         help_text="Tailor who created this customer via the POS system"
     )
+    welcome_sms_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the onboarding welcome SMS was sent to this customer",
+    )
 
     def __str__(self):
         return f"Customer Profile for {self.user.username}"
