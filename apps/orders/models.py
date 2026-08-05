@@ -475,18 +475,88 @@ class Order(BaseModel):
         if self.tailor and self.tailor.role != 'TAILOR':
             from django.core.exceptions import ValidationError
             raise ValidationError("Tailor must have TAILOR role")
-    def save(self,*args,**kwargs):
-        if not self.order_number:
-           import uuid
-           self.order_number = f"ORD-{uuid.uuid4().hex[:8].upper()}"
+
+    # Sequential customer-facing numbers: 00300, 00301, ... 99999
+    # Existing ORD-XXXXXXXX values are left untouched.
+    STARTING_ORDER_NUMBER = 300
+    MAX_ORDER_NUMBER = 99999
+
+    @classmethod
+    def _next_order_number(cls):
+        """
+        Compute the next 5-digit sequential order number.
+
+        Must be called inside transaction.atomic() so SELECT FOR UPDATE
+        is held until the new order row is inserted.
+        """
+        last = (
+            cls.objects
+            .select_for_update()
+            .filter(order_number__regex=r'^\d{5}$')
+            .order_by('-order_number')
+            .values_list('order_number', flat=True)
+            .first()
+        )
+        next_num = int(last) + 1 if last else cls.STARTING_ORDER_NUMBER
+        next_num = max(next_num, cls.STARTING_ORDER_NUMBER)
+        if next_num > cls.MAX_ORDER_NUMBER:
+            raise ValueError(
+                f"Order number limit reached ({cls.MAX_ORDER_NUMBER})"
+            )
+        return f"{next_num:05d}"
+
+    @classmethod
+    def generate_order_number(cls):
+        """Public helper: allocate next number under a short lock."""
+        from django.db import transaction
+
+        with transaction.atomic():
+            return cls._next_order_number()
+
+    def save(self, *args, **kwargs):
+        from django.db import IntegrityError, transaction
+
         if not self.total_amount:
-            self.total_amount=self.subtotal+self.stitching_price+self.tax_amount+self.delivery_fee+self.express_fee
+            self.total_amount = (
+                self.subtotal
+                + self.stitching_price
+                + self.tax_amount
+                + self.delivery_fee
+                + self.express_fee
+            )
 
         # Auto-sync main status based on rider_status and tailor_status
         # This preserves the existing auto-sync logic from OrderStatusTransitionService
         self._sync_main_status()
 
-        super().save(*args, **kwargs)
+        if self.order_number:
+            super().save(*args, **kwargs)
+            return
+
+        # Allocate + insert in the same atomic block so the row lock is held
+        # until commit. Retry only on order_number unique collisions.
+        last_error = None
+        for _ in range(5):
+            try:
+                with transaction.atomic():
+                    self.order_number = self._next_order_number()
+                    super().save(*args, **kwargs)
+                return
+            except IntegrityError as exc:
+                last_error = exc
+                error_text = str(exc).lower()
+                if (
+                    'order_number' not in error_text
+                    and 'orders_order_order_number' not in error_text
+                ):
+                    raise
+                self.order_number = None
+                if self.pk and not type(self).objects.filter(pk=self.pk).exists():
+                    self.pk = None
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Failed to allocate a unique order number")
     
     def _sync_main_status(self):
         """
