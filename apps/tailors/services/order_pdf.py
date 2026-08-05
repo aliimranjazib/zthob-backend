@@ -985,7 +985,7 @@ def _kv_table(rows, col_widths=None, lang='en'):
         if not val:
             val_html = '—'
         elif skip_trans:
-            val_html = _format_user_text_html(val, lang, reshape=False)
+            val_html = _format_user_text_html(val, lang)
         elif lang == 'en':
             val_html = _format_user_text_html(val, lang)
         else:
@@ -1364,9 +1364,7 @@ def _person_header_text(item, order, lang, person_index):
         else:
             detail = name
     else:
-        customer_name = _customer_display_name(getattr(order, 'customer', None)) or '—'
-        self_lbl = _translate_label('Self', lang)
-        detail = f'{customer_name} ({self_lbl})'
+        detail = _customer_display_name(getattr(order, 'customer', None)) or '—'
     return f'{person_lbl} {person_index} — {detail}'
 
 
