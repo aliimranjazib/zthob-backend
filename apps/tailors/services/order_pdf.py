@@ -619,14 +619,27 @@ def _fmt_amount(value, currency='SAR'):
 
 
 def _choice_display(value, choices, lang='en'):
-    """Return a localized display label for a Django choice value."""
+    """Return a localized display label for a Django choice value (logical order)."""
     display = dict(choices).get(value, value or '—')
-    return _t(display, lang) if _is_rtl(lang) else str(display)
+    if _is_rtl(lang):
+        return _translate_label(str(display), lang)
+    return str(display)
 
 
 def _localized_value(text, lang='en'):
-    """Translate common display values when Arabic is requested."""
-    return _t(text, lang) if _is_rtl(lang) else str(text or '—')
+    """Translate common display values for RTL PDFs (logical order)."""
+    if _is_rtl(lang):
+        return _translate_label(str(text or '—'), lang)
+    return str(text or '—')
+
+
+def _inline_value_html(value, lang='en'):
+    """Shape a localized or user value once for inline Paragraph HTML."""
+    if value is None or value == '':
+        return '—'
+    if not _is_rtl(lang):
+        return _safe_text(value)
+    return _format_user_text_html(value, lang)
 
 
 def _short_reference(reference):
@@ -1340,7 +1353,6 @@ def _item_fabric_label_html(item, order, lang):
         fabric_name_html = _format_user_text_html(
             _localized_value('Measurement Service', lang),
             lang,
-            reshape=False,
         )
     fabric_sku = f'SKU: {item.fabric.sku}' if item.fabric and item.fabric.sku else ''
     fabric_parts = []
@@ -1353,29 +1365,34 @@ def _item_fabric_label_html(item, order, lang):
     return '<br/>'.join(fabric_parts)
 
 
-def _person_header_text(item, order, lang, person_index):
-    """Plain-text person block title, e.g. PERSON 1 — Ali (son)."""
-    person_lbl = _translate_label('PERSON', lang)
+def _person_header_detail_text(item, order):
     if item.family_member_id and item.family_member:
         fm = item.family_member
         name = fm.name or '—'
         if fm.relationship:
-            detail = f'{name} ({fm.relationship})'
-        else:
-            detail = name
-    else:
-        detail = _customer_display_name(getattr(order, 'customer', None)) or '—'
+            return f'{name} ({fm.relationship})'
+        return name
+    return _customer_display_name(getattr(order, 'customer', None)) or '—'
+
+
+def _person_header_text(item, order, lang, person_index):
+    """Plain-text person block title, e.g. PERSON 1 — Ali (son)."""
+    person_lbl = _translate_label('PERSON', lang)
+    detail = _person_header_detail_text(item, order)
     return f'{person_lbl} {person_index} — {detail}'
 
 
-def _person_header_bar(title_text, page_w, s, lang):
+def _person_header_bar(item, order, page_w, s, lang, person_index):
     """Accent bar heading for each person block."""
     is_rtl = _is_rtl(lang)
     font_bold = _AR_FONT_BOLD if (is_rtl and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
+    detail = _person_header_detail_text(item, order)
     if is_rtl:
-        body_html = _format_user_text_html(title_text, lang)
+        person_lbl = _safe_text(_t('PERSON', lang))
+        detail_html = _format_user_text_html(detail, lang)
+        body_html = f'{person_lbl} {person_index} — {_LRM}{detail_html}{_LRM}'
     else:
-        body_html = _safe_text(title_text.upper())
+        body_html = _safe_text(f'PERSON {person_index} — {detail}'.upper())
     cell = Paragraph(
         body_html,
         ParagraphStyle(
@@ -1412,13 +1429,11 @@ def _item_details_table(item, order, page_w, s, lang, item_index):
         fabric_name_html = _format_user_text_html(
             _localized_value('Measurement Service', lang),
             lang,
-            reshape=False,
         )
 
     ready_val = _format_user_text_html(
-        _t('Yes', lang) if item.is_ready else _t('No', lang),
+        _localized_value('Yes', lang) if item.is_ready else _localized_value('No', lang),
         lang,
-        reshape=False,
     )
     qty_html = _safe_text(str(item.quantity))
     item_num_html = _safe_text(str(item_index))
@@ -1464,7 +1479,6 @@ def _item_details_html(item, order, lang, item_index):
         fabric_name_html = _format_user_text_html(
             _localized_value('Measurement Service', lang),
             lang,
-            reshape=False,
         )
 
     fabric_lbl = _safe_text(_t('Fabric', lang))
@@ -1567,7 +1581,7 @@ def _build_person_blocks(order, items, page_w, s, lang, measurement_fields):
 
     for item_index, item in enumerate(items, start=1):
         block = []
-        block.append(_person_header_bar(_person_header_text(item, order, lang, item_index), page_w, s, lang))
+        block.append(_person_header_bar(item, order, page_w, s, lang, item_index))
         block.append(Spacer(1, PDF_ITEM_SPACER))
         block.append(_item_details_table(item, order, page_w, s, lang, item_index))
         block.append(Spacer(1, PDF_ITEM_SPACER))
@@ -1676,8 +1690,8 @@ def _tailor_info_rows(order):
         pass
 
     rows = [
-        ('Shop Name', shop_name),
-        ('Tailor', tailor_name),
+        ('Shop Name', shop_name, True),
+        ('Tailor', tailor_name, True),
         ('Contact', tailor_contact, True),
     ]
     return rows
@@ -1751,7 +1765,10 @@ def _build_header_section(order, page_w, s, lang):
     story.append(Spacer(1, PDF_SECTION_SPACER))
 
     status_display = _choice_display(order.status, order.ORDER_STATUS_CHOICES, lang)
-    tailor_status_display = _choice_display(order.tailor_status, order.TAILOR_STATUS_CHOICES, lang) if order.tailor_status else _t('N/A', lang)
+    tailor_status_display = (
+        _choice_display(order.tailor_status, order.TAILOR_STATUS_CHOICES, lang)
+        if order.tailor_status else _translate_label('N/A', lang)
+    )
     status_color = _status_badge_color(order.status)
     _sb_font = _AR_FONT_BOLD if (is_rtl and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
     _status_lbl = _t('Status:', lang)
@@ -1759,15 +1776,21 @@ def _build_header_section(order, page_w, s, lang):
     _placed_lbl = _t('Placed:', lang)
 
     status_data = [[
-        Paragraph(f'{_safe_text(_status_lbl)} <b>{_safe_text(status_display)}</b>',
-                  ParagraphStyle(f'sb_{lang}', parent=s['value'], fontSize=7.5, textColor=WHITE, fontName=_sb_font,
-                                 alignment=TA_RIGHT if is_rtl else TA_LEFT)),
-        Paragraph(f'{_safe_text(_tailor_lbl)} <b>{_safe_text(tailor_status_display)}</b>',
-                  ParagraphStyle(f'sb2_{lang}', parent=s['value'], fontSize=7.5, textColor=WHITE, fontName=_sb_font,
-                                 alignment=TA_CENTER)),
-        Paragraph(f'{_safe_text(_placed_lbl)} <b>{_safe_text(_fmt_datetime(order.created_at))}</b>',
-                  ParagraphStyle(f'sb3_{lang}', parent=s['value'], fontSize=7.5, textColor=WHITE, fontName=_sb_font,
-                                 alignment=TA_LEFT if is_rtl else TA_RIGHT)),
+        Paragraph(
+            f'{_safe_text(_status_lbl)} <b>{_inline_value_html(status_display, lang)}</b>',
+            ParagraphStyle(f'sb_{lang}', parent=s['value'], fontSize=7.5, textColor=WHITE, fontName=_sb_font,
+                           alignment=TA_RIGHT if is_rtl else TA_LEFT),
+        ),
+        Paragraph(
+            f'{_safe_text(_tailor_lbl)} <b>{_inline_value_html(tailor_status_display, lang)}</b>',
+            ParagraphStyle(f'sb2_{lang}', parent=s['value'], fontSize=7.5, textColor=WHITE, fontName=_sb_font,
+                           alignment=TA_CENTER),
+        ),
+        Paragraph(
+            f'{_safe_text(_placed_lbl)} <b>{_safe_text(_fmt_datetime(order.created_at))}</b>',
+            ParagraphStyle(f'sb3_{lang}', parent=s['value'], fontSize=7.5, textColor=WHITE, fontName=_sb_font,
+                           alignment=TA_LEFT if is_rtl else TA_RIGHT),
+        ),
     ]]
     if is_rtl:
         status_data[0].reverse()
@@ -1909,15 +1932,15 @@ def _build_status_history_section(order, page_w, s, lang):
 
     for h in history:
         if h.changed_by and order.customer_id and h.changed_by_id == order.customer_id:
-            changed_by = _t('Customer', lang) if is_rtl else 'Customer'
+            changed_by = _translate_label('Customer', lang) if is_rtl else 'Customer'
         else:
             changed_by = h.changed_by.get_full_name() or h.changed_by.username if h.changed_by else '—'
         status_display = _choice_display(h.status, order.ORDER_STATUS_CHOICES, lang)
         note_text = _localized_note(h.notes, lang)
         hist_row = [
             Paragraph(_fmt_datetime(h.created_at), s['small']),
-            Paragraph(_format_user_text_html(status_display, lang, reshape=False), s['small']),
-            Paragraph(_format_user_text_html(changed_by, lang, reshape=False), s['small']),
+            Paragraph(_inline_value_html(status_display, lang), s['small']),
+            Paragraph(_inline_value_html(changed_by, lang), s['small']),
             Paragraph(_format_user_text_html(note_text, lang), s['small']),
         ]
         if is_rtl:
@@ -1992,13 +2015,29 @@ def _canvas_prepare_text(text, lang):
     if not runs:
         return logical
 
-    parts = []
-    for run in runs:
-        if _contains_arabic(run):
-            parts.append(_shape_arabic(run))
-        else:
-            parts.append(run)
-    return ''.join(parts)
+    try:
+        import arabic_reshaper
+        from bidi.algorithm import get_display
+
+        config = _get_reshaper_config()
+        parts = []
+        for run in runs:
+            if _contains_arabic(run):
+                if config:
+                    parts.append(arabic_reshaper.reshape(run, configuration=config))
+                else:
+                    parts.append(arabic_reshaper.reshape(run))
+            else:
+                parts.append(run)
+        return get_display(''.join(parts))
+    except Exception:
+        parts = []
+        for run in runs:
+            if _contains_arabic(run):
+                parts.append(_shape_arabic(run))
+            else:
+                parts.append(run)
+        return ''.join(parts)
 
 
 def _canvas_fonts(lang):
