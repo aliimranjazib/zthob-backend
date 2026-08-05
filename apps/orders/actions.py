@@ -402,6 +402,7 @@ class RecordMeasurementsAction(BaseOrderAction):
             raw_measurements,
             unit=self.data.get('unit'),
             title=self.data.get('title'),
+            notes=self.data.get('notes'),
         )
         family_member_id = self.data.get('family_member')
 

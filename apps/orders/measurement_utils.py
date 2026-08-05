@@ -4,7 +4,8 @@ from decimal import Decimal
 
 from rest_framework.exceptions import ValidationError
 
-METADATA_KEYS = frozenset({'unit', 'title', 'recorded_unit'})
+METADATA_KEYS = frozenset({'unit', 'title', 'recorded_unit', 'notes'})
+MAX_MEASUREMENT_NOTES_LENGTH = 2000
 SUPPORTED_UNITS = frozenset({'cm', 'inches'})
 
 
@@ -76,7 +77,20 @@ def get_measurement_unit(measurements, default='cm'):
         return default
 
 
-def prepare_measurements_payload(raw_measurements, *, unit=None, title=None):
+def _normalize_notes(notes):
+    if notes in (None, ''):
+        return None
+    text = str(notes).strip()
+    if not text:
+        return None
+    if len(text) > MAX_MEASUREMENT_NOTES_LENGTH:
+        raise ValidationError({
+            'notes': f'Notes must be at most {MAX_MEASUREMENT_NOTES_LENGTH} characters.',
+        })
+    return text
+
+
+def prepare_measurements_payload(raw_measurements, *, unit=None, title=None, notes=None):
     """
     Build a stored measurements JSON object with metadata.
 
@@ -103,5 +117,10 @@ def prepare_measurements_payload(raw_measurements, *, unit=None, title=None):
     resolved_title = title if title is not None else raw_measurements.get('title')
     if resolved_title:
         stored['title'] = resolved_title
+
+    resolved_notes = notes if notes is not None else raw_measurements.get('notes')
+    normalized_notes = _normalize_notes(resolved_notes)
+    if normalized_notes:
+        stored['notes'] = normalized_notes
 
     return stored

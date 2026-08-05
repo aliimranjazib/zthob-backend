@@ -91,6 +91,7 @@ PDF_LABELS_UR = {
     # Misc
     'No items found for this order.': 'اس آرڈر کے لیے کوئی شے نہیں ملی۔',
     'Instructions:':       'ہدایات:',
+    'Additional Notes:':   'اضافی نوٹس:',
     'Measurements:':       'ناپ:',
     'Styles:':             'اسٹائل:',
     'Style Images:':       'اسٹائل کی تصاویر:',

@@ -341,6 +341,7 @@ _AR_LABELS = {
     # Misc
     'No items found for this order.': 'لا توجد عناصر لهذا الطلب.',
     'Instructions:':       'التعليمات:',
+    'Additional Notes:':   'ملاحظات إضافية:',
     'Measurements:':       'القياسات:',
     'Styles:':             'الأنماط:',
     'Style Images:':       'صور الأنماط:',
@@ -1134,6 +1135,21 @@ def _localized_note(note, lang='en'):
     return _labels_for(lang).get(str(note), str(note))
 
 
+def _append_measurement_notes(block, measurements, page_w, s, lang):
+    """Render optional rider/tailor notes stored on a measurements payload."""
+    if not measurements or not isinstance(measurements, dict):
+        return
+    meas_notes = str(measurements.get('notes') or '').strip()
+    if not meas_notes:
+        return
+    notes_label = _t('Additional Notes:', lang)
+    block.append(Paragraph(
+        f'<b>{_safe_text(notes_label)}</b> {_format_user_text_html(meas_notes, lang)}',
+        s['small'],
+    ))
+    block.append(Spacer(1, PDF_ITEM_SPACER))
+
+
 def _measurement_field_map():
     """
     Return active measurement field metadata keyed by JSON field name.
@@ -1171,7 +1187,7 @@ def _format_measurement_pairs(measurements, lang='en', field_map=None):
     unknown_base_order = len(field_map) + 1000
 
     for idx, (key, value) in enumerate(measurements.items()):
-        if key in ('title', 'unit', 'recorded_unit') or value in (None, '', 'null'):
+        if key in ('title', 'unit', 'recorded_unit', 'notes') or value in (None, '', 'null'):
             continue
 
         meta = field_map.get(key, {})
@@ -1566,7 +1582,7 @@ def _build_person_blocks(order, items, page_w, s, lang, measurement_fields):
         if meas_pairs:
             meas_title = item.measurements.get('title', '')
             block.append(_measurements_grid(meas_pairs, page_w, s, lang, title=meas_title))
-            block.append(Spacer(1, PDF_ITEM_SPACER))
+            _append_measurement_notes(block, item.measurements, page_w, s, lang)
 
         if item.custom_styles and isinstance(item.custom_styles, list):
             style_section = _custom_style_section(item.custom_styles, page_w, s, lang)
@@ -1600,6 +1616,7 @@ def _build_person_blocks(order, items, page_w, s, lang, measurement_fields):
                 ))
                 rider_block.append(Spacer(1, PDF_ITEM_SPACER))
             rider_block.append(_measurements_grid(meas_pairs, page_w, s, lang))
+            _append_measurement_notes(rider_block, order.rider_measurements, page_w, s, lang)
             blocks.append(rider_block)
 
     if not blocks:
