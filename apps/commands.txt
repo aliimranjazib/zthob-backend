@@ -1,0 +1,1 @@
+uv run python manage.py test apps.orders.tests_platform_e2e_flow -v 2
