@@ -71,7 +71,7 @@ class PosCustomerOrderVisibilityTest(TestCase):
         )
         self.assertEqual(response.status_code, 201, response.data)
         customer = User.objects.get(id=response.data['data']['id'])
-        self.assertEqual(customer.phone, '+966500000002')
+        self.assertEqual(customer.phone, '0500000002')
         self.assertEqual(customer.customer_profile.pos_created_by, self.tailor_user)
         return customer
 
@@ -131,6 +131,15 @@ class PosCustomerOrderVisibilityTest(TestCase):
         self.assertEqual(detail_response.status_code, 200, detail_response.data)
         self.assertEqual(detail_response.data['data']['customer'], customer.id)
         self.assertEqual(detail_response.data['data']['items'][0]['custom_instructions'], 'Use white buttons')
+
+    def test_pos_customer_phone_login_resolves_same_user_account(self):
+        customer = self._create_pos_customer()
+
+        from apps.core.services import PhoneVerificationService
+
+        login_user = PhoneVerificationService._find_or_create_user('0500000002')
+        self.assertEqual(login_user.id, customer.id)
+        self.assertEqual(login_user.phone, '0500000002')
 
     def test_tailor_created_order_can_use_customer_family_member_and_address(self):
         customer = self._create_pos_customer()
@@ -462,7 +471,7 @@ class PosCustomerOrderVisibilityTest(TestCase):
         customers = list_response.data['data']
         customer_entry = next(item for item in customers if item['id'] == customer_with_order.id)
         zero_order_customer = next(
-            item for item in customers if item['phone'] == '+966500000099'
+            item for item in customers if item['phone'] == '0500000099'
         )
 
         self.assertEqual(len(customer_entry['order_styles']), 1)

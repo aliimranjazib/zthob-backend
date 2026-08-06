@@ -10,6 +10,7 @@ from apps.tailors.serializers.tailor_pos import (
     TailorCustomerSerializer,
     CreateCustomerSerializer,
 )
+from apps.core.phone_format import normalize_phone_to_local, phone_lookup_variations
 from apps.customers.models import CustomerProfile
 from apps.orders.models import Order
 from apps.orders.serializers import OrderListSerializer, OrderSerializer
@@ -150,27 +151,15 @@ class TailorCreateCustomerView(BaseTailorAPIView):
         serializer = CreateCustomerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        phone = serializer.validated_data['phone']
+        phone = normalize_phone_to_local(serializer.validated_data['phone'])
         name = serializer.validated_data['name']
 
-        # Check if user with this phone already exists
-        # Handle format variations: +966511111113, 966511111113, 0511111113, 511111113
-        phone_variations = [phone]
-        stripped = phone.lstrip('+')
-        if stripped not in phone_variations:
-            phone_variations.append(stripped)
-        if stripped.startswith('966'):
-            local = '0' + stripped[3:]
-            phone_variations.append(local)
-            phone_variations.append(stripped[3:])  # without 0 prefix
-        elif stripped.startswith('0'):
-            intl = '966' + stripped[1:]
-            phone_variations.append(intl)
-            phone_variations.append('+' + intl)
-
-        existing_user = User.objects.filter(phone__in=phone_variations).first()
+        existing_user = User.objects.filter(phone__in=phone_lookup_variations(phone)).first()
 
         if existing_user:
+            if existing_user.phone != phone:
+                existing_user.phone = phone
+                existing_user.save(update_fields=['phone'])
             # Update name if provided
             name_parts = name.strip().split(' ', 1)
             existing_user.first_name = name_parts[0]
@@ -217,9 +206,15 @@ class TailorCreateCustomerView(BaseTailorAPIView):
         first_name = name_parts[0]
         last_name = name_parts[1] if len(name_parts) > 1 else ''
 
-        # Create user with phone as username
+        # Create user with canonical local phone (matches login flow)
+        username = f"user_{phone}"
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"user_{phone}_{counter}"
+            counter += 1
+
         user = User.objects.create(
-            username=phone,
+            username=username,
             phone=phone,
             first_name=first_name,
             last_name=last_name,

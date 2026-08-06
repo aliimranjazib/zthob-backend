@@ -42,7 +42,8 @@ class CreateCustomerSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=150)
 
     def validate_phone(self, value):
-        # Normalize: ensure it starts with +
-        if not value.startswith('+'):
-            value = '+' + value
-        return value
+        from apps.core.phone_format import format_phone_e164, is_valid_saudi_phone, normalize_phone_to_local
+
+        if not is_valid_saudi_phone(value):
+            raise serializers.ValidationError('Enter a valid Saudi mobile number.')
+        return normalize_phone_to_local(format_phone_e164(value))

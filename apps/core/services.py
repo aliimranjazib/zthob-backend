@@ -4,7 +4,7 @@ import uuid
 from django.utils import timezone
 from datetime import timedelta
 from .models import PhoneVerification
-from .phone_format import format_phone_e164, normalize_phone_to_local
+from .phone_format import format_phone_e164, normalize_phone_to_local, phone_lookup_variations
 from zthob.languages import taqnyat_sms_language
 from .taqnyat_service import TaqnyatVerifyService
 
@@ -97,8 +97,11 @@ class PhoneVerificationService:
         if user is not None:
             return user
 
-        user = User.objects.filter(phone=local_phone).first()
+        user = User.objects.filter(phone__in=phone_lookup_variations(local_phone)).first()
         if user:
+            if user.phone != local_phone:
+                user.phone = local_phone
+                user.save(update_fields=['phone'])
             return user
 
         username = f"user_{local_phone}"
@@ -195,7 +198,7 @@ class PhoneVerificationService:
         formatted_phone = format_phone_e164(phone_number)
 
         if local_phone in PhoneVerificationService.TEST_PHONES:
-            user = User.objects.filter(phone=local_phone).first()
+            user = User.objects.filter(phone__in=phone_lookup_variations(local_phone)).first()
             if not user:
                 return False, "User not found for this phone number", None
 
@@ -220,7 +223,7 @@ class PhoneVerificationService:
             except PhoneVerification.DoesNotExist:
                 return False, "Invalid OTP code", None
 
-        user = User.objects.filter(phone=local_phone).first()
+        user = User.objects.filter(phone__in=phone_lookup_variations(local_phone)).first()
         if not user:
             return False, "User not found for this phone number", None
 
