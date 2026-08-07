@@ -326,7 +326,8 @@ class PhoneLoginView(APIView):
                 if sms_success:
                     return api_response(
                         success=True,
-                        message=f"OTP sent to {display_phone}",
+                        message="OTP sent to {phone_number}",
+                        message_kwargs={"phone_number": display_phone},
                         data=response_data,
                         status_code=status.HTTP_200_OK,
                         request=request
@@ -335,7 +336,8 @@ class PhoneLoginView(APIView):
                     error_details = sms_message if sms_message else "Unknown error"
                     return api_response(
                         success=False,
-                        message=f"Failed to send OTP to {display_phone}",
+                        message="Failed to send OTP to {phone_number}",
+                        message_kwargs={"phone_number": display_phone},
                         errors=error_details,
                         data=response_data,
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -556,14 +558,16 @@ class PhoneResendOTPView(APIView):
                 if sms_success:
                     return api_response(
                         success=True,
-                        message=f"OTP resent to {display_phone}",
+                        message="OTP resent to {phone_number}",
+                        message_kwargs={"phone_number": display_phone},
                         data=response_data,
                         status_code=status.HTTP_200_OK,
                         request=request
                     )
                 return api_response(
                     success=False,
-                    message=f"OTP generated for {display_phone}, but SMS sending failed. Please check server logs.",
+                    message="OTP generated for {phone_number}, but SMS sending failed. Please check server logs.",
+                    message_kwargs={"phone_number": display_phone},
                     data=response_data,
                     status_code=status.HTTP_400_BAD_REQUEST,
                     request=request

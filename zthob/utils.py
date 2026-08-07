@@ -29,7 +29,7 @@ class StandardResultsSetPagination(PageNumberPagination):
         )
 
 
-def api_response(*,success:bool, message:str, data:dict=None, errors:dict=None, status_code:int=200, request=None):
+def api_response(*,success:bool, message:str, data:dict=None, errors:dict=None, status_code:int=200, request=None, message_kwargs=None):
     """
     Standardized API response format with automatic translation support
     
@@ -40,6 +40,7 @@ def api_response(*,success:bool, message:str, data:dict=None, errors:dict=None, 
         errors: Error details (for failed requests) - can be dict or string
         status_code: HTTP status code
         request: Optional request object for language detection (if provided, messages will be auto-translated)
+        message_kwargs: Optional format placeholders for templated messages (e.g. phone_number)
     """
     # Detect language from request if provided, or try to get from context
     language = 'en'  # Default to English
@@ -142,7 +143,7 @@ def api_response(*,success:bool, message:str, data:dict=None, errors:dict=None, 
                 formatted_errors = translate_message(error_str, language)
     
     # Translate the main message
-    translated_message = translate_message(message, language)
+    translated_message = translate_message(message, language, **(message_kwargs or {}))
     
     return Response({
         'success': success,

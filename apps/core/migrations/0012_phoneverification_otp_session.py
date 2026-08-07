@@ -7,7 +7,7 @@ from django.db import migrations, models
 
 def assign_session_ids(apps, schema_editor):
     PhoneVerification = apps.get_model('core', 'PhoneVerification')
-    for row in PhoneVerification.objects.filter(session_id__isnull=True).iterator():
+    for row in PhoneVerification.objects.all().iterator():
         PhoneVerification.objects.filter(pk=row.pk).update(session_id=uuid.uuid4())
 
 
@@ -21,7 +21,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='phoneverification',
             name='session_id',
-            field=models.UUIDField(db_index=True, default=uuid.uuid4, editable=False, null=True),
+            field=models.UUIDField(db_index=True, editable=False, null=True),
         ),
         migrations.AddField(
             model_name='phoneverification',
