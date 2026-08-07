@@ -1277,7 +1277,8 @@ class OrderStatusHistory(BaseModel):
         verbose_name_plural='Order Status Histories'
 
     def __str__(self):
-        return f"{self.order.order_number} - {self.status} (changed by {self.changed_by.username})"
+        actor = self.changed_by.username if self.changed_by else "unknown"
+        return f"{self.order.order_number} - {self.status} (changed by {actor})"
 
 
 class StyleReferenceImage(BaseModel):
