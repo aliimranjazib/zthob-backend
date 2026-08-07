@@ -1,18 +1,22 @@
-from django.db.models import Count, Prefetch, Q, F, ExpressionWrapper, FloatField
-from django.db.models.functions import ACos, Cos, Radians, Sin
 from django.utils import timezone
 from django.core.cache import cache
+from django.db.models import Prefetch
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from rest_framework import status
 
-from apps.customers.models import Address
-from apps.customers.serializers import (
-    FabricCatalogSerializer, TailorHomeSerializer, FabricHomeSerializer,
-    FabricCategorySerializer, FabricCategoryHomeSerializer, CustomerHomeSerializer
+from apps.customers.services.home_tailor_sections import (
+    HOME_DEFAULT_RADIUS_KM,
+    apply_tailor_section,
+    get_active_tailors_queryset,
+    get_home_nearby_user_ids,
 )
-from apps.tailors.models import Fabric, FabricCategory, TailorProfile
+from apps.customers.serializers import (
+    TailorHomeSerializer, FabricHomeSerializer,
+    FabricCategoryHomeSerializer, CustomerHomeSerializer
+)
+from apps.tailors.models import Fabric, FabricCategory
 from apps.core.models import Slider
 from apps.core.serializers import SliderSerializer
 from zthob.utils import api_response
@@ -20,7 +24,7 @@ from zthob.utils import api_response
 # Riyadh city center coordinates as default launch location
 RIYADH_LAT = 24.7136
 RIYADH_LNG = 46.6753
-DEFAULT_RADIUS = 50 # KM
+DEFAULT_RADIUS = HOME_DEFAULT_RADIUS_KM
 
 class CustomerHomeAPIView(APIView):
     """
@@ -79,17 +83,7 @@ class CustomerHomeAPIView(APIView):
         now = timezone.now()
         
         # 5. Calculate Nearby Users
-        # Filter addresses by distance using Haversine formula (6371 is Earth's KM radius)
-        nearby_user_ids = Address.objects.annotate(
-            distance=ExpressionWrapper(
-                6371 * ACos(
-                    Cos(Radians(target_lat)) * Cos(Radians(F('latitude'))) *
-                    Cos(Radians(F('longitude')) - Radians(target_lng)) +
-                    Sin(Radians(target_lat)) * Sin(Radians(F('latitude')))
-                ),
-                output_field=FloatField()
-            )
-        ).filter(distance__lte=radius).values_list('user_id', flat=True)
+        nearby_user_ids = get_home_nearby_user_ids(target_lat, target_lng, radius)
 
         # 6. Fetch Banners & Categories
         sliders = Slider.objects.filter(is_active=True).order_by('order', '-created_at')[:5]
@@ -105,22 +99,14 @@ class CustomerHomeAPIView(APIView):
         categories = FabricCategoryHomeSerializer(categories_qs, many=True, context={'request': request}).data
 
         # 7. Tailors Filtering (Approved & Nearby)
-        active_tailors = TailorProfile.objects.filter(
-            review__review_status='approved',
-            shop_status=True,
-            user__is_active=True,
-            user_id__in=nearby_user_ids
-        ).select_related('user').prefetch_related(
-            'review',
-            Prefetch('user__addresses', queryset=Address.objects.filter(is_default=True)),
-        )
+        active_tailors = get_active_tailors_queryset(nearby_user_ids=nearby_user_ids)
 
         # Build Tailors Sections using optimized serializers
-        new_tailors = TailorHomeSerializer(active_tailors.order_by('-created_at')[:8], many=True, context={'request': request}).data
-        top_rated_tailors = TailorHomeSerializer(active_tailors.order_by('-avg_overall_satisfaction', '-rating_count')[:8], many=True, context={'request': request}).data
-        featured_tailors = TailorHomeSerializer(active_tailors.filter(is_featured=True).order_by('-avg_overall_satisfaction')[:8], many=True, context={'request': request}).data
-        express_delivery_tailors = TailorHomeSerializer(active_tailors.filter(is_express_delivery_enabled=True).order_by('-avg_overall_satisfaction')[:8], many=True, context={'request': request}).data
-        most_popular_tailors = TailorHomeSerializer(active_tailors.annotate(order_count=Count('user__tailor_orders')).order_by('-order_count')[:8], many=True, context={'request': request}).data
+        new_tailors = TailorHomeSerializer(apply_tailor_section(active_tailors, 'new')[:8], many=True, context={'request': request}).data
+        top_rated_tailors = TailorHomeSerializer(apply_tailor_section(active_tailors, 'top_rated')[:8], many=True, context={'request': request}).data
+        featured_tailors = TailorHomeSerializer(apply_tailor_section(active_tailors, 'featured')[:8], many=True, context={'request': request}).data
+        express_delivery_tailors = TailorHomeSerializer(apply_tailor_section(active_tailors, 'express_delivery')[:8], many=True, context={'request': request}).data
+        most_popular_tailors = TailorHomeSerializer(apply_tailor_section(active_tailors, 'most_popular')[:8], many=True, context={'request': request}).data
         
         # 8. Fabrics Filtering (Active & Nearby)
         active_fabrics = Fabric.objects.filter(

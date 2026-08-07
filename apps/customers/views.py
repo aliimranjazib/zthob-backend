@@ -13,6 +13,13 @@ from apps.customers.serializers import (
     FamilyMemberMeasurementsDetailSerializer, CustomerHomeSerializer
 )
 from apps.orders.models import Order
+from apps.customers.services.home_tailor_sections import (
+    allowed_tailor_sections_display,
+    apply_tailor_section,
+    get_active_tailors_queryset,
+    is_valid_tailor_section,
+    parse_section_geo_params,
+)
 from apps.customers.measurement_queries import (
     apply_current_measurements_fallback,
     build_order_measurement_entry,
@@ -359,15 +366,27 @@ class CustomerProfileAPIView(APIView):
     description=(
         "Get all tailors. Pass `lat`, `lng`, and `radius` (km) to filter tailors "
         "by proximity and sort nearest-first. Omit these params to get all tailors "
-        "(original behaviour, fully backward-compatible)."
+        "(original behaviour, fully backward-compatible).\n\n"
+        "Pass `section` to paginate a customer-home tailor section (See All): "
+        "`featured`, `express_delivery`, `most_popular`, `new`, or `top_rated`. "
+        "When `section` is set, omitting `lat`/`lng` returns the national list for "
+        "that section; with location params, filtering matches `/customers/home/`."
     ),
     parameters=[
+        OpenApiParameter('section', OpenApiTypes.STR, OpenApiParameter.QUERY,
+                         description='Home section to list: featured, express_delivery, most_popular, new, top_rated',
+                         required=False),
         OpenApiParameter('lat', OpenApiTypes.FLOAT, OpenApiParameter.QUERY,
                          description='Latitude of the search centre (WGS84)', required=False),
         OpenApiParameter('lng', OpenApiTypes.FLOAT, OpenApiParameter.QUERY,
                          description='Longitude of the search centre (WGS84)', required=False),
         OpenApiParameter('radius', OpenApiTypes.FLOAT, OpenApiParameter.QUERY,
-                         description='Search radius in kilometres (default 10, max 200)', required=False),
+                         description='Search radius in kilometres (default 10 without section, 50 with section)',
+                         required=False),
+        OpenApiParameter('page', OpenApiTypes.INT, OpenApiParameter.QUERY,
+                         description='Page number (default 1)', required=False),
+        OpenApiParameter('page_size', OpenApiTypes.INT, OpenApiParameter.QUERY,
+                         description='Results per page (default 10, max 100)', required=False),
     ],
     responses={200: TailorProfileSerializer(many=True)}
 )
@@ -378,44 +397,60 @@ class TailorListAPIView(APIView):
 
     @extend_schema(operation_id="customers_tailor_list")
     def get(self, request):
-        """Get all tailors with optional geo-radius filtering and proximity sort."""
-        # Fetch all tailor profiles with related data
-        tailors = TailorProfile.objects.filter(
-            review__review_status='approved',
-            shop_status=True,
-            user__is_active=True
-        ).select_related(
-            'user'
-        ).prefetch_related(
-            'review',
-            Prefetch('user__addresses', queryset=Address.objects.filter(is_default=True)),
-        ).all()
+        """Get all tailors, or a paginated home section when `section` is provided."""
+        section = request.query_params.get('section')
+        if section is not None:
+            section = section.strip().lower()
+            if not section or not is_valid_tailor_section(section):
+                return api_response(
+                    success=False,
+                    message=(
+                        f"Invalid section '{section or '(empty)'}'. "
+                        f"Allowed values: {allowed_tailor_sections_display()}."
+                    ),
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
 
-        # ── Geo filtering ────────────────────────────────────────────────────
-        # Filter tailors via their existing Address (no new model fields).
-        lat, lng, radius_km = parse_geo_params(request)
-        if lat is not None:
-            nearby_user_ids = get_nearby_user_ids(lat, lng, radius_km)
-            tailors = tailors.filter(user_id__in=nearby_user_ids)
-        # ────────────────────────────────────────────────────────────────────
+            nearby_user_ids, geo_applied = parse_section_geo_params(request)
+            tailors = get_active_tailors_queryset(
+                nearby_user_ids=nearby_user_ids if geo_applied else None,
+            )
+            tailors = apply_tailor_section(tailors, section)
+            message = f"{section.replace('_', ' ').title()} tailors fetched successfully"
+        else:
+            # Original list behaviour — unchanged when section is omitted.
+            tailors = TailorProfile.objects.filter(
+                review__review_status='approved',
+                shop_status=True,
+                user__is_active=True
+            ).select_related(
+                'user'
+            ).prefetch_related(
+                'review',
+                Prefetch('user__addresses', queryset=Address.objects.filter(is_default=True)),
+            ).all()
 
-        # Add service area names to context to avoid per-item lookups
+            lat, lng, radius_km = parse_geo_params(request)
+            if lat is not None:
+                nearby_user_ids = get_nearby_user_ids(lat, lng, radius_km)
+                tailors = tailors.filter(user_id__in=nearby_user_ids)
+            message = "Tailors fetched successfully"
+
         service_area_names = {sa.id: sa.name for sa in ServiceArea.objects.filter(is_active=True)}
-        
+
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(tailors, request)
-        
-        # Serialize the data
+
         serializer = TailorProfileSerializer(
-            page, 
-            many=True, 
+            page,
+            many=True,
             context={
                 'request': request,
                 'service_area_names': service_area_names
             }
         )
-        
-        return paginator.get_paginated_response(serializer.data, message="Tailors fetched successfully")
+
+        return paginator.get_paginated_response(serializer.data, message=message)
         
 
 @extend_schema(
