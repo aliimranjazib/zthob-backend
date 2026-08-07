@@ -5,14 +5,10 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
-from django.apps import apps as django_apps
-from django.contrib.auth import get_user_model
-from django.db import connection
+from django.db import connection, migrations
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
 from django.utils import timezone
-
-from apps.core.models import PhoneVerification
 
 MIGRATE_FROM = '0011_alter_phoneverification_otp_fields'
 MIGRATE_TO = '0012_phoneverification_otp_session'
@@ -66,29 +62,61 @@ class PhoneVerificationMigration0012Tests(TransactionTestCase):
         self.assertTrue(all(session_id is not None for session_id in session_ids))
 
     def test_assign_session_ids_fixes_duplicate_prefill(self):
-        user = get_user_model().objects.create_user(
+        """Simulate legacy AddField backfill duplicates before the unique index is added."""
+        executor = self._executor()
+        executor.migrate([('core', MIGRATE_FROM)])
+
+        old_state = executor.loader.project_state()
+        apps = old_state.apps
+        HistoricalPhoneVerification = apps.get_model('core', 'PhoneVerification')
+        User = apps.get_model('accounts', 'User')
+
+        user = User.objects.create_user(
             username='migration_otp_dupe_user',
             phone='0500888777',
             email=None,
         )
         expires = timezone.now() + timedelta(minutes=5)
-        rows = [
-            PhoneVerification.objects.create(
+        for index in range(3):
+            HistoricalPhoneVerification.objects.create(
                 user=user,
                 phone_number=f'+9665000000{index}',
                 expires_at=expires,
             )
-            for index in range(3)
-        ]
-
-        duplicate_session_id = uuid.uuid4()
-        PhoneVerification.objects.filter(pk__in=[row.pk for row in rows]).update(
-            session_id=duplicate_session_id,
-        )
 
         migration_module = _load_migration_module()
-        migration_module.assign_session_ids(django_apps, connection.schema_editor())
+        migration = migration_module.Migration(MIGRATE_TO, 'core')
 
+        with connection.schema_editor() as schema_editor:
+            for operation in migration.operations:
+                if (
+                    isinstance(operation, migrations.AlterField)
+                    and operation.name == 'session_id'
+                    and operation.field.unique
+                ):
+                    break
+
+                new_state = old_state.clone()
+                operation.state_forwards('core', new_state)
+
+                if isinstance(operation, migrations.RunPython):
+                    PhoneVerification = new_state.apps.get_model('core', 'PhoneVerification')
+                    duplicate_session_id = uuid.uuid4()
+                    PhoneVerification.objects.all().update(session_id=duplicate_session_id)
+                    migration_module.assign_session_ids(new_state.apps, schema_editor)
+                    old_state = new_state
+                    continue
+
+                operation.database_forwards('core', schema_editor, old_state, new_state)
+                old_state = new_state
+
+            unique_field_op = migration.operations[-1]
+            new_state = old_state.clone()
+            unique_field_op.state_forwards('core', new_state)
+            unique_field_op.database_forwards('core', schema_editor, old_state, new_state)
+            old_state = new_state
+
+        PhoneVerification = old_state.apps.get_model('core', 'PhoneVerification')
         session_ids = list(PhoneVerification.objects.values_list('session_id', flat=True))
         self.assertEqual(len(session_ids), 3)
         self.assertEqual(len(set(session_ids)), 3)
