@@ -8,6 +8,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 from apps.accounts.models import CustomUser
 from apps.core.models import PhoneVerification
+from apps.core.services import PhoneVerificationService
 from django.utils import timezone
 from datetime import timedelta
 
@@ -64,6 +65,9 @@ class PhoneAuthenticationTestCase(TestCase):
         self.assertEqual(response.data['data']['phone'], '+966500000000')
         self.assertIn('sms_sent', response.data['data'])
         self.assertIn('expires_in', response.data['data'])
+        self.assertIn('verification_id', response.data['data'])
+        self.assertIn('resend_after', response.data['data'])
+        self.assertEqual(response.data['data']['otp_length'], 4)
         
         # Verify PhoneVerification record was created
         user = CustomUser.objects.filter(phone=self.test_phone).first()
@@ -109,7 +113,7 @@ class PhoneAuthenticationTestCase(TestCase):
         # Get the OTP from the verification record
         user = CustomUser.objects.filter(phone=self.test_phone).first()
         verification = PhoneVerification.objects.filter(user=user).latest('created_at')
-        otp_code = verification.otp_code
+        otp_code = PhoneVerificationService.TEST_OTP
         
         # Verify OTP with name and role
         response = self.client.post(self.phone_verify_url, {
@@ -149,7 +153,7 @@ class PhoneAuthenticationTestCase(TestCase):
         # Verify with date_of_birth
         response = self.client.post(self.phone_verify_url, {
             'phone': self.test_phone,
-            'otp_code': verification.otp_code,
+            'otp_code': PhoneVerificationService.TEST_OTP,
             'name': 'Ahmed Ali',
             'date_of_birth': '1990-01-15',
             'role': 'USER'
@@ -185,7 +189,7 @@ class PhoneAuthenticationTestCase(TestCase):
         
         # Get the OTP
         verification = PhoneVerification.objects.filter(user=existing_user).latest('created_at')
-        otp_code = verification.otp_code
+        otp_code = PhoneVerificationService.TEST_OTP
         
         # Verify OTP
         response = self.client.post(self.phone_verify_url, {
@@ -236,7 +240,7 @@ class PhoneAuthenticationTestCase(TestCase):
         # Try to verify expired OTP
         response = self.client.post(self.phone_verify_url, {
             'phone': self.test_phone,
-            'otp_code': verification.otp_code
+            'otp_code': PhoneVerificationService.TEST_OTP
         })
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -259,6 +263,11 @@ class PhoneAuthenticationTestCase(TestCase):
         self.client.post(self.phone_login_url, {
             'phone': self.test_phone
         })
+
+        user = CustomUser.objects.filter(phone=self.test_phone).first()
+        latest = PhoneVerification.objects.filter(user=user).latest('created_at')
+        latest.resend_available_at = timezone.now() - timedelta(seconds=1)
+        latest.save(update_fields=['resend_available_at'])
         
         # Resend OTP
         response = self.client.post(self.phone_resend_url, {
@@ -288,7 +297,7 @@ class PhoneAuthenticationTestCase(TestCase):
         # Verify without name
         response = self.client.post(self.phone_verify_url, {
             'phone': self.test_phone,
-            'otp_code': verification.otp_code
+            'otp_code': PhoneVerificationService.TEST_OTP
         })
         
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -313,7 +322,7 @@ class PhoneAuthenticationTestCase(TestCase):
         # First verify without name (creates minimal user)
         self.client.post(self.phone_verify_url, {
             'phone': self.test_phone,
-            'otp_code': verification.otp_code
+            'otp_code': PhoneVerificationService.TEST_OTP
         })
         
         # Send new OTP
@@ -328,7 +337,7 @@ class PhoneAuthenticationTestCase(TestCase):
         # Verify with name (should update user)
         response = self.client.post(self.phone_verify_url, {
             'phone': self.test_phone,
-            'otp_code': verification.otp_code,
+            'otp_code': PhoneVerificationService.TEST_OTP,
             'name': 'Updated Name'
         })
         
@@ -364,7 +373,7 @@ class PhoneAuthenticationTestCase(TestCase):
         
         verify_response = self.client.post(self.phone_verify_url, {
             'phone': self.test_phone,
-            'otp_code': verification.otp_code,
+            'otp_code': PhoneVerificationService.TEST_OTP,
             'name': 'Test User'
         })
         
