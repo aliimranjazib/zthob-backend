@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.core.validators import FileExtensionValidator
 from decimal import Decimal
 from django.core.cache import cache
+import uuid
 
 User = get_user_model()
 
@@ -22,6 +23,11 @@ class PhoneVerification(models.Model):
     phone_number = models.CharField(max_length=20)
     otp_code = models.CharField(max_length=4, blank=True, null=True, help_text="OTP code (test phones) or empty if using Taqnyat Verify")
     verification_sid = models.CharField(max_length=100, blank=True, null=True, help_text="Taqnyat Verify requestId")
+    session_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    invalidated_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    resend_available_at = models.DateTimeField(null=True, blank=True)
+    otp_hash = models.CharField(max_length=128, blank=True, null=True)
     is_verified = models.BooleanField(default=False)
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -37,10 +43,23 @@ class PhoneVerification(models.Model):
     def is_expired(self):
         """Check if OTP has expired"""
         return timezone.now() > self.expires_at
-    
+
+    def is_invalidated(self):
+        return self.invalidated_at is not None
+
+    def is_active_session(self):
+        return (
+            not self.is_verified
+            and not self.is_invalidated()
+            and not self.is_expired()
+        )
+
     def is_valid(self):
         """Check if OTP is valid and not expired"""
-        return not self.is_expired() and not self.is_verified
+        return self.is_active_session()
+
+    def attempts_remaining(self, max_attempts: int) -> int:
+        return max(0, max_attempts - self.attempt_count)
 
 
 

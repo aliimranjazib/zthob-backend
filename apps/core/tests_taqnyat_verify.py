@@ -3,6 +3,8 @@ from django.test import TestCase
 from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from apps.core.models import PhoneVerification
+from django.contrib.auth.hashers import make_password
+from apps.core.otp_session import OtpErrorCode
 from apps.core.services import PhoneVerificationService
 from apps.core.taqnyat_service import (
     TaqnyatVerifyService,
@@ -148,7 +150,8 @@ class PhoneVerificationServiceTaqnyatTestCase(TestCase):
 
         self.assertEqual(otp_code, '1234')
         self.assertTrue(sms_success)
-        self.assertEqual(verification.otp_code, '1234')
+        self.assertIsNone(verification.otp_code)
+        self.assertIsNotNone(verification.otp_hash)
         self.assertIsNone(verification.verification_sid)
         self.assertIsNotNone(user)
 
@@ -185,17 +188,17 @@ class PhoneVerificationServiceTaqnyatTestCase(TestCase):
         verification = PhoneVerification.objects.create(
             user=user,
             phone_number='+966500000000',
-            otp_code='1234',
+            otp_hash=make_password('1234'),
             expires_at=timezone.now() + timedelta(minutes=5),
         )
 
-        is_valid, message, verified_user = PhoneVerificationService.verify_otp_for_phone(
+        result = PhoneVerificationService.verify_otp_for_phone(
             phone_number=self.test_phone,
             otp_code='1234',
         )
 
-        self.assertTrue(is_valid)
-        self.assertEqual(verified_user.id, user.id)
+        self.assertTrue(result.success)
+        self.assertEqual(result.user.id, user.id)
         verification.refresh_from_db()
         self.assertTrue(verification.is_verified)
 
@@ -217,13 +220,13 @@ class PhoneVerificationServiceTaqnyatTestCase(TestCase):
 
         mock_verify.return_value = (True, 'Phone verified successfully!')
 
-        is_valid, message, verified_user = PhoneVerificationService.verify_otp_for_phone(
+        result = PhoneVerificationService.verify_otp_for_phone(
             phone_number=self.real_phone,
             otp_code='1234',
         )
 
-        self.assertTrue(is_valid)
-        self.assertEqual(verified_user.id, user.id)
+        self.assertTrue(result.success)
+        self.assertEqual(result.user.id, user.id)
         verification.refresh_from_db()
         self.assertTrue(verification.is_verified)
         mock_verify.assert_called_once()
@@ -243,24 +246,26 @@ class PhoneVerificationServiceTaqnyatTestCase(TestCase):
             expires_at=timezone.now() + timedelta(minutes=10),
         )
 
-        mock_verify.return_value = (False, 'Invalid or expired verification code')
+        mock_verify.return_value = (False, 'Invalid verification code')
 
-        is_valid, message, verified_user = PhoneVerificationService.verify_otp_for_phone(
+        result = PhoneVerificationService.verify_otp_for_phone(
             phone_number=self.real_phone,
             otp_code='9999',
         )
 
-        self.assertFalse(is_valid)
-        self.assertIsNone(verified_user)
+        self.assertFalse(result.success)
+        self.assertIsNone(result.user)
+        self.assertEqual(result.error_code, OtpErrorCode.INVALID)
 
     def test_verify_otp_user_not_found(self):
-        is_valid, message, user = PhoneVerificationService.verify_otp_for_phone(
+        result = PhoneVerificationService.verify_otp_for_phone(
             phone_number='0599999999',
             otp_code='1234',
         )
 
-        self.assertFalse(is_valid)
-        self.assertIsNone(user)
+        self.assertFalse(result.success)
+        self.assertIsNone(result.user)
+        self.assertEqual(result.error_code, OtpErrorCode.SESSION_NOT_FOUND)
 
     def test_phone_normalization(self):
         test_cases = [

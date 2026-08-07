@@ -21,6 +21,11 @@ from .serializers import (
 from .throttles import OTPRateThrottle
 from rest_framework.throttling import AnonRateThrottle
 from apps.core.services import PhoneVerificationService
+from apps.core.otp_session import (
+    OtpRateLimitError,
+    OtpResendCooldownError,
+    build_session_payload,
+)
 from apps.core.phone_utils import format_phone_for_display
 from apps.core.models import PhoneVerification
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -290,7 +295,11 @@ class PhoneLoginView(APIView):
         responses={200: PhoneLoginSerializer},
         tags=["Authentication"],
         summary="Send OTP to phone number",
-        description="Send OTP code to phone number for phone-based authentication. Works for both new and existing users."
+        description=(
+            "Send OTP code to phone number for phone-based authentication. "
+            "Returns verification_id — pass it to phone-verify along with the OTP. "
+            "Works for both new and existing users."
+        )
     )
     def post(self, request):
         serializer = PhoneLoginSerializer(data=request.data)
@@ -306,13 +315,14 @@ class PhoneLoginView(APIView):
                     phone_number=phone,
                     locale=get_language_from_request(request),
                 )
-                
+
+                session_data = build_session_payload(verification)
                 response_data = {
                     "phone": display_phone,
                     "sms_sent": sms_success,
-                    "expires_in": 300  # 5 minutes
+                    **session_data,
                 }
-                
+
                 if sms_success:
                     return api_response(
                         success=True,
@@ -322,8 +332,6 @@ class PhoneLoginView(APIView):
                         request=request
                     )
                 else:
-                    # SMS failed - return error with details
-                    # Include the error message from Taqnyat for debugging
                     error_details = sms_message if sms_message else "Unknown error"
                     return api_response(
                         success=False,
@@ -333,6 +341,14 @@ class PhoneLoginView(APIView):
                         status_code=status.HTTP_400_BAD_REQUEST,
                         request=request
                     )
+            except OtpRateLimitError as exc:
+                return api_response(
+                    success=False,
+                    message=exc.message,
+                    errors=exc.error_code,
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    request=request,
+                )
             except Exception as e:
                 return api_response(
                     success=False,
@@ -360,70 +376,98 @@ class PhoneVerifyView(APIView):
         responses={200: PhoneVerifySerializer},
         tags=["Authentication"],
         summary="Verify OTP and login/register",
-        description="Verify OTP code and complete phone-based authentication. Creates new user if doesn't exist."
+        description=(
+            "Verify OTP and complete phone-based authentication. "
+            "Prefer verification_id from phone-login; phone alone is supported for backward compatibility."
+        )
     )
     def post(self, request):
         serializer = PhoneVerifySerializer(data=request.data)
         if serializer.is_valid():
-            phone = serializer.validated_data['phone']
+            phone = serializer.validated_data.get('phone') or ''
+            verification_id = serializer.validated_data.get('verification_id')
             otp_code = serializer.validated_data['otp_code']
             name = serializer.validated_data.get('name', '')
             role = serializer.validated_data.get('role', 'USER')
             date_of_birth = serializer.validated_data.get('date_of_birth', None)
-            
-            # Check if user exists and was already verified (before verification)
-            # This determines if they're a new or returning user
+
             from django.contrib.auth import get_user_model
             User = get_user_model()
-            
-            local_phone = PhoneVerificationService.normalize_phone_to_local(phone)
-            user_before_verify = User.objects.filter(phone=local_phone).first()
-            
-            # Check if user was already verified before this verification
-            # Users that were soft-deleted are treated as new users
-            was_already_verified = user_before_verify and user_before_verify.phone_verified and not user_before_verify.is_deleted
-            
-            # Also check if there are any previous verified verifications
-            has_previous_verification = False
-            if user_before_verify:
-                has_previous_verification = PhoneVerification.objects.filter(
-                    user=user_before_verify,
-                    is_verified=True
-                ).exclude(otp_code=otp_code).exists()
-            
-            # User is new if they were never verified before OR if they were previously deleted
-            is_new_user = (not was_already_verified and not has_previous_verification) or (user_before_verify and user_before_verify.is_deleted)
-            
-            # Verify OTP
-            is_valid, message, user = PhoneVerificationService.verify_otp_for_phone(
-                phone_number=phone,
+
+            pending_session = PhoneVerificationService._get_verification_session(
+                verification_id=verification_id,
+                phone_number=phone or None,
+            )
+            local_phone = (
+                PhoneVerificationService.normalize_phone_to_local(phone)
+                if phone
+                else (
+                    PhoneVerificationService.normalize_phone_to_local(pending_session.phone_number)
+                    if pending_session
+                    else None
+                )
+            )
+            user_before_verify = (
+                User.objects.filter(phone=local_phone).first()
+                if local_phone
+                else (pending_session.user if pending_session else None)
+            )
+
+            def _is_established_account(user):
+                if not user:
+                    return False
+                if user.phone_verified:
+                    return True
+                if (user.first_name or '').strip() or (user.email or '').strip():
+                    return True
+                return PhoneVerification.objects.filter(user=user, is_verified=True).exists()
+
+            is_new_user = (
+                not _is_established_account(user_before_verify)
+                or (user_before_verify and user_before_verify.is_deleted)
+            )
+
+            verify_result = PhoneVerificationService.verify_otp_for_phone(
+                phone_number=phone or None,
                 otp_code=otp_code,
                 locale=get_language_from_request(request),
+                verification_id=verification_id,
             )
-            
-            if not is_valid or not user:
+
+            if not verify_result.success or not verify_result.user:
                 return api_response(
                     success=False,
-                    message=message or "Invalid or expired OTP",
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    message=verify_result.message,
+                    errors=verify_result.error_code,
+                    status_code=verify_result.status_code,
                     request=request
                 )
-            
-            # Update user with provided information if this is a new user
+
+            user = verify_result.user
+            profile_fields = []
+            if name:
+                name_parts = name.strip().split(' ', 1)
+                user.first_name = name_parts[0]
+                user.last_name = name_parts[1] if len(name_parts) > 1 else ''
+                profile_fields.extend(['first_name', 'last_name'])
             if is_new_user:
-                if name:
-                    name_parts = name.strip().split(' ', 1)
-                    user.first_name = name_parts[0]
-                    user.last_name = name_parts[1] if len(name_parts) > 1 else ''
                 if role:
                     user.role = role
+                    profile_fields.append('role')
                 if date_of_birth:
                     user.date_of_birth = date_of_birth
-                
+                    profile_fields.append('date_of_birth')
+
                 # Restore soft-deleted account
                 user.is_active = True
                 user.is_deleted = False
-                user.save()
+                profile_fields.extend(['is_active', 'is_deleted'])
+            elif date_of_birth and not user.date_of_birth:
+                user.date_of_birth = date_of_birth
+                profile_fields.append('date_of_birth')
+
+            if profile_fields:
+                user.save(update_fields=profile_fields)
 
             # Ensure requested role profile exists (Multi-Role Logic)
             from apps.accounts.services import IdentityService
@@ -499,14 +543,16 @@ class PhoneResendOTPView(APIView):
                 verification, otp_code, sms_success, sms_message, user = PhoneVerificationService.create_verification_for_phone(
                     phone_number=phone,
                     locale=get_language_from_request(request),
+                    enforce_resend_cooldown=True,
                 )
-                
+
+                session_data = build_session_payload(verification)
                 response_data = {
                     "phone": display_phone,
                     "sms_sent": sms_success,
-                    "expires_in": 300  # 5 minutes
+                    **session_data,
                 }
-                
+
                 if sms_success:
                     return api_response(
                         success=True,
@@ -515,14 +561,30 @@ class PhoneResendOTPView(APIView):
                         status_code=status.HTTP_200_OK,
                         request=request
                     )
-                else:
-                    return api_response(
-                        success=True,
-                        message=f"OTP generated for {display_phone}, but SMS sending failed. Please check server logs.",
-                        data=response_data,
-                        status_code=status.HTTP_200_OK,
-                        request=request
-                    )
+                return api_response(
+                    success=False,
+                    message=f"OTP generated for {display_phone}, but SMS sending failed. Please check server logs.",
+                    data=response_data,
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    request=request
+                )
+            except OtpResendCooldownError as exc:
+                return api_response(
+                    success=False,
+                    message=exc.message,
+                    errors=exc.error_code,
+                    data=exc.session_payload,
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    request=request,
+                )
+            except OtpRateLimitError as exc:
+                return api_response(
+                    success=False,
+                    message=exc.message,
+                    errors=exc.error_code,
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    request=request,
+                )
             except Exception as e:
                 return api_response(
                     success=False,

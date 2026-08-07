@@ -138,15 +138,15 @@ class AccountDeletionService:
         from apps.core.services import PhoneVerificationService
         
         # Verify OTP
-        is_valid, message, verified_user = PhoneVerificationService.verify_otp_for_phone(
+        result = PhoneVerificationService.verify_otp_for_phone(
             phone_number=phone_number,
-            otp_code=otp_code
+            otp_code=otp_code,
         )
-        
-        if not is_valid:
-            return False, message or "Invalid or expired OTP code"
-        
-        # Check if verified user matches the user we're trying to delete
+
+        if not result.success:
+            return False, result.message or "Invalid or expired OTP code"
+
+        verified_user = result.user
         if verified_user.id != user.id:
             return False, "OTP verification failed - user mismatch"
         

@@ -91,6 +91,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'first_name',
             'last_name',
             'language',
+            'date_of_birth',
             'date_joined',
             'tailor_context',
             'all_roles',
@@ -186,20 +187,23 @@ class PhoneLoginSerializer(serializers.Serializer):
 
 class PhoneVerifySerializer(serializers.Serializer):
     """Serializer for OTP verification - completes login/registration"""
-    phone = serializers.CharField(max_length=15, required=True)
+    verification_id = serializers.UUIDField(required=False)
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
     otp_code = serializers.CharField(max_length=4, required=True)
     name = serializers.CharField(max_length=200, required=False, allow_blank=True)
     role = serializers.ChoiceField(choices=CustomUser.USER_ROLES, required=False, default='USER')
     date_of_birth = serializers.DateField(required=False, allow_null=True)
-    
+
     def validate_otp_code(self, value):
         """Validate OTP format"""
         if not value.isdigit() or len(value) != 4:
             raise serializers.ValidationError('OTP must be 4 digits')
         return value
-    
+
     def validate_phone(self, value):
-        """Validate Saudi Arabia phone number formats."""
+        """Validate Saudi Arabia phone number formats when provided."""
+        if not value:
+            return value
         from apps.core.phone_format import is_valid_saudi_phone
 
         phone = value.strip().replace(' ', '').replace('-', '')
@@ -209,4 +213,11 @@ class PhoneVerifySerializer(serializers.Serializer):
             )
         return phone
 
-    
+    def validate(self, attrs):
+        verification_id = attrs.get('verification_id')
+        phone = attrs.get('phone')
+        if not verification_id and not phone:
+            raise serializers.ValidationError(
+                'Either verification_id or phone is required.'
+            )
+        return attrs

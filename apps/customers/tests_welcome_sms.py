@@ -9,6 +9,7 @@ from rest_framework.test import APIClient
 
 from apps.accounts import views as account_views
 from apps.core.models import PhoneVerification
+from apps.core.services import PhoneVerificationService
 from apps.customers.models import CustomerProfile
 from apps.customers.services.welcome_sms import (
     CUSTOMER_WELCOME_SMS_BODY,
@@ -112,7 +113,7 @@ class CustomerWelcomeSmsPhoneVerifyTest(TestCase):
             self.phone_verify_url,
             {
                 'phone': self.test_phone,
-                'otp_code': verification.otp_code,
+                'otp_code': PhoneVerificationService.TEST_OTP,
                 'name': 'New Customer',
                 'role': 'USER',
             },
@@ -138,7 +139,7 @@ class CustomerWelcomeSmsPhoneVerifyTest(TestCase):
             self.phone_verify_url,
             {
                 'phone': self.test_phone,
-                'otp_code': verification.otp_code,
+                'otp_code': PhoneVerificationService.TEST_OTP,
                 'role': 'USER',
             },
         )
@@ -165,7 +166,7 @@ class CustomerWelcomeSmsPhoneVerifyTest(TestCase):
             self.phone_verify_url,
             {
                 'phone': self.test_phone,
-                'otp_code': verification.otp_code,
+                'otp_code': PhoneVerificationService.TEST_OTP,
                 'name': 'Returning Customer',
                 'role': 'USER',
             },
