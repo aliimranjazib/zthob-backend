@@ -316,16 +316,29 @@ class APIResponseTranslationTests(TestCase):
         response = api_response(
             success=True,
             message="OTP sent to {phone_number}",
+            message_kwargs={"phone_number": "0500000000"},
             data={"otp": "123456"},
             request=request
         )
         
-        # Note: Placeholder messages are translated but not formatted
-        # The translation exists, so it returns Arabic with placeholder
         response_data = response.data
-        # Should return Arabic translation with placeholder still present
-        self.assertIn("تم", response_data['message'])
-        self.assertIn("{phone_number}", response_data['message'])
+        self.assertEqual(
+            response_data['message'],
+            "تم إرسال رمز التحقق إلى 0500000000",
+        )
+    
+    def test_api_response_otp_error_messages_arabic(self):
+        """Test new OTP hardening error messages translate to Arabic"""
+        request = self.factory.get('/api/test/')
+        request.META['HTTP_ACCEPT_LANGUAGE'] = 'ar'
+
+        response = api_response(
+            success=False,
+            message="Invalid verification code",
+            errors="OTP_INVALID",
+            request=request,
+        )
+        self.assertEqual(response.data['message'], "رمز التحقق غير صحيح")
     
     def test_api_response_without_request_uses_context(self):
         """Test that api_response can work without explicit request"""

@@ -155,14 +155,16 @@ class RiderSendOTPView(APIView):
             if sms_success:
                 return api_response(
                     success=True,
-                    message=f"OTP sent to {phone_number}",
+                    message="OTP sent to {phone_number}",
+                    message_kwargs={"phone_number": phone_number},
                     data=response_data
                 )
             else:
                 # Still return success but warn about SMS failure
                 return api_response(
                     success=True,
-                    message=f"OTP generated for {phone_number}, but SMS sending failed. Please check server logs.",
+                    message="OTP generated for {phone_number}, but SMS sending failed. Please check server logs.",
+                    message_kwargs={"phone_number": phone_number},
                     data=response_data
                 )
         return api_response(
