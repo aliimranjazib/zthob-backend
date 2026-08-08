@@ -217,6 +217,10 @@ class RejectOrderAction(BaseOrderAction):
     label = 'Reject Order'
     allowed_roles = ['TAILOR']
 
+    def __init__(self, order, user, data=None, requested_role=None, request=None, for_execution=False):
+        super().__init__(order, user, data, requested_role=requested_role, request=request)
+        self.for_execution = for_execution
+
     def _resolve_rejection(self):
         from apps.orders.rejection_reasons import resolve_rejection_reason
 
@@ -226,7 +230,7 @@ class RejectOrderAction(BaseOrderAction):
         except ValueError as exc:
             raise ValidationError(str(exc))
 
-    def _check_requirements(self):
+    def _check_eligibility(self):
         if not user_can_manage_shop_order(self.user, self.order):
             raise PermissionDenied("You cannot reject this order.")
         if self.order.payment_method != 'cod':
@@ -240,7 +244,14 @@ class RejectOrderAction(BaseOrderAction):
             raise ValidationError("Only pending orders can be rejected.")
         if self.order.tailor_status != 'none':
             raise ValidationError("Cannot reject an order that is already accepted.")
-        self._resolve_rejection()
+
+    def _check_requirements(self):
+        self._check_eligibility()
+
+    def validate(self):
+        super().validate()
+        if self.for_execution:
+            self._resolve_rejection()
 
     def execute(self):
         from apps.orders.models import OrderStatusHistory
@@ -891,10 +902,19 @@ class OrderActionManager:
     }
 
     @classmethod
-    def get_action(cls, action_key, order, user, data=None, requested_role=None, request=None):
+    def get_action(cls, action_key, order, user, data=None, requested_role=None, request=None, for_execution=False):
         action_class = cls._actions.get(action_key)
         if not action_class:
             raise ValidationError(f"Action '{action_key}' is not recognized.")
+        if action_class is RejectOrderAction:
+            return action_class(
+                order,
+                user,
+                data,
+                requested_role=requested_role,
+                request=request,
+                for_execution=for_execution,
+            )
         return action_class(order, user, data, requested_role=requested_role, request=request)
 
     @classmethod
