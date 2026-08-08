@@ -212,6 +212,74 @@ class CancelOrderAction(BaseOrderAction):
         return "Order cancelled successfully."
 
 
+class RejectOrderAction(BaseOrderAction):
+    key = 'reject_order'
+    label = 'Reject Order'
+    allowed_roles = ['TAILOR']
+
+    def _resolve_rejection(self):
+        from apps.orders.rejection_reasons import resolve_rejection_reason
+
+        language = get_language_from_request(self.request) if self.request else 'en'
+        try:
+            return resolve_rejection_reason(self.data, language=language)
+        except ValueError as exc:
+            raise ValidationError(str(exc))
+
+    def _check_requirements(self):
+        if not user_can_manage_shop_order(self.user, self.order):
+            raise PermissionDenied("You cannot reject this order.")
+        if self.order.payment_method != 'cod':
+            raise ValidationError(
+                "Only Cash on Delivery (COD) orders can be rejected. "
+                "Paid online orders require a refund process."
+            )
+        if self.order.payment_status != 'pending':
+            raise ValidationError("Cannot reject an order where payment has already been collected.")
+        if self.order.status != 'pending':
+            raise ValidationError("Only pending orders can be rejected.")
+        if self.order.tailor_status != 'none':
+            raise ValidationError("Cannot reject an order that is already accepted.")
+        self._resolve_rejection()
+
+    def execute(self):
+        from apps.orders.models import OrderStatusHistory
+
+        reason_code, reason_text = self._resolve_rejection()
+        self.order.status = 'cancelled'
+        self.order.rejection_reason_code = reason_code or None
+        self.order.rejection_reason = reason_text
+        self.order.rejected_by = self.user
+        self.order.rider = None
+        self.order.measurement_rider = None
+        self.order.delivery_rider = None
+        self.order.assigned_rider = None
+        self.order.rider_status = 'none'
+        self.order.save()
+
+        OrderStatusHistory.objects.create(
+            order=self.order,
+            status=self.order.status,
+            previous_status=self._old_status,
+            changed_by=self.user,
+            notes=(
+                f"Rejected by tailor. Reason code: {reason_code or 'custom'}. "
+                f"Reason: {reason_text}"
+            ),
+        )
+        language = get_language_from_request(self.request) if self.request else 'en'
+        return translate_message("Order rejected successfully", language)
+
+    def post_execute(self):
+        from apps.notifications.services import NotificationService
+
+        NotificationService.send_order_rejected_by_tailor_notification(
+            self.order,
+            self.order.rejection_reason,
+            self.user,
+        )
+
+
 class AcceptOrderAction(BaseOrderAction):
     key = 'accept_order'
     label = 'Accept Order'
@@ -807,6 +875,7 @@ class OrderActionManager:
     """Registry for all available actions"""
     _actions = {
         'cancel_order': CancelOrderAction,
+        'reject_order': RejectOrderAction,
         'accept_order': AcceptOrderAction,
         'start_measuring': StartMeasuringAction,
         'record_measurements': RecordMeasurementsAction,

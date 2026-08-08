@@ -2295,13 +2295,15 @@ class OrderActionView(APIView):
             "Unit defaults to cm when omitted. For start_stitching, "
             "you can pass stitching_completion_date, stitching_completion_time, and "
             "optional assigned_employee_id (TailorEmployee id). Leave assigned_employee_id "
-            "empty/null to keep the job open to all employees with can_stitch_orders."
+            "empty/null to keep the job open to all employees with can_stitch_orders. "
+            "For reject_order (COD only), send optional data.rejection_reason_code from "
+            "tailor config order_rejection_reasons and/or optional data.rejection_reason text."
         ),
         tags=["Orders"]
     )
     @transaction.atomic
     def post(self, request, order_id):
-        order = get_object_or_404(Order, id=order_id)
+        order = get_object_or_404(Order.objects.select_for_update(), id=order_id)
         action_key = request.data.get('action')
         action_data = request.data.get('data', {})
 

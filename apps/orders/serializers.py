@@ -301,6 +301,9 @@ class OrderSerializer(serializers.ModelSerializer):
             'appointment_time',
             'custom_styles',
             'notes',
+            'rejection_reason_code',
+            'rejection_reason',
+            'rejected_by',
             'measurement_taken_at',
             'items',
             'items_count',
@@ -316,7 +319,8 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id', 'order_number', 'stitching_price', 'total_amount', 'items_count', 
-            'can_be_cancelled', 'created_at', 'updated_at'
+            'can_be_cancelled', 'rejection_reason_code', 'rejection_reason', 'rejected_by',
+            'created_at', 'updated_at'
         ]
 
     def get_customer_name(self, obj):
@@ -1975,12 +1979,23 @@ class OrderStatusUpdateResponseSerializer(OrderSerializer):
             'status',
             'rider_status',
             'tailor_status',
+            'rejection_reason_code',
+            'rejection_reason',
             'stitching_completion_date',
             'stitching_completion_time',
             'status_info',
             'updated_at'
         ]
-        read_only_fields = ['id', 'order_number', 'status', 'rider_status', 'tailor_status', 'updated_at']
+        read_only_fields = [
+            'id',
+            'order_number',
+            'status',
+            'rider_status',
+            'tailor_status',
+            'rejection_reason_code',
+            'rejection_reason',
+            'updated_at',
+        ]
 
 class OrderStatusHistorySerializer(serializers.ModelSerializer):
     changed_by_name = serializers.CharField(source='changed_by.username', read_only=True)
