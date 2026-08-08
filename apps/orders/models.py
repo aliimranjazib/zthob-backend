@@ -413,6 +413,25 @@ class Order(BaseModel):
     blank=True,
     help_text="Interal notes for tailor/admin"
     )
+    rejection_reason_code = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="Predefined rejection reason key when tailor rejects a COD order",
+    )
+    rejection_reason = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Human-readable rejection reason shown to customer/admin",
+    )
+    rejected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rejected_orders',
+        help_text="User who rejected the order",
+    )
     
     # Rider measurements (for fabric_with_stitching orders)
     rider_measurements = models.JSONField(

@@ -166,6 +166,7 @@ class TailorConfigView(APIView):
         # 4. Express Delivery Options (admin-managed: hours and/or days)
         from apps.core.models import SystemSettings
         from apps.core.express_delivery import get_express_delivery_options
+        from apps.orders.rejection_reasons import build_rejection_reasons_config
 
         system_settings = SystemSettings.get_active_settings()
         express_delivery_options = get_express_delivery_options(
@@ -183,6 +184,7 @@ class TailorConfigView(APIView):
             "employee_roles": employee_roles,
             "employee_permissions": employee_permissions,
             "express_delivery_options": express_delivery_options,
+            "order_rejection_reasons": build_rejection_reasons_config(language),
         }
         
         return api_response(

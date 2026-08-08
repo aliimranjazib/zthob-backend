@@ -82,7 +82,8 @@ class NotificationService:
         category: str,
         data: Optional[Dict] = None,
         priority: str = 'high',
-        app_role: Optional[str] = None
+        app_role: Optional[str] = None,
+        language_override: Optional[str] = None,
     ) -> bool:
         """
         Send push notification to a user
@@ -95,13 +96,14 @@ class NotificationService:
             category: Notification category (e.g., order_confirmed)
             data: Additional data payload
             priority: Notification priority (high, normal)
+            language_override: Optional language code to force translation (e.g. 'ar')
         
         Returns:
             bool: True if notification was sent successfully, False otherwise
         """
         try:
             # Detect user's language preference
-            user_language = getattr(user, 'language', 'ar')
+            user_language = language_override or getattr(user, 'language', 'ar')
             
             # Translate title and body to user's language
             translated_title = translate_message(title, user_language, **data) if data else translate_message(title, user_language)
@@ -404,6 +406,52 @@ class NotificationService:
                     priority='high',
                     app_role='RIDER'
                 )
+
+    @staticmethod
+    def send_order_rejected_by_tailor_notification(order, rejection_reason: str, changed_by):
+        """Notify customer and tailor when a tailor rejects a pending COD order."""
+        order_number = order.order_number
+        customer_name = order.customer.username if order.customer else 'Customer'
+        reason = rejection_reason or ''
+        notification_data = {
+            'order_id': order.id,
+            'order_number': order_number,
+            'status': 'cancelled',
+            'rejection_reason': reason,
+            'customer_name': customer_name,
+        }
+
+        if order.customer:
+            NotificationService.send_notification(
+                user=order.customer,
+                title='Order #{order_number} Rejected',
+                body=(
+                    'Your order #{order_number} was declined by the tailor. '
+                    'Reason: {rejection_reason}'
+                ),
+                notification_type='ORDER_STATUS',
+                category='order_rejected_by_tailor',
+                data=notification_data,
+                priority='high',
+                app_role='CUSTOMER',
+                language_override='ar',
+            )
+
+        if order.tailor:
+            NotificationService.send_notification(
+                user=order.tailor,
+                title='Order #{order_number} Rejected',
+                body=(
+                    'You rejected order #{order_number} from {customer_name}. '
+                    'Reason: {rejection_reason}'
+                ),
+                notification_type='ORDER_STATUS',
+                category='order_rejected_by_tailor',
+                data=notification_data,
+                priority='high',
+                app_role='TAILOR',
+                language_override='ar',
+            )
     
     @staticmethod
     def send_tailor_status_notification(order, old_tailor_status: str, new_tailor_status: str, changed_by):
