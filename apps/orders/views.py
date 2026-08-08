@@ -1506,16 +1506,16 @@ class TailorOrderListView(APIView):
         order_type = request.query_params.get('order_type')
         assigned_employee_id = request.query_params.get('assigned_employee_id')
 
-        if status_filter:
-            if status_filter == 'express':
-                orders = orders.filter(is_express=True)
-            else:
-                orders = orders.filter(status=status_filter)
-        elif not tailor_status_filter:
-            # Default: Show active orders only (exclude completed/cancelled)
-            # unless a specific tailor_status is requested
-            orders = orders.exclude(status__in=['delivered', 'collected', 'cancelled'])
-        
+        terminal_order_statuses = ['delivered', 'collected', 'cancelled']
+        if status_filter == 'express':
+            orders = orders.filter(is_express=True).exclude(
+                status__in=terminal_order_statuses
+            )
+        elif status_filter:
+            orders = orders.filter(status=status_filter)
+        else:
+            orders = orders.exclude(status__in=terminal_order_statuses)
+
         if tailor_status_filter:
             orders = orders.filter(tailor_status=tailor_status_filter)
         
@@ -1702,6 +1702,8 @@ class TailorPaidOrdersView(APIView):
             tailor=tailor_user,
         ).filter(
             Q(payment_status__in=['paid', 'partially_paid']) | Q(payment_method='cod', payment_status='pending')
+        ).exclude(
+            status='cancelled',
         ).select_related(
             'customer',
             'delivery_address',

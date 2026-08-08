@@ -224,8 +224,7 @@ class RejectOrderActionTest(TestCase):
         for call in mock_send.call_args_list:
             self.assertEqual(call.kwargs.get('language_override'), 'ar')
 
-    def test_rejected_order_removed_from_available_orders(self):
-        order = self._create_order()
+    def _reject_order(self, order):
         with patch(
             'apps.notifications.services.NotificationService.send_order_rejected_by_tailor_notification'
         ):
@@ -239,6 +238,45 @@ class RejectOrderActionTest(TestCase):
                 format='json',
             )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response
+
+    def test_rejected_order_removed_from_available_orders(self):
+        order = self._create_order()
+        self._reject_order(order)
         list_response = self.tailor_client.get('/api/orders/tailor/available-orders/')
         order_ids = [item['id'] for item in list_response.data['data']]
         self.assertNotIn(order.id, order_ids)
+
+    def test_rejected_order_excluded_from_my_orders_with_tailor_status_none(self):
+        order = self._create_order()
+        self._reject_order(order)
+        list_response = self.tailor_client.get(
+            '/api/orders/tailor/my-orders/',
+            {
+                'payment_status': '',
+                'tailor_status': 'none',
+                'service_mode': 'home_delivery',
+            },
+        )
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        order_ids = [item['id'] for item in list_response.data['data']]
+        self.assertNotIn(order.id, order_ids)
+
+    def test_rejected_order_excluded_from_paid_orders(self):
+        order = self._create_order()
+        self._reject_order(order)
+        list_response = self.tailor_client.get('/api/orders/tailor/paid-orders/')
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        order_ids = [item['id'] for item in list_response.data['data']]
+        self.assertNotIn(order.id, order_ids)
+
+    def test_my_orders_can_still_filter_cancelled_when_requested(self):
+        order = self._create_order()
+        self._reject_order(order)
+        list_response = self.tailor_client.get(
+            '/api/orders/tailor/my-orders/',
+            {'status': 'cancelled'},
+        )
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        order_ids = [item['id'] for item in list_response.data['data']]
+        self.assertIn(order.id, order_ids)
