@@ -2324,6 +2324,7 @@ class OrderActionView(APIView):
                 action_data,
                 requested_role=requested_role,
                 request=request,
+                for_execution=True,
             )
             
             # 2. Validate (Role and State)
