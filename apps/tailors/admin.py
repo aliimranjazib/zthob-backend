@@ -214,6 +214,9 @@ class TailorProfileAdmin(admin.ModelAdmin):
                 '(e.g. unit=hours and days=6 means 6 Hours). Options come from System Settings.'
             ),
         }),
+        ('Standard Stitching', {
+            'fields': ('standard_stitching_days',),
+        }),
         ('Status', {
             'fields': ('shop_status', 'is_featured')
         }),

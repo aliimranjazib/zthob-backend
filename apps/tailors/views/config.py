@@ -167,6 +167,8 @@ class TailorConfigView(APIView):
         from apps.core.models import SystemSettings
         from apps.core.express_delivery import get_express_delivery_options
         from apps.orders.rejection_reasons import build_rejection_reasons_config
+        from apps.tailors.shop_access import get_tailor_profile
+        from apps.tailors.standard_stitching_days import get_standard_stitching_days_limits
 
         system_settings = SystemSettings.get_active_settings()
         express_delivery_options = get_express_delivery_options(
@@ -179,11 +181,21 @@ class TailorConfigView(APIView):
             if option.get('unit') == 'days' and option.get('days') is not None:
                 option.setdefault('legacy_days', option['days'])
 
+        stitching_limits = get_standard_stitching_days_limits()
+        tailor_profile = None
+        if request.user.is_authenticated:
+            tailor_profile = get_tailor_profile(request.user)
+
         config_data = {
             "statuses": statuses,
             "employee_roles": employee_roles,
             "employee_permissions": employee_permissions,
             "express_delivery_options": express_delivery_options,
+            "standard_stitching_days": (
+                tailor_profile.standard_stitching_days if tailor_profile else None
+            ),
+            "standard_stitching_days_min": stitching_limits['min'],
+            "standard_stitching_days_max": stitching_limits['max'],
             "order_rejection_reasons": build_rejection_reasons_config(language),
         }
         

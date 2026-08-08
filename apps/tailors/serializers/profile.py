@@ -42,7 +42,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             'average_stitching_time_days', 'completed_stitching_orders_count',
             'is_express_delivery_enabled', 'is_express',
             'express_delivery_unit', 'express_delivery_days', 'express_delivery_fee',
-            'measurement_fee',
+            'measurement_fee', 'standard_stitching_days',
         ]
 
     def _get_stitching_time_stats(self, obj):
@@ -168,7 +168,21 @@ class TailorProfileUpdateSerializer(serializers.ModelSerializer):
             'working_hours', 'contact_number', 'address', 'shop_status',
             'shop_image', 'is_express_delivery_enabled',
             'express_delivery_unit', 'express_delivery_days', 'express_delivery_fee',
+            'standard_stitching_days',
         ]
+
+    def validate_standard_stitching_days(self, value):
+        if value is None:
+            return value
+
+        from ..standard_stitching_days import get_standard_stitching_days_limits
+
+        limits = get_standard_stitching_days_limits()
+        if value < limits['min'] or value > limits['max']:
+            raise serializers.ValidationError(
+                f"standard_stitching_days must be between {limits['min']} and {limits['max']}."
+            )
+        return value
 
     def validate(self, attrs):
         enabled = attrs.get(

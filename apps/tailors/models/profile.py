@@ -126,6 +126,11 @@ class TailorProfile(models.Model):
         default=Decimal('0.00'),
         help_text="One-time fee charged when this tailor sends a rider for measurements"
     )
+    standard_stitching_days = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="Default standard stitching turnaround in days for this shop",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
