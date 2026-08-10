@@ -33,7 +33,7 @@ def tailor_has_pos_access_to_customer(*, tailor_owner_user, customer_user) -> bo
 def get_customer_for_pos_or_none(*, tailor_owner_user, customer_id):
     """Return customer user if tailor has POS access, else None."""
     try:
-        customer = User.objects.get(id=customer_id, role='USER')
+        customer = User.objects.get(id=customer_id)
     except User.DoesNotExist:
         return None
 

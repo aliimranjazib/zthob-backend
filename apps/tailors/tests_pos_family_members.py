@@ -91,6 +91,24 @@ class POSFamilyMemberTestCase(TestCase):
         response = self.client.get(self._family_url())
         self.assertEqual(response.status_code, 404)
 
+    def test_tailor_can_access_family_for_multi_role_customer(self):
+        """Customers with primary role != USER still work if shop has POS access."""
+        multi_role_customer = User.objects.create_user(
+            username='multi_role_customer',
+            phone='0500000104',
+            role='TAILOR',
+            first_name='Ramzan',
+            last_name='English',
+        )
+        CustomerProfile.objects.create(
+            user=multi_role_customer,
+            pos_created_by=self.tailor_user,
+        )
+
+        self.client.force_authenticate(user=self.tailor_user)
+        response = self.client.get(self._family_url(customer_id=multi_role_customer.id))
+        self.assertEqual(response.status_code, 200, response.data)
+
     def test_customer_sees_tailor_created_family_member(self):
         self.client.force_authenticate(user=self.tailor_user)
         create_response = self.client.post(
