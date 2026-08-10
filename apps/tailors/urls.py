@@ -53,6 +53,8 @@ from apps.tailors.views import (
     TailorCreateCustomerView,
     TailorPOSCustomerOrdersView,
     TailorPOSCustomerOrderDetailView,
+    TailorPOSFamilyMemberListCreateView,
+    TailorPOSFamilyMemberDetailView,
 
     # Rating views
     SubmitTailorRatingView,
@@ -133,6 +135,8 @@ urlpatterns = [
     path('pos/customers/create/', TailorCreateCustomerView.as_view(), name='tailor-pos-create-customer'),
     path('pos/customers/<int:customer_id>/orders/', TailorPOSCustomerOrdersView.as_view(), name='tailor-pos-customer-orders'),
     path('pos/customers/<int:customer_id>/orders/<int:order_id>/', TailorPOSCustomerOrderDetailView.as_view(), name='tailor-pos-customer-order-detail'),
+    path('pos/customers/<int:customer_id>/family/', TailorPOSFamilyMemberListCreateView.as_view(), name='tailor-pos-family-list'),
+    path('pos/customers/<int:customer_id>/family/<int:family_member_id>/', TailorPOSFamilyMemberDetailView.as_view(), name='tailor-pos-family-detail'),
 
     path('phone/send-otp/', SendOTPView.as_view(), name='customer-send-otp'),
     path('phone/verify-otp/', VerifyOTPView.as_view(), name='customer-verify-otp'),

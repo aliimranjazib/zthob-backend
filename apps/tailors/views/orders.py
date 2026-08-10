@@ -379,30 +379,62 @@ class TailorAddMeasurementsView(APIView):
                 title=serializer.validated_data.get('title'),
             )
             family_member_id = serializer.validated_data.get('family_member')
+            replace_profile_measurements = serializer.validated_data.get(
+                'replace_profile_measurements',
+                False,
+            )
 
             order.measurement_taken_at = timezone.now()
 
-            # Identify the recipient and update profiles/items
+            from apps.customers.models import CustomerProfile, FamilyMember
+            from apps.tailors.services.pos_profile_write_policy import (
+                apply_customer_profile_measurements,
+                apply_family_member_measurements,
+            )
+
+            tailor_profile = getattr(request.user, 'tailor_profile', None)
+            if hasattr(request.user, 'tailor_employee') and request.user.tailor_employee.is_active:
+                tailor_profile = request.user.tailor_employee.tailor
+            actor_shop_id = tailor_profile.id if tailor_profile else None
+            actor_role = getattr(request.user, 'role', '')
+
             recipient_name = None
+            profile_message = ''
             if family_member_id:
-                from apps.customers.models import FamilyMember
-                family_member = get_object_or_404(FamilyMember, id=family_member_id, user=order.customer)
-                family_member.measurements = measurements_data
-                family_member.save()
+                family_member = get_object_or_404(
+                    FamilyMember,
+                    id=family_member_id,
+                    user=order.customer,
+                )
+                order.order_items.filter(family_member=family_member).update(
+                    measurements=measurements_data,
+                )
+                _, profile_message = apply_family_member_measurements(
+                    family_member=family_member,
+                    measurements_data=measurements_data,
+                    actor_user=request.user,
+                    actor_role=actor_role,
+                    actor_shop_id=actor_shop_id,
+                    replace_profile_measurements=replace_profile_measurements,
+                )
                 recipient_name = family_member.name
-                
-                # Update all items for this family member in this order
-                order.order_items.filter(family_member=family_member).update(measurements=measurements_data)
             else:
-                # Update customer profile measurements
-                from apps.customers.models import CustomerProfile
-                profile, created = CustomerProfile.objects.get_or_create(user=order.customer)
-                profile.measurements = measurements_data
-                profile.save()
-                
-                # Update all items for the customer in this order
-                order.order_items.filter(family_member__isnull=True).update(measurements=measurements_data)
-                recipient_name = order.customer.get_full_name() or order.customer.username if order.customer else 'Customer'
+                profile, _ = CustomerProfile.objects.get_or_create(user=order.customer)
+                order.order_items.filter(family_member__isnull=True).update(
+                    measurements=measurements_data,
+                )
+                _, profile_message = apply_customer_profile_measurements(
+                    customer_profile=profile,
+                    measurements_data=measurements_data,
+                    actor_user=request.user,
+                    actor_role=actor_role,
+                    replace_profile_measurements=replace_profile_measurements,
+                )
+                recipient_name = (
+                    order.customer.get_full_name() or order.customer.username
+                    if order.customer
+                    else 'Customer'
+                )
             
             # Save order to persist timestamp
             order.save()
@@ -417,7 +449,13 @@ class TailorAddMeasurementsView(APIView):
             ):
                 from apps.orders.measurement_service import MeasurementCompletionService
 
-                MeasurementCompletionService.complete_measurement_order(order)
+                MeasurementCompletionService.complete_measurement_order(
+                    order,
+                    actor_user=request.user,
+                    actor_role=actor_role,
+                    actor_shop_id=actor_shop_id,
+                    replace_profile_measurements=replace_profile_measurements,
+                )
             
             # For measurement_service orders, auto-update tailor_status when measurements are complete
             if order.order_type == 'measurement_service' and order.service_mode == 'walk_in':
@@ -436,6 +474,8 @@ class TailorAddMeasurementsView(APIView):
             
             # Build message
             message = f"Measurements saved for {recipient_name}."
+            if profile_message:
+                message = f"{message} {profile_message}"
             if all_measured:
                 if order.order_type == 'measurement_service':
                     message += " Measurement service completed."

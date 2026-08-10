@@ -907,6 +907,28 @@ class OrderItem(BaseModel):
     blank=True,
     help_text="Family member this item is for (optional - if not specified, item is for the customer)"
     )
+    RECIPIENT_TYPE_CHOICES = (
+        ('customer', 'Customer'),
+        ('family_member', 'Family Member'),
+    )
+    recipient_type = models.CharField(
+        max_length=20,
+        choices=RECIPIENT_TYPE_CHOICES,
+        default='customer',
+        help_text='Snapshot of who this item is for at order time',
+    )
+    recipient_display_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Immutable display name captured at order creation',
+    )
+    recipient_relationship = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text='Immutable relationship snapshot captured at order creation',
+    )
 
     class Meta:
         ordering = ['created_at']

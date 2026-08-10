@@ -87,6 +87,11 @@ class CustomerProfile(models.Model):
         return f"Customer Profile for {self.user.username}"
     
 class FamilyMember(models.Model):
+    CREATED_SOURCE_CHOICES = (
+        ('customer_app', 'Customer App'),
+        ('tailor_pos', 'Tailor POS'),
+    )
+
     user=models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                             related_name="family_profile")
     name = models.CharField(max_length=255)
@@ -94,9 +99,94 @@ class FamilyMember(models.Model):
     relationship = models.CharField(max_length=50, blank=True, null=True)
     measurements = models.JSONField(blank=True, null=True)
     address=models.ForeignKey(Address, on_delete=models.CASCADE, null=True,blank=True)
+    created_source = models.CharField(
+        max_length=20,
+        choices=CREATED_SOURCE_CHOICES,
+        default='customer_app',
+        db_index=True,
+        help_text="Where this family member record was created",
+    )
+    created_by_tailor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pos_created_family_members',
+        help_text='Tailor shop owner who created this family member via POS',
+    )
+    created_by_shop = models.ForeignKey(
+        'tailors.TailorProfile',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pos_created_family_members',
+        help_text='Tailor shop profile that created this family member via POS',
+    )
+    customer_edited_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the customer last edited this family member in the customer app',
+    )
+    last_profile_sync_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When profile measurements were last synced from POS/order flows',
+    )
     
     def __str__(self):
         return f"{self.name} ({self.relationship}) for {self.user.username}"
+
+
+class CustomerDataAuditLog(models.Model):
+    """Audit trail for customer profile changes initiated by POS or customer."""
+
+    ENTITY_TYPE_CHOICES = (
+        ('family_member', 'Family Member'),
+        ('customer_profile', 'Customer Profile'),
+    )
+    ACTION_CHOICES = (
+        ('create', 'Create'),
+        ('update', 'Update'),
+        ('delete', 'Delete'),
+        ('blocked_overwrite', 'Blocked Overwrite'),
+        ('replace_measurements', 'Replace Measurements'),
+    )
+    SOURCE_CHOICES = (
+        ('customer_app', 'Customer App'),
+        ('tailor_pos', 'Tailor POS'),
+        ('system', 'System'),
+    )
+
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='data_audit_logs',
+    )
+    actor_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='customer_data_audit_actions',
+    )
+    actor_role = models.CharField(max_length=20, blank=True, default='')
+    entity_type = models.CharField(max_length=30, choices=ENTITY_TYPE_CHOICES)
+    entity_id = models.PositiveIntegerField(null=True, blank=True)
+    action = models.CharField(max_length=30, choices=ACTION_CHOICES)
+    before = models.JSONField(null=True, blank=True)
+    after = models.JSONField(null=True, blank=True)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='system')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['customer', 'created_at']),
+            models.Index(fields=['entity_type', 'entity_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.action} {self.entity_type}:{self.entity_id} for customer {self.customer_id}"
 
 
 class FabricFavorite(models.Model):

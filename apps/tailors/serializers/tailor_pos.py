@@ -47,3 +47,40 @@ class CreateCustomerSerializer(serializers.Serializer):
         if not is_valid_saudi_phone(value):
             raise serializers.ValidationError('Enter a valid Saudi mobile number.')
         return normalize_phone_to_local(format_phone_e164(value))
+
+
+class POSFamilyMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = None
+        fields = [
+            'id',
+            'name',
+            'gender',
+            'relationship',
+            'measurements',
+            'created_source',
+            'customer_edited_at',
+        ]
+        read_only_fields = [
+            'id',
+            'measurements',
+            'created_source',
+            'customer_edited_at',
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.customers.models import FamilyMember
+        self.Meta.model = FamilyMember
+
+
+class POSFamilyMemberCreateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255)
+    gender = serializers.CharField(max_length=10, required=False, allow_blank=True, allow_null=True)
+    relationship = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
+
+
+class POSFamilyMemberUpdateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255, required=False)
+    gender = serializers.CharField(max_length=10, required=False, allow_blank=True, allow_null=True)
+    relationship = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)

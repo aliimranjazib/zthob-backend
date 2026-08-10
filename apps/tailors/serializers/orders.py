@@ -52,6 +52,11 @@ class TailorAddMeasurementsSerializer(serializers.Serializer):
     )
     measurements = serializers.JSONField(required=True)
     notes = serializers.CharField(required=False, allow_blank=True)
+    replace_profile_measurements = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text='When true, overwrite existing customer/family profile measurements.',
+    )
     
     def validate_measurements(self, value):
         from apps.orders.measurement_utils import has_measurement_values

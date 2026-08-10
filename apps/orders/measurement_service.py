@@ -1,7 +1,11 @@
 from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
-from apps.customers.models import FamilyMember
+from apps.customers.models import FamilyMember, CustomerProfile
+from apps.tailors.services.pos_profile_write_policy import (
+    apply_customer_profile_measurements,
+    apply_family_member_measurements,
+)
 
 
 class MeasurementCompletionService:
@@ -11,7 +15,14 @@ class MeasurementCompletionService:
     """
     
     @staticmethod
-    def complete_measurement_order(order):
+    def complete_measurement_order(
+        order,
+        *,
+        actor_user=None,
+        actor_role='',
+        actor_shop_id=None,
+        replace_profile_measurements=False,
+    ):
         """
         Save measurements from order items to customer/family member profiles.
         Mark account as used if this is a free measurement order.
@@ -40,19 +51,27 @@ class MeasurementCompletionService:
         if incomplete_items:
             return False, f"{len(incomplete_items)} people still need measurements"
         
-        # Save measurements to profiles
+        # Save measurements to profiles using write policy
         with transaction.atomic():
             for item in items:
                 if item.family_member is None:
-                    # Save to customer profile
-                    profile = order.customer.customer_profile
-                    profile.measurements = item.measurements
-                    profile.save()
+                    profile, _ = CustomerProfile.objects.get_or_create(user=order.customer)
+                    apply_customer_profile_measurements(
+                        customer_profile=profile,
+                        measurements_data=item.measurements,
+                        actor_user=actor_user,
+                        actor_role=actor_role,
+                        replace_profile_measurements=replace_profile_measurements,
+                    )
                 else:
-                    # Save to family member
-                    family_member = item.family_member
-                    family_member.measurements = item.measurements
-                    family_member.save()
+                    apply_family_member_measurements(
+                        family_member=item.family_member,
+                        measurements_data=item.measurements,
+                        actor_user=actor_user,
+                        actor_role=actor_role,
+                        actor_shop_id=actor_shop_id,
+                        replace_profile_measurements=replace_profile_measurements,
+                    )
             
             # Mark account as used if this is a free measurement order
             if order.is_free_measurement:

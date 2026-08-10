@@ -53,6 +53,10 @@ from .tailor_pos import (
     TailorPOSCustomerOrdersView,
     TailorPOSCustomerOrderDetailView
 )
+from .pos_family import (
+    TailorPOSFamilyMemberListCreateView,
+    TailorPOSFamilyMemberDetailView,
+)
 from .rating import (
     SubmitTailorRatingView,
     TailorRatingListView
@@ -120,6 +124,8 @@ __all__ = [
     'TailorCreateCustomerView',
     'TailorPOSCustomerOrdersView',
     'TailorPOSCustomerOrderDetailView',
+    'TailorPOSFamilyMemberListCreateView',
+    'TailorPOSFamilyMemberDetailView',
 
     # Rating views
     'SubmitTailorRatingView',

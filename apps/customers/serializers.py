@@ -268,6 +268,7 @@ class FamilyMemberCreateSerializer(serializers.ModelSerializer):
         user = self.context.get("user")
         family_member = FamilyMember.objects.create(
             user=user,
+            created_source='customer_app',
             **validated_data
         )
         return family_member
@@ -286,8 +287,11 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
     
     class Meta:
         model=FamilyMember
-        fields = ['id', 'name', 'measurements', 'address', 'address_response']
-        read_only_fields = ['user']
+        fields = [
+            'id', 'name', 'measurements', 'address', 'address_response',
+            'gender', 'relationship', 'created_source',
+        ]
+        read_only_fields = ['user', 'created_source']
         
     def to_representation(self, instance):
         """Custom representation to use address_response as address in output."""
@@ -304,6 +308,7 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
 
         family_member = FamilyMember.objects.create(
             user=user,
+            created_source='customer_app',
             **validated_data
         )
 
@@ -323,10 +328,13 @@ class FamilyMemberSerializer(serializers.ModelSerializer):
         return family_member
 
     def update(self,instance,validated_data):
+        from django.utils import timezone
+
         address_data=validated_data.pop('address',None)
         #update family member field
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+        instance.customer_edited_at = timezone.now()
         instance.save()
         if address_data:
             # Create a mock request object for AddressCreateSerializer

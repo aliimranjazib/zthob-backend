@@ -21,6 +21,38 @@ from .actions import OrderActionManager
 User = get_user_model()
 
 
+def resolve_order_item_recipient_snapshot(*, customer, item_data):
+    """Build immutable recipient snapshot fields for an order item."""
+    family_member = item_data.get('family_member')
+    if family_member:
+        return {
+            'recipient_type': 'family_member',
+            'recipient_display_name': (
+                item_data.get('recipient_display_name')
+                or family_member.name
+            ),
+            'recipient_relationship': (
+                item_data.get('recipient_relationship')
+                or family_member.relationship
+            ),
+        }
+
+    customer_name = display_user_label(customer) if customer else 'Customer'
+    return {
+        'recipient_type': 'customer',
+        'recipient_display_name': item_data.get('recipient_display_name') or customer_name,
+        'recipient_relationship': item_data.get('recipient_relationship'),
+    }
+
+
+def enrich_order_item_payload(*, customer, item_data):
+    snapshot = resolve_order_item_recipient_snapshot(customer=customer, item_data=item_data)
+    return {
+        **item_data,
+        **snapshot,
+    }
+
+
 def enrich_custom_style_payload(style, idx, user=None):
     """Validate and enrich a custom style payload while preserving optional frontend text."""
     if not isinstance(style, dict):
@@ -134,11 +166,16 @@ class OrderItemSerializer(serializers.ModelSerializer):
         fields = [
             'id','fabric','fabric_name','fabric_sku', 'fabric_stitching_price', 'fabric_image','quantity',
             'unit_price','total_price','measurements','custom_instructions',
-            'is_ready','family_member','family_member_name','custom_styles','created_at'
+            'is_ready','family_member','family_member_name','custom_styles','created_at',
+            'recipient_type','recipient_display_name','recipient_relationship',
         ]
         read_only_fields = ['id', 'total_price', 'created_at']
 
     def get_family_member_name(self, obj):
+        if obj.recipient_display_name:
+            if obj.recipient_type == 'customer':
+                return f"{obj.recipient_display_name} (Self)"
+            return obj.recipient_display_name
         if obj.family_member:
             return obj.family_member.name
         
@@ -170,10 +207,19 @@ class OrderItemSerializer(serializers.ModelSerializer):
         )
 
 class OrderItemCreateSerializer(serializers.ModelSerializer):
+    recipient_type = serializers.ChoiceField(
+        choices=[('customer', 'Customer'), ('family_member', 'Family Member')],
+        required=False,
+    )
+    recipient_display_name = serializers.CharField(required=False, allow_blank=True)
+    recipient_relationship = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model=OrderItem
-        fields=['fabric','quantity','measurements','custom_instructions','family_member','custom_styles']
+        fields=[
+            'fabric','quantity','measurements','custom_instructions','family_member','custom_styles',
+            'recipient_type','recipient_display_name','recipient_relationship',
+        ]
         extra_kwargs = {
             'fabric': {'required': False, 'allow_null': True}
         }
@@ -1150,6 +1196,44 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({
                         'items': f"Fabric {fabric.name} does not belong to the selected tailor."
                     })
+
+        request = self.context.get('request')
+        service_mode = data.get('service_mode', self.initial_data.get('service_mode', 'home_delivery'))
+        customer = self._get_target_customer()
+        if (
+            request
+            and request.user.is_tailor
+            and service_mode == 'walk_in'
+            and customer
+        ):
+            from apps.tailors.services.pos_customer_access import tailor_has_pos_access_to_customer
+
+            tailor_user = data.get('tailor') or request.user
+            if hasattr(request.user, 'tailor_employee') and request.user.tailor_employee.is_active:
+                tailor_user = request.user.tailor_employee.tailor.user
+            elif hasattr(request.user, 'tailor_profile'):
+                tailor_user = request.user
+
+            if not tailor_has_pos_access_to_customer(
+                tailor_owner_user=tailor_user,
+                customer_user=customer,
+            ):
+                raise serializers.ValidationError({
+                    'customer': 'Tailor does not have POS access to this customer.'
+                })
+
+            for index, item in enumerate(items):
+                family_member = item.get('family_member')
+                if family_member and family_member.user_id != customer.id:
+                    raise serializers.ValidationError({
+                        'items': f"Item {index + 1}: family member must belong to the selected customer."
+                    })
+                snapshot = resolve_order_item_recipient_snapshot(customer=customer, item_data=item)
+                if not snapshot['recipient_display_name']:
+                    raise serializers.ValidationError({
+                        'items': f"Item {index + 1}: recipient_display_name is required for walk-in orders."
+                    })
+                item.update(snapshot)
             
         return data
 
@@ -1306,6 +1390,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     'custom_instructions': item_data.get('custom_instructions', ''),
                     'family_member': item_data.get('family_member'),
                     'custom_styles': item_data.get('custom_styles'),  # Item-level custom styles
+                    'recipient_type': item_data.get('recipient_type', 'customer'),
+                    'recipient_display_name': item_data.get('recipient_display_name', ''),
+                    'recipient_relationship': item_data.get('recipient_relationship'),
                 })
         else:
             # No catalog fabric needed for measurement_service and stitching_only orders
@@ -1318,6 +1405,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     'custom_instructions': item_data.get('custom_instructions', ''),
                     'family_member': item_data.get('family_member'),
                     'custom_styles': item_data.get('custom_styles'),  # Item-level custom styles
+                    'recipient_type': item_data.get('recipient_type', 'customer'),
+                    'recipient_display_name': item_data.get('recipient_display_name', ''),
+                    'recipient_relationship': item_data.get('recipient_relationship'),
                 })
         # Get distance_km from validated_data if provided
         # Get distance_km from validated_data if provided
@@ -1385,6 +1475,17 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             validated_data['status'] = 'confirmed'
 
         order = Order.objects.create(**validated_data)
+        order_customer = order.customer
+        
+        # Ensure recipient snapshots exist on every item payload
+        for item_data in items_with_fabrics:
+            if not item_data.get('recipient_display_name'):
+                item_data.update(
+                    resolve_order_item_recipient_snapshot(
+                        customer=order_customer,
+                        item_data=item_data,
+                    )
+                )
         
         # Handle measurement service orders differently
         if order_type == 'measurement_service':
@@ -1420,6 +1521,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     custom_instructions=item_data.get('custom_instructions', ''),
                     family_member=item_data.get('family_member'),
                     custom_styles=item_data.get('custom_styles'),  # Item-level custom styles
+                    recipient_type=item_data.get('recipient_type', 'customer'),
+                    recipient_display_name=item_data.get('recipient_display_name', ''),
+                    recipient_relationship=item_data.get('recipient_relationship'),
                 )
         else:
             # Regular orders - create items with fabric and reduce stock
@@ -1437,6 +1541,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     custom_instructions=item_data['custom_instructions'],
                     family_member=item_data['family_member'],
                     custom_styles=item_data.get('custom_styles'),  # Item-level custom styles
+                    recipient_type=item_data.get('recipient_type', 'customer'),
+                    recipient_display_name=item_data.get('recipient_display_name', ''),
+                    recipient_relationship=item_data.get('recipient_relationship'),
                 )
                 if fabric is None:
                     continue
