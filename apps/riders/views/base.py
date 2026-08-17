@@ -1113,7 +1113,7 @@ class RiderAddMeasurementsView(APIView):
         
         serializer = RiderAddMeasurementsSerializer(data=request.data)
         if serializer.is_valid():
-            from apps.orders.measurement_utils import prepare_measurements_payload
+            from apps.orders.measurement_utils import prepare_measurements_payload, public_measurements
 
             measurements_data = prepare_measurements_payload(
                 serializer.validated_data['measurements'],
@@ -1131,7 +1131,7 @@ class RiderAddMeasurementsView(APIView):
             if family_member_id:
                 from apps.customers.models import FamilyMember
                 family_member = get_object_or_404(FamilyMember, id=family_member_id, user=order.customer)
-                family_member.measurements = measurements_data
+                family_member.measurements = public_measurements(measurements_data)
                 family_member.save()
                 recipient_name = family_member.name
                 
@@ -1141,7 +1141,7 @@ class RiderAddMeasurementsView(APIView):
                 # Update customer profile measurements
                 from apps.customers.models import CustomerProfile
                 profile, created = CustomerProfile.objects.get_or_create(user=order.customer)
-                profile.measurements = measurements_data
+                profile.measurements = public_measurements(measurements_data)
                 profile.save()
                 
                 # Update all items for the customer in this order

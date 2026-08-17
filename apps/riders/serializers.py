@@ -5,6 +5,7 @@ from apps.core.phone_utils import display_user_label, format_phone_for_display
 from . import models
 from .models import RiderProfile, RiderOrderAssignment, RiderProfileReview, RiderDocument
 from apps.orders.models import Order
+from apps.orders.measurement_utils import public_measurements
 from apps.orders.serializers import OrderItemSerializer
 from zthob.translations import get_language_from_request, translate_message
 
@@ -781,7 +782,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
                 recipients.append(recipients_by_key[key])
 
             if measurements:
-                recipients_by_key[key]['measurements'] = measurements
+                recipients_by_key[key]['measurements'] = public_measurements(measurements)
         
         # Add order-level family member if exists
         if obj.family_member:
@@ -828,7 +829,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
         if obj.rider_status == 'measurement_taken' and obj.rider_measurements:
             for recipient in recipients:
                 if 'measurements' not in recipient:
-                    recipient['measurements'] = obj.rider_measurements
+                    recipient['measurements'] = public_measurements(obj.rider_measurements)
         
         return recipients
 
@@ -923,7 +924,7 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
                 'total_price': str(item.total_price),
                 'family_member': item.family_member.id if item.family_member else None,
                 'family_member_name': self._get_item_recipient_name(item),
-                'measurements': item.measurements,
+                'measurements': public_measurements(item.measurements),
                 'custom_styles': OrderItemSerializer(item, context=self.context).data.get('custom_styles', []),
             })
         return items

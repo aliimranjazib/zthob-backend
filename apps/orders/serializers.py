@@ -6,6 +6,7 @@ from apps.customers.models import Address
 from apps.customization.models import CustomStyle
 from decimal import Decimal
 from django.db import transaction
+from apps.orders.measurement_utils import public_measurements
 from apps.orders.services import OrderCalculationService
 from apps.orders.payments import build_payment_options
 from zthob.translations import get_language_from_request, translate_message
@@ -170,6 +171,11 @@ class OrderItemSerializer(serializers.ModelSerializer):
             'recipient_type','recipient_display_name','recipient_relationship',
         ]
         read_only_fields = ['id', 'total_price', 'created_at']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['measurements'] = public_measurements(data.get('measurements'))
+        return data
 
     def get_family_member_name(self, obj):
         if obj.recipient_display_name:
@@ -537,7 +543,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
         if include_measurements:
             for recipient in recipients:
-                recipient['measurements'] = obj.rider_measurements
+                recipient['measurements'] = public_measurements(obj.rider_measurements)
         
         return recipients
 
@@ -1831,6 +1837,11 @@ class OrderListSerializer(serializers.ModelSerializer):
             'express_fee',
             'created_at'
         ]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['rider_measurements'] = public_measurements(data.get('rider_measurements'))
+        return data
 
     def get_customer_name(self, obj):
         if not obj.customer:

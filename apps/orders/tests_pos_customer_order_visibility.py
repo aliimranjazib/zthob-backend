@@ -328,7 +328,11 @@ class PosCustomerOrderVisibilityTest(TestCase):
         self.assertEqual(order.payment_status, 'paid')
         self.assertIsNone(item.fabric)
         self.assertEqual(item.unit_price, Decimal('0.00'))
-        self.assertEqual(item.measurements, {'chest': 102, 'length': 144})
+        self.assertEqual(item.measurements, {
+            'chest': 102,
+            'length': 144,
+            '_order': ['chest', 'length'],
+        })
 
         self.fabric.refresh_from_db()
         self.assertEqual(self.fabric.stock, initial_stock)

@@ -534,6 +534,10 @@ class Order(BaseModel):
 
     def save(self, *args, **kwargs):
         from django.db import IntegrityError, transaction
+        from apps.orders.measurement_utils import with_measurement_order
+
+        if isinstance(self.rider_measurements, dict) and self.rider_measurements:
+            self.rider_measurements = with_measurement_order(self.rider_measurements)
 
         if not self.total_amount:
             self.total_amount = (
@@ -936,7 +940,10 @@ class OrderItem(BaseModel):
         verbose_name_plural = "Order Items"
 
     def save(self,*args,**kwargs):
+        from apps.orders.measurement_utils import with_measurement_order
         self.total_price=self.quantity * self.unit_price
+        if isinstance(self.measurements, dict) and self.measurements:
+            self.measurements = with_measurement_order(self.measurements)
         super().save(*args,**kwargs)
 
     def __str__(self):

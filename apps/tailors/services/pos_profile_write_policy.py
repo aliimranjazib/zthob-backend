@@ -3,7 +3,7 @@
 from django.utils import timezone
 
 from apps.customers.services.audit_log import log_customer_data_change
-from apps.orders.measurement_utils import has_measurement_values
+from apps.orders.measurement_utils import has_measurement_values, public_measurements
 
 
 def _has_profile_measurements(measurements) -> bool:
@@ -73,7 +73,7 @@ def apply_family_member_measurements(
         )
         return False, 'Profile measurements were not updated because customer data is protected.'
 
-    family_member.measurements = measurements_data
+    family_member.measurements = public_measurements(measurements_data)
     family_member.last_profile_sync_at = timezone.now()
     family_member.save(update_fields=['measurements', 'last_profile_sync_at'])
 
@@ -120,7 +120,7 @@ def apply_customer_profile_measurements(
         )
         return False, 'Customer profile measurements were not updated because existing data is protected.'
 
-    customer_profile.measurements = measurements_data
+    customer_profile.measurements = public_measurements(measurements_data)
     customer_profile.save(update_fields=['measurements'])
 
     action = 'replace_measurements' if replace_profile_measurements else 'update'

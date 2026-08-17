@@ -10,7 +10,10 @@ from apps.orders.measurement_utils import (
     get_measurement_unit,
     has_measurement_values,
     normalize_unit,
+    ordered_measurement_keys,
     prepare_measurements_payload,
+    public_measurements,
+    with_measurement_order,
 )
 from apps.orders.models import Order, OrderItem
 from apps.tailors.models import TailorEmployee, TailorProfile
@@ -44,6 +47,7 @@ class MeasurementUtilsTest(TestCase):
         self.assertEqual(payload['title'], 'Wedding Thobe')
         self.assertEqual(payload['length'], 56)
         self.assertEqual(payload['shoulder'], 22)
+        self.assertEqual(payload['_order'], ['length', 'shoulder'])
 
     def test_prepare_measurements_payload_defaults_unit_to_cm(self):
         payload = prepare_measurements_payload({'chest': 42})
@@ -57,6 +61,33 @@ class MeasurementUtilsTest(TestCase):
     def test_get_measurement_unit_falls_back_for_legacy_records(self):
         self.assertEqual(get_measurement_unit({'length': 42}), 'cm')
         self.assertEqual(get_measurement_unit({'unit': 'inches', 'length': 56}), 'inches')
+
+    def test_with_measurement_order_keeps_payload_sequence(self):
+        stored = with_measurement_order({'chest': 42, 'waist': 34, 'shoulder': 18})
+        self.assertEqual(stored['_order'], ['chest', 'waist', 'shoulder'])
+
+    def test_ordered_measurement_keys_uses_stored_order_when_keys_scrambled(self):
+        scrambled = {
+            'waist': 34,
+            'shoulder': 18,
+            'chest': 42,
+            '_order': ['chest', 'waist', 'shoulder'],
+        }
+        self.assertEqual(
+            ordered_measurement_keys(scrambled),
+            ['chest', 'waist', 'shoulder'],
+        )
+
+    def test_public_measurements_hides_internal_order(self):
+        stored = with_measurement_order({'chest': 42, 'waist': 34, 'unit': 'cm'})
+        public = public_measurements(stored)
+        self.assertNotIn('_order', public)
+        self.assertEqual(public['chest'], 42)
+        self.assertEqual(public['waist'], 34)
+        self.assertEqual(public['unit'], 'cm')
+
+    def test_has_measurement_values_ignores_order_metadata(self):
+        self.assertFalse(has_measurement_values({'_order': ['chest'], 'unit': 'cm'}))
 
 
 @override_settings(
@@ -139,6 +170,7 @@ class RecordMeasurementsUnitActionTest(APITestCase):
         item = order.order_items.first()
         self.assertEqual(item.measurements['unit'], 'cm')
         self.assertEqual(item.measurements['length'], 142)
+        self.assertEqual(item.measurements['_order'], ['length', 'shoulder'])
         self.assertTrue(order.all_items_have_measurements)
 
     def test_record_measurements_with_inches_unit(self):

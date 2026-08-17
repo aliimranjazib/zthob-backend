@@ -2170,6 +2170,9 @@ class OrderMeasurementsDetailView(APIView):
             )
         
         # Build recipient data (consistent with order detail API)
+        from apps.orders.measurement_utils import public_measurements
+
+        rider_measurements = public_measurements(order.rider_measurements)
         if order.family_member:
             recipient = {
                 'type': 'family_member',
@@ -2177,7 +2180,7 @@ class OrderMeasurementsDetailView(APIView):
                 'name': order.family_member.name,
                 'relationship': order.family_member.relationship,
                 'gender': order.family_member.gender,
-                'measurements': order.rider_measurements,
+                'measurements': rider_measurements,
             }
         else:
             recipient = {
@@ -2186,7 +2189,7 @@ class OrderMeasurementsDetailView(APIView):
                 'name': request.user.get_full_name() or request.user.username,
                 'phone': request.user.phone,
                 'email': request.user.email,
-                'measurements': order.rider_measurements,
+                'measurements': rider_measurements,
             }
         
         # Get rider info

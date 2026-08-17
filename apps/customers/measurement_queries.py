@@ -2,7 +2,7 @@
 
 from django.db.models import Q
 
-from apps.orders.measurement_utils import has_measurement_values
+from apps.orders.measurement_utils import has_measurement_values, public_measurements
 from apps.orders.models import Order
 
 
@@ -27,15 +27,15 @@ def get_recipient_measurements_from_order(order, recipient_type, recipient_id, u
     if recipient_type == 'family_member':
         for item in order.order_items.all():
             if item.family_member_id == recipient_id and has_measurement_values(item.measurements):
-                return item.measurements
+                return public_measurements(item.measurements)
         return None
 
     if recipient_type == 'customer' and recipient_id == user_id:
         for item in order.order_items.all():
             if item.family_member_id is None and has_measurement_values(item.measurements):
-                return item.measurements
+                return public_measurements(item.measurements)
         if has_measurement_values(order.rider_measurements):
-            return order.rider_measurements
+            return public_measurements(order.rider_measurements)
     return None
 
 
@@ -68,7 +68,7 @@ def iter_order_recipient_measurements(order, user_id):
             yield recipient_type, recipient_id, measurements
 
     if not seen and has_measurement_values(order.rider_measurements):
-        yield 'customer', user_id, order.rider_measurements
+        yield 'customer', user_id, public_measurements(order.rider_measurements)
 
 
 def customer_orders_with_measurements(customer, *, order_id=None, family_member_id=None):
@@ -100,7 +100,7 @@ def build_order_measurement_entry(order, measurements):
         'order_id': order.id,
         'order_number': order.order_number,
         'order_type': order.order_type,
-        'measurements': measurements,
+        'measurements': public_measurements(measurements),
         'measurement_taken_at': order.measurement_taken_at,
         'order_status': order.status,
         'rider_status': order.rider_status,

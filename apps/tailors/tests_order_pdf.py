@@ -25,6 +25,7 @@ from apps.tailors.services.order_pdf import (
     _format_user_text_html,
     _item_recipient_display,
     _normalize_rtl_text,
+    _pad_measurement_row,
     _resolve_media_file_path,
     _shape_arabic,
     _safe_text,
@@ -122,6 +123,55 @@ class OrderPDFServiceTest(TestCase):
         shaped_twice = _shape_arabic(_shape_arabic('طول الكم'))
         self.assertEqual(shaped_once, _shape_arabic('طول الكم'))
         self.assertNotEqual(shaped_once, shaped_twice)
+
+    def test_format_measurement_pairs_follows_stored_order_when_keys_scrambled(self):
+        pairs = _format_measurement_pairs(
+            {
+                'waist': 34,
+                'shoulder': 18,
+                'chest': 42,
+                '_order': ['chest', 'waist', 'shoulder'],
+            },
+            lang='en',
+            field_map={},
+        )
+        self.assertEqual([pair[0] for pair in pairs], ['Chest', 'Waist', 'Shoulder'])
+        self.assertEqual([pair[1] for pair in pairs], [42, 34, 18])
+
+    def test_format_measurement_pairs_skips_empty_null_and_metadata(self):
+        pairs = _format_measurement_pairs(
+            {
+                'chest': 42,
+                'waist': None,
+                'hip': '',
+                'sleeve_length': 'null',
+                'title': 'Wedding Thobe',
+                'unit': 'cm',
+                '_order': ['chest', 'waist', 'hip', 'sleeve_length'],
+            },
+            lang='en',
+            field_map={},
+        )
+        self.assertEqual(len(pairs), 1)
+        self.assertEqual(pairs[0][0], 'Chest')
+        self.assertEqual(pairs[0][1], 42)
+
+    def test_rtl_measurement_row_reverses_and_pads_left(self):
+        from apps.tailors.services.order_pdf import PDF_MEASUREMENT_COLS
+
+        pairs = [('a', 1), ('b', 2), ('c', 3)]
+        row = _pad_measurement_row(pairs, PDF_MEASUREMENT_COLS, is_rtl=True)
+        self.assertEqual(len(row), PDF_MEASUREMENT_COLS)
+        self.assertEqual(row[:3], [('', ''), ('', ''), ('', '')])
+        self.assertEqual(row[-3:], [('c', 3), ('b', 2), ('a', 1)])
+
+    def test_ltr_measurement_row_pads_right(self):
+        from apps.tailors.services.order_pdf import PDF_MEASUREMENT_COLS
+
+        pairs = [('a', 1), ('b', 2), ('c', 3)]
+        row = _pad_measurement_row(pairs, PDF_MEASUREMENT_COLS, is_rtl=False)
+        self.assertEqual(row[:3], [('a', 1), ('b', 2), ('c', 3)])
+        self.assertEqual(row[-3:], [('', ''), ('', ''), ('', '')])
 
     def test_pdf_priority_sections_appear_before_order_details(self):
         item = self.order.order_items.first()

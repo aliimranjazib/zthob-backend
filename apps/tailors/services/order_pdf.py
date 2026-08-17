@@ -1195,11 +1195,14 @@ def _format_measurement_pairs(measurements, lang='en', field_map=None):
     if not measurements or not isinstance(measurements, dict):
         return []
 
+    from apps.orders.measurement_utils import ordered_measurement_keys
+
     field_map = field_map if field_map is not None else _measurement_field_map()
     formatted = []
 
-    for key, value in measurements.items():
-        if key in ('title', 'unit', 'recorded_unit', 'notes') or value in (None, '', 'null'):
+    for key in ordered_measurement_keys(measurements):
+        value = measurements.get(key)
+        if value in (None, '', 'null'):
             continue
 
         meta = field_map.get(key, {})
@@ -1222,6 +1225,24 @@ def _format_measurement_pairs(measurements, lang='en', field_map=None):
         ))
 
     return formatted
+
+
+def _pad_measurement_row(chunk, cols, is_rtl=False):
+    """
+    Fit a measurement chunk into a fixed-width table row.
+
+    ReportLab fills left-to-right. For RTL, reverse the chunk and pad empty
+    cells on the left so the first payload field sits on the right.
+    """
+    row = list(chunk)
+    if is_rtl:
+        row = list(reversed(row))
+        while len(row) < cols:
+            row.insert(0, ('', ''))
+    else:
+        while len(row) < cols:
+            row.append(('', ''))
+    return row
 
 
 def _measurements_grid(pairs, page_w, s, lang='en', title=''):
@@ -1290,10 +1311,7 @@ def _measurements_grid(pairs, page_w, s, lang='en', title=''):
         # We'll prepend this manually below
 
     for i in range(0, len(pairs), COLS):
-        chunk = pairs[i:i + COLS]
-        # Pad with empty cells to fill the row
-        while len(chunk) < COLS:
-            chunk.append(('', ''))
+        chunk = _pad_measurement_row(pairs[i:i + COLS], COLS, is_rtl=is_rtl)
         cells = []
         for pair in chunk:
             if not pair or not pair[0]:
