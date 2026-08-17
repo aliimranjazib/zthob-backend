@@ -41,9 +41,23 @@ def _reserved_payout_amount(user):
     return queryset.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
 
+def _walk_in_order_credit_total(wallet):
+    """Walk-in order credits are excluded from tailor wallet totals."""
+    if not isinstance(wallet, TailorWallet):
+        return Decimal('0.00')
+    return (
+        WalletTransaction.objects.filter(
+            wallet=wallet,
+            transaction_type='credit',
+            source='order',
+            order__service_mode='walk_in',
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    )
+
+
 def _spendable_balance(wallet, user):
     reserved_amount = _reserved_payout_amount(user)
-    spendable = wallet.available_balance - reserved_amount
+    spendable = wallet.available_balance - reserved_amount - _walk_in_order_credit_total(wallet)
     return max(spendable, Decimal('0.00'))
 
 class OrderSummarySerializer(serializers.ModelSerializer):
@@ -84,6 +98,7 @@ class TailorWalletSerializer(serializers.ModelSerializer):
     available_balance = serializers.SerializerMethodField()
     pending_payout_amount = serializers.SerializerMethodField()
     ledger_balance = serializers.SerializerMethodField()
+    total_earned = serializers.SerializerMethodField()
 
     class Meta:
         model = TailorWallet
@@ -100,7 +115,10 @@ class TailorWalletSerializer(serializers.ModelSerializer):
         return _money(_reserved_payout_amount(obj.tailor))
 
     def get_ledger_balance(self, obj):
-        return _money(obj.available_balance)
+        return _money(max(obj.available_balance - _walk_in_order_credit_total(obj), Decimal('0.00')))
+
+    def get_total_earned(self, obj):
+        return _money(max(obj.total_earned - _walk_in_order_credit_total(obj), Decimal('0.00')))
 
 class RiderWalletSerializer(serializers.ModelSerializer):
     available_balance = serializers.SerializerMethodField()

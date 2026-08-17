@@ -34,6 +34,10 @@ class WalletService:
         """
         if not order.tailor:
             return None
+
+        # Walk-in cash stays with the shop; tailor wallet is for home-delivery payouts only.
+        if getattr(order, 'service_mode', None) == 'walk_in':
+            return None
         
         # Avoid duplicate credits for the same order
         if WalletTransaction.objects.filter(order=order, transaction_type='credit').exists():

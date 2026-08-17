@@ -1166,7 +1166,7 @@ def _append_measurement_notes(block, measurements, page_w, s, lang):
 def _measurement_field_map():
     """
     Return active measurement field metadata keyed by JSON field name.
-    The PDF uses this as the source of truth for labels and ordering.
+    The PDF uses this as the source of truth for labels. Field order follows the payload.
     """
     try:
         from apps.customization.models import MeasurementField
@@ -1191,15 +1191,14 @@ def _measurement_field_map():
 
 
 def _format_measurement_pairs(measurements, lang='en', field_map=None):
-    """Format measurement JSON into localized, consistently ordered label/value/unit tuples."""
+    """Format measurement JSON into localized label/value/unit tuples, preserving payload order."""
     if not measurements or not isinstance(measurements, dict):
         return []
 
     field_map = field_map if field_map is not None else _measurement_field_map()
     formatted = []
-    unknown_base_order = len(field_map) + 1000
 
-    for idx, (key, value) in enumerate(measurements.items()):
+    for key, value in measurements.items():
         if key in ('title', 'unit', 'recorded_unit', 'notes') or value in (None, '', 'null'):
             continue
 
@@ -1217,14 +1216,12 @@ def _format_measurement_pairs(measurements, lang='en', field_map=None):
 
         snapshot_unit = measurements.get('unit') if isinstance(measurements, dict) else None
         formatted.append((
-            meta.get('order', unknown_base_order + idx),
             label,
             value,
             snapshot_unit or meta.get('unit', 'cm'),
         ))
 
-    formatted.sort(key=lambda item: item[0])
-    return [(label, value, unit) for _, label, value, unit in formatted]
+    return formatted
 
 
 def _measurements_grid(pairs, page_w, s, lang='en', title=''):
@@ -1291,10 +1288,6 @@ def _measurements_grid(pairs, page_w, s, lang='en', title=''):
             ('RIGHTPADDING',  (0, 0), (-1, -1), 4),
         ]))
         # We'll prepend this manually below
-
-    # Reverse order for RTL so pairs read right-to-left
-    if is_rtl:
-        pairs = list(reversed(pairs))
 
     for i in range(0, len(pairs), COLS):
         chunk = pairs[i:i + COLS]

@@ -9,8 +9,8 @@ from apps.notifications.services import NotificationService
 @receiver(post_save, sender=Order)
 def handle_order_financials(sender, instance, created, **kwargs):
     """
-    Signal receiver to process tailor earnings when an order is completed.
-    Completed statuses: 'delivered' (Home Delivery) or 'collected' (Walk-In).
+    Signal receiver to process earnings when an order is completed.
+    Tailor wallet credits home-delivery orders only (walk-in is skipped in WalletService).
     """
     # Measurement rider can be credited once paid measurement work is complete.
     if instance.payment_status == 'paid':

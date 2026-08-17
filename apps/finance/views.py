@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework import viewsets, generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -52,6 +53,8 @@ class TailorTransactionHistoryView(generics.ListAPIView):
         if finance_role == 'tailor':
             return WalletTransaction.objects.filter(
                 wallet__tailor=self.request.user
+            ).filter(
+                Q(order__isnull=True) | ~Q(order__service_mode='walk_in')
             ).select_related('order').order_by('-created_at')
         
         if finance_role == 'rider':
