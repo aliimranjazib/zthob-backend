@@ -1557,37 +1557,64 @@ def _rider_info_cell(rider, lang, s):
 
 
 def _build_customer_section(order, page_w, s, lang):
-    """Customer name, service mode, and who took measurements on one line."""
+    """Customer name, service mode, and who took measurements in aligned columns."""
     story = []
     story.append(Paragraph(_t('CUSTOMER INFORMATION', lang), s['section_header']))
     story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=PDF_HR_SPACE_AFTER))
 
-    name_lbl = _safe_text(_t('Name', lang))
-    name_html = _format_user_text_html(_customer_display_name(order.customer) or '—', lang)
-    service_lbl = _safe_text(_t('Service Mode', lang))
-    service_html = _format_user_text_html(
-        _choice_display(order.service_mode, order.SERVICE_MODE_CHOICES, lang),
-        lang,
-    )
-    parts = [
-        f'<b>{name_lbl}:</b> {name_html}',
-        f'<b>{service_lbl}:</b> {service_html}',
+    def _header(label):
+        return Paragraph(_t(label, lang), s['label'])
+
+    def _value(text):
+        return Paragraph(_format_user_text_html(text or '—', lang), s['value'])
+
+    headers = [
+        _header('Name'),
+        _header('Service Mode'),
+    ]
+    values = [
+        _value(_customer_display_name(order.customer)),
+        _value(_choice_display(order.service_mode, order.SERVICE_MODE_CHOICES, lang)),
     ]
 
     taken_by = _measurement_taken_by_name(order)
     if taken_by:
-        by_lbl = _safe_text(_t('Measured by', lang))
-        parts.append(f'<b>{by_lbl}:</b> {_format_user_text_html(taken_by, lang)}')
+        headers.append(_header('Measured by'))
+        values.append(_value(taken_by))
 
-    story.append(Paragraph(' &nbsp;|&nbsp; '.join(parts), s['value']))
+    if _is_rtl(lang):
+        headers.reverse()
+        values.reverse()
+
+    data = [headers, values]
+    n_cols = len(headers)
+    col_w = page_w / n_cols
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), BRAND_LIGHT),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT' if _is_rtl(lang) else 'LEFT'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('BOX', (0, 0), (-1, -1), 0.4, BRAND_MID),
+        ('LINEBELOW', (0, 0), (-1, 0), 0.5, BRAND_ACCENT),
+        ('INNERGRID', (0, 0), (-1, -1), 0.25, BRAND_MID),
+    ]
 
     address = _order_delivery_address(order)
     if address:
-        addr_lbl = _safe_text(_t('Address', lang))
-        story.append(Paragraph(
-            f'<b>{addr_lbl}:</b> {_format_user_text_html(address, lang)}',
-            s['small'],
-        ))
+        data.append([
+            [
+                Paragraph(_t('Address', lang), s['label']),
+                Paragraph(_format_user_text_html(address, lang), s['value']),
+            ]
+        ] + [''] * (n_cols - 1))
+        style_cmds.append(('SPAN', (0, 2), (-1, 2)))
+
+    tbl = Table(data, colWidths=[col_w] * n_cols)
+    tbl.setStyle(TableStyle(style_cmds))
+    story.append(tbl)
     return story
 
 
