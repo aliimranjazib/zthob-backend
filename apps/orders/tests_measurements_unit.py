@@ -13,9 +13,11 @@ from apps.orders.measurement_utils import (
     ordered_measurement_keys,
     prepare_measurements_payload,
     public_measurements,
+    resolve_measurement_recipient_items,
     with_measurement_order,
 )
 from apps.orders.models import Order, OrderItem
+from apps.customers.models import FamilyMember
 from apps.tailors.models import TailorEmployee, TailorProfile
 
 
@@ -222,3 +224,143 @@ class RecordMeasurementsUnitActionTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         order.refresh_from_db()
         self.assertFalse(order.all_items_have_measurements)
+
+    def test_record_measurements_falls_back_when_stale_family_member_on_self_order(self):
+        order = self._create_walk_in_order()
+        stale_member = FamilyMember.objects.create(
+            user=self.customer,
+            name='Previous Recipient',
+            relationship='son',
+        )
+
+        response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            data={
+                'action': 'record_measurements',
+                'role': 'TAILOR',
+                'data': {
+                    'measurements': {'chest': 40, 'length': 58},
+                    'family_member': stale_member.id,
+                },
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        order.refresh_from_db()
+        item = order.order_items.get()
+        self.assertEqual(item.measurements['chest'], 40)
+        self.assertTrue(order.all_items_have_measurements)
+
+    def test_record_measurements_falls_back_when_family_item_submitted_as_self(self):
+        family_member = FamilyMember.objects.create(
+            user=self.customer,
+            name='Ali',
+            relationship='brother',
+        )
+        order = self._create_walk_in_order()
+        order.order_items.update(family_member=family_member)
+
+        response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            data={
+                'action': 'record_measurements',
+                'role': 'TAILOR',
+                'data': {
+                    'measurements': {'chest': 42, 'length': 60},
+                    'family_member': None,
+                },
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        item = order.order_items.get()
+        self.assertEqual(item.measurements['chest'], 42)
+
+    def test_record_measurements_does_not_fallback_on_mixed_recipients(self):
+        family_member = FamilyMember.objects.create(
+            user=self.customer,
+            name='Ali',
+            relationship='brother',
+        )
+        other_member = FamilyMember.objects.create(
+            user=self.customer,
+            name='Omar',
+            relationship='son',
+        )
+        order = self._create_walk_in_order()
+        order.order_items.update(family_member=family_member)
+        OrderItem.objects.create(
+            order=order,
+            quantity=1,
+            unit_price=Decimal('100.00'),
+            family_member=other_member,
+        )
+
+        response = self.client.post(
+            f'/api/orders/{order.id}/action/',
+            data={
+                'action': 'record_measurements',
+                'role': 'TAILOR',
+                'data': {
+                    'measurements': {'chest': 40},
+                    'family_member': None,
+                },
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('No order items found for the selected recipient', str(response.data))
+        self.assertFalse(
+            any(has_measurement_values(item.measurements) for item in order.order_items.all())
+        )
+
+
+class ResolveMeasurementRecipientItemsTest(TestCase):
+    def setUp(self):
+        self.customer = User.objects.create_user(
+            username='recipient_match_customer',
+            password='testpass123',
+            role='USER',
+        )
+        self.tailor = User.objects.create_user(
+            username='recipient_match_tailor',
+            password='testpass123',
+            role='TAILOR',
+        )
+        self.order = Order.objects.create(
+            customer=self.customer,
+            tailor=self.tailor,
+            order_type='stitching_only',
+            service_mode='walk_in',
+            payment_method='cod',
+            payment_status='paid',
+            status='confirmed',
+            tailor_status='accepted',
+            stitching_price=Decimal('80.00'),
+            total_amount=Decimal('80.00'),
+        )
+
+    def test_exact_family_member_match_wins(self):
+        member = FamilyMember.objects.create(user=self.customer, name='Ali')
+        other = FamilyMember.objects.create(user=self.customer, name='Omar')
+        matched = OrderItem.objects.create(
+            order=self.order, quantity=1, unit_price=Decimal('0.00'), family_member=member,
+        )
+        OrderItem.objects.create(
+            order=self.order, quantity=1, unit_price=Decimal('0.00'), family_member=other,
+        )
+
+        items = resolve_measurement_recipient_items(self.order, member.id)
+        self.assertEqual(list(items.values_list('id', flat=True)), [matched.id])
+
+    def test_single_recipient_fallback_for_stale_id(self):
+        OrderItem.objects.create(
+            order=self.order, quantity=1, unit_price=Decimal('0.00'),
+        )
+        stale = FamilyMember.objects.create(user=self.customer, name='Stale')
+
+        items = resolve_measurement_recipient_items(self.order, stale.id)
+        self.assertEqual(items.count(), 1)

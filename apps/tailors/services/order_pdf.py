@@ -1227,22 +1227,28 @@ def _format_measurement_pairs(measurements, lang='en', field_map=None):
     return formatted
 
 
-def _pad_measurement_row(chunk, cols, is_rtl=False):
+def _measurement_grid_rows(pairs, cols, is_rtl=False):
     """
-    Fit a measurement chunk into a fixed-width table row.
+    Fill the measurement grid top-to-bottom, then the next column.
 
-    ReportLab fills left-to-right. For RTL, reverse the chunk and pad empty
-    cells on the left so the first payload field sits on the right.
+    English starts at the top-left. Arabic starts at the top-right so
+    reading down the rightmost column follows payload order.
     """
-    row = list(chunk)
-    if is_rtl:
-        row = list(reversed(row))
-        while len(row) < cols:
-            row.insert(0, ('', ''))
-    else:
-        while len(row) < cols:
-            row.append(('', ''))
-    return row
+    pairs = list(pairs)
+    if not pairs or cols <= 0:
+        return []
+
+    empty = ('', '')
+    rows_count = (len(pairs) + cols - 1) // cols
+    grid = [[empty for _ in range(cols)] for _ in range(rows_count)]
+
+    for index, pair in enumerate(pairs):
+        col = index // rows_count
+        row = index % rows_count
+        if is_rtl:
+            col = cols - 1 - col
+        grid[row][col] = pair
+    return grid
 
 
 def _measurements_grid(pairs, page_w, s, lang='en', title=''):
@@ -1310,8 +1316,7 @@ def _measurements_grid(pairs, page_w, s, lang='en', title=''):
         ]))
         # We'll prepend this manually below
 
-    for i in range(0, len(pairs), COLS):
-        chunk = _pad_measurement_row(pairs[i:i + COLS], COLS, is_rtl=is_rtl)
+    for chunk in _measurement_grid_rows(pairs, COLS, is_rtl=is_rtl):
         cells = []
         for pair in chunk:
             if not pair or not pair[0]:

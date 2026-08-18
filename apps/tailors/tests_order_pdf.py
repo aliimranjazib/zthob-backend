@@ -24,8 +24,8 @@ from apps.tailors.services.order_pdf import (
     _format_recipient_html,
     _format_user_text_html,
     _item_recipient_display,
+    _measurement_grid_rows,
     _normalize_rtl_text,
-    _pad_measurement_row,
     _resolve_media_file_path,
     _shape_arabic,
     _safe_text,
@@ -156,22 +156,26 @@ class OrderPDFServiceTest(TestCase):
         self.assertEqual(pairs[0][0], 'Chest')
         self.assertEqual(pairs[0][1], 42)
 
-    def test_rtl_measurement_row_reverses_and_pads_left(self):
+    def test_rtl_measurement_grid_fills_down_the_right_column(self):
         from apps.tailors.services.order_pdf import PDF_MEASUREMENT_COLS
 
-        pairs = [('a', 1), ('b', 2), ('c', 3)]
-        row = _pad_measurement_row(pairs, PDF_MEASUREMENT_COLS, is_rtl=True)
-        self.assertEqual(len(row), PDF_MEASUREMENT_COLS)
-        self.assertEqual(row[:3], [('', ''), ('', ''), ('', '')])
-        self.assertEqual(row[-3:], [('c', 3), ('b', 2), ('a', 1)])
+        pairs = [(str(i), i) for i in range(1, 21)]
+        grid = _measurement_grid_rows(pairs, PDF_MEASUREMENT_COLS, is_rtl=True)
+        self.assertEqual(len(grid), 4)
+        self.assertEqual(len(grid[0]), PDF_MEASUREMENT_COLS)
+        # Arabic reads down the rightmost column first: 1, 2, 3, 4.
+        self.assertEqual([row[-1] for row in grid], [('1', 1), ('2', 2), ('3', 3), ('4', 4)])
+        self.assertEqual([row[-2] for row in grid], [('5', 5), ('6', 6), ('7', 7), ('8', 8)])
 
-    def test_ltr_measurement_row_pads_right(self):
+    def test_ltr_measurement_grid_fills_down_the_left_column(self):
         from apps.tailors.services.order_pdf import PDF_MEASUREMENT_COLS
 
-        pairs = [('a', 1), ('b', 2), ('c', 3)]
-        row = _pad_measurement_row(pairs, PDF_MEASUREMENT_COLS, is_rtl=False)
-        self.assertEqual(row[:3], [('a', 1), ('b', 2), ('c', 3)])
-        self.assertEqual(row[-3:], [('', ''), ('', ''), ('', '')])
+        pairs = [(str(i), i) for i in range(1, 8)]
+        grid = _measurement_grid_rows(pairs, PDF_MEASUREMENT_COLS, is_rtl=False)
+        self.assertEqual([row[0] for row in grid], [('1', 1), ('2', 2)])
+        self.assertEqual([row[1] for row in grid], [('3', 3), ('4', 4)])
+        self.assertEqual(grid[0][3], ('7', 7))
+        self.assertEqual(grid[1][3], ('', ''))
 
     def test_pdf_priority_sections_appear_before_order_details(self):
         item = self.order.order_items.first()

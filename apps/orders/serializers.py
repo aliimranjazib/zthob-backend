@@ -54,6 +54,33 @@ def enrich_order_item_payload(*, customer, item_data):
     }
 
 
+def apply_order_family_member_to_untagged_items(*, order, items_data):
+    """
+    If the order has a family_member and every item omitted one, copy it onto
+    the items so later measurement recording can match the recipient.
+    Mixed-recipient carts are left unchanged.
+    """
+    order_family_member = getattr(order, 'family_member', None)
+    if not order_family_member or not items_data:
+        return items_data
+
+    if any(item_data.get('family_member') for item_data in items_data):
+        return items_data
+
+    customer = getattr(order, 'customer', None)
+    for item_data in items_data:
+        item_data['family_member'] = order_family_member
+        item_data.pop('recipient_display_name', None)
+        item_data.pop('recipient_relationship', None)
+        item_data.update(
+            resolve_order_item_recipient_snapshot(
+                customer=customer,
+                item_data=item_data,
+            )
+        )
+    return items_data
+
+
 def enrich_custom_style_payload(style, idx, user=None):
     """Validate and enrich a custom style payload while preserving optional frontend text."""
     if not isinstance(style, dict):
@@ -1482,6 +1509,10 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
         order = Order.objects.create(**validated_data)
         order_customer = order.customer
+        apply_order_family_member_to_untagged_items(
+            order=order,
+            items_data=items_with_fabrics,
+        )
         
         # Ensure recipient snapshots exist on every item payload
         for item_data in items_with_fabrics:

@@ -5,7 +5,10 @@ from django.utils import timezone
 from django.db.models import Q
 from apps.customers.models import FamilyMember
 from apps.orders.payments import money
-from apps.orders.measurement_utils import prepare_measurements_payload
+from apps.orders.measurement_utils import (
+    prepare_measurements_payload,
+    resolve_measurement_recipient_items,
+)
 from apps.tailors.shop_access import (
     get_shop_owner_user,
     order_supports_employee_stitch_assignment,
@@ -484,13 +487,10 @@ class RecordMeasurementsAction(BaseOrderAction):
             notes=self.data.get('notes'),
         )
         family_member_id = self.data.get('family_member')
-
-        # Update only selected recipient items (family member OR customer/self).
-        if family_member_id is not None:
-            recipient_items = self.order.order_items.filter(family_member_id=family_member_id)
-        else:
-            recipient_items = self.order.order_items.filter(family_member__isnull=True)
-
+        recipient_items = resolve_measurement_recipient_items(
+            self.order,
+            family_member_id,
+        )
         if not recipient_items.exists():
             raise ValidationError("No order items found for the selected recipient.")
 

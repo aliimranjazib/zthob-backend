@@ -186,3 +186,32 @@ def prepare_measurements_payload(raw_measurements, *, unit=None, title=None, not
         stored['notes'] = normalized_notes
 
     return with_measurement_order(stored)
+
+
+def resolve_measurement_recipient_items(order, family_member_id=None):
+    """
+    Return the order items that should receive a measurement payload.
+
+    Exact family-member (or customer/self) matches win. If the client sent a
+    stale recipient — common on walk-in fresh measurement — fall back only when
+    this order has a single unambiguous recipient so mixed-recipient orders
+    never get measurements written onto the wrong person.
+    """
+    items = order.order_items.all()
+    if not items.exists():
+        return items.none()
+
+    if family_member_id is not None:
+        matched = items.filter(family_member_id=family_member_id)
+        if matched.exists():
+            return matched
+    else:
+        self_items = items.filter(family_member_id__isnull=True)
+        if self_items.exists():
+            return self_items
+
+    recipient_ids = set(items.values_list('family_member_id', flat=True))
+    if len(recipient_ids) == 1:
+        return items
+
+    return items.none()

@@ -197,6 +197,42 @@ class POSFamilyMemberTestCase(TestCase):
         self.assertEqual(item.recipient_type, 'family_member')
         self.assertEqual(item.recipient_relationship, 'brother')
 
+    def test_walk_in_order_level_family_member_is_copied_onto_untagged_items(self):
+        family_member = FamilyMember.objects.create(
+            user=self.customer,
+            name='Copied Recipient',
+            relationship='son',
+            created_source='tailor_pos',
+            created_by_tailor=self.tailor_user,
+            created_by_shop=self.tailor_profile,
+        )
+
+        self.client.force_authenticate(user=self.tailor_user)
+        response = self.client.post(
+            '/api/orders/create/',
+            {
+                'customer': self.customer.id,
+                'tailor': self.tailor_user.id,
+                'order_type': 'fabric_with_stitching',
+                'service_mode': 'walk_in',
+                'payment_method': 'cod',
+                'family_member': family_member.id,
+                'items': [
+                    {
+                        'fabric': self.fabric.id,
+                        'quantity': 1,
+                    }
+                ],
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+
+        item = OrderItem.objects.get(order_id=response.data['data']['id'])
+        self.assertEqual(item.family_member, family_member)
+        self.assertEqual(item.recipient_type, 'family_member')
+        self.assertEqual(item.recipient_display_name, 'Copied Recipient')
+
     def test_renamed_family_member_does_not_change_old_order_snapshot(self):
         family_member = FamilyMember.objects.create(
             user=self.customer,

@@ -371,7 +371,10 @@ class TailorAddMeasurementsView(APIView):
         
         serializer = TailorAddMeasurementsSerializer(data=request.data)
         if serializer.is_valid():
-            from apps.orders.measurement_utils import prepare_measurements_payload
+            from apps.orders.measurement_utils import (
+                prepare_measurements_payload,
+                resolve_measurement_recipient_items,
+            )
 
             measurements_data = prepare_measurements_payload(
                 serializer.validated_data['measurements'],
@@ -383,6 +386,17 @@ class TailorAddMeasurementsView(APIView):
                 'replace_profile_measurements',
                 False,
             )
+
+            recipient_items = resolve_measurement_recipient_items(
+                order,
+                family_member_id,
+            )
+            if not recipient_items.exists():
+                return api_response(
+                    success=False,
+                    message="No order items found for the selected recipient.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
 
             order.measurement_taken_at = timezone.now()
 
@@ -398,16 +412,23 @@ class TailorAddMeasurementsView(APIView):
             actor_shop_id = tailor_profile.id if tailor_profile else None
             actor_role = getattr(request.user, 'role', '')
 
+            recipient_items.update(measurements=measurements_data)
+            actual_family_member_ids = set(
+                recipient_items.values_list('family_member_id', flat=True)
+            )
+            actual_family_member_id = (
+                next(iter(actual_family_member_ids))
+                if len(actual_family_member_ids) == 1
+                else None
+            )
+
             recipient_name = None
             profile_message = ''
-            if family_member_id:
+            if actual_family_member_id:
                 family_member = get_object_or_404(
                     FamilyMember,
-                    id=family_member_id,
+                    id=actual_family_member_id,
                     user=order.customer,
-                )
-                order.order_items.filter(family_member=family_member).update(
-                    measurements=measurements_data,
                 )
                 _, profile_message = apply_family_member_measurements(
                     family_member=family_member,
@@ -420,9 +441,6 @@ class TailorAddMeasurementsView(APIView):
                 recipient_name = family_member.name
             else:
                 profile, _ = CustomerProfile.objects.get_or_create(user=order.customer)
-                order.order_items.filter(family_member__isnull=True).update(
-                    measurements=measurements_data,
-                )
                 _, profile_message = apply_customer_profile_measurements(
                     customer_profile=profile,
                     measurements_data=measurements_data,
