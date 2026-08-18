@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.customers.models import CustomerProfile, FamilyMember
@@ -14,7 +15,9 @@ from apps.tailors.services.order_pdf import (
     _build_person_blocks,
     _build_priority_sections,
     _build_riders_section,
+    _canvas_customer_summary_line,
     _pdf_page_width,
+    _measurement_taken_by_name,
     _rider_contact_details,
     _contains_arabic,
     _custom_style_caption_html,
@@ -235,6 +238,78 @@ class OrderPDFServiceTest(TestCase):
         self.assertIn('Saeed Del', joined)
         self.assertIn('+966500000001', joined)
         self.assertIn('+966500000002', joined)
+
+    def _story_text(self, story):
+        return ' '.join(str(getattr(el, 'text', '')) for el in story)
+
+    def test_customer_section_is_one_line_without_phone(self):
+        self.customer.phone = '0501111999'
+        self.customer.save(update_fields=['phone'])
+
+        s = _styles('en')
+        section = _build_customer_section(self.order, _pdf_page_width(), s, 'en')
+        joined = self._story_text(section)
+
+        self.assertIn('CUSTOMER INFORMATION', joined)
+        self.assertIn('Name', joined)
+        self.assertIn('Ahmed', joined)
+        self.assertIn('Service Mode', joined)
+        self.assertIn('Home Delivery', joined)
+        self.assertNotIn('0501111999', joined)
+        self.assertNotIn('Phone', joined)
+        self.assertNotIn('Measured by', joined)
+        self.assertEqual(sum(1 for el in section if getattr(el, 'text', '') and '|' in str(el.text)), 1)
+
+    def test_customer_section_shows_walk_in_tailor_as_measured_by(self):
+        self.order.service_mode = 'walk_in'
+        self.order.measurement_taken_at = timezone.now()
+        self.order.save(update_fields=['service_mode', 'measurement_taken_at'])
+
+        self.assertEqual(_measurement_taken_by_name(self.order), 'pdf_tailor')
+        section = _build_customer_section(self.order, _pdf_page_width(), _styles('en'), 'en')
+        joined = self._story_text(section)
+        self.assertIn('Measured by', joined)
+        self.assertIn('pdf_tailor', joined)
+        self.assertIn('Walk-In Service', joined)
+
+    def test_customer_section_shows_measurement_rider_as_measured_by(self):
+        meas_rider = User.objects.create_user(
+            username='pdf_meas_by_rider',
+            password='testpass123',
+            role='RIDER',
+        )
+        from apps.riders.models import RiderProfile
+        RiderProfile.objects.create(user=meas_rider, full_name='Khalid Meas')
+        self.order.measurement_rider = meas_rider
+        self.order.measurement_taken_at = timezone.now()
+        self.order.save(update_fields=['measurement_rider', 'measurement_taken_at'])
+
+        self.assertEqual(_measurement_taken_by_name(self.order), 'Khalid Meas')
+        section = _build_customer_section(self.order, _pdf_page_width(), _styles('en'), 'en')
+        joined = self._story_text(section)
+        self.assertIn('Measured by', joined)
+        self.assertIn('Khalid Meas', joined)
+
+    def test_customer_section_arabic_uses_measured_by_label(self):
+        self.order.service_mode = 'walk_in'
+        self.order.measurement_taken_at = timezone.now()
+        self.order.save(update_fields=['service_mode', 'measurement_taken_at'])
+
+        section = _build_customer_section(self.order, _pdf_page_width(), _styles('ar'), 'ar')
+        joined = self._story_text(section)
+        self.assertIn(_t('Measured by', 'ar'), joined)
+        self.assertIn(_t('Name', 'ar'), joined)
+        self.assertEqual(_translate_label('Measured by', 'ar'), 'تم القياس بواسطة')
+        self.assertEqual(_translate_label('Measured by', 'ur'), 'ناپ لینے والا')
+
+    def test_generated_pdf_omits_customer_phone_from_header_and_body(self):
+        self.customer.phone = '0501111999'
+        self.customer.save(update_fields=['phone'])
+
+        self.assertNotIn('0501111999', _canvas_customer_summary_line(self.order, 'en'))
+        pdf_bytes = generate_order_pdf(self.order, lang='en')
+        self.assertTrue(pdf_bytes.startswith(b'%PDF'))
+        self.assertNotIn(b'0501111999', pdf_bytes)
 
     def test_pdf_includes_page_number_marker(self):
         pdf_bytes = generate_order_pdf(self.order, lang='en')

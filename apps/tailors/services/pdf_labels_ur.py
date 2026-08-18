@@ -4,6 +4,7 @@ PDF_LABELS_UR = {
     # Section headers
     'ORDER DETAILS':       'آرڈر کی تفصیلات',
     'CUSTOMER DETAILS':    'گاہک کی تفصیلات',
+    'CUSTOMER INFORMATION':'گاہک کی معلومات',
     'TAILOR DETAILS':      'درزی کی تفصیلات',
     'NOTES & INSTRUCTIONS':'نوٹس اور ہدایات',
     'ORDER ITEMS':         'آرڈر کی اشیاء',
@@ -33,6 +34,9 @@ PDF_LABELS_UR = {
     'Stitching Done':      'سلائی مکمل',
     # Customer labels
     'Customer Name':       'گاہک کا نام',
+    'Name':                'نام',
+    'Address':             'پتہ',
+    'Measured by':         'ناپ لینے والا',
     'Phone':               'فون',
     'Email':               'ای میل',
     'Delivery Addr.':      'ترسیل کا پتہ',

@@ -290,6 +290,7 @@ _AR_LABELS = {
     'For (Family)':        'لصالح (عائلة)',
     'Relationship':        'صلة القرابة',
     'Customer':            'العميل',
+    'Measured by':         'تم القياس بواسطة',
     # Tailor labels
     'Shop Name':           'اسم المحل',
     'Tailor':              'الخياط',
@@ -1055,6 +1056,30 @@ def _customer_phone(order):
     return getattr(customer, 'phone', None)
 
 
+def _measurement_taken_by_name(order):
+    """Return who recorded measurements, if that is known for this order."""
+    if not getattr(order, 'measurement_taken_at', None):
+        return None
+
+    rider = getattr(order, 'measurement_rider', None)
+    if rider:
+        name, _phone = _rider_contact_details(rider)
+        if name:
+            return name
+
+    if getattr(order, 'service_mode', None) != 'walk_in':
+        return None
+
+    tailor = getattr(order, 'tailor', None)
+    if not tailor:
+        return None
+    try:
+        shop_name = (tailor.tailor_profile.shop_name or '').strip()
+    except Exception:
+        shop_name = ''
+    return _customer_display_name(tailor) or shop_name or None
+
+
 def _is_coordinate_address(text):
     return bool(_COORD_ONLY_RE.match(str(text or '').strip()))
 
@@ -1532,21 +1557,37 @@ def _rider_info_cell(rider, lang, s):
 
 
 def _build_customer_section(order, page_w, s, lang):
-    """Customer name, phone, address, and service mode."""
+    """Customer name, service mode, and who took measurements on one line."""
     story = []
     story.append(Paragraph(_t('CUSTOMER INFORMATION', lang), s['section_header']))
     story.append(HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=PDF_HR_SPACE_AFTER))
 
-    rows = [
-        ('Name', _customer_display_name(order.customer) or '—', True),
-        ('Phone', _customer_phone(order) or '—', True),
+    name_lbl = _safe_text(_t('Name', lang))
+    name_html = _format_user_text_html(_customer_display_name(order.customer) or '—', lang)
+    service_lbl = _safe_text(_t('Service Mode', lang))
+    service_html = _format_user_text_html(
+        _choice_display(order.service_mode, order.SERVICE_MODE_CHOICES, lang),
+        lang,
+    )
+    parts = [
+        f'<b>{name_lbl}:</b> {name_html}',
+        f'<b>{service_lbl}:</b> {service_html}',
     ]
+
+    taken_by = _measurement_taken_by_name(order)
+    if taken_by:
+        by_lbl = _safe_text(_t('Measured by', lang))
+        parts.append(f'<b>{by_lbl}:</b> {_format_user_text_html(taken_by, lang)}')
+
+    story.append(Paragraph(' &nbsp;|&nbsp; '.join(parts), s['value']))
+
     address = _order_delivery_address(order)
     if address:
-        rows.append(('Address', address, True))
-    service_mode_display = _choice_display(order.service_mode, order.SERVICE_MODE_CHOICES, lang)
-    rows.append(('Service Mode', service_mode_display, True))
-    story.append(_kv_table(rows, col_widths=[page_w * 0.22, page_w * 0.78], lang=lang))
+        addr_lbl = _safe_text(_t('Address', lang))
+        story.append(Paragraph(
+            f'<b>{addr_lbl}:</b> {_format_user_text_html(address, lang)}',
+            s['small'],
+        ))
     return story
 
 
@@ -2093,8 +2134,7 @@ def _canvas_draw_page_number(canvas, page_num, lang):
 
 def _canvas_customer_summary_line(order, lang):
     customer_name = _customer_display_name(order.customer) or '—'
-    phone = _customer_phone(order) or '—'
-    return f'{order.order_number}  |  {customer_name}  |  {phone}'
+    return f'{order.order_number}  |  {customer_name}'
 
 
 def _canvas_riders_summary_line(order, lang):
