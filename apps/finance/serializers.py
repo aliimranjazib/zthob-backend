@@ -172,3 +172,24 @@ class PayoutRequestSerializer(serializers.ModelSerializer):
 class RiderPayoutRequestSerializer(PayoutRequestSerializer):
     class Meta(PayoutRequestSerializer.Meta):
         model = RiderPayoutRequest
+
+
+class ShopSalesBreakdownSerializer(serializers.Serializer):
+    subtotal = serializers.CharField()
+    stitching_price = serializers.CharField()
+    express_fee = serializers.CharField()
+
+
+class ShopSalesPeriodSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    from_date = serializers.CharField(source='from')
+    to = serializers.CharField()
+
+
+class ShopSalesSummarySerializer(serializers.Serializer):
+    title = serializers.CharField()
+    disclaimer = serializers.CharField()
+    period = ShopSalesPeriodSerializer()
+    orders_count = serializers.IntegerField()
+    total_collected = serializers.CharField()
+    breakdown = ShopSalesBreakdownSerializer()

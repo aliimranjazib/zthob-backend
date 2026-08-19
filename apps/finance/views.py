@@ -2,7 +2,7 @@ from django.db.models import Q
 from rest_framework import viewsets, generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from .models import (
     TailorWallet, WalletTransaction, PayoutRequest,
     RiderWallet, RiderWalletTransaction, RiderPayoutRequest,
@@ -11,8 +11,10 @@ from .serializers import (
     TailorWalletSerializer, WalletTransactionSerializer, 
     PayoutRequestSerializer, RiderWalletSerializer,
     RiderWalletTransactionSerializer, RiderPayoutRequestSerializer,
+    ShopSalesSummarySerializer,
     get_finance_role,
 )
+from .shop_sales import SHOP_SALES_DEFAULT_PERIOD, get_shop_sales_summary
 
 class TailorWalletView(APIView):
     """
@@ -63,6 +65,38 @@ class TailorTransactionHistoryView(generics.ListAPIView):
             ).select_related('order').order_by('-created_at')
 
         return WalletTransaction.objects.none()
+
+
+class ShopSalesSummaryView(APIView):
+    """
+    Walk-in shop cash collected by the tailor for a selected period.
+    Excludes platform wallet payouts (home delivery).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if get_finance_role(request.user) != 'tailor':
+            return Response(
+                {"error": "Only tailors can access shop sales summary."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        period = request.query_params.get('period', SHOP_SALES_DEFAULT_PERIOD)
+        from_date = request.query_params.get('from_date')
+        to_date = request.query_params.get('to_date')
+
+        try:
+            summary = get_shop_sales_summary(
+                request.user,
+                period=period,
+                from_date=from_date,
+                to_date=to_date,
+            )
+        except ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = ShopSalesSummarySerializer(summary)
+        return Response(serializer.data)
 
 
 class PayoutRequestViewSet(viewsets.ModelViewSet):
