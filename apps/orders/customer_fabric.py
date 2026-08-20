@@ -4,6 +4,8 @@ from rest_framework import serializers
 
 from apps.core.media_utils import build_public_media_url
 from apps.orders.models import CustomerFabricImage
+from apps.orders.style_references import parse_image_id
+from apps.tailors.shop_access import shop_media_uploader_ids
 
 MAX_CUSTOMER_FABRIC_IMAGES = 4
 MAX_CUSTOMER_FABRIC_IMAGE_BYTES = 5 * 1024 * 1024
@@ -29,9 +31,7 @@ def resolve_customer_fabric_image_ids(image_ids, user, item_index):
 
     normalized_ids = []
     for image_id in image_ids:
-        if not isinstance(image_id, int):
-            raise serializers.ValidationError({field_name: 'Each fabric image ID must be an integer.'})
-        normalized_ids.append(image_id)
+        normalized_ids.append(parse_image_id(image_id, field_name))
 
     if len(set(normalized_ids)) != len(normalized_ids):
         raise serializers.ValidationError({field_name: 'Duplicate fabric image IDs are not allowed.'})
@@ -41,9 +41,10 @@ def resolve_customer_fabric_image_ids(image_ids, user, item_index):
             field_name: 'Authentication is required to attach fabric images.',
         })
 
+    allowed_uploader_ids = shop_media_uploader_ids(user)
     images = CustomerFabricImage.objects.filter(
         id__in=normalized_ids,
-        uploaded_by=user,
+        uploaded_by_id__in=allowed_uploader_ids,
         order_item__isnull=True,
     )
     images_by_id = {image.id: image for image in images}
@@ -61,10 +62,11 @@ def attach_customer_fabric_images(*, order_item, image_ids, user):
     if not image_ids:
         return
 
+    allowed_uploader_ids = shop_media_uploader_ids(user)
     locked = list(
         CustomerFabricImage.objects.select_for_update().filter(
             id__in=image_ids,
-            uploaded_by=user,
+            uploaded_by_id__in=allowed_uploader_ids,
             order_item__isnull=True,
         )
     )

@@ -19,6 +19,32 @@ def get_shop_owner_user(user):
     return profile.user if profile else None
 
 
+def shop_media_uploader_ids(user):
+    """
+    User IDs whose uploaded media this session may attach.
+
+    Shop owner and active employees share photos uploaded by anyone in the shop.
+    Customers and other roles may only use their own uploads.
+    """
+    if not user or not getattr(user, 'is_authenticated', False):
+        return set()
+
+    allowed = {user.id}
+    owner = get_shop_owner_user(user)
+    if owner is None:
+        return allowed
+
+    allowed.add(owner.id)
+    from apps.tailors.models import TailorEmployee
+    allowed.update(
+        TailorEmployee.objects.filter(
+            tailor__user_id=owner.id,
+            is_active=True,
+        ).values_list('user_id', flat=True)
+    )
+    return allowed
+
+
 def user_can_manage_shop_order(user, order, *, employee_permission='can_manage_orders'):
     """
     True if user is the order's tailor owner OR an active employee

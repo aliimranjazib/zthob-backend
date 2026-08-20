@@ -4,6 +4,21 @@ from rest_framework import serializers
 
 from apps.core.media_utils import build_public_media_url
 from apps.orders.models import StyleReferenceImage
+from apps.tailors.shop_access import shop_media_uploader_ids
+
+MAX_STYLE_REFERENCE_IMAGES = 4
+MAX_STYLE_REFERENCE_IMAGE_BYTES = 5 * 1024 * 1024
+
+
+def parse_image_id(image_id, field_name):
+    """Accept JSON ints or numeric strings from mobile clients."""
+    if isinstance(image_id, bool) or image_id is None:
+        raise serializers.ValidationError({field_name: 'Each image ID must be an integer.'})
+    if isinstance(image_id, int):
+        return image_id
+    if isinstance(image_id, str) and image_id.strip().isdigit():
+        return int(image_id.strip())
+    raise serializers.ValidationError({field_name: 'Each image ID must be an integer.'})
 
 MAX_STYLE_REFERENCE_IMAGES = 4
 MAX_STYLE_REFERENCE_IMAGE_BYTES = 5 * 1024 * 1024
@@ -29,9 +44,7 @@ def resolve_reference_image_ids(reference_image_ids, user, style_index):
 
     normalized_ids = []
     for image_id in reference_image_ids:
-        if not isinstance(image_id, int):
-            raise serializers.ValidationError({field_name: 'Each reference image ID must be an integer.'})
-        normalized_ids.append(image_id)
+        normalized_ids.append(parse_image_id(image_id, field_name))
 
     if len(set(normalized_ids)) != len(normalized_ids):
         raise serializers.ValidationError({field_name: 'Duplicate reference image IDs are not allowed.'})
@@ -39,10 +52,26 @@ def resolve_reference_image_ids(reference_image_ids, user, style_index):
     if user is None or not getattr(user, 'is_authenticated', False):
         raise serializers.ValidationError({field_name: 'Authentication is required to attach reference images.'})
 
-    images = StyleReferenceImage.objects.filter(id__in=normalized_ids, uploaded_by=user)
+    allowed_uploader_ids = shop_media_uploader_ids(user)
+    images = StyleReferenceImage.objects.filter(
+        id__in=normalized_ids,
+        uploaded_by_id__in=allowed_uploader_ids,
+    )
     images_by_id = {image.id: image for image in images}
     missing_ids = [image_id for image_id in normalized_ids if image_id not in images_by_id]
     if missing_ids:
+        from apps.orders.models import CustomerFabricImage
+
+        fabric_ids = list(
+            CustomerFabricImage.objects.filter(id__in=missing_ids).values_list('id', flat=True)
+        )
+        if fabric_ids:
+            raise serializers.ValidationError({
+                field_name: (
+                    'These IDs are customer fabric photos, not style references. '
+                    f'Send them in items[].customer_fabric_image_ids: {sorted(fabric_ids)}'
+                ),
+            })
         raise serializers.ValidationError({
             field_name: f'Invalid or unauthorized reference image IDs: {missing_ids}',
         })
