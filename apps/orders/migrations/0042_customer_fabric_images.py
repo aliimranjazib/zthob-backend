@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='orderitem',
             name='customer_fabric_quantity',
-            field=models.DecimalField(blank=True, decimal_places=2, help_text='Meters of customer-provided fabric for stitching-only orders', max_digits=8, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0.01'))]),
+            field=models.DecimalField(blank=True, decimal_places=2, help_text='Optional meters of customer-provided fabric for stitching-only orders', max_digits=8, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0.01'))]),
         ),
         migrations.CreateModel(
             name='CustomerFabricImage',
