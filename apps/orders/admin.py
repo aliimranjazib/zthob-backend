@@ -10,6 +10,7 @@ from datetime import datetime
 from .models import (
     CheckoutPaymentAttempt,
     CheckoutSession,
+    CustomerFabricImage,
     MyFatoorahWebhookEvent,
     Order,
     OrderItem,
@@ -27,10 +28,11 @@ class OrderItemInline(admin.TabularInline):
     extra = 0
     readonly_fields = ['total_price', 'created_at', 'updated_at']
     fields = [
-        'fabric', 
-        'quantity', 
-        'unit_price', 
-        'total_price', 
+        'fabric',
+        'quantity',
+        'customer_fabric_quantity',
+        'unit_price',
+        'total_price',
         'is_ready',
         'created_at'
     ]
@@ -714,6 +716,22 @@ class OrderAdmin(admin.ModelAdmin):
         )
 
 
+class CustomerFabricImageInline(admin.TabularInline):
+    model = CustomerFabricImage
+    extra = 0
+    fields = ['image_preview', 'image', 'display_order', 'uploaded_by', 'created_at']
+    readonly_fields = ['image_preview', 'uploaded_by', 'created_at']
+
+    def image_preview(self, obj):
+        if obj.image:
+            return format_html(
+                '<img src="{}" style="max-height: 80px; max-width: 80px; object-fit: cover;" />',
+                obj.image.url,
+            )
+        return '-'
+    image_preview.short_description = 'Preview'
+
+
 # ============================================================================
 # ORDER ITEM ADMIN
 # ============================================================================
@@ -766,6 +784,7 @@ class OrderItemAdmin(admin.ModelAdmin):
             'fields': (
                 'fabric',
                 'quantity',
+                'customer_fabric_quantity',
                 'unit_price',
                 'total_price',
             )
@@ -786,6 +805,7 @@ class OrderItemAdmin(admin.ModelAdmin):
         }),
     )
     
+    inlines = [CustomerFabricImageInline]
     list_per_page = 50
     
     def order_link(self, obj):
@@ -804,6 +824,11 @@ class OrderItemAdmin(admin.ModelAdmin):
                 '<strong>{}</strong><br><small>SKU: {}</small>',
                 obj.fabric.name,
                 getattr(obj.fabric, 'sku', 'N/A')
+            )
+        if obj.customer_fabric_quantity is not None:
+            return format_html(
+                '<strong>Customer Fabric</strong><br><small>{} m</small>',
+                obj.customer_fabric_quantity,
             )
         return '-'
     fabric_info.short_description = 'Fabric'

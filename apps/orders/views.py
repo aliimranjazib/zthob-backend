@@ -39,6 +39,10 @@ from apps.orders.style_reference_serializers import (
     StyleReferenceUploadSerializer,
     StyleReferenceUploadResponseSerializer,
 )
+from apps.orders.customer_fabric_serializers import (
+    CustomerFabricUploadSerializer,
+    CustomerFabricUploadResponseSerializer,
+)
 from apps.tailors.models import TailorProfile
 from apps.tailors.permissions import IsShopStaff
 from apps.tailors.shop_access import (
@@ -1111,7 +1115,11 @@ class OrderDetailView(APIView):
                 'delivery_rider__rider_profile',
                 'assigned_employee__user',
                 'family_member',
-            ).prefetch_related('order_items__fabric', 'order_items__family_member'),
+            ).prefetch_related(
+                'order_items__fabric',
+                'order_items__family_member',
+                'order_items__customer_fabric_images',
+            ),
             id=order_id
         )
         # Resource-based permission check
@@ -1387,7 +1395,7 @@ class CustomerOrderListView(APIView):
     )
 
     def get(self,request):
-        orders = Order.objects.filter(customer=request.user).select_related('tailor', 'delivery_address').prefetch_related('order_items__fabric').order_by('-created_at')
+        orders = Order.objects.filter(customer=request.user).select_related('tailor', 'delivery_address').prefetch_related('order_items__fabric', 'order_items__customer_fabric_images').order_by('-created_at')
         status_filter=request.query_params.get('status')
         if status_filter:
             orders=orders.filter(status=status_filter)
@@ -1435,7 +1443,7 @@ class TailorAvailableOrdersView(APIView):
             'measurement_rider__rider_profile',
             'delivery_rider__rider_profile',
             'assigned_employee__user',
-        ).prefetch_related('order_items__fabric').order_by('-created_at')
+        ).prefetch_related('order_items__fabric', 'order_items__customer_fabric_images').order_by('-created_at')
 
         orders = filter_orders_for_shop_staff(orders, request.user)
         
@@ -1495,7 +1503,9 @@ class TailorOrderListView(APIView):
             'measurement_rider__rider_profile',
             'delivery_rider__rider_profile',
             'assigned_employee__user',
-        ).prefetch_related('order_items__fabric').order_by('-created_at')
+        ).prefetch_related('order_items__fabric', 'order_items__customer_fabric_images').order_by('-created_at')
+        
+        # Filter by payment status
 
         orders = filter_orders_for_shop_staff(orders, request.user)
         
@@ -1712,7 +1722,7 @@ class TailorPaidOrdersView(APIView):
             'measurement_rider__rider_profile',
             'delivery_rider__rider_profile',
             'assigned_employee__user',
-        ).prefetch_related('order_items').order_by('-created_at')
+        ).prefetch_related('order_items', 'order_items__customer_fabric_images').order_by('-created_at')
 
         orders = filter_orders_for_shop_staff(orders, request.user)
         
@@ -1769,7 +1779,7 @@ class TailorOrderDetailView(APIView):
                 'delivery_rider__rider_profile',
                 'assigned_employee__user',
                 'family_member'
-            ).prefetch_related('order_items__fabric', 'status_history'),
+            ).prefetch_related('order_items__fabric', 'order_items__customer_fabric_images', 'status_history'),
             id=order_id,
             tailor=tailor_user
         )
@@ -2463,6 +2473,52 @@ class StyleReferenceUploadView(APIView):
         return api_response(
             success=False,
             message="Style reference image upload failed",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            request=request,
+        )
+
+
+@extend_schema(tags=["Orders"])
+class CustomerFabricUploadView(APIView):
+    """Upload a photo of customer-provided fabric for stitching-only orders."""
+
+    permission_classes = [IsAuthenticated, IsShopStaff]
+    required_employee_permissions = ('can_manage_pos', 'can_manage_orders')
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        request=CustomerFabricUploadSerializer,
+        responses={201: CustomerFabricUploadResponseSerializer},
+        summary="Upload customer fabric image",
+        description=(
+            "Upload one camera/gallery photo of fabric brought by the customer. "
+            "Use the returned id in items[].customer_fabric_image_ids when creating "
+            "a stitching-only walk-in order."
+        ),
+    )
+    def post(self, request):
+        serializer = CustomerFabricUploadSerializer(
+            data=request.data,
+            context={'request': request},
+        )
+        if serializer.is_valid():
+            image = serializer.save()
+            response_serializer = CustomerFabricUploadResponseSerializer(
+                image,
+                context={'request': request},
+            )
+            return api_response(
+                success=True,
+                message="Customer fabric image uploaded successfully",
+                data=response_serializer.data,
+                status_code=status.HTTP_201_CREATED,
+                request=request,
+            )
+
+        return api_response(
+            success=False,
+            message="Customer fabric image upload failed",
             errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST,
             request=request,

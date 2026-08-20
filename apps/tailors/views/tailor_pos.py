@@ -264,7 +264,7 @@ class TailorPOSCustomerOrdersView(BaseTailorAPIView):
         orders = (
             Order.objects.filter(customer_id=customer_id, tailor=profile.user)
             .select_related('customer', 'tailor', 'delivery_address', 'rider')
-            .prefetch_related('order_items__fabric')
+            .prefetch_related('order_items__fabric', 'order_items__customer_fabric_images')
             .order_by('-created_at')
         )
 
@@ -307,7 +307,7 @@ class TailorPOSCustomerOrderDetailView(BaseTailorAPIView):
                     'rider',
                     'family_member',
                 )
-                .prefetch_related('order_items__fabric', 'status_history')
+                .prefetch_related('order_items__fabric', 'order_items__customer_fabric_images', 'status_history')
                 .get(id=order_id, customer_id=customer_id, tailor=profile.user)
             )
         except Order.DoesNotExist:

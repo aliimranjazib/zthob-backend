@@ -102,6 +102,10 @@ PDF_LABELS_UR = {
     'N/A':                 'دستیاب نہیں',
     'Measured at:':        'ناپ لیے گئے:',
     'Measurement Service': 'ناپ کی سروس',
+    'Customer Fabric':     'گاہک کا کپڑا',
+    'Fabric Qty':          'کپڑے کی مقدار',
+    'Customer Fabric Photos': 'گاہک کے کپڑے کی تصاویر',
+    'Stitching Only':      'صرف سلائی',
     'Yes':                 'ہاں',
     'No':                  'نہیں',
     # Order values

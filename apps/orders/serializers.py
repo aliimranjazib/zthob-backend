@@ -16,6 +16,11 @@ from apps.orders.style_references import (
     apply_reference_images_to_style,
     format_style_reference_fields,
 )
+from apps.orders.customer_fabric import (
+    attach_customer_fabric_images,
+    format_customer_fabric_images,
+    resolve_customer_fabric_image_ids,
+)
 from .actions import OrderActionManager
 
 
@@ -186,6 +191,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
     fabric_sku = serializers.CharField(source='fabric.sku', read_only=True)
     fabric_stitching_price = serializers.DecimalField(source='fabric.stitching_price', max_digits=10, decimal_places=2, read_only=True)
     fabric_image = serializers.SerializerMethodField()
+    customer_fabric_images = serializers.SerializerMethodField()
     family_member_name = serializers.SerializerMethodField()
     custom_styles = serializers.SerializerMethodField()
     
@@ -193,11 +199,12 @@ class OrderItemSerializer(serializers.ModelSerializer):
         model = OrderItem
         fields = [
             'id','fabric','fabric_name','fabric_sku', 'fabric_stitching_price', 'fabric_image','quantity',
+            'customer_fabric_images', 'customer_fabric_quantity',
             'unit_price','total_price','measurements','custom_instructions',
             'is_ready','family_member','family_member_name','custom_styles','created_at',
             'recipient_type','recipient_display_name','recipient_relationship',
         ]
-        read_only_fields = ['id', 'total_price', 'created_at']
+        read_only_fields = ['id', 'total_price', 'created_at', 'customer_fabric_images']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -231,6 +238,9 @@ class OrderItemSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             return build_public_media_url(request, obj.fabric.primary_image.url)
         return None
+
+    def get_customer_fabric_images(self, obj):
+        return format_customer_fabric_images(obj, self.context.get('request'))
     
     def get_custom_styles(self, obj):
         """Return custom_styles with absolute URLs for images"""
@@ -246,12 +256,26 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
     )
     recipient_display_name = serializers.CharField(required=False, allow_blank=True)
     recipient_relationship = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    customer_fabric_image_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+    )
+    customer_fabric_quantity = serializers.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        min_value=Decimal('0.01'),
+    )
 
     class Meta:
         model=OrderItem
         fields=[
             'fabric','quantity','measurements','custom_instructions','family_member','custom_styles',
             'recipient_type','recipient_display_name','recipient_relationship',
+            'customer_fabric_image_ids', 'customer_fabric_quantity',
         ]
         extra_kwargs = {
             'fabric': {'required': False, 'allow_null': True}
@@ -1035,12 +1059,17 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Stitching-only orders must have at least one item")
             
             customer = self._get_target_customer()
+            request = self.context.get('request')
+            user = request.user if request else None
             validated_items = []
+            used_fabric_image_ids = set()
             
-            for item_data in value:
+            for index, item_data in enumerate(value):
                 family_member = item_data.get('family_member')
                 fabric = item_data.get('fabric')
                 quantity = item_data.get('quantity', 1)
+                fabric_image_ids = item_data.get('customer_fabric_image_ids') or []
+                fabric_quantity = item_data.get('customer_fabric_quantity')
 
                 if order_type == 'stitching_only' and fabric is not None:
                     raise serializers.ValidationError(
@@ -1053,6 +1082,22 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 if family_member and customer and family_member.user != customer:
                     raise serializers.ValidationError(
                         f"Family member {family_member.name} must belong to the authenticated customer"
+                    )
+
+                if order_type == 'stitching_only':
+                    resolved_ids = resolve_customer_fabric_image_ids(fabric_image_ids, user, index)
+                    duplicate_ids = used_fabric_image_ids.intersection(resolved_ids)
+                    if duplicate_ids:
+                        raise serializers.ValidationError(
+                            f"Item {index + 1}: fabric image IDs already used on another item: {sorted(duplicate_ids)}"
+                        )
+                    used_fabric_image_ids.update(resolved_ids)
+                    item_data['customer_fabric_image_ids'] = resolved_ids
+                    if fabric_quantity is not None:
+                        item_data['customer_fabric_quantity'] = Decimal(str(fabric_quantity)).quantize(Decimal('0.01'))
+                elif fabric_image_ids or fabric_quantity is not None:
+                    raise serializers.ValidationError(
+                        "Customer fabric photos and quantity are only allowed on stitching-only orders."
                     )
                 
                 # For measurement orders, set default values
@@ -1070,10 +1115,14 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         tailor =self.context.get('tailor')
         customer = self._get_target_customer()
         validated_items=[]
-        for item_data in value:
+        for index, item_data in enumerate(value):
             fabric = item_data.get('fabric')
             quantity=item_data.get('quantity',1)
             family_member = item_data.get('family_member')
+            if item_data.get('customer_fabric_image_ids') or item_data.get('customer_fabric_quantity') is not None:
+                raise serializers.ValidationError(
+                    f"Item {index + 1}: customer fabric photos and quantity are only allowed on stitching-only orders."
+                )
             
             if fabric is None:
                 raise serializers.ValidationError("Each item must have a fabric")
@@ -1205,6 +1254,11 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'stitching_price': 'Stitching price is required for stitching-only orders.'
                 })
+            for index, item in enumerate(data.get('items', [])):
+                if not item.get('customer_fabric_image_ids'):
+                    raise serializers.ValidationError({
+                        'items': f"Item {index + 1}: customer_fabric_image_ids is required for stitching-only orders."
+                    })
         
         # Check context for one-time address (current location)
         using_current_location = self.context.get('using_current_location', False)
@@ -1269,6 +1323,31 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 item.update(snapshot)
             
         return data
+
+    def _create_order_item(self, order, item_data, *, fabric, quantity, unit_price):
+        """Create an order item and attach any customer-provided fabric photos."""
+        item = OrderItem.objects.create(
+            order=order,
+            fabric=fabric,
+            quantity=quantity,
+            unit_price=unit_price,
+            measurements=item_data.get('measurements', {}),
+            custom_instructions=item_data.get('custom_instructions', ''),
+            family_member=item_data.get('family_member'),
+            custom_styles=item_data.get('custom_styles'),
+            recipient_type=item_data.get('recipient_type', 'customer'),
+            recipient_display_name=item_data.get('recipient_display_name', ''),
+            recipient_relationship=item_data.get('recipient_relationship'),
+            customer_fabric_quantity=item_data.get('customer_fabric_quantity'),
+        )
+        request = self.context.get('request')
+        user = request.user if request else None
+        attach_customer_fabric_images(
+            order_item=item,
+            image_ids=item_data.get('customer_fabric_image_ids') or [],
+            user=user,
+        )
+        return item
 
     def get_checkout_pricing_snapshot(self):
         """Calculate checkout totals without creating an order or reducing stock."""
@@ -1426,6 +1505,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     'recipient_type': item_data.get('recipient_type', 'customer'),
                     'recipient_display_name': item_data.get('recipient_display_name', ''),
                     'recipient_relationship': item_data.get('recipient_relationship'),
+                    'customer_fabric_image_ids': item_data.get('customer_fabric_image_ids') or [],
+                    'customer_fabric_quantity': item_data.get('customer_fabric_quantity'),
                 })
         else:
             # No catalog fabric needed for measurement_service and stitching_only orders
@@ -1441,6 +1522,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     'recipient_type': item_data.get('recipient_type', 'customer'),
                     'recipient_display_name': item_data.get('recipient_display_name', ''),
                     'recipient_relationship': item_data.get('recipient_relationship'),
+                    'customer_fabric_image_ids': item_data.get('customer_fabric_image_ids') or [],
+                    'customer_fabric_quantity': item_data.get('customer_fabric_quantity'),
                 })
         # Get distance_km from validated_data if provided
         # Get distance_km from validated_data if provided
@@ -1549,18 +1632,12 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             
             # Create order items (each represents a person to measure)
             for item_data in items_with_fabrics:
-                OrderItem.objects.create(
-                    order=order,
-                    fabric=None,  # No fabric for measurement orders
+                self._create_order_item(
+                    order,
+                    item_data,
+                    fabric=None,
                     quantity=1,
                     unit_price=Decimal('0.00'),
-                    measurements=item_data.get('measurements', {}),
-                    custom_instructions=item_data.get('custom_instructions', ''),
-                    family_member=item_data.get('family_member'),
-                    custom_styles=item_data.get('custom_styles'),  # Item-level custom styles
-                    recipient_type=item_data.get('recipient_type', 'customer'),
-                    recipient_display_name=item_data.get('recipient_display_name', ''),
-                    recipient_relationship=item_data.get('recipient_relationship'),
                 )
         else:
             # Regular orders - create items with fabric and reduce stock
@@ -1569,18 +1646,12 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 quantity = item_data['quantity']
                 
                 # Create order item
-                OrderItem.objects.create(
-                    order=order,
+                self._create_order_item(
+                    order,
+                    item_data,
                     fabric=fabric,
                     quantity=quantity,
-                    unit_price=item_data['unit_price'],  # Snapshot of price at order time
-                    measurements=item_data['measurements'],
-                    custom_instructions=item_data['custom_instructions'],
-                    family_member=item_data['family_member'],
-                    custom_styles=item_data.get('custom_styles'),  # Item-level custom styles
-                    recipient_type=item_data.get('recipient_type', 'customer'),
-                    recipient_display_name=item_data.get('recipient_display_name', ''),
-                    recipient_relationship=item_data.get('recipient_relationship'),
+                    unit_price=item_data['unit_price'],
                 )
                 if fabric is None:
                     continue

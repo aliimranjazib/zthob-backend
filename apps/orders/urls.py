@@ -24,6 +24,7 @@ from .views import (
     RemainingBalanceInitiatePaymentView,
     RemainingPaymentStatusView,
     StyleReferenceUploadView,
+    CustomerFabricUploadView,
 )
 from .measurement_views import MeasurementEligibilityView
 from .myfatoorah_views import (
@@ -49,6 +50,7 @@ urlpatterns = [
     path('checkout/<str:booking_unique_key>/', CheckoutStatusView.as_view(), name='checkout-status'),
     path('create/', OrderCreateView.as_view(), name='order-create'),
     path('style-reference/upload/', StyleReferenceUploadView.as_view(), name='style-reference-upload'),
+    path('customer-fabric/upload/', CustomerFabricUploadView.as_view(), name='customer-fabric-upload'),
     path('<int:order_id>/', OrderDetailView.as_view(), name='order-detail'),
     path('<int:order_id>/status/', OrderStatusUpdateView.as_view(), name='order-status-update'),
     path('<int:order_id>/history/', OrderHistoryView.as_view(), name='order-history'),

@@ -3,7 +3,7 @@ from django.db.models import Q
 from django.conf import settings
 from django.utils import timezone
 from django.dispatch import receiver
-from django.core.validators import FileExtensionValidator
+from django.core.validators import FileExtensionValidator, MinValueValidator
 from apps.core.models import BaseModel
 from decimal import Decimal
 from django_fsm import FSMField, transition
@@ -933,6 +933,14 @@ class OrderItem(BaseModel):
         null=True,
         help_text='Immutable relationship snapshot captured at order creation',
     )
+    customer_fabric_quantity = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        help_text="Optional meters of customer-provided fabric for stitching-only orders",
+    )
 
     class Meta:
         ordering = ['created_at']
@@ -947,7 +955,12 @@ class OrderItem(BaseModel):
         super().save(*args,**kwargs)
 
     def __str__(self):
-        fabric_name = self.fabric.name if self.fabric else "No Fabric"
+        if self.fabric:
+            fabric_name = self.fabric.name
+        elif self.customer_fabric_quantity is not None:
+            fabric_name = "Customer Fabric"
+        else:
+            fabric_name = "No Fabric"
         return f"{fabric_name} x{self.quantity} - {self.order.order_number}"
 
 
@@ -1327,6 +1340,53 @@ class OrderStatusHistory(BaseModel):
     def __str__(self):
         actor = self.changed_by.username if self.changed_by else "unknown"
         return f"{self.order.order_number} - {self.status} (changed by {actor})"
+
+
+class CustomerFabricImage(BaseModel):
+    """Photo of customer-provided fabric for stitching-only walk-in orders."""
+
+    order_item = models.ForeignKey(
+        OrderItem,
+        on_delete=models.CASCADE,
+        related_name='customer_fabric_images',
+        null=True,
+        blank=True,
+        help_text='Set when this photo is attached to a stitching-only order item',
+    )
+    image = models.ImageField(
+        upload_to='customer_fabrics/%Y/%m/',
+        validators=[FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'webp'])],
+        help_text='Photo of fabric brought by the customer',
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='customer_fabric_images',
+    )
+    display_order = models.PositiveSmallIntegerField(
+        default=0,
+        help_text='Display order of this photo on the order item',
+    )
+
+    class Meta:
+        verbose_name = 'Customer Fabric Image'
+        verbose_name_plural = 'Customer Fabric Images'
+        ordering = ['display_order', 'id']
+        indexes = [
+            models.Index(
+                fields=['uploaded_by', 'created_at'],
+                name='orders_cust_upload__idx',
+            ),
+            models.Index(
+                fields=['order_item', 'display_order'],
+                name='orders_cust_item_ord_idx',
+            ),
+        ]
+
+    def __str__(self):
+        if self.order_item_id:
+            return f"CustomerFabricImage #{self.pk} for item {self.order_item_id}"
+        return f"CustomerFabricImage #{self.pk} by {self.uploaded_by_id}"
 
 
 class StyleReferenceImage(BaseModel):

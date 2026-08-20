@@ -349,6 +349,10 @@ _AR_LABELS = {
     'N/A':                 'غير متاح',
     'Measured at:':        'تم القياس في:',
     'Measurement Service': 'خدمة القياس',
+    'Customer Fabric':     'قماش العميل',
+    'Fabric Qty':          'كمية القماش',
+    'Customer Fabric Photos': 'صور قماش العميل',
+    'Stitching Only':      'خياطة فقط',
     'Yes':                 'نعم',
     'No':                  'لا',
     # Order values
@@ -1386,15 +1390,18 @@ def _measurements_grid(pairs, page_w, s, lang='en', title=''):
     return grid
 
 
+def _item_fabric_display_name(item, order, lang):
+    """Catalog fabric name, or a type-specific fallback when the customer brought fabric."""
+    if item.fabric:
+        return item.fabric.name
+    if getattr(order, 'order_type', None) == 'stitching_only':
+        return _localized_value('Customer Fabric', lang)
+    return _localized_value('Measurement Service', lang)
+
+
 def _item_fabric_label_html(item, order, lang):
     """Compact fabric/recipient line for priority measurement/style sections."""
-    if item.fabric:
-        fabric_name_html = _format_user_text_html(item.fabric.name, lang)
-    else:
-        fabric_name_html = _format_user_text_html(
-            _localized_value('Measurement Service', lang),
-            lang,
-        )
+    fabric_name_html = _format_user_text_html(_item_fabric_display_name(item, order, lang), lang)
     fabric_sku = f'SKU: {item.fabric.sku}' if item.fabric and item.fabric.sku else ''
     fabric_parts = []
     recipient_html = _format_recipient_html(item, order, lang)
@@ -1464,13 +1471,7 @@ def _item_detail_cell(label, value_html, s, lang):
 
 def _item_details_table(item, order, page_w, s, lang, item_index):
     """Aligned item metadata table for each person block."""
-    if item.fabric:
-        fabric_name_html = _format_user_text_html(item.fabric.name, lang)
-    else:
-        fabric_name_html = _format_user_text_html(
-            _localized_value('Measurement Service', lang),
-            lang,
-        )
+    fabric_name_html = _format_user_text_html(_item_fabric_display_name(item, order, lang), lang)
 
     ready_val = _format_user_text_html(
         _localized_value('Yes', lang) if item.is_ready else _localized_value('No', lang),
@@ -1490,6 +1491,9 @@ def _item_details_table(item, order, page_w, s, lang, item_index):
     ]
     if item.fabric and item.fabric.sku:
         row2_cells.append(_item_detail_cell('SKU', _safe_text(item.fabric.sku), s, lang))
+    if getattr(item, 'customer_fabric_quantity', None) is not None:
+        fabric_qty = f'{item.customer_fabric_quantity} m'
+        row2_cells.append(_item_detail_cell('Fabric Qty', _safe_text(fabric_qty), s, lang))
     while len(row2_cells) < 3:
         row2_cells.append(Paragraph('', s['small']))
     row2 = row2_cells
@@ -1512,15 +1516,62 @@ def _item_details_table(item, order, page_w, s, lang, item_index):
     return tbl
 
 
+def _customer_fabric_image_paths(item):
+    """Resolve attached customer fabric photos to local files."""
+    images = getattr(item, 'customer_fabric_images', None)
+    if images is None:
+        return []
+
+    paths = []
+    for image in images.all():
+        raw_path = image.image.name if getattr(image, 'image', None) else None
+        resolved = _resolve_media_file_path(raw_path)
+        if resolved:
+            paths.append(resolved)
+    return paths[:4]
+
+
+def _customer_fabric_images_table(item, page_w, s, lang):
+    """Compact row of customer-provided fabric photos."""
+    paths = _customer_fabric_image_paths(item)
+    if not paths:
+        return None
+
+    images = []
+    thumb_size = PDF_STYLE_THUMB_SIZE
+    col_width = thumb_size + 4 * mm
+    for path in paths:
+        try:
+            images.append(Image(path, width=thumb_size, height=thumb_size, kind='proportional'))
+        except Exception as exc:
+            logger.debug("Unable to add customer fabric image to PDF: %s", exc)
+
+    if not images:
+        return None
+
+    title = Paragraph(_safe_text(_t('Customer Fabric Photos', lang)), s['small'])
+    img_table = Table([images], colWidths=[col_width] * len(images))
+    img_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    wrapper = Table([[title], [img_table]], colWidths=[page_w])
+    wrapper.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    return wrapper
+
+
 def _item_details_html(item, order, lang, item_index):
     """Fabric, quantity, SKU, item number, and ready status for a person block."""
-    if item.fabric:
-        fabric_name_html = _format_user_text_html(item.fabric.name, lang)
-    else:
-        fabric_name_html = _format_user_text_html(
-            _localized_value('Measurement Service', lang),
-            lang,
-        )
+    fabric_name_html = _format_user_text_html(_item_fabric_display_name(item, order, lang), lang)
 
     fabric_lbl = _safe_text(_t('Fabric', lang))
     qty_lbl = _safe_text(_t('Qty', lang))
@@ -1537,6 +1588,9 @@ def _item_details_html(item, order, lang, item_index):
     if item.fabric and item.fabric.sku:
         sku_lbl = _safe_text(_t('SKU', lang))
         parts.insert(2, f'<b>{sku_lbl}:</b> {_safe_text(item.fabric.sku)}')
+    if getattr(item, 'customer_fabric_quantity', None) is not None:
+        fabric_qty_lbl = _safe_text(_t('Fabric Qty', lang))
+        parts.insert(2, f'<b>{fabric_qty_lbl}:</b> {_safe_text(str(item.customer_fabric_quantity))} m')
     return ' &nbsp;|&nbsp; '.join(parts)
 
 
@@ -1669,6 +1723,10 @@ def _build_person_blocks(order, items, page_w, s, lang, measurement_fields):
         block.append(Spacer(1, PDF_ITEM_SPACER))
         block.append(_item_details_table(item, order, page_w, s, lang, item_index))
         block.append(Spacer(1, PDF_ITEM_SPACER))
+        fabric_photos = _customer_fabric_images_table(item, page_w, s, lang)
+        if fabric_photos:
+            block.append(fabric_photos)
+            block.append(Spacer(1, PDF_ITEM_SPACER))
 
         has_content = True
         meas_pairs = []
@@ -2283,7 +2341,11 @@ def generate_order_pdf(order, lang='en') -> bytes:
     s = _styles(lang)
     page_w = _pdf_page_width()
     measurement_fields = _measurement_field_map()
-    items = list(order.order_items.select_related('fabric', 'family_member').all())
+    items = list(
+        order.order_items.select_related('fabric', 'family_member')
+        .prefetch_related('customer_fabric_images')
+        .all()
+    )
 
     story = [NextPageTemplate('Later')]
     story.extend(_build_header_section(order, page_w, s, lang))

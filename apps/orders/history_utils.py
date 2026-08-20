@@ -112,7 +112,7 @@ def get_tailor_completed_orders(tailor_user, period=DEFAULT_PERIOD, from_date=No
         'assigned_rider__rider_profile',
         'measurement_rider__rider_profile',
         'delivery_rider__rider_profile',
-    ).prefetch_related('order_items__fabric').order_by('-completed_at')
+    ).prefetch_related('order_items__fabric', 'order_items__customer_fabric_images').order_by('-completed_at')
 
     return queryset, start, end
 
