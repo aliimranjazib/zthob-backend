@@ -7,10 +7,11 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.customization.models import CustomStyle, CustomStyleCategory
-from apps.orders.models import Order, StyleReferenceImage
+from apps.customers.models import CustomerProfile
+from apps.orders.models import CustomerFabricImage, Order, StyleReferenceImage
 from apps.orders.serializers import OrderUpdateSerializer, format_custom_styles_for_response
 from apps.orders.style_references import MAX_STYLE_REFERENCE_IMAGES
-from apps.tailors.models import Fabric, FabricCategory, TailorProfile
+from apps.tailors.models import Fabric, FabricCategory, TailorEmployee, TailorProfile
 
 
 User = get_user_model()
@@ -441,3 +442,131 @@ class StyleReferenceOrderDetailAPITest(TestCase):
         item_styles = response.data['data']['items'][0]['custom_styles']
         self.assertEqual(item_styles[0]['reference_image_ids'], [self.reference_image.id])
         self.assertIn('/api/media/style_references/', item_styles[0]['reference_images'][0])
+
+
+@override_settings(
+    SECURE_SSL_REDIRECT=False,
+    CACHES={
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    },
+)
+class StyleReferenceShopSharingAPITest(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.owner = User.objects.create_user(
+            username='style_ref_shop_owner',
+            phone='+966544400001',
+            password='testpass123',
+            role='TAILOR',
+        )
+        self.profile, _ = TailorProfile.objects.get_or_create(
+            user=self.owner,
+            defaults={'shop_name': 'Shared Ref Shop', 'shop_status': True},
+        )
+        self.profile.shop_status = True
+        self.profile.save(update_fields=['shop_status'])
+        self.employee_user = User.objects.create_user(
+            username='style_ref_shop_employee',
+            phone='+966544400002',
+            password='testpass123',
+            role='TAILOR',
+        )
+        TailorEmployee.objects.create(
+            tailor=self.profile,
+            user=self.employee_user,
+            roles=['receptionist'],
+            can_manage_pos=True,
+            can_manage_orders=True,
+            is_active=True,
+        )
+        self.customer = User.objects.create_user(
+            username='style_ref_shop_customer',
+            phone='+966544400003',
+            password='testpass123',
+            role='USER',
+        )
+        CustomerProfile.objects.create(user=self.customer, pos_created_by=self.owner)
+        self.category = FabricCategory.objects.create(name='Shared Fabric', slug='shared-fabric')
+        self.fabric = Fabric.objects.create(
+            tailor=self.profile,
+            name='Shared Cotton',
+            price=Decimal('80.00'),
+            stock=5,
+            is_active=True,
+            category=self.category,
+        )
+        self.style_category = CustomStyleCategory.objects.create(
+            name='collar',
+            display_name='Collar Styles',
+            display_order=1,
+            is_active=True,
+        )
+        self.style = CustomStyle.objects.create(
+            category=self.style_category,
+            name='Shared Collar',
+            code='shared_collar',
+            image='custom_styles/shared_collar.png',
+            display_order=1,
+            is_active=True,
+        )
+        self.client = APIClient()
+
+    def test_owner_can_use_employee_uploaded_reference_image(self):
+        self.client.force_authenticate(user=self.employee_user)
+        uploaded = upload_style_reference(self.client)
+
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.post(
+            '/api/orders/create/',
+            {
+                'customer': self.customer.id,
+                'tailor': self.owner.id,
+                'order_type': 'fabric_with_stitching',
+                'service_mode': 'walk_in',
+                'payment_method': 'cod',
+                'items': [{
+                    'fabric': self.fabric.id,
+                    'quantity': 1,
+                    'recipient_display_name': 'Walk-in Customer',
+                    'custom_styles': [{
+                        'style_id': self.style.id,
+                        'reference_image_ids': [str(uploaded['id'])],
+                    }],
+                }],
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        item_styles = response.data['data']['items'][0]['custom_styles']
+        self.assertEqual(item_styles[0]['reference_image_ids'], [uploaded['id']])
+
+    def test_rejects_customer_fabric_ids_in_reference_image_ids(self):
+        self.client.force_authenticate(user=self.owner)
+        fabric_image = CustomerFabricImage.objects.create(
+            image=make_test_png('wrong_field.png'),
+            uploaded_by=self.owner,
+        )
+        response = self.client.post(
+            '/api/orders/create/',
+            {
+                'customer': self.customer.id,
+                'tailor': self.owner.id,
+                'order_type': 'fabric_with_stitching',
+                'service_mode': 'walk_in',
+                'payment_method': 'cod',
+                'items': [{
+                    'fabric': self.fabric.id,
+                    'quantity': 1,
+                    'recipient_display_name': 'Walk-in Customer',
+                    'custom_styles': [{
+                        'style_id': self.style.id,
+                        'reference_image_ids': [fabric_image.id],
+                    }],
+                }],
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('customer_fabric_image_ids', str(response.data['errors']))
