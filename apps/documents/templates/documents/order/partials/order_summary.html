@@ -1,0 +1,29 @@
+<section class="section">
+  <div class="section-title">{{ labels.order_summary }}</div>
+  <div class="gold-rule"></div>
+  <table class="two-col">
+    <tr>
+      <td>
+        <table class="kv">
+          <tr><th>{{ labels.order_number }}</th><td>{{ order.number }}</td></tr>
+          <tr><th>{{ labels.order_type }}</th><td>{{ order.type }}</td></tr>
+          <tr><th>{{ labels.service_mode }}</th><td>{{ order.service_mode }}</td></tr>
+          <tr><th>{{ labels.items_count }}</th><td>{{ order.items_count }}</td></tr>
+          {% if order.estimated_delivery %}<tr><th>{{ labels.est_delivery }}</th><td>{{ order.estimated_delivery }}</td></tr>{% endif %}
+          {% if order.actual_delivery %}<tr><th>{{ labels.actual_delivery }}</th><td>{{ order.actual_delivery }}</td></tr>{% endif %}
+          {% if order.appointment %}<tr><th>{{ labels.appointment }}</th><td>{{ order.appointment }}</td></tr>{% endif %}
+          {% if order.stitching_done %}<tr><th>{{ labels.stitching_done }}</th><td>{{ order.stitching_done }}</td></tr>{% endif %}
+        </table>
+      </td>
+      <td>
+        {% if tailor %}
+        <table class="kv">
+          <tr><th>{{ labels.shop_name }}</th><td>{{ tailor.shop_name }}</td></tr>
+          <tr><th>{{ labels.tailor }}</th><td>{{ tailor.name }}</td></tr>
+          <tr><th>{{ labels.contact }}</th><td>{{ tailor.contact }}</td></tr>
+        </table>
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+</section>

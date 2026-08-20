@@ -1,0 +1,24 @@
+<section class="section">
+  <div class="section-title">{{ labels.riders }}</div>
+  <div class="gold-rule"></div>
+  <table class="kv">
+    <tr>
+      <th>{{ labels.measurement_rider }}</th>
+      <th>{{ labels.delivery_rider }}</th>
+    </tr>
+    <tr>
+      <td>
+        {% if riders.measurement %}
+          {{ riders.measurement.name }}
+          {% if riders.measurement.phone %}<br>{{ labels.phone }}: {{ riders.measurement.phone }}{% endif %}
+        {% else %}—{% endif %}
+      </td>
+      <td>
+        {% if riders.delivery %}
+          {{ riders.delivery.name }}
+          {% if riders.delivery.phone %}<br>{{ labels.phone }}: {{ riders.delivery.phone }}{% endif %}
+        {% else %}—{% endif %}
+      </td>
+    </tr>
+  </table>
+</section>

@@ -162,7 +162,7 @@ class MeasurementFieldInline(admin.TabularInline):
     fields = [
         'name', 'display_name', 'display_name_ar', 'display_name_ur',
         'field_type', 'min_value', 'max_value',
-        'is_required', 'display_order', 'is_active',
+        'is_required', 'display_order', 'pdf_grid_row', 'pdf_grid_col', 'is_active',
         'help_text_en', 'help_text_ar', 'help_text_ur'
     ]
 

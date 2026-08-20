@@ -1,0 +1,23 @@
+<section class="section">
+  <div class="section-title">{{ labels.customer }}</div>
+  <div class="gold-rule"></div>
+  <table class="kv">
+    <tr>
+      <th>{{ labels.name }}</th>
+      <th>{{ labels.service_mode }}</th>
+      {% if customer.measured_by %}<th>{{ labels.measured_by }}</th>{% endif %}
+    </tr>
+    <tr>
+      <td>{{ customer.name }}</td>
+      <td>{{ order.service_mode }}</td>
+      {% if customer.measured_by %}<td>{{ customer.measured_by }}</td>{% endif %}
+    </tr>
+    {% if customer.address %}
+    <tr>
+      <td colspan="{% if customer.measured_by %}3{% else %}2{% endif %}">
+        <strong>{{ labels.address }}</strong><br>{{ customer.address }}
+      </td>
+    </tr>
+    {% endif %}
+  </table>
+</section>

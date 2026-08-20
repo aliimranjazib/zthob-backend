@@ -1,0 +1,12 @@
+<section class="section">
+  <div class="section-title">{{ labels.comments }}</div>
+  <div class="gold-rule"></div>
+  <div class="comments-box"></div>
+  <div class="footer">
+    {% if is_rtl %}
+      {{ labels.order }} {{ order.number }} · {{ generated_at }} · {{ labels.generated }}
+    {% else %}
+      {{ labels.generated }} · {{ generated_at }} · {{ labels.order }} {{ order.number }}
+    {% endif %}
+  </div>
+</section>

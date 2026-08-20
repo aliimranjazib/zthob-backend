@@ -1,0 +1,24 @@
+<section class="section">
+  <div class="section-title">{{ labels.status_history }}</div>
+  <div class="gold-rule"></div>
+  <table class="history">
+    <thead>
+      <tr>
+        <th>{{ labels.date_time }}</th>
+        <th>{{ labels.status }}</th>
+        <th>{{ labels.changed_by }}</th>
+        <th>{{ labels.history_notes }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in status_history %}
+      <tr>
+        <td>{{ row.when }}</td>
+        <td>{{ row.status }}</td>
+        <td>{{ row.changed_by }}</td>
+        <td>{{ row.notes }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>

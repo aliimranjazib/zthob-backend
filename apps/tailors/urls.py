@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.core.views import SendOTPView, VerifyOTPView
+from apps.documents.views import OrderDocumentPreviewView
 from apps.tailors.views import (
     # Profile views
     TailorProfileView,
@@ -128,6 +129,7 @@ urlpatterns = [
     # Order URLs
     path('orders/<int:order_id>/measurements/', TailorAddMeasurementsView.as_view(), name='tailor-add-measurements'),
     path('orders/<int:order_id>/download-pdf/', TailorOrderDownloadPDFView.as_view(), name='tailor-order-download-pdf'),
+    path('orders/<int:order_id>/document-preview/', OrderDocumentPreviewView.as_view(), name='tailor-order-document-preview'),
     path('config/', TailorConfigView.as_view(), name='tailor-config'),
 
     # POS URLs

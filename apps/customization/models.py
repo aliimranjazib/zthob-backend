@@ -261,6 +261,16 @@ class MeasurementField(BaseModel):
         default=0,
         help_text="Order in which to display (lower = first)"
     )
+    pdf_grid_row = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="PDF grid row (1-based). Leave blank to auto-fill.",
+    )
+    pdf_grid_col = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="PDF grid column (1-based). Leave blank to auto-fill.",
+    )
     is_active = models.BooleanField(
         default=True,
         help_text="Whether this field is shown in the form"
