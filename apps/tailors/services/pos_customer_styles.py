@@ -2,6 +2,8 @@ from collections import defaultdict
 
 from django.db.models import Q
 
+from apps.customization.models import UserStylePreset
+from apps.customization.serializers import UserStylePresetSerializer
 from apps.orders.models import OrderItem
 from apps.orders.serializers import format_custom_styles_for_response
 
@@ -62,4 +64,31 @@ def get_customer_order_styles(owner_user, customer_ids, request=None):
     for customer_id, orders_by_id in customer_orders.items():
         result[customer_id] = list(orders_by_id.values())
 
+    return result
+
+
+def get_customer_style_presets(customer_ids, request=None):
+    """
+    Return saved UserStylePreset payloads for POS, including reference_image_ids.
+
+    Tailors reuse these when creating a walk-in order for that customer.
+    """
+    if not customer_ids:
+        return {}
+
+    presets = (
+        UserStylePreset.objects.filter(user_id__in=customer_ids)
+        .order_by('-is_default', '-updated_at', '-id')
+    )
+    grouped = defaultdict(list)
+    for preset in presets:
+        grouped[preset.user_id].append(preset)
+
+    result = {}
+    for customer_id, customer_presets in grouped.items():
+        result[customer_id] = UserStylePresetSerializer(
+            customer_presets,
+            many=True,
+            context={'request': request},
+        ).data
     return result

@@ -570,3 +570,161 @@ class StyleReferenceShopSharingAPITest(TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn('customer_fabric_image_ids', str(response.data['errors']))
+
+    def test_walk_in_order_accepts_customer_uploaded_style_reference_images(self):
+        self.client.force_authenticate(user=self.customer)
+        uploaded = upload_style_reference(self.client)
+
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.post(
+            '/api/orders/create/',
+            {
+                'customer': self.customer.id,
+                'tailor': self.owner.id,
+                'order_type': 'fabric_with_stitching',
+                'service_mode': 'walk_in',
+                'payment_method': 'cod',
+                'items': [{
+                    'fabric': self.fabric.id,
+                    'quantity': 1,
+                    'recipient_display_name': 'Walk-in Customer',
+                    'custom_styles': [{
+                        'style_id': self.style.id,
+                        'reference_image_ids': [uploaded['id']],
+                    }],
+                }],
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        item_styles = response.data['data']['items'][0]['custom_styles']
+        self.assertEqual(item_styles[0]['reference_image_ids'], [uploaded['id']])
+
+    def test_employee_walk_in_order_accepts_customer_style_preset_images(self):
+        self.client.force_authenticate(user=self.customer)
+        uploaded = upload_style_reference(self.client)
+        preset_response = self.client.post(
+            '/api/customization/presets/',
+            {
+                'name': 'My Collar',
+                'styles': [{
+                    'category': 'collar',
+                    'style_id': self.style.id,
+                    'reference_image_ids': [uploaded['id']],
+                }],
+                'is_default': True,
+            },
+            format='json',
+        )
+        self.assertEqual(preset_response.status_code, 201, preset_response.data)
+
+        self.client.force_authenticate(user=self.owner)
+        pos_response = self.client.get('/api/tailors/pos/customers/')
+        self.assertEqual(pos_response.status_code, 200, pos_response.data)
+        customer_entry = next(
+            item for item in pos_response.data['data'] if item['id'] == self.customer.id
+        )
+        self.assertEqual(customer_entry['style_presets'][0]['name'], 'My Collar')
+        self.assertEqual(
+            customer_entry['style_presets'][0]['styles'][0]['reference_image_ids'],
+            [uploaded['id']],
+        )
+
+        self.client.force_authenticate(user=self.employee_user)
+        response = self.client.post(
+            '/api/orders/create/',
+            {
+                'customer': self.customer.id,
+                'tailor': self.owner.id,
+                'order_type': 'fabric_with_stitching',
+                'service_mode': 'walk_in',
+                'payment_method': 'cod',
+                'items': [{
+                    'fabric': self.fabric.id,
+                    'quantity': 1,
+                    'recipient_display_name': 'Walk-in Customer',
+                    'custom_styles': [{
+                        'style_id': self.style.id,
+                        'reference_image_ids': [uploaded['id']],
+                    }],
+                }],
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        item_styles = response.data['data']['items'][0]['custom_styles']
+        self.assertEqual(item_styles[0]['reference_image_ids'], [uploaded['id']])
+
+    def test_walk_in_stitching_only_accepts_customer_style_and_shop_fabric_photos(self):
+        self.client.force_authenticate(user=self.customer)
+        style_image = upload_style_reference(self.client)
+
+        self.client.force_authenticate(user=self.owner)
+        fabric_response = self.client.post(
+            '/api/orders/customer-fabric/upload/',
+            {'image': make_test_png('customer_cloth.png')},
+            format='multipart',
+        )
+        self.assertEqual(fabric_response.status_code, 201, fabric_response.data)
+        fabric_image_id = fabric_response.data['data']['id']
+
+        response = self.client.post(
+            '/api/orders/create/',
+            {
+                'customer': self.customer.id,
+                'tailor': self.owner.id,
+                'order_type': 'stitching_only',
+                'service_mode': 'walk_in',
+                'payment_method': 'cod',
+                'stitching_price': '120.00',
+                'items': [{
+                    'quantity': 1,
+                    'recipient_display_name': 'Walk-in Customer',
+                    'customer_fabric_image_ids': [fabric_image_id],
+                    'custom_styles': [{
+                        'style_id': self.style.id,
+                        'reference_image_ids': [style_image['id']],
+                    }],
+                }],
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        item = response.data['data']['items'][0]
+        self.assertEqual(item['custom_styles'][0]['reference_image_ids'], [style_image['id']])
+        self.assertEqual(item['customer_fabric_images'][0]['id'], fabric_image_id)
+
+    def test_rejects_another_customers_style_reference_images(self):
+        other_customer = User.objects.create_user(
+            username='style_ref_other_customer',
+            phone='+966544400099',
+            password='testpass123',
+            role='USER',
+        )
+        CustomerProfile.objects.create(user=other_customer, pos_created_by=self.owner)
+        self.client.force_authenticate(user=other_customer)
+        uploaded = upload_style_reference(self.client)
+
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.post(
+            '/api/orders/create/',
+            {
+                'customer': self.customer.id,
+                'tailor': self.owner.id,
+                'order_type': 'fabric_with_stitching',
+                'service_mode': 'walk_in',
+                'payment_method': 'cod',
+                'items': [{
+                    'fabric': self.fabric.id,
+                    'quantity': 1,
+                    'recipient_display_name': 'Walk-in Customer',
+                    'custom_styles': [{
+                        'style_id': self.style.id,
+                        'reference_image_ids': [uploaded['id']],
+                    }],
+                }],
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('unauthorized', str(response.data).lower())

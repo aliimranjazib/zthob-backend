@@ -1309,12 +1309,15 @@ class RiderUpdateStyleWithConsentView(APIView):
     )
     def post(self, request, order_id):
         from apps.customization.models import CustomStyle, UserStylePreset
-        serializer = RiderUpdateStyleSerializer(data=request.data, context={'request': request})
+        order = get_object_or_404(
+            Order.objects.prefetch_related('order_items__family_member'),
+            id=order_id
+        )
+        serializer = RiderUpdateStyleSerializer(
+            data=request.data,
+            context={'request': request, 'style_owner_customer': order.customer},
+        )
         if serializer.is_valid():
-            order = get_object_or_404(
-                Order.objects.prefetch_related('order_items__family_member'),
-                id=order_id
-            )
             
             # 1. Verify rider authorization
             if order.rider != request.user and order.assigned_rider != request.user:
@@ -1385,6 +1388,7 @@ class RiderUpdateStyleWithConsentView(APIView):
                         s.get('reference_image_ids'),
                         request.user,
                         idx,
+                        customer=order.customer,
                     )
                     detailed_styles.append(detailed_style)
             
@@ -1414,6 +1418,7 @@ class RiderUpdateStyleWithConsentView(APIView):
                         },
                         idx,
                         request.user,
+                        customer=order.customer,
                     )
                     for idx, s in enumerate(styles_data)
                 ]
