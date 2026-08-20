@@ -8,13 +8,13 @@ from apps.orders.style_references import (
 )
 
 
-def enrich_preset_style(style, idx, user):
+def enrich_preset_style(style, idx, user, customer=None):
     """Validate preset style selection and attach reference image paths."""
     reference_image_ids = style.get('reference_image_ids')
     if reference_image_ids is None:
         return style
 
-    paths = resolve_reference_image_ids(reference_image_ids, user, idx)
+    paths = resolve_reference_image_ids(reference_image_ids, user, idx, customer=customer)
     enriched = dict(style)
     enriched.pop('reference_image_ids', None)
     if paths is not None:

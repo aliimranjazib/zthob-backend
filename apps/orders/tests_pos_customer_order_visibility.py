@@ -1,15 +1,24 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from apps.customers.models import Address, CustomerProfile, FamilyMember
 from apps.tailors.models import Fabric, FabricCategory, TailorProfile
-from apps.orders.models import Order
+from apps.orders.models import Order, OrderItem
 
 
 User = get_user_model()
+
+
+TEST_PNG_BYTES = (
+    b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+    b'\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'
+    b'\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01'
+    b'\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
+)
 
 
 @override_settings(
@@ -74,6 +83,26 @@ class PosCustomerOrderVisibilityTest(TestCase):
         self.assertEqual(customer.phone, '0500000002')
         self.assertEqual(customer.customer_profile.pos_created_by, self.tailor_user)
         return customer
+
+    def _create_cross_shop_walk_in_order(self, *, customer, tailor, fabric, custom_styles=None):
+        order = Order.objects.create(
+            customer=customer,
+            tailor=tailor,
+            order_type='fabric_with_stitching',
+            service_mode='walk_in',
+            payment_method='cod',
+            subtotal=Decimal('100.00'),
+            total_amount=Decimal('100.00'),
+        )
+        OrderItem.objects.create(
+            order=order,
+            fabric=fabric,
+            quantity=1,
+            unit_price=Decimal('100.00'),
+            total_price=Decimal('100.00'),
+            custom_styles=custom_styles or [],
+        )
+        return order
 
     def test_tailor_created_walk_in_order_is_visible_to_pos_customer_with_item_details(self):
         customer = self._create_pos_customer()
@@ -245,21 +274,12 @@ class PosCustomerOrderVisibilityTest(TestCase):
         self.assertEqual(current_tailor_response.status_code, 201, current_tailor_response.data)
         current_tailor_order_id = current_tailor_response.data['data']['id']
 
-        self.client.force_authenticate(user=self.other_tailor_user)
-        other_tailor_response = self.client.post(
-            '/api/orders/create/',
-            {
-                'customer': customer.id,
-                'tailor': self.other_tailor_user.id,
-                'order_type': 'fabric_only',
-                'service_mode': 'walk_in',
-                'payment_method': 'cod',
-                'items': [{'fabric': self.other_fabric.id, 'quantity': 1}],
-            },
-            format='json',
+        other_order = self._create_cross_shop_walk_in_order(
+            customer=customer,
+            tailor=self.other_tailor_user,
+            fabric=self.other_fabric,
         )
-        self.assertEqual(other_tailor_response.status_code, 201, other_tailor_response.data)
-        other_tailor_order_id = other_tailor_response.data['data']['id']
+        other_tailor_order_id = other_order.id
 
         self.client.force_authenticate(user=self.tailor_user)
         list_response = self.client.get(f'/api/tailors/pos/customers/{customer.id}/orders/')
@@ -286,6 +306,13 @@ class PosCustomerOrderVisibilityTest(TestCase):
         initial_stock = self.fabric.stock
 
         self.client.force_authenticate(user=self.tailor_user)
+        fabric_upload = self.client.post(
+            '/api/orders/customer-fabric/upload/',
+            {'image': SimpleUploadedFile('cloth.png', TEST_PNG_BYTES, content_type='image/png')},
+            format='multipart',
+        )
+        self.assertEqual(fabric_upload.status_code, 201, fabric_upload.data)
+
         response = self.client.post(
             '/api/orders/create/',
             {
@@ -298,6 +325,7 @@ class PosCustomerOrderVisibilityTest(TestCase):
                 'items': [
                     {
                         'quantity': 1,
+                        'customer_fabric_image_ids': [fabric_upload.data['data']['id']],
                         'measurements': {'chest': 102, 'length': 144},
                         'custom_styles': [
                             {
@@ -440,33 +468,19 @@ class PosCustomerOrderVisibilityTest(TestCase):
         self.assertEqual(current_tailor_response.status_code, 201, current_tailor_response.data)
         current_tailor_order_id = current_tailor_response.data['data']['id']
 
-        self.client.force_authenticate(user=self.other_tailor_user)
-        other_tailor_response = self.client.post(
-            '/api/orders/create/',
-            {
-                'customer': customer_with_order.id,
-                'tailor': self.other_tailor_user.id,
-                'order_type': 'fabric_with_stitching',
-                'service_mode': 'walk_in',
-                'payment_method': 'cod',
-                'items': [
-                    {
-                        'fabric': self.other_fabric.id,
-                        'quantity': 1,
-                        'custom_styles': [
-                            {
-                                'style_type': 'collar',
-                                'index': 1,
-                                'label': 'Other Shop Collar',
-                                'asset_path': 'custom_styles/other_collar.png',
-                            }
-                        ],
-                    }
-                ],
-            },
-            format='json',
+        self._create_cross_shop_walk_in_order(
+            customer=customer_with_order,
+            tailor=self.other_tailor_user,
+            fabric=self.other_fabric,
+            custom_styles=[
+                {
+                    'style_type': 'collar',
+                    'index': 1,
+                    'label': 'Other Shop Collar',
+                    'asset_path': 'custom_styles/other_collar.png',
+                }
+            ],
         )
-        self.assertEqual(other_tailor_response.status_code, 201, other_tailor_response.data)
 
         self.client.force_authenticate(user=self.tailor_user)
         list_response = self.client.get('/api/tailors/pos/customers/')
@@ -489,3 +503,4 @@ class PosCustomerOrderVisibilityTest(TestCase):
             'Other Shop Collar',
         )
         self.assertEqual(zero_order_customer['order_styles'], [])
+        self.assertEqual(zero_order_customer.get('style_presets', []), [])

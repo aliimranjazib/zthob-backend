@@ -32,6 +32,7 @@ class TailorCustomerSerializer(serializers.Serializer):
     last_order_date = serializers.DateTimeField(allow_null=True)
     measurements = serializers.JSONField(allow_null=True)
     order_styles = POSCustomerOrderStyleGroupSerializer(many=True)
+    style_presets = serializers.ListField(child=serializers.DictField(), required=False)
 
 
 class CreateCustomerSerializer(serializers.Serializer):

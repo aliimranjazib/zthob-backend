@@ -20,11 +20,25 @@ def parse_image_id(image_id, field_name):
         return int(image_id.strip())
     raise serializers.ValidationError({field_name: 'Each image ID must be an integer.'})
 
-MAX_STYLE_REFERENCE_IMAGES = 4
-MAX_STYLE_REFERENCE_IMAGE_BYTES = 5 * 1024 * 1024
+
+def allowed_style_reference_uploader_ids(user, customer=None):
+    """
+    Who may own style-reference photos attached to an order.
+
+    - The acting user
+    - Other staff in the same shop
+    - The order's customer (POS walk-in reuses the customer's saved styles)
+    """
+    allowed = set(shop_media_uploader_ids(user))
+    if customer is None:
+        return allowed
+    customer_id = customer.id if hasattr(customer, 'id') else customer
+    if customer_id:
+        allowed.add(customer_id)
+    return allowed
 
 
-def resolve_reference_image_ids(reference_image_ids, user, style_index):
+def resolve_reference_image_ids(reference_image_ids, user, style_index, customer=None):
     """Validate ownership and return relative media paths in request order."""
     if reference_image_ids is None:
         return None
@@ -52,7 +66,7 @@ def resolve_reference_image_ids(reference_image_ids, user, style_index):
     if user is None or not getattr(user, 'is_authenticated', False):
         raise serializers.ValidationError({field_name: 'Authentication is required to attach reference images.'})
 
-    allowed_uploader_ids = shop_media_uploader_ids(user)
+    allowed_uploader_ids = allowed_style_reference_uploader_ids(user, customer=customer)
     images = StyleReferenceImage.objects.filter(
         id__in=normalized_ids,
         uploaded_by_id__in=allowed_uploader_ids,
@@ -79,9 +93,14 @@ def resolve_reference_image_ids(reference_image_ids, user, style_index):
     return [images_by_id[image_id].image.name for image_id in normalized_ids]
 
 
-def apply_reference_images_to_style(style_dict, reference_image_ids, user, style_index):
+def apply_reference_images_to_style(style_dict, reference_image_ids, user, style_index, customer=None):
     """Attach validated reference image paths to an enriched style dict."""
-    resolved_paths = resolve_reference_image_ids(reference_image_ids, user, style_index)
+    resolved_paths = resolve_reference_image_ids(
+        reference_image_ids,
+        user,
+        style_index,
+        customer=customer,
+    )
     if resolved_paths is not None:
         style_dict['reference_images'] = resolved_paths
     style_dict.pop('reference_image_ids', None)

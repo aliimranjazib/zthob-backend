@@ -86,7 +86,68 @@ def apply_order_family_member_to_untagged_items(*, order, items_data):
     return items_data
 
 
-def enrich_custom_style_payload(style, idx, user=None):
+def _user_from_customer_id(customer_id):
+    """Resolve a customer User from a create-order payload value."""
+    if customer_id is None or customer_id == '':
+        return None
+    if hasattr(customer_id, 'pk'):
+        return customer_id
+    try:
+        return User.objects.get(id=int(customer_id))
+    except (User.DoesNotExist, TypeError, ValueError):
+        return None
+
+
+def _customer_from_initial_data(serializer):
+    data = getattr(serializer, 'initial_data', None)
+    if not isinstance(data, dict):
+        return None
+    return _user_from_customer_id(data.get('customer'))
+
+
+def resolve_style_owner_customer(serializer):
+    """Find the order customer whose saved style photos may be attached."""
+    context_customer = serializer.context.get('style_owner_customer')
+    if context_customer is not None:
+        return context_customer
+
+    request = serializer.context.get('request') if hasattr(serializer, 'context') else None
+    user = request.user if request else None
+    from apps.tailors.shop_access import get_shop_owner_user
+
+    acting_as_shop = bool(
+        user
+        and getattr(user, 'is_authenticated', False)
+        and (
+            getattr(user, 'is_admin', False)
+            or getattr(user, 'is_tailor', False)
+            or get_shop_owner_user(user)
+        )
+    )
+
+    current = serializer
+    while current is not None:
+        if acting_as_shop:
+            payload_customer = _customer_from_initial_data(current)
+            if payload_customer is not None:
+                return payload_customer
+        getter = getattr(current, '_get_target_customer', None)
+        if callable(getter):
+            customer = getter()
+            if customer is not None:
+                return customer
+        instance = getattr(current, 'instance', None)
+        if instance is not None:
+            if hasattr(instance, 'customer'):
+                return instance.customer
+            order = getattr(instance, 'order', None)
+            if order is not None and hasattr(order, 'customer'):
+                return order.customer
+        current = getattr(current, 'parent', None)
+    return None
+
+
+def enrich_custom_style_payload(style, idx, user=None, customer=None):
     """Validate and enrich a custom style payload while preserving optional frontend text."""
     if not isinstance(style, dict):
         raise serializers.ValidationError(f"custom_styles[{idx}] must be an object")
@@ -111,7 +172,9 @@ def enrich_custom_style_payload(style, idx, user=None):
         }
         if optional_text is not None:
             enriched["text"] = str(optional_text)
-        return apply_reference_images_to_style(enriched, reference_image_ids, user, idx)
+        return apply_reference_images_to_style(
+            enriched, reference_image_ids, user, idx, customer=customer,
+        )
 
     # Scenario 2: Traditional format (for backward compatibility)
     required_fields = ['style_type', 'index', 'label', 'asset_path']
@@ -121,7 +184,9 @@ def enrich_custom_style_payload(style, idx, user=None):
                 f"custom_styles[{idx}] must contain either 'style_id' or '{field}'"
             )
     if reference_image_ids is not None:
-        return apply_reference_images_to_style(style, reference_image_ids, user, idx)
+        return apply_reference_images_to_style(
+            style, reference_image_ids, user, idx, customer=customer,
+        )
     return style
 
 
@@ -300,8 +365,9 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("custom_styles must be an array")
 
         user = self.context.get('request').user if self.context.get('request') else None
+        customer = resolve_style_owner_customer(self)
         return [
-            enrich_custom_style_payload(style, idx, user=user)
+            enrich_custom_style_payload(style, idx, user=user, customer=customer)
             for idx, style in enumerate(value)
         ]
 
@@ -1034,13 +1100,15 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             return None
 
         user = request.user
-        if user.is_admin or user.is_tailor:
-            customer_id = getattr(self, 'initial_data', {}).get('customer')
-            if customer_id:
-                try:
-                    return User.objects.get(id=customer_id)
-                except (User.DoesNotExist, TypeError, ValueError):
-                    return None
+        from apps.tailors.shop_access import get_shop_owner_user
+
+        acting_as_shop = bool(
+            user.is_admin or user.is_tailor or get_shop_owner_user(user)
+        )
+        if acting_as_shop:
+            customer = _customer_from_initial_data(self)
+            if customer is not None:
+                return customer
 
         return user
 
@@ -1233,8 +1301,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("custom_styles must be an array")
         
         user = self.context.get('request').user if self.context.get('request') else None
+        customer = resolve_style_owner_customer(self)
         return [
-            enrich_custom_style_payload(style, idx, user=user)
+            enrich_custom_style_payload(style, idx, user=user, customer=customer)
             for idx, style in enumerate(value)
         ]
 
@@ -1722,8 +1791,9 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("custom_styles must be an array")
         
         user = self.context.get('request').user if self.context.get('request') else None
+        customer = resolve_style_owner_customer(self)
         return [
-            enrich_custom_style_payload(style, idx, user=user)
+            enrich_custom_style_payload(style, idx, user=user, customer=customer)
             for idx, style in enumerate(value)
         ]
     def validate_stitching_completion_date(self, value):

@@ -1366,6 +1366,12 @@ class RiderUpdateStyleSerializer(serializers.Serializer):
 
         request = self.context.get('request')
         user = request.user if request else None
+        customer = self.context.get('style_owner_customer')
         for idx, style in enumerate(attrs.get('styles', [])):
-            resolve_reference_image_ids(style.get('reference_image_ids'), user, idx)
+            resolve_reference_image_ids(
+                style.get('reference_image_ids'),
+                user,
+                idx,
+                customer=customer,
+            )
         return attrs
