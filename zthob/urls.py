@@ -231,6 +231,7 @@ api_patterns = [
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path('studio/', include('apps.documents.urls')),
     path('payment-result', payment_result_view, name='payment-result'),
     
     # 1. Legacy API routes (No version prefix - for backward compatibility)

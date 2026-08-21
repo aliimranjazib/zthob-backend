@@ -1,0 +1,18 @@
+<section class="section">
+  <div class="banner">
+    <div class="brand">{{ section.settings.brand_text|default:brand }}</div>
+    <div class="meta">
+      <strong>{{ labels.receipt }}</strong><br>
+      {% if section.settings.show_order_number != False %}<span class="sub">{{ order.number }}</span>{% endif %}
+    </div>
+  </div>
+  {% if section.settings.show_status_strip != False %}
+  <div class="status-strip">
+    <strong>{{ labels.status_label }}</strong> {{ order.status }}
+    &nbsp;·&nbsp;
+    <strong>{{ labels.tailor_status_label }}</strong> {{ order.tailor_status }}
+    &nbsp;·&nbsp;
+    <strong>{{ labels.placed_label }}</strong> {{ order.placed_at }}
+  </div>
+  {% endif %}
+</section>

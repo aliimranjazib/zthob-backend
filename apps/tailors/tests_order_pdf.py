@@ -43,6 +43,7 @@ from apps.tailors.services.order_pdf import (
 User = get_user_model()
 
 
+@override_settings(ORDER_PDF_ENGINE='reportlab')
 class OrderPDFServiceTest(TestCase):
     def setUp(self):
         self.customer = User.objects.create_user(

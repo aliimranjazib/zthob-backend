@@ -2253,7 +2253,6 @@ class WorkOrderPDFView(APIView):
     
     def get(self, request, order_id):
         from django.http import HttpResponse
-        from .pdf_service import WorkOrderPDFService
         
         try:
             order = Order.objects.select_related('customer', 'tailor').prefetch_related(
@@ -2277,8 +2276,9 @@ class WorkOrderPDFView(APIView):
             language = 'ar'
         
         try:
-            pdf_service = WorkOrderPDFService(order, language=language)
-            pdf_bytes = pdf_service.generate()
+            from apps.documents.service import generate_order_document
+            pdf_bytes = generate_order_document(order, language)
+
             
             response = HttpResponse(pdf_bytes, content_type='application/pdf')
             filename = f'work_order_{order.order_number}_{language}.pdf'

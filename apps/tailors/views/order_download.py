@@ -21,6 +21,7 @@ from rest_framework.permissions import IsAuthenticated
 from apps.orders.models import Order
 from apps.tailors.permissions import IsShopStaff
 from apps.tailors.services.order_pdf import generate_order_pdf
+from apps.documents.service import generate_order_html
 from zthob.translations import get_language_from_request
 from zthob.utils import api_response
 from .base import BaseTailorAPIView
@@ -103,6 +104,18 @@ class TailorOrderDownloadPDFView(BaseTailorAPIView):
         lang = request.GET.get('lang') or get_language_from_request(request) or 'en'
         if lang not in ('en', 'ar', 'ur'):
             lang = 'en'
+
+        if str(request.GET.get('format', '')).lower() == 'html':
+            try:
+                html, _context, _layout = generate_order_html(order, lang=lang)
+            except Exception as exc:
+                logger.exception("HTML preview failed for order %s: %s", order_id, exc)
+                return api_response(
+                    success=False,
+                    message="Failed to generate document preview. Please try again later.",
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+            return HttpResponse(html, content_type='text/html; charset=utf-8')
 
         # Generate PDF
         try:

@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PDF Layout Studio — {{ template.name|default:"Order Receipt" }}</title>
+  <style>
+    :root {
+      --brand: #990404;
+      --gold: #C9A84C;
+      --bg: #f4f4f6;
+      --panel: #fff;
+      --border: #ddd;
+      --text: #333;
+      --muted: #666;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    body.modal-open { overflow: hidden; }
+    header {
+      background: var(--brand);
+      color: #fff;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    header h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+    header .actions { display: flex; gap: 8px; align-items: center; }
+    header a { color: #fff; opacity: 0.9; text-decoration: none; font-size: 0.85rem; }
+    .toolbar {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .toolbar label { font-size: 0.85rem; color: var(--muted); }
+    .toolbar select, .toolbar button {
+      font-size: 0.85rem;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .toolbar button {
+      background: var(--brand);
+      color: #fff;
+      border-color: var(--brand);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .toolbar button.secondary {
+      background: #fff;
+      color: var(--brand);
+    }
+    .toolbar button.gold {
+      background: var(--gold);
+      border-color: #b8923f;
+      color: #fff;
+    }
+    .toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .status {
+      margin-left: auto;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .status.ok { color: #0a7; }
+    .status.err { color: #c00; }
+
+    .workspace {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 240px 1fr 260px;
+      gap: 0;
+      min-height: 0;
+    }
+    .panel {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .panel.settings-panel { border-right: none; border-left: 1px solid var(--border); }
+    .panel-head {
+      padding: 12px 14px;
+      font-weight: 700;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--brand);
+      border-bottom: 1px solid var(--border);
+      background: #fafafa;
+      flex-shrink: 0;
+    }
+    .panel-body { flex: 1; overflow: auto; padding: 12px; }
+    #section-list { list-style: none; margin: 0; padding: 0; }
+    #section-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      margin-bottom: 6px;
+      background: #fafafa;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: grab;
+      user-select: none;
+    }
+    #section-list li.selected {
+      border-color: var(--gold);
+      background: #fffbf0;
+    }
+    #section-list li.hidden-section { opacity: 0.55; }
+    .drag-handle { color: var(--muted); font-size: 1.1rem; }
+    .section-label { flex: 1; font-size: 0.85rem; }
+    .preview-wrap {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      background: #e8e8ec;
+    }
+    #preview-frame {
+      flex: 1;
+      width: 100%;
+      border: none;
+      background: #fff;
+    }
+    .settings-group { margin-bottom: 16px; }
+    .settings-group h3 {
+      margin: 0 0 8px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    .settings-group label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      margin-bottom: 6px;
+      cursor: pointer;
+    }
+    .settings-hint {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.45;
+      margin: 0;
+    }
+    .field-hint {
+      margin: -2px 0 8px 24px !important;
+      font-size: 0.75rem !important;
+    }
+    .settings-text-input {
+      width: 100%;
+      margin-bottom: 8px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .settings-number-input {
+      width: 80px;
+      margin-bottom: 8px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .settings-field-label {
+      display: block;
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+    }
+    .btn-open-grid {
+      width: 100%;
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--gold);
+      background: linear-gradient(180deg, #fffbf0 0%, #fff 100%);
+      color: var(--brand);
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .btn-open-grid:hover {
+      background: #fffbf0;
+      box-shadow: 0 2px 8px rgba(153, 4, 4, 0.12);
+    }
+
+    /* Full-screen grid modal */
+    .grid-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: none;
+      flex-direction: column;
+      background: var(--bg);
+    }
+    .grid-modal.open { display: flex; }
+    .grid-modal-header {
+      background: var(--brand);
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .grid-modal-header h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+    .grid-modal-header .subtitle {
+      font-size: 0.85rem;
+      opacity: 0.85;
+      flex: 1;
+    }
+    .grid-modal-header .lang-switch {
+      display: flex;
+      gap: 4px;
+      background: rgba(255,255,255,0.12);
+      padding: 4px;
+      border-radius: 8px;
+    }
+    .grid-modal-header .lang-switch button {
+      background: transparent;
+      color: rgba(255,255,255,0.85);
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .grid-modal-header .lang-switch button.active {
+      background: #fff;
+      color: var(--brand);
+    }
+    .grid-modal-header .lang-switch button:hover:not(.active) {
+      background: rgba(255,255,255,0.15);
+    }
+    .grid-modal-header .btn-close-modal {
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      font-size: 0.85rem;
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .grid-modal-header .btn-close-modal:hover { background: rgba(255,255,255,0.25); }
+    .grid-modal-body {
+      flex: 1;
+      overflow: auto;
+      padding: 24px;
+      display: flex;
+      gap: 28px;
+      align-items: flex-start;
+      justify-content: center;
+      min-height: 0;
+    }
+    .grid-modal-body[dir="rtl"] {
+      flex-direction: row-reverse;
+    }
+    .grid-shell {
+      width: 100%;
+    }
+    .grid-shell[dir="rtl"] .grid-table {
+      direction: rtl;
+    }
+    .grid-shell[dir="ltr"] .grid-table {
+      direction: ltr;
+    }
+    .field-pool-wrap[dir="rtl"] #field-pool {
+      direction: rtl;
+    }
+    .field-pool-wrap[dir="ltr"] #field-pool {
+      direction: ltr;
+    }
+    .field-pool-wrap {
+      flex: 0 0 240px;
+      position: sticky;
+      top: 0;
+    }
+    .field-pool-wrap strong {
+      display: block;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    #field-pool {
+      min-height: 120px;
+      max-height: calc(100vh - 200px);
+      overflow: auto;
+      padding: 12px;
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #field-pool:empty::after {
+      content: 'All fields placed on grid';
+      font-size: 0.8rem;
+      color: #999;
+      font-style: italic;
+      text-align: center;
+      padding: 20px 8px;
+    }
+    .grid-wrap {
+      flex: 1;
+      min-width: 0;
+      max-width: 900px;
+      display: flex;
+      justify-content: center;
+    }
+    .grid-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 8px;
+    }
+    .grid-table th, .grid-table td { padding: 0; vertical-align: middle; }
+    .grid-table thead th {
+      height: 28px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-align: center;
+    }
+    .grid-row-label {
+      width: 32px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-align: center;
+    }
+    .grid-cell {
+      min-height: 80px;
+      min-width: 120px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 8px;
+      background: #fff;
+      font-size: 0.8rem;
+      position: relative;
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    }
+    .grid-cell.drag-over {
+      border-color: var(--gold);
+      background: #fffbf0;
+      box-shadow: inset 0 0 0 3px rgba(201, 168, 76, 0.35);
+    }
+    .grid-cell.empty {
+      border-style: dashed;
+      background: #fafafa;
+    }
+    .grid-cell .cell-coord {
+      position: absolute;
+      top: 4px;
+      inset-inline-start: 6px;
+      font-size: 0.65rem;
+      color: #bbb;
+      font-weight: 600;
+    }
+    .grid-cell .seq {
+      position: absolute;
+      top: 4px;
+      inset-inline-end: 6px;
+      color: var(--gold);
+      font-weight: 700;
+      font-size: 0.75rem;
+      background: #fffbf0;
+      border-radius: 4px;
+      padding: 2px 6px;
+      line-height: 1.2;
+    }
+    .field-chip {
+      background: var(--brand);
+      color: #fff;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: grab;
+      display: block;
+      width: 100%;
+      font-size: 0.82rem;
+      font-weight: 500;
+      margin-top: 18px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.12);
+      line-height: 1.3;
+    }
+    .field-chip .chip-label {
+      display: block;
+      font-size: 0.86rem;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .field-chip .chip-label.rtl {
+      direction: rtl;
+      text-align: right;
+      unicode-bidi: plaintext;
+    }
+    .field-chip .chip-label.ltr {
+      direction: ltr;
+      text-align: left;
+    }
+    .field-chip .chip-fallback {
+      display: block;
+      margin-top: 2px;
+      font-size: 0.65rem;
+      font-weight: 400;
+      opacity: 0.75;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .field-chip:active { cursor: grabbing; }
+    #field-pool .field-chip {
+      background: #555;
+      width: 100%;
+      margin-top: 0;
+    }
+    .sortable-ghost { opacity: 0.35; }
+    .sortable-drag { opacity: 0.9; }
+
+    .grid-modal-footer {
+      flex-shrink: 0;
+      padding: 14px 24px;
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+    .grid-modal-footer .modal-status {
+      margin-right: auto;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .grid-modal-footer .modal-status.ok { color: #0a7; }
+    .grid-modal-footer .modal-status.err { color: #c00; }
+    .grid-modal-footer button {
+      font-size: 0.9rem;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .grid-modal-footer .btn-cancel {
+      background: #fff;
+      color: var(--text);
+    }
+    .grid-modal-footer .btn-save-grid {
+      background: var(--brand);
+      color: #fff;
+      border-color: var(--brand);
+    }
+    .grid-modal-footer button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    @media (max-width: 1100px) {
+      .workspace { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
+      .panel { border-right: none; border-bottom: 1px solid var(--border); max-height: 220px; }
+      .panel.settings-panel { border-left: none; }
+      .grid-modal-body { flex-direction: column; align-items: stretch; }
+      .field-pool-wrap { flex: none; width: 100%; position: static; }
+      #field-pool { max-height: 160px; flex-direction: row; flex-wrap: wrap; }
+      #field-pool .field-chip { width: auto; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>PDF Layout Studio</h1>
+    <div class="actions">
+      <a href="/admin/">← Admin</a>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <label>Preview order</label>
+    <select id="order-select">
+      {% for order in sample_orders %}
+        <option value="{{ order.id }}">{{ order.order_number }} (#{{ order.id }})</option>
+      {% empty %}
+        <option value="">No orders</option>
+      {% endfor %}
+    </select>
+    <label>Language</label>
+    <select id="lang-select">
+      <option value="ar">Arabic</option>
+      <option value="en">English</option>
+      <option value="ur">Urdu</option>
+    </select>
+    <button type="button" class="secondary" id="btn-preview">View preview</button>
+    <button type="button" class="gold" id="btn-open-grid-toolbar">Edit measurement grid</button>
+    <button type="button" id="btn-save">Save sections</button>
+    <span class="status" id="status-msg"></span>
+  </div>
+
+  <div class="workspace">
+    <aside class="panel">
+      <div class="panel-head">Sections — drag to reorder</div>
+      <div class="panel-body">
+        <ul id="section-list"></ul>
+      </div>
+    </aside>
+
+    <section class="preview-wrap">
+      <div class="panel-head">Live preview</div>
+      <iframe id="preview-frame" title="Document preview"></iframe>
+    </section>
+
+    <aside class="panel settings-panel">
+      <div class="panel-head">Section settings</div>
+      <div class="panel-body">
+        <div class="settings-group" id="section-settings">
+          <p id="no-section-hint" class="settings-hint">Click a section on the left to edit its options.</p>
+          <div id="section-settings-form" style="display:none;">
+            <h3 id="section-settings-title"></h3>
+            <div id="section-settings-fields"></div>
+            <div id="section-settings-extra"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Full-screen measurement grid modal -->
+  <div class="grid-modal" id="grid-modal" role="dialog" aria-modal="true" aria-labelledby="grid-modal-title">
+    <div class="grid-modal-header">
+      <h2 id="grid-modal-title">Measurement grid ({{ grid_cols }}×{{ grid_rows }})</h2>
+      <div class="lang-switch" role="tablist" aria-label="Grid label language">
+        <button type="button" data-lang="en" role="tab" aria-selected="false">English</button>
+        <button type="button" data-lang="ar" role="tab" class="active" aria-selected="true">العربية</button>
+        <button type="button" data-lang="ur" role="tab" aria-selected="false">اردو</button>
+      </div>
+      <span class="subtitle">RTL for Arabic/Urdu — LTR for English. Column 1 stays logical; layout mirrors visually.</span>
+      <button type="button" class="btn-close-modal" id="btn-close-grid">✕ Close</button>
+    </div>
+    <div class="grid-modal-body" id="grid-modal-body">
+      <div class="field-pool-wrap" id="field-pool-wrap">
+        <strong id="pool-label">Unplaced fields</strong>
+        <div id="field-pool"></div>
+      </div>
+      <div class="grid-wrap">
+        <div class="grid-shell" id="grid-shell" dir="rtl">
+          <table class="grid-table" id="grid-table"
+                 style="--grid-cols: {{ grid_cols }}; --grid-rows: {{ grid_rows }};">
+            <thead>
+              <tr id="grid-header-row">
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="measurement-grid" data-cols="{{ grid_cols }}" data-rows="{{ grid_rows }}"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="grid-modal-footer">
+      <span class="modal-status" id="grid-modal-status"></span>
+      <button type="button" class="btn-cancel" id="btn-cancel-grid">Cancel</button>
+      <button type="button" class="btn-save-grid" id="btn-save-grid">Save grid</button>
+    </div>
+  </div>
+
+  <script>
+    const CSRF = '{{ csrf_token }}';
+    const API = {
+      load: '/studio/pdf-layout/api/',
+      save: '/studio/pdf-layout/api/save/',
+      measurements: '/studio/pdf-layout/api/measurements/',
+      preview: '/studio/pdf-layout/preview/',
+    };
+
+    let state = { sections: [], measurement_fields: [], template: null, grid: { cols: 5, rows: 4 }, section_schemas: {} };
+    let gridDraftSnapshot = null;
+    let gridLabelLang = 'ar';
+    let selectedSectionKey = null;
+    let sortableInstances = [];
+
+    const GRID_UI = {
+      en: { pool: 'Unplaced fields', col: 'Col', row: 'Row', dir: 'ltr' },
+      ar: { pool: 'حقول غير موضوعة', col: 'ع', row: 'س', dir: 'rtl' },
+      ur: { pool: 'غیر رکھے ہوئے فیلڈ', col: 'کالم', row: 'قطار', dir: 'rtl' },
+    };
+
+    function isGridRtl(lang) {
+      return lang === 'ar' || lang === 'ur';
+    }
+
+    function fieldLabelForLang(field, lang) {
+      const en = (field.display_name || '').trim();
+      const ar = (field.display_name_ar || '').trim();
+      const ur = (field.display_name_ur || '').trim();
+      if (lang === 'ar') return ar || en;
+      if (lang === 'ur') return ur || en;
+      return en || ar || ur;
+    }
+
+    function fieldFallbackLabel(field, lang) {
+      const primary = fieldLabelForLang(field, lang);
+      const en = (field.display_name || '').trim();
+      if (lang !== 'en' && en && en !== primary) return en;
+      return '';
+    }
+
+    function applyGridLabelLanguage(lang) {
+      gridLabelLang = lang;
+      const rtl = isGridRtl(lang);
+      const ui = GRID_UI[lang] || GRID_UI.en;
+      const dir = rtl ? 'rtl' : 'ltr';
+
+      document.getElementById('grid-shell').dir = dir;
+      document.getElementById('grid-modal-body').dir = dir;
+      document.getElementById('field-pool-wrap').dir = dir;
+      document.getElementById('pool-label').textContent = ui.pool;
+
+      document.querySelectorAll('.lang-switch button').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.lang === lang);
+        btn.setAttribute('aria-selected', btn.dataset.lang === lang ? 'true' : 'false');
+      });
+
+      renderGrid();
+    }
+
+    function setStatus(msg, ok) {
+      const el = document.getElementById('status-msg');
+      el.textContent = msg;
+      el.className = 'status ' + (ok ? 'ok' : ok === false ? 'err' : '');
+    }
+
+    function setGridModalStatus(msg, ok) {
+      const el = document.getElementById('grid-modal-status');
+      el.textContent = msg;
+      el.className = 'modal-status ' + (ok ? 'ok' : ok === false ? 'err' : '');
+    }
+
+    function cloneMeasurementFields(fields) {
+      return fields.map(f => ({ ...f }));
+    }
+
+    function destroySortables() {
+      sortableInstances.forEach(s => s.destroy());
+      sortableInstances = [];
+    }
+
+    async function loadData() {
+      const res = await fetch(API.load);
+      if (!res.ok) throw new Error('Failed to load layout');
+      const data = await res.json();
+      state = data;
+      renderSections();
+      setStatus('Loaded', true);
+    }
+
+    function openGridModal() {
+      gridDraftSnapshot = cloneMeasurementFields(state.measurement_fields);
+      const previewLang = document.getElementById('lang-select').value;
+      const initialLang = ['en', 'ar', 'ur'].includes(previewLang) ? previewLang : 'ar';
+      applyGridLabelLanguage(initialLang);
+      document.getElementById('grid-modal').classList.add('open');
+      document.body.classList.add('modal-open');
+      setGridModalStatus('');
+    }
+
+    function closeGridModal(restore = false) {
+      if (restore && gridDraftSnapshot) {
+        state.measurement_fields = cloneMeasurementFields(gridDraftSnapshot);
+      }
+      destroySortables();
+      document.getElementById('grid-modal').classList.remove('open');
+      document.body.classList.remove('modal-open');
+      gridDraftSnapshot = null;
+      setGridModalStatus('');
+    }
+
+    function renderSections() {
+      const list = document.getElementById('section-list');
+      list.innerHTML = '';
+      const sorted = [...state.sections].sort((a, b) => a.display_order - b.display_order);
+      sorted.forEach(section => {
+        const li = document.createElement('li');
+        li.dataset.id = section.id;
+        li.dataset.key = section.key;
+        if (!section.is_visible) li.classList.add('hidden-section');
+        if (section.key === selectedSectionKey) li.classList.add('selected');
+        li.innerHTML = `
+          <span class="drag-handle">☰</span>
+          <span class="section-label">${section.label}</span>
+          <input type="checkbox" class="section-visible" ${section.is_visible ? 'checked' : ''} title="Visible">
+        `;
+        li.querySelector('.section-visible').addEventListener('change', e => {
+          section.is_visible = e.target.checked;
+          li.classList.toggle('hidden-section', !section.is_visible);
+        });
+        li.addEventListener('click', e => {
+          if (e.target.type === 'checkbox') return;
+          applySectionSettings();
+          selectedSectionKey = section.key;
+          renderSections();
+          showSectionSettings(section);
+        });
+        list.appendChild(li);
+      });
+      Sortable.create(list, {
+        animation: 150,
+        handle: '.drag-handle',
+        ghostClass: 'sortable-ghost',
+        onEnd: () => {
+          [...list.children].forEach((li, idx) => {
+            const sec = state.sections.find(s => String(s.id) === li.dataset.id);
+            if (sec) sec.display_order = idx + 1;
+          });
+        },
+      });
+    }
+
+    function getSettingValue(section, field) {
+      const settings = section.settings || {};
+      if (settings[field.key] !== undefined && settings[field.key] !== null) {
+        return settings[field.key];
+      }
+      return field.default;
+    }
+
+    function showSectionSettings(section) {
+      const hint = document.getElementById('no-section-hint');
+      const form = document.getElementById('section-settings-form');
+      const schema = (state.section_schemas || {})[section.key] || [];
+
+      if (!schema.length) {
+        form.style.display = 'none';
+        hint.style.display = 'block';
+        hint.textContent = `"${section.label}" has no configurable options.`;
+        return;
+      }
+
+      hint.style.display = 'none';
+      form.style.display = 'block';
+      document.getElementById('section-settings-title').textContent = section.label;
+
+      const fieldsEl = document.getElementById('section-settings-fields');
+      fieldsEl.innerHTML = '';
+      const groups = {};
+      schema.forEach(field => {
+        const groupName = field.group || 'General';
+        if (!groups[groupName]) groups[groupName] = [];
+        groups[groupName].push(field);
+      });
+
+      Object.entries(groups).forEach(([groupName, fields]) => {
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'settings-group';
+        const heading = document.createElement('h3');
+        heading.textContent = groupName;
+        groupDiv.appendChild(heading);
+
+        fields.forEach(field => {
+          const value = getSettingValue(section, field);
+          if (field.type === 'bool') {
+            const label = document.createElement('label');
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.dataset.settingKey = field.key;
+            input.checked = value !== false;
+            label.appendChild(input);
+            label.appendChild(document.createTextNode(' ' + field.label));
+            groupDiv.appendChild(label);
+          } else if (field.type === 'number') {
+            const label = document.createElement('label');
+            label.className = 'settings-field-label';
+            label.textContent = field.label;
+            groupDiv.appendChild(label);
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'settings-number-input';
+            input.dataset.settingKey = field.key;
+            input.value = value;
+            if (field.min != null) input.min = field.min;
+            if (field.max != null) input.max = field.max;
+            groupDiv.appendChild(input);
+          } else {
+            const label = document.createElement('label');
+            label.className = 'settings-field-label';
+            label.textContent = field.label;
+            groupDiv.appendChild(label);
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'settings-text-input';
+            input.dataset.settingKey = field.key;
+            input.value = value || '';
+            groupDiv.appendChild(input);
+          }
+          if (field.hint) {
+            const note = document.createElement('p');
+            note.className = 'settings-hint field-hint';
+            note.textContent = field.hint;
+            groupDiv.appendChild(note);
+          }
+        });
+        fieldsEl.appendChild(groupDiv);
+      });
+
+      const extra = document.getElementById('section-settings-extra');
+      extra.innerHTML = '';
+      if (section.key === 'person_items') {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-open-grid';
+        btn.id = 'btn-open-grid';
+        btn.textContent = '⊞ Open measurement grid editor';
+        btn.addEventListener('click', openGridModal);
+        extra.appendChild(btn);
+      }
+    }
+
+    function applySectionSettings() {
+      if (!selectedSectionKey) return;
+      const section = state.sections.find(s => s.key === selectedSectionKey);
+      if (!section) return;
+      const schema = (state.section_schemas || {})[section.key] || [];
+      if (!schema.length) return;
+
+      const settings = { ...(section.settings || {}) };
+      document.querySelectorAll('#section-settings-fields [data-setting-key]').forEach(input => {
+        const key = input.dataset.settingKey;
+        const field = schema.find(item => item.key === key);
+        if (!field) return;
+        if (field.type === 'bool') {
+          settings[key] = input.checked;
+        } else if (field.type === 'number') {
+          settings[key] = parseInt(input.value, 10) || field.default || 0;
+        } else {
+          settings[key] = input.value;
+        }
+      });
+
+      if (section.key === 'person_items') {
+        settings.measurement_cols = state.grid.cols;
+        settings.measurement_rows = state.grid.rows;
+      }
+      section.settings = settings;
+    }
+
+    function fieldChip(field) {
+      const chip = document.createElement('span');
+      chip.className = 'field-chip';
+      chip.dataset.id = field.id;
+      chip.dataset.name = field.name;
+
+      const rtl = isGridRtl(gridLabelLang);
+      const label = fieldLabelForLang(field, gridLabelLang);
+      const fallback = fieldFallbackLabel(field, gridLabelLang);
+      chip.title = `${label}${fallback ? ' — ' + fallback : ''} (${field.name})`;
+
+      const labelEl = document.createElement('span');
+      labelEl.className = 'chip-label ' + (rtl ? 'rtl' : 'ltr');
+      labelEl.textContent = label;
+      chip.appendChild(labelEl);
+
+      if (fallback) {
+        const fbEl = document.createElement('span');
+        fbEl.className = 'chip-fallback ltr';
+        fbEl.textContent = fallback;
+        chip.appendChild(fbEl);
+      }
+      return chip;
+    }
+
+    function renderGridLabels(cols, rows) {
+      const gridTable = document.getElementById('grid-table');
+      const headerRow = document.getElementById('grid-header-row');
+      const gridBody = document.getElementById('measurement-grid');
+      const ui = GRID_UI[gridLabelLang] || GRID_UI.en;
+      gridTable.style.setProperty('--grid-cols', cols);
+      gridTable.style.setProperty('--grid-rows', rows);
+      gridBody.dataset.cols = cols;
+      gridBody.dataset.rows = rows;
+
+      headerRow.innerHTML = '<th></th>';
+      for (let c = 1; c <= cols; c++) {
+        const th = document.createElement('th');
+        th.textContent = ui.col + ' ' + c;
+        headerRow.appendChild(th);
+      }
+
+      gridBody.innerHTML = '';
+      const sortedFields = [...state.measurement_fields].sort((a, b) => a.display_order - b.display_order);
+      const placed = new Set();
+      const seqByFieldId = {};
+      sortedFields.forEach((f, i) => { seqByFieldId[f.id] = i + 1; });
+
+      for (let r = 1; r <= rows; r++) {
+        const tr = document.createElement('tr');
+        const rowLabel = document.createElement('td');
+        rowLabel.className = 'grid-row-label';
+        rowLabel.textContent = r;
+        tr.appendChild(rowLabel);
+
+        for (let c = 1; c <= cols; c++) {
+          const td = document.createElement('td');
+          const cell = document.createElement('div');
+          cell.className = 'grid-cell';
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          const coord = document.createElement('span');
+          coord.className = 'cell-coord';
+          coord.textContent = r + ',' + c;
+          cell.appendChild(coord);
+
+          const field = sortedFields.find(f => f.pdf_grid_row === r && f.pdf_grid_col === c);
+          if (field) {
+            placed.add(field.id);
+            const seqEl = document.createElement('span');
+            seqEl.className = 'seq';
+            seqEl.textContent = '#' + seqByFieldId[field.id];
+            cell.appendChild(seqEl);
+            cell.appendChild(fieldChip(field));
+          } else {
+            cell.classList.add('empty');
+          }
+          td.appendChild(cell);
+          tr.appendChild(td);
+        }
+        gridBody.appendChild(tr);
+      }
+
+      const poolEl = document.getElementById('field-pool');
+      poolEl.innerHTML = '';
+      sortedFields.filter(f => !placed.has(f.id)).forEach(field => {
+        poolEl.appendChild(fieldChip(field));
+      });
+
+      initGridSortables();
+    }
+
+    function renderGrid() {
+      const cols = state.grid?.cols || 5;
+      const rows = state.grid?.rows || 4;
+      destroySortables();
+      renderGridLabels(cols, rows);
+    }
+
+    function enforceOnePerCell(container) {
+      if (!container.classList.contains('grid-cell')) return;
+      const chips = container.querySelectorAll('.field-chip');
+      if (chips.length <= 1) return;
+      const pool = document.getElementById('field-pool');
+      for (let i = 0; i < chips.length - 1; i++) {
+        pool.appendChild(chips[i]);
+      }
+    }
+
+    function swapDisplacedField(evt) {
+      const toEl = evt.to;
+      const fromEl = evt.from;
+      if (!toEl.classList.contains('grid-cell')) return;
+
+      const chips = [...toEl.querySelectorAll('.field-chip')];
+      if (chips.length <= 1) return;
+
+      const incoming = evt.item;
+      const displaced = chips.find(c => c !== incoming);
+      if (!displaced) return;
+
+      fromEl.appendChild(displaced);
+    }
+
+    function initGridSortables() {
+      destroySortables();
+
+      const sortableOptions = {
+        group: { name: 'measurements', pull: true, put: true },
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        dragClass: 'sortable-drag',
+        draggable: '.field-chip',
+        onMove: (evt) => {
+          document.querySelectorAll('.grid-cell').forEach(c => c.classList.remove('drag-over'));
+          if (evt.to.classList.contains('grid-cell')) {
+            evt.to.classList.add('drag-over');
+          }
+        },
+        onEnd: (evt) => {
+          document.querySelectorAll('.grid-cell').forEach(c => c.classList.remove('drag-over'));
+          swapDisplacedField(evt);
+          document.querySelectorAll('.grid-cell').forEach(enforceOnePerCell);
+          syncGridFromDom(false);
+        },
+      };
+
+      document.querySelectorAll('.grid-cell, #field-pool').forEach(container => {
+        sortableInstances.push(Sortable.create(container, sortableOptions));
+      });
+    }
+
+    function syncGridFromDom(reRender = true) {
+      const sortedFields = [...state.measurement_fields].sort((a, b) => a.display_order - b.display_order);
+      sortedFields.forEach(f => { f.pdf_grid_row = null; f.pdf_grid_col = null; });
+
+      const orderedCells = [];
+      document.querySelectorAll('.grid-cell').forEach(cell => {
+        const chip = cell.querySelector('.field-chip');
+        if (!chip) return;
+        const field = state.measurement_fields.find(f => String(f.id) === chip.dataset.id);
+        if (field) {
+          field.pdf_grid_row = parseInt(cell.dataset.row, 10);
+          field.pdf_grid_col = parseInt(cell.dataset.col, 10);
+          orderedCells.push(field);
+        }
+      });
+
+      const poolFields = [];
+      document.querySelectorAll('#field-pool .field-chip').forEach(chip => {
+        const field = state.measurement_fields.find(f => String(f.id) === chip.dataset.id);
+        if (field) poolFields.push(field);
+      });
+
+      let order = 1;
+      [...orderedCells, ...poolFields].forEach(field => { field.display_order = order++; });
+
+      if (reRender) {
+        renderGrid();
+      } else {
+        updateSeqBadges();
+      }
+    }
+
+    function updateSeqBadges() {
+      const sortedFields = [...state.measurement_fields].sort((a, b) => a.display_order - b.display_order);
+      const seqByFieldId = {};
+      sortedFields.forEach((f, i) => { seqByFieldId[f.id] = i + 1; });
+
+      document.querySelectorAll('.grid-cell').forEach(cell => {
+        const chip = cell.querySelector('.field-chip');
+        let seqEl = cell.querySelector('.seq');
+        if (chip) {
+          cell.classList.remove('empty');
+          const seq = seqByFieldId[parseInt(chip.dataset.id, 10)];
+          if (!seqEl) {
+            seqEl = document.createElement('span');
+            seqEl.className = 'seq';
+            cell.insertBefore(seqEl, chip);
+          }
+          seqEl.textContent = '#' + seq;
+        } else {
+          cell.classList.add('empty');
+          if (seqEl) seqEl.remove();
+        }
+      });
+    }
+
+    function sectionsForPreview() {
+      return [...state.sections].sort((a, b) => a.display_order - b.display_order);
+    }
+
+    async function refreshPreview() {
+      const orderId = document.getElementById('order-select').value;
+      if (!orderId) {
+        setStatus('Select an order to preview', false);
+        return;
+      }
+      applySectionSettings();
+      setStatus('Loading preview…');
+      document.getElementById('btn-preview').disabled = true;
+      const lang = document.getElementById('lang-select').value;
+      try {
+        const res = await fetch(API.preview, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+          body: JSON.stringify({
+            order_id: orderId,
+            lang,
+            sections: sectionsForPreview(),
+            measurement_fields: state.measurement_fields,
+          }),
+        });
+        if (!res.ok) {
+          setStatus('Preview failed', false);
+          return;
+        }
+        const html = await res.text();
+        document.getElementById('preview-frame').srcdoc = html;
+        setStatus('Preview updated', true);
+      } catch (err) {
+        setStatus(err.message || 'Preview failed', false);
+      } finally {
+        document.getElementById('btn-preview').disabled = false;
+      }
+    }
+
+    async function saveMeasurements() {
+      const sorted = [...state.measurement_fields].sort((a, b) => a.display_order - b.display_order);
+      const measRes = await fetch(API.measurements, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({
+          fields: sorted.map((f, i) => ({
+            id: f.id,
+            display_order: i + 1,
+            pdf_grid_row: f.pdf_grid_row,
+            pdf_grid_col: f.pdf_grid_col,
+          })),
+        }),
+      });
+      if (!measRes.ok) throw new Error('Measurement save failed');
+      return measRes.json();
+    }
+
+    async function saveGridModal() {
+      setGridModalStatus('Saving grid…');
+      const btn = document.getElementById('btn-save-grid');
+      btn.disabled = true;
+      try {
+        await saveMeasurements();
+        gridDraftSnapshot = cloneMeasurementFields(state.measurement_fields);
+        setGridModalStatus('Grid saved ✓', true);
+        setStatus('Measurement grid saved', true);
+        await refreshPreview();
+        setTimeout(() => closeGridModal(false), 600);
+      } catch (err) {
+        setGridModalStatus(err.message || 'Save failed', false);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function saveSections() {
+      applySectionSettings();
+      setStatus('Saving sections…');
+      document.getElementById('btn-save').disabled = true;
+      try {
+        const secRes = await fetch(API.save, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+          body: JSON.stringify({ sections: sectionsForPreview() }),
+        });
+        if (!secRes.ok) throw new Error('Section save failed');
+        setStatus('Sections saved ✓', true);
+        await refreshPreview();
+      } catch (err) {
+        setStatus(err.message || 'Save failed', false);
+      } finally {
+        document.getElementById('btn-save').disabled = false;
+      }
+    }
+
+    document.getElementById('btn-preview').addEventListener('click', refreshPreview);
+    document.getElementById('btn-save').addEventListener('click', saveSections);
+    document.getElementById('btn-open-grid-toolbar').addEventListener('click', openGridModal);
+    document.getElementById('btn-close-grid').addEventListener('click', () => closeGridModal(true));
+    document.getElementById('btn-cancel-grid').addEventListener('click', () => closeGridModal(true));
+    document.getElementById('btn-save-grid').addEventListener('click', saveGridModal);
+    document.querySelectorAll('.lang-switch button').forEach(btn => {
+      btn.addEventListener('click', () => applyGridLabelLanguage(btn.dataset.lang));
+    });
+
+    document.addEventListener('keydown', (e) => {
+      const modal = document.getElementById('grid-modal');
+      if (!modal.classList.contains('open')) return;
+      if (e.key === 'Escape') closeGridModal(true);
+    });
+
+    loadData().then(() => setStatus('Loaded — click View preview', true)).catch(err => setStatus(err.message, false));
+  </script>
+</body>
+</html>

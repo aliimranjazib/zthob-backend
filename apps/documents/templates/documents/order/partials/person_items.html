@@ -1,0 +1,89 @@
+<section class="section">
+  <div class="section-title">{{ labels.items_by_person }}</div>
+  <div class="gold-rule"></div>
+
+  {% for item in items %}
+  <div class="person">
+    <div class="person-head">{{ labels.person }} {{ item.index }} — {{ item.header }}</div>
+    <div class="person-body">
+      {% if section.settings.show_fabric != False %}
+      <table class="meta-grid">
+        <tr>
+          <td><strong>{{ labels.fabric }}:</strong> {{ item.fabric_name }}</td>
+          <td><strong>{{ labels.qty }}:</strong> {{ item.quantity }}</td>
+          {% if section.settings.show_item_ready != False %}
+          <td><strong>{{ labels.ready }}:</strong> {% if item.is_ready %}{{ labels.yes }}{% else %}{{ labels.no }}{% endif %}</td>
+          {% endif %}
+        </tr>
+        <tr>
+          <td><strong>{{ labels.item_number }}:</strong> {{ item.index }}</td>
+          <td>{% if section.settings.show_sku != False and item.sku %}<strong>{{ labels.sku }}:</strong> {{ item.sku }}{% endif %}</td>
+          <td>{% if item.fabric_quantity != None %}<strong>{{ labels.fabric_qty }}:</strong> {{ item.fabric_quantity }} m{% endif %}</td>
+        </tr>
+      </table>
+      {% endif %}
+
+      {% if section.settings.show_fabric_photos != False and item.fabric_photos %}
+      <div class="photos">
+        <strong>{{ labels.fabric_photos }}</strong><br>
+        {% for photo in item.fabric_photos %}<img src="{{ photo }}" alt="">{% endfor %}
+      </div>
+      {% endif %}
+
+      {% if section.settings.show_measurements != False and item.measurement_cells %}
+        {% if item.measurement_title %}<div class="note"><strong>{{ item.measurement_title }}</strong></div>{% endif %}
+        <div class="meas-grid" style="grid-template-columns: repeat({{ measurement_cols }}, 1fr);{% if section.settings.measurement_grid_ltr != False %} direction: ltr;{% endif %}">
+          {% for cell in item.measurement_cells %}
+          <div class="meas-cell" style="grid-row: {{ cell.row }}; grid-column: {{ cell.col }};">
+            {% if section.settings.show_sequence_numbers != False %}<div class="meas-seq">{{ cell.sequence }}</div>{% endif %}
+            <div class="meas-label">{{ cell.label }}</div>
+            <div class="meas-value">{{ cell.value }} {{ cell.unit }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% if item.measurement_notes %}
+          <div class="note"><strong>{{ labels.additional_notes }}</strong> {{ item.measurement_notes }}</div>
+        {% endif %}
+      {% endif %}
+
+      {% if section.settings.show_styles != False and item.styles %}
+        <div class="note"><strong>{{ labels.styles }}</strong></div>
+        <div class="styles">
+          {% for style in item.styles %}
+          <div class="style-card">
+            {% if style.image %}<img src="{{ style.image }}" alt="">{% endif %}
+            {% if style.label %}<div>{{ style.label }}</div>{% endif %}
+            {% if style.comment %}<div>{{ labels.comment }}: {{ style.comment }}</div>{% endif %}
+            {% for ref in style.references %}<img src="{{ ref }}" alt="">{% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% if section.settings.show_instructions != False and item.instructions %}
+        <div class="note"><strong>{{ labels.instructions }}</strong> {{ item.instructions }}</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+
+  {% if rider_measurements.cells %}
+  <div class="person">
+    <div class="person-head">{{ labels.rider_measurements }}</div>
+    <div class="person-body">
+      {% if rider_measurements.measured_at %}
+        <div class="note"><em>{{ labels.measured_at }} {{ rider_measurements.measured_at }}</em></div>
+      {% endif %}
+      <div class="meas-grid" style="grid-template-columns: repeat({{ measurement_cols }}, 1fr);{% if section.settings.measurement_grid_ltr != False %} direction: ltr;{% endif %}">
+        {% for cell in rider_measurements.cells %}
+        <div class="meas-cell" style="grid-row: {{ cell.row }}; grid-column: {{ cell.col }};">
+          {% if section.settings.show_sequence_numbers != False %}<div class="meas-seq">{{ cell.sequence }}</div>{% endif %}
+          <div class="meas-label">{{ cell.label }}</div>
+          <div class="meas-value">{{ cell.value }} {{ cell.unit }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</section>

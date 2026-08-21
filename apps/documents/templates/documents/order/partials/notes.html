@@ -1,0 +1,10 @@
+<section class="section">
+  <div class="section-title">{{ labels.notes }}</div>
+  <div class="gold-rule"></div>
+  {% if section.settings.show_special_instructions != False and order.special_instructions %}
+    <div class="note"><strong>{{ labels.special_instructions }}</strong> {{ order.special_instructions }}</div>
+  {% endif %}
+  {% if section.settings.show_internal_notes != False and order.notes %}
+    <div class="note"><strong>{{ labels.internal_notes }}</strong> {{ order.notes }}</div>
+  {% endif %}
+</section>

@@ -1214,6 +1214,9 @@ def _measurement_field_map():
             'label_ar': field.display_name_ar or field.display_name or field.name,
             'label_ur': field.display_name_ur or field.display_name or field.name,
             'order': idx,
+            'display_order': field.display_order,
+            'pdf_grid_row': getattr(field, 'pdf_grid_row', None),
+            'pdf_grid_col': getattr(field, 'pdf_grid_col', None),
             'unit': getattr(field.template, 'default_unit', 'cm') or 'cm',
         })
     return field_map
@@ -2317,17 +2320,8 @@ def _build_order_pdf_doc(buffer):
     return doc, first_frame, later_frame
 
 
-def generate_order_pdf(order, lang='en') -> bytes:
-    """
-    Generate a professional PDF for a single order.
-
-    Args:
-        order: apps.orders.models.Order instance (with related objects pre-fetched or lazy).
-        lang: Language code, 'en' (default), 'ar', or 'ur'.
-
-    Returns:
-        bytes: Raw PDF file content.
-    """
+def generate_order_pdf_reportlab(order, lang='en') -> bytes:
+    """Legacy ReportLab renderer for the complete order PDF."""
     buffer = io.BytesIO()
     page_ctx = _OrderPDFPageContext(order, lang)
     draw_first_page, draw_later_page = _make_pdf_page_callbacks(page_ctx)
@@ -2372,3 +2366,10 @@ def generate_order_pdf(order, lang='en') -> bytes:
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
+
+def generate_order_pdf(order, lang='en') -> bytes:
+    """Generate the complete order PDF via the document engine."""
+    from apps.documents.service import generate_order_document
+
+    return generate_order_document(order, lang=lang)

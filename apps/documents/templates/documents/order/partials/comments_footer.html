@@ -1,0 +1,18 @@
+<section class="section">
+  <div class="section-title">{{ labels.comments }}</div>
+  <div class="gold-rule"></div>
+  {% if section.settings.show_comments_box != False %}
+  <div class="comments-box"></div>
+  {% endif %}
+  {% if section.settings.show_generated_footer != False %}
+  <div class="footer">
+    {% if section.settings.footer_text %}
+      {{ section.settings.footer_text }}
+    {% elif is_rtl %}
+      {{ labels.order }} {{ order.number }} · {{ generated_at }} · {{ labels.generated }}
+    {% else %}
+      {{ labels.generated }} · {{ generated_at }} · {{ labels.order }} {{ order.number }}
+    {% endif %}
+  </div>
+  {% endif %}
+</section>

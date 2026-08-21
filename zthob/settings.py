@@ -32,6 +32,9 @@ except ImportError:
 APP_ENV = os.getenv('APP_ENV', 'development')
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
+# auto = HTML (WeasyPrint) with ReportLab fallback
+ORDER_PDF_ENGINE = os.getenv('ORDER_PDF_ENGINE', 'auto').strip().lower() or 'auto'
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-vv#!hz_y7dae4soqei&61+5l-5@(cr@kaz#($@5-nyb5jsku1=')
 
@@ -77,6 +80,7 @@ INSTALLED_APPS = [
     "apps.messaging",
     "apps.deliveries",
     "apps.customization",
+    "apps.documents",
     "apps.finance",
 ]
     
@@ -516,6 +520,10 @@ JAZZMIN_SETTINGS = {
         "core.SystemSettings": "fas fa-cog",
         "core.Slider": "fas fa-images",
         "core.PhoneVerification": "fas fa-phone-alt",
+
+        # Documents
+        "documents.PdfDocumentTemplate": "fas fa-file-pdf",
+        "documents.PdfDocumentSection": "fas fa-layer-group",
     },
 
     # Simplified forms - single column for easier use
