@@ -1,0 +1,8 @@
+{% extends "admin/change_form.html" %}
+
+{% block object-tools-items %}
+  <li>
+    <a href="{{ pdf_layout_studio_url }}" class="viewsitelink" target="_blank" rel="noopener">Edit grid in Layout Studio</a>
+  </li>
+  {{ block.super }}
+{% endblock %}

@@ -173,6 +173,8 @@ class MeasurementTemplateAdmin(admin.ModelAdmin):
     Admin interface for managing measurement templates.
     Add fields inline — all on one page.
     """
+    change_list_template = 'admin/customization/measurementtemplate/change_list.html'
+    change_form_template = 'admin/customization/measurementtemplate/change_form.html'
     list_display = [
         'display_name', 'display_name_ar', 'name',
         'default_unit', 'fields_count',
@@ -199,4 +201,16 @@ class MeasurementTemplateAdmin(admin.ModelAdmin):
         total = obj.fields.count()
         return f"{active} active / {total} total"
     fields_count.short_description = 'Fields'
+
+    def changelist_view(self, request, extra_context=None):
+        from apps.documents.admin import pdf_layout_studio_url
+
+        extra_context = {**(extra_context or {}), 'pdf_layout_studio_url': pdf_layout_studio_url()}
+        return super().changelist_view(request, extra_context=extra_context)
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        from apps.documents.admin import pdf_layout_studio_url
+
+        extra_context = {**(extra_context or {}), 'pdf_layout_studio_url': pdf_layout_studio_url()}
+        return super().changeform_view(request, object_id, form_url, extra_context=extra_context)
 

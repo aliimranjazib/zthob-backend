@@ -8,6 +8,21 @@
 {% endblock %}
 
 {% block content %}
+<div class="dashboard-quick-links" style="margin-bottom: 24px;">
+    <div style="background: #fff; border: 1px solid #e9ecef; border-radius: 6px; padding: 18px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+        <div>
+            <h3 style="color: #2c3e50; margin: 0 0 6px; font-size: 1.15rem;">PDF Layout Studio</h3>
+            <p style="margin: 0; color: #666; font-size: 0.92rem;">
+                Edit order receipt sections, measurement grid (5×4), and preview Arabic / English / Urdu PDFs.
+            </p>
+        </div>
+        <a href="{{ pdf_layout_studio_url }}" target="_blank" rel="noopener"
+           style="background: #990404; color: #fff; text-decoration: none; padding: 10px 18px; border-radius: 4px; font-weight: 600; white-space: nowrap;">
+            Open Layout Studio
+        </a>
+    </div>
+</div>
+
 {{ block.super }}
 
 <!-- Order Statistics Charts Section -->

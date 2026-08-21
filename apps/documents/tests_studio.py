@@ -20,6 +20,7 @@ class PdfLayoutStudioTest(TestCase):
             password='testpass123',
             role='ADMIN',
             is_staff=True,
+            is_superuser=True,
         )
         self.client = Client()
         self.client.force_login(self.staff)
@@ -82,6 +83,20 @@ class PdfLayoutStudioTest(TestCase):
         self.assertContains(response, 'lang-switch')
         self.assertContains(response, 'العربية')
         self.assertContains(response, 'اردو')
+
+    def test_admin_links_to_pdf_layout_studio(self):
+        response = self.client.get('/admin/documents/pdfdocumenttemplate/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'PDF Layout Studio')
+        self.assertContains(response, '/studio/pdf-layout/')
+
+        response = self.client.get('/admin/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Open Layout Studio')
+
+        response = self.client.get('/admin/customization/measurementtemplate/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Edit grid in Layout Studio')
 
     def test_api_load_includes_localized_measurement_labels(self):
         response = self.client.get('/studio/pdf-layout/api/')

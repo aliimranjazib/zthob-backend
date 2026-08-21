@@ -195,6 +195,9 @@ def custom_admin_index(request, extra_context=None):
         'daily_orders_data': daily_orders_data,
         'daily_labels': daily_labels,
     })
+
+    from django.urls import reverse
+    extra_context['pdf_layout_studio_url'] = reverse('documents:pdf-layout-studio')
     
     return original_index(request, extra_context)
 
