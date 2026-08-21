@@ -1,8 +1,18 @@
 {% extends "admin/change_list.html" %}
 
-{% block object-tools-items %}
-  <li>
-    <a href="{{ pdf_layout_studio_url }}" class="viewsitelink" target="_blank" rel="noopener">PDF Layout Studio</a>
-  </li>
-  {{ block.super }}
+{% block content %}
+<div style="background: #f8f9fa; border: 1px solid #dee2e6; border-left: 4px solid #990404; border-radius: 4px; padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+  <div>
+    <strong style="color: #333; font-size: 14px;">Visual layout editor</strong>
+    <p style="margin: 4px 0 0; color: #666; font-size: 13px; max-width: 640px;">
+      Use <strong>PDF Layout Studio</strong> to reorder sections, place the measurement grid, and preview Arabic / English PDFs.
+      The table below is for advanced JSON settings only.
+    </p>
+  </div>
+  <a href="{{ pdf_layout_studio_url }}" target="_blank" rel="noopener"
+     style="background: #990404; color: #fff; text-decoration: none; padding: 8px 16px; border-radius: 4px; font-weight: 600; white-space: nowrap; font-size: 13px;">
+    Open PDF Layout Studio
+  </a>
+</div>
+{{ block.super }}
 {% endblock %}

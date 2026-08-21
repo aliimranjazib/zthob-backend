@@ -1,8 +1,10 @@
 {% extends "admin/change_list.html" %}
 
-{% block object-tools-items %}
-  <li>
-    <a href="{{ pdf_layout_studio_url }}" class="viewsitelink" target="_blank" rel="noopener">Edit grid in Layout Studio</a>
-  </li>
-  {{ block.super }}
+{% block content %}
+<div style="background: #f8f9fa; border: 1px solid #dee2e6; border-left: 4px solid #990404; border-radius: 4px; padding: 12px 16px; margin-bottom: 18px; font-size: 13px; color: #555;">
+  Grid positions on PDF receipts are edited in
+  <a href="{{ pdf_layout_studio_url }}" target="_blank" rel="noopener" style="font-weight: 600;">PDF Layout Studio</a>
+  (not row/column fields here unless you need a bulk fix).
+</div>
+{{ block.super }}
 {% endblock %}

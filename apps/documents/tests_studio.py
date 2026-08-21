@@ -87,7 +87,8 @@ class PdfLayoutStudioTest(TestCase):
     def test_admin_links_to_pdf_layout_studio(self):
         response = self.client.get('/admin/documents/pdfdocumenttemplate/')
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'PDF Layout Studio')
+        self.assertContains(response, 'Open PDF Layout Studio')
+        self.assertContains(response, 'Visual layout editor')
         self.assertContains(response, '/studio/pdf-layout/')
 
         response = self.client.get('/admin/')
@@ -96,7 +97,7 @@ class PdfLayoutStudioTest(TestCase):
 
         response = self.client.get('/admin/customization/measurementtemplate/')
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Edit grid in Layout Studio')
+        self.assertContains(response, 'PDF Layout Studio')
 
     def test_api_load_includes_localized_measurement_labels(self):
         response = self.client.get('/studio/pdf-layout/api/')
