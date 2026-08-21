@@ -11,7 +11,8 @@ from django.conf import settings
 from django.utils import timezone
 from django.utils.html import escape
 
-from apps.documents.catalog import PERSON_ITEMS, STATUS_HISTORY
+from apps.documents.catalog import PERSON_ITEMS
+from apps.documents.section_schemas import merge_section_settings, STATUS_HISTORY
 from apps.orders.measurement_utils import ordered_measurement_keys
 from apps.tailors.services.order_pdf import (
     PDF_STATUS_HISTORY_MAX_ROWS,
@@ -244,7 +245,7 @@ def build_order_document_context(order, lang, layout, measurement_field_map=None
     lang = lang if lang in ('en', 'ar', 'ur') else 'en'
     field_map = measurement_field_map if measurement_field_map is not None else _measurement_field_map()
     items, measurement_cols, measurement_rows = _build_items(order, lang, layout, field_map)
-    person_settings = _section_settings(layout, PERSON_ITEMS)
+    person_settings = merge_section_settings(PERSON_ITEMS, _section_settings(layout, PERSON_ITEMS))
 
     rider_measurements = {}
     if isinstance(order.rider_measurements, dict) and order.rider_measurements:

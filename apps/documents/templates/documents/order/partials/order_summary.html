@@ -9,14 +9,14 @@
           <tr><th>{{ labels.order_type }}</th><td>{{ order.type }}</td></tr>
           <tr><th>{{ labels.service_mode }}</th><td>{{ order.service_mode }}</td></tr>
           <tr><th>{{ labels.items_count }}</th><td>{{ order.items_count }}</td></tr>
-          {% if order.estimated_delivery %}<tr><th>{{ labels.est_delivery }}</th><td>{{ order.estimated_delivery }}</td></tr>{% endif %}
-          {% if order.actual_delivery %}<tr><th>{{ labels.actual_delivery }}</th><td>{{ order.actual_delivery }}</td></tr>{% endif %}
-          {% if order.appointment %}<tr><th>{{ labels.appointment }}</th><td>{{ order.appointment }}</td></tr>{% endif %}
-          {% if order.stitching_done %}<tr><th>{{ labels.stitching_done }}</th><td>{{ order.stitching_done }}</td></tr>{% endif %}
+          {% if section.settings.show_estimated_delivery != False and order.estimated_delivery %}<tr><th>{{ labels.est_delivery }}</th><td>{{ order.estimated_delivery }}</td></tr>{% endif %}
+          {% if section.settings.show_actual_delivery != False and order.actual_delivery %}<tr><th>{{ labels.actual_delivery }}</th><td>{{ order.actual_delivery }}</td></tr>{% endif %}
+          {% if section.settings.show_appointment != False and order.appointment %}<tr><th>{{ labels.appointment }}</th><td>{{ order.appointment }}</td></tr>{% endif %}
+          {% if section.settings.show_stitching_done != False and order.stitching_done %}<tr><th>{{ labels.stitching_done }}</th><td>{{ order.stitching_done }}</td></tr>{% endif %}
         </table>
       </td>
       <td>
-        {% if tailor %}
+        {% if section.settings.show_tailor_block != False and tailor %}
         <table class="kv">
           <tr><th>{{ labels.shop_name }}</th><td>{{ tailor.shop_name }}</td></tr>
           <tr><th>{{ labels.tailor }}</th><td>{{ tailor.name }}</td></tr>

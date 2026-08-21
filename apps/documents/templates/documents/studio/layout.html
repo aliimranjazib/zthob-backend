@@ -159,6 +159,31 @@
       line-height: 1.45;
       margin: 0;
     }
+    .field-hint {
+      margin: -2px 0 8px 24px !important;
+      font-size: 0.75rem !important;
+    }
+    .settings-text-input {
+      width: 100%;
+      margin-bottom: 8px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .settings-number-input {
+      width: 80px;
+      margin-bottom: 8px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .settings-field-label {
+      display: block;
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+    }
     .btn-open-grid {
       width: 100%;
       margin-top: 12px;
@@ -513,14 +538,10 @@
       <div class="panel-body">
         <div class="settings-group" id="section-settings">
           <p id="no-section-hint" class="settings-hint">Click a section on the left to edit its options.</p>
-          <div id="person-settings" style="display:none;">
-            <h3>Person / items block</h3>
-            <label><input type="checkbox" id="set-show-fabric" checked> Show fabric</label>
-            <label><input type="checkbox" id="set-show-styles" checked> Show styles</label>
-            <label><input type="checkbox" id="set-show-measurements" checked> Show measurements</label>
-            <label><input type="checkbox" id="set-show-instructions" checked> Show instructions</label>
-            <label><input type="checkbox" id="set-show-sequence" checked> Show sequence numbers</label>
-            <button type="button" class="btn-open-grid" id="btn-open-grid">⊞ Open measurement grid editor</button>
+          <div id="section-settings-form" style="display:none;">
+            <h3 id="section-settings-title"></h3>
+            <div id="section-settings-fields"></div>
+            <div id="section-settings-extra"></div>
           </div>
         </div>
       </div>
@@ -574,7 +595,7 @@
       preview: '/studio/pdf-layout/preview/',
     };
 
-    let state = { sections: [], measurement_fields: [], template: null, grid: { cols: 5, rows: 4 } };
+    let state = { sections: [], measurement_fields: [], template: null, grid: { cols: 5, rows: 4 }, section_schemas: {} };
     let gridDraftSnapshot = null;
     let gridLabelLang = 'ar';
     let selectedSectionKey = null;
@@ -697,6 +718,7 @@
         });
         li.addEventListener('click', e => {
           if (e.target.type === 'checkbox') return;
+          applySectionSettings();
           selectedSectionKey = section.key;
           renderSections();
           showSectionSettings(section);
@@ -716,38 +738,131 @@
       });
     }
 
+    function getSettingValue(section, field) {
+      const settings = section.settings || {};
+      if (settings[field.key] !== undefined && settings[field.key] !== null) {
+        return settings[field.key];
+      }
+      return field.default;
+    }
+
     function showSectionSettings(section) {
-      document.getElementById('no-section-hint').style.display = 'none';
-      const person = document.getElementById('person-settings');
+      const hint = document.getElementById('no-section-hint');
+      const form = document.getElementById('section-settings-form');
+      const schema = (state.section_schemas || {})[section.key] || [];
+
+      if (!schema.length) {
+        form.style.display = 'none';
+        hint.style.display = 'block';
+        hint.textContent = `"${section.label}" has no configurable options.`;
+        return;
+      }
+
+      hint.style.display = 'none';
+      form.style.display = 'block';
+      document.getElementById('section-settings-title').textContent = section.label;
+
+      const fieldsEl = document.getElementById('section-settings-fields');
+      fieldsEl.innerHTML = '';
+      const groups = {};
+      schema.forEach(field => {
+        const groupName = field.group || 'General';
+        if (!groups[groupName]) groups[groupName] = [];
+        groups[groupName].push(field);
+      });
+
+      Object.entries(groups).forEach(([groupName, fields]) => {
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'settings-group';
+        const heading = document.createElement('h3');
+        heading.textContent = groupName;
+        groupDiv.appendChild(heading);
+
+        fields.forEach(field => {
+          const value = getSettingValue(section, field);
+          if (field.type === 'bool') {
+            const label = document.createElement('label');
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.dataset.settingKey = field.key;
+            input.checked = value !== false;
+            label.appendChild(input);
+            label.appendChild(document.createTextNode(' ' + field.label));
+            groupDiv.appendChild(label);
+          } else if (field.type === 'number') {
+            const label = document.createElement('label');
+            label.className = 'settings-field-label';
+            label.textContent = field.label;
+            groupDiv.appendChild(label);
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'settings-number-input';
+            input.dataset.settingKey = field.key;
+            input.value = value;
+            if (field.min != null) input.min = field.min;
+            if (field.max != null) input.max = field.max;
+            groupDiv.appendChild(input);
+          } else {
+            const label = document.createElement('label');
+            label.className = 'settings-field-label';
+            label.textContent = field.label;
+            groupDiv.appendChild(label);
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'settings-text-input';
+            input.dataset.settingKey = field.key;
+            input.value = value || '';
+            groupDiv.appendChild(input);
+          }
+          if (field.hint) {
+            const note = document.createElement('p');
+            note.className = 'settings-hint field-hint';
+            note.textContent = field.hint;
+            groupDiv.appendChild(note);
+          }
+        });
+        fieldsEl.appendChild(groupDiv);
+      });
+
+      const extra = document.getElementById('section-settings-extra');
+      extra.innerHTML = '';
       if (section.key === 'person_items') {
-        person.style.display = 'block';
-        const s = section.settings || {};
-        document.getElementById('set-show-fabric').checked = s.show_fabric !== false;
-        document.getElementById('set-show-styles').checked = s.show_styles !== false;
-        document.getElementById('set-show-measurements').checked = s.show_measurements !== false;
-        document.getElementById('set-show-instructions').checked = s.show_instructions !== false;
-        document.getElementById('set-show-sequence').checked = s.show_sequence_numbers !== false;
-      } else {
-        person.style.display = 'none';
-        document.getElementById('no-section-hint').style.display = 'block';
-        document.getElementById('no-section-hint').textContent =
-          `"${section.label}" has no extra settings.`;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-open-grid';
+        btn.id = 'btn-open-grid';
+        btn.textContent = '⊞ Open measurement grid editor';
+        btn.addEventListener('click', openGridModal);
+        extra.appendChild(btn);
       }
     }
 
-    function applyPersonSettings() {
-      const sec = state.sections.find(s => s.key === 'person_items');
-      if (!sec) return;
-      sec.settings = {
-        ...(sec.settings || {}),
-        show_fabric: document.getElementById('set-show-fabric').checked,
-        show_styles: document.getElementById('set-show-styles').checked,
-        show_measurements: document.getElementById('set-show-measurements').checked,
-        show_instructions: document.getElementById('set-show-instructions').checked,
-        show_sequence_numbers: document.getElementById('set-show-sequence').checked,
-        measurement_cols: state.grid.cols,
-        measurement_rows: state.grid.rows,
-      };
+    function applySectionSettings() {
+      if (!selectedSectionKey) return;
+      const section = state.sections.find(s => s.key === selectedSectionKey);
+      if (!section) return;
+      const schema = (state.section_schemas || {})[section.key] || [];
+      if (!schema.length) return;
+
+      const settings = { ...(section.settings || {}) };
+      document.querySelectorAll('#section-settings-fields [data-setting-key]').forEach(input => {
+        const key = input.dataset.settingKey;
+        const field = schema.find(item => item.key === key);
+        if (!field) return;
+        if (field.type === 'bool') {
+          settings[key] = input.checked;
+        } else if (field.type === 'number') {
+          settings[key] = parseInt(input.value, 10) || field.default || 0;
+        } else {
+          settings[key] = input.value;
+        }
+      });
+
+      if (section.key === 'person_items') {
+        settings.measurement_cols = state.grid.cols;
+        settings.measurement_rows = state.grid.rows;
+      }
+      section.settings = settings;
     }
 
     function fieldChip(field) {
@@ -968,7 +1083,7 @@
         setStatus('Select an order to preview', false);
         return;
       }
-      applyPersonSettings();
+      applySectionSettings();
       setStatus('Loading preview…');
       document.getElementById('btn-preview').disabled = true;
       const lang = document.getElementById('lang-select').value;
@@ -1034,7 +1149,7 @@
     }
 
     async function saveSections() {
-      applyPersonSettings();
+      applySectionSettings();
       setStatus('Saving sections…');
       document.getElementById('btn-save').disabled = true;
       try {
@@ -1055,7 +1170,6 @@
 
     document.getElementById('btn-preview').addEventListener('click', refreshPreview);
     document.getElementById('btn-save').addEventListener('click', saveSections);
-    document.getElementById('btn-open-grid').addEventListener('click', openGridModal);
     document.getElementById('btn-open-grid-toolbar').addEventListener('click', openGridModal);
     document.getElementById('btn-close-grid').addEventListener('click', () => closeGridModal(true));
     document.getElementById('btn-cancel-grid').addEventListener('click', () => closeGridModal(true));
@@ -1063,8 +1177,6 @@
     document.querySelectorAll('.lang-switch button').forEach(btn => {
       btn.addEventListener('click', () => applyGridLabelLanguage(btn.dataset.lang));
     });
-    ['set-show-fabric','set-show-styles','set-show-measurements','set-show-instructions','set-show-sequence']
-      .forEach(id => document.getElementById(id).addEventListener('change', applyPersonSettings));
 
     document.addEventListener('keydown', (e) => {
       const modal = document.getElementById('grid-modal');

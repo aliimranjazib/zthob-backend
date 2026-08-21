@@ -6,8 +6,8 @@
       <tr>
         <th>{{ labels.date_time }}</th>
         <th>{{ labels.status }}</th>
-        <th>{{ labels.changed_by }}</th>
-        <th>{{ labels.history_notes }}</th>
+        {% if section.settings.show_changed_by != False %}<th>{{ labels.changed_by }}</th>{% endif %}
+        {% if section.settings.show_notes_column != False %}<th>{{ labels.history_notes }}</th>{% endif %}
       </tr>
     </thead>
     <tbody>
@@ -15,8 +15,8 @@
       <tr>
         <td>{{ row.when }}</td>
         <td>{{ row.status }}</td>
-        <td>{{ row.changed_by }}</td>
-        <td>{{ row.notes }}</td>
+        {% if section.settings.show_changed_by != False %}<td>{{ row.changed_by }}</td>{% endif %}
+        {% if section.settings.show_notes_column != False %}<td>{{ row.notes }}</td>{% endif %}
       </tr>
       {% endfor %}
     </tbody>

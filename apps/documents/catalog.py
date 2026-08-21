@@ -36,24 +36,58 @@ SECTION_CHOICES = [
 ]
 
 DEFAULT_SECTION_SETTINGS = {
-    HEADER: {},
-    CUSTOMER: {},
-    RIDERS: {'hide_if_empty': True},
+    HEADER: {
+        'show_status_strip': True,
+        'show_order_number': True,
+        'brand_text': 'MGASK',
+    },
+    CUSTOMER: {
+        'show_service_mode': True,
+        'show_measured_by': True,
+        'show_address': True,
+    },
+    RIDERS: {
+        'hide_if_empty': True,
+        'show_measurement_rider': True,
+        'show_delivery_rider': True,
+        'show_phone': True,
+    },
     PERSON_ITEMS: {
         'show_fabric': True,
+        'show_fabric_photos': True,
+        'show_sku': True,
+        'show_item_ready': True,
         'show_styles': True,
         'show_measurements': True,
         'show_instructions': True,
         'measurement_cols': 5,
         'measurement_rows': 4,
-        # Keep the client's paper grid (col 1 on the left) even in Arabic PDFs.
         'measurement_grid_ltr': True,
         'show_sequence_numbers': True,
     },
-    ORDER_SUMMARY: {},
-    NOTES: {'hide_if_empty': True},
-    STATUS_HISTORY: {'hide_if_empty': True, 'max_rows': 4},
-    COMMENTS_FOOTER: {},
+    ORDER_SUMMARY: {
+        'show_tailor_block': True,
+        'show_estimated_delivery': True,
+        'show_actual_delivery': True,
+        'show_appointment': True,
+        'show_stitching_done': True,
+    },
+    NOTES: {
+        'hide_if_empty': True,
+        'show_special_instructions': True,
+        'show_internal_notes': True,
+    },
+    STATUS_HISTORY: {
+        'hide_if_empty': True,
+        'max_rows': 4,
+        'show_changed_by': True,
+        'show_notes_column': True,
+    },
+    COMMENTS_FOOTER: {
+        'show_comments_box': True,
+        'show_generated_footer': True,
+        'footer_text': '',
+    },
 }
 
 DEFAULT_TEMPLATE_SLUG = 'order_receipt'

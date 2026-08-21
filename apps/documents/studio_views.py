@@ -11,6 +11,7 @@ from apps.customization.models import MeasurementField
 from apps.documents.catalog import PERSON_ITEMS, SECTION_CHOICES
 from apps.documents.layout import resolve_layout, resolve_layout_from_draft
 from apps.documents.models import PdfDocumentSection, PdfDocumentTemplate
+from apps.documents.section_schemas import merge_section_settings, section_schemas_for_studio
 from apps.documents.service import generate_order_html
 from apps.orders.models import Order
 
@@ -70,7 +71,7 @@ def _serialize_sections(template):
             'label': labels.get(section.key, section.key),
             'display_order': section.display_order,
             'is_visible': section.is_visible,
-            'settings': section.settings or {},
+            'settings': merge_section_settings(section.key, section.settings or {}),
         }
         for section in sections
     ]
@@ -144,7 +145,7 @@ def _parse_json_body(request):
 @require_GET
 def layout_studio_page(request):
     template = _default_template()
-    person_settings = _person_items_settings(template) if template else {}
+    person_settings = merge_section_settings(PERSON_ITEMS, _person_items_settings(template) if template else {})
     grid = _grid_dimensions(person_settings)
     context = {
         'template': template,
@@ -170,6 +171,7 @@ def layout_studio_api_get(request):
         'grid': _grid_dimensions(person_settings),
         'sample_orders': _sample_orders(),
         'section_labels': _section_labels(),
+        'section_schemas': section_schemas_for_studio(),
     })
 
 

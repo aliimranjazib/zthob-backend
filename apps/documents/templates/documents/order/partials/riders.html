@@ -3,22 +3,26 @@
   <div class="gold-rule"></div>
   <table class="kv">
     <tr>
-      <th>{{ labels.measurement_rider }}</th>
-      <th>{{ labels.delivery_rider }}</th>
+      {% if section.settings.show_measurement_rider != False %}<th>{{ labels.measurement_rider }}</th>{% endif %}
+      {% if section.settings.show_delivery_rider != False %}<th>{{ labels.delivery_rider }}</th>{% endif %}
     </tr>
     <tr>
+      {% if section.settings.show_measurement_rider != False %}
       <td>
         {% if riders.measurement %}
           {{ riders.measurement.name }}
-          {% if riders.measurement.phone %}<br>{{ labels.phone }}: {{ riders.measurement.phone }}{% endif %}
+          {% if section.settings.show_phone != False and riders.measurement.phone %}<br>{{ labels.phone }}: {{ riders.measurement.phone }}{% endif %}
         {% else %}—{% endif %}
       </td>
+      {% endif %}
+      {% if section.settings.show_delivery_rider != False %}
       <td>
         {% if riders.delivery %}
           {{ riders.delivery.name }}
-          {% if riders.delivery.phone %}<br>{{ labels.phone }}: {{ riders.delivery.phone }}{% endif %}
+          {% if section.settings.show_phone != False and riders.delivery.phone %}<br>{{ labels.phone }}: {{ riders.delivery.phone }}{% endif %}
         {% else %}—{% endif %}
       </td>
+      {% endif %}
     </tr>
   </table>
 </section>
