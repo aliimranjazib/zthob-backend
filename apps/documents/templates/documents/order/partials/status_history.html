@@ -13,7 +13,7 @@
     <tbody>
       {% for row in status_history %}
       <tr>
-        <td>{{ row.when }}</td>
+        <td><span class="doc-ltr-date" dir="ltr">{{ row.when }}</span></td>
         <td>{{ row.status }}</td>
         {% if section.settings.show_changed_by != False %}<td>{{ row.changed_by }}</td>{% endif %}
         {% if section.settings.show_notes_column != False %}<td>{{ row.notes }}</td>{% endif %}

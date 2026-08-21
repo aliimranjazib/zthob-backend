@@ -52,6 +52,14 @@
       text-align: right;
     }
     .doc-rtl .two-col td { padding: 0 0 0 4pt; }
+    .doc-rtl .doc-ltr-date {
+      direction: ltr;
+      unicode-bidi: isolate;
+      display: inline-block;
+    }
+    .doc-ltr-date[dir="ltr"] {
+      unicode-bidi: isolate;
+    }
     .doc { width: 100%; }
     .section { margin-bottom: 8pt; page-break-inside: avoid; }
     .section-title {

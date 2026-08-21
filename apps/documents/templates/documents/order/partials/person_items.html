@@ -74,7 +74,7 @@
     <div class="person-head">{{ labels.rider_measurements }}</div>
     <div class="person-body">
       {% if rider_measurements.measured_at %}
-        <div class="note"><em>{{ labels.measured_at }} {{ rider_measurements.measured_at }}</em></div>
+        <div class="note"><em>{{ labels.measured_at }} <span class="doc-ltr-date" dir="ltr">{{ rider_measurements.measured_at }}</span></em></div>
       {% endif %}
       <div class="meas-grid{% if section.settings.measurement_grid_ltr != False and not is_rtl %} meas-grid-fixed-cols{% endif %}" style="grid-template-columns: repeat({{ measurement_cols }}, 1fr); grid-template-rows: repeat({{ measurement_rows }}, minmax(28pt, auto));">
         {% for cell in rider_measurements.cells %}

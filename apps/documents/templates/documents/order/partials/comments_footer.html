@@ -9,9 +9,9 @@
     {% if section.settings.footer_text %}
       {{ section.settings.footer_text }}
     {% elif is_rtl %}
-      {{ labels.order }} {{ order.number }} · {{ generated_at }} · {{ labels.generated }}
+      {{ labels.order }} {{ order.number }} · <span class="doc-ltr-date" dir="ltr">{{ generated_at }}</span> · {{ labels.generated }}
     {% else %}
-      {{ labels.generated }} · {{ generated_at }} · {{ labels.order }} {{ order.number }}
+      {{ labels.generated }} · <span class="doc-ltr-date" dir="ltr">{{ generated_at }}</span> · {{ labels.order }} {{ order.number }}
     {% endif %}
   </div>
   {% endif %}

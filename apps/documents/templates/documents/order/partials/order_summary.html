@@ -9,10 +9,10 @@
           <tr><th>{{ labels.order_type }}</th><td>{{ order.type }}</td></tr>
           <tr><th>{{ labels.service_mode }}</th><td>{{ order.service_mode }}</td></tr>
           <tr><th>{{ labels.items_count }}</th><td>{{ order.items_count }}</td></tr>
-          {% if section.settings.show_estimated_delivery != False and order.estimated_delivery %}<tr><th>{{ labels.est_delivery }}</th><td>{{ order.estimated_delivery }}</td></tr>{% endif %}
-          {% if section.settings.show_actual_delivery != False and order.actual_delivery %}<tr><th>{{ labels.actual_delivery }}</th><td>{{ order.actual_delivery }}</td></tr>{% endif %}
-          {% if section.settings.show_appointment != False and order.appointment %}<tr><th>{{ labels.appointment }}</th><td>{{ order.appointment }}</td></tr>{% endif %}
-          {% if section.settings.show_stitching_done != False and order.stitching_done %}<tr><th>{{ labels.stitching_done }}</th><td>{{ order.stitching_done }}</td></tr>{% endif %}
+          {% if section.settings.show_estimated_delivery != False and order.estimated_delivery %}<tr><th>{{ labels.est_delivery }}</th><td><span class="doc-ltr-date" dir="ltr">{{ order.estimated_delivery }}</span></td></tr>{% endif %}
+          {% if section.settings.show_actual_delivery != False and order.actual_delivery %}<tr><th>{{ labels.actual_delivery }}</th><td><span class="doc-ltr-date" dir="ltr">{{ order.actual_delivery }}</span></td></tr>{% endif %}
+          {% if section.settings.show_appointment != False and order.appointment %}<tr><th>{{ labels.appointment }}</th><td><span class="doc-ltr-date" dir="ltr">{{ order.appointment }}</span></td></tr>{% endif %}
+          {% if section.settings.show_stitching_done != False and order.stitching_done %}<tr><th>{{ labels.stitching_done }}</th><td><span class="doc-ltr-date" dir="ltr">{{ order.stitching_done }}</span></td></tr>{% endif %}
         </table>
       </td>
       <td>
