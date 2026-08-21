@@ -44,3 +44,15 @@ class MeasurementGridTest(TestCase):
         self.assertIsNone(by_key['waist']['value'])
         self.assertEqual(by_key['sleeve_width']['sequence'], 1)
         self.assertEqual(by_key['waist']['sequence'], 3)
+
+    def test_build_measurement_grid_table_indexes_by_row_col(self):
+        from apps.documents.measurement_grid import build_measurement_grid_table
+
+        cells = [
+            {'row': 1, 'col': 1, 'label': 'A', 'has_value': True},
+            {'row': 2, 'col': 5, 'label': 'B', 'has_value': True},
+        ]
+        table = build_measurement_grid_table(cells, 4, 5)
+        self.assertEqual(table[0][0]['label'], 'A')
+        self.assertEqual(table[1][4]['label'], 'B')
+        self.assertIsNone(table[0][1])

@@ -14,7 +14,7 @@ from django.utils.html import escape
 from apps.documents.catalog import PERSON_ITEMS
 from apps.documents.measurement_config import build_pdf_field_map
 from apps.documents.section_schemas import merge_section_settings, STATUS_HISTORY
-from apps.documents.measurement_grid import build_measurement_grid_cells
+from apps.documents.measurement_grid import build_measurement_grid_cells, build_measurement_grid_table
 from apps.tailors.services.order_pdf import (
     PDF_STATUS_HISTORY_MAX_ROWS,
     _choice_display,
@@ -143,6 +143,14 @@ def _build_items(order, lang, layout, field_map):
     )
     for index, item in enumerate(qs.all(), start=1):
         measurements = item.measurements if isinstance(item.measurements, dict) else {}
+        measurement_cells = _build_measurement_cells(
+            measurements,
+            field_map,
+            lang,
+            cols,
+            rows,
+            show_all_slots=bool(settings.get('show_all_measurement_slots', True)),
+        )
         items.append({
             'index': index,
             'recipient': _recipient(item, order),
@@ -159,14 +167,8 @@ def _build_items(order, lang, layout, field_map):
             ],
             'measurement_title': measurements.get('title') or '',
             'measurement_notes': measurements.get('notes') or '',
-            'measurement_cells': _build_measurement_cells(
-                measurements,
-                field_map,
-                lang,
-                cols,
-                rows,
-                show_all_slots=bool(settings.get('show_all_measurement_slots', True)),
-            ),
+            'measurement_cells': measurement_cells,
+            'measurement_table': build_measurement_grid_table(measurement_cells, rows, cols),
             'styles': _style_cards(item.custom_styles, lang),
             'instructions': item.custom_instructions or '',
         })
@@ -230,15 +232,19 @@ def build_order_document_context(order, lang, layout, measurement_field_map=None
 
     rider_measurements = {}
     if isinstance(order.rider_measurements, dict) and order.rider_measurements:
+        rider_cells = _build_measurement_cells(
+            order.rider_measurements,
+            field_map,
+            lang,
+            measurement_cols,
+            measurement_rows,
+            show_all_slots=bool(person_settings.get('show_all_measurement_slots', True)),
+        )
         rider_measurements = {
             'measured_at': _fmt_datetime(order.measurement_taken_at) if order.measurement_taken_at else '',
-            'cells': _build_measurement_cells(
-                order.rider_measurements,
-                field_map,
-                lang,
-                measurement_cols,
-                measurement_rows,
-                show_all_slots=bool(person_settings.get('show_all_measurement_slots', True)),
+            'cells': rider_cells,
+            'table': build_measurement_grid_table(
+                rider_cells, measurement_rows, measurement_cols,
             ),
             'notes': order.rider_measurements.get('notes') or '',
         }

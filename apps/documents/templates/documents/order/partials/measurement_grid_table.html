@@ -1,0 +1,15 @@
+<table class="meas-grid-table" dir="{% if is_rtl and section.settings.measurement_grid_ltr == False %}rtl{% else %}ltr{% endif %}">
+  {% for row in measurement_table %}
+  <tr>
+    {% for cell in row %}
+    <td class="meas-cell{% if cell and not cell.has_value %} meas-cell-empty{% endif %}">
+      {% if cell and cell.label %}
+        {% if section.settings.show_sequence_numbers != False and cell.sequence %}<div class="meas-seq">{{ cell.sequence }}</div>{% endif %}
+        <div class="meas-label">{{ cell.label }}</div>
+        <div class="meas-value">{% if cell.has_value %}{{ cell.value }} {{ cell.unit }}{% else %}—{% endif %}</div>
+      {% endif %}
+    </td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>

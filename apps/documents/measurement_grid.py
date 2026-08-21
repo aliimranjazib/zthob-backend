@@ -124,3 +124,14 @@ def build_measurement_grid_cells(
             'has_value': True,
         })
     return cells
+
+
+def build_measurement_grid_table(cells, rows, cols):
+    """Return a rows x cols table for HTML/ReportLab renderers (WeasyPrint-safe)."""
+    table = [[None for _ in range(cols)] for _ in range(rows)]
+    for cell in cells:
+        row_idx = int(cell['row']) - 1
+        col_idx = int(cell['col']) - 1
+        if 0 <= row_idx < rows and 0 <= col_idx < cols:
+            table[row_idx][col_idx] = cell
+    return table

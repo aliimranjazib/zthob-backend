@@ -120,7 +120,9 @@ class OrderDocumentEngineTest(TestCase):
         self.assertEqual(cells['waist']['row'], 4)
         self.assertEqual(cells['waist']['col'], 1)
         html, _ctx, _layout = generate_order_html(self.order, lang='en')
-        self.assertIn('grid-row: 4', html)
+        table = context['items'][0]['measurement_table']
+        self.assertEqual(table[3][0]['key'], 'waist')
+        self.assertIn('meas-grid-table', html)
         self.assertIn('Sleeve Width', html)
 
     def test_measurement_grid_shows_all_slots_including_empty(self):
@@ -154,6 +156,8 @@ class OrderDocumentEngineTest(TestCase):
         self.assertIn('doc-rtl', html)
         self.assertIn('معلومات العميل', html)
         self.assertNotIn('meas-grid meas-grid-fixed-cols', html)
+        self.assertIn('meas-grid-table', html)
+        self.assertIn('dir="rtl"', html)
         self.assertIn('text-transform: none', html)
 
     @override_settings(ORDER_PDF_ENGINE='reportlab')

@@ -30,19 +30,9 @@
       </div>
       {% endif %}
 
-      {% if section.settings.show_measurements != False and item.measurement_cells %}
+      {% if section.settings.show_measurements != False and item.measurement_table %}
         {% if item.measurement_title %}<div class="note"><strong>{{ item.measurement_title }}</strong></div>{% endif %}
-        <div class="meas-grid{% if section.settings.measurement_grid_ltr != False and not is_rtl %} meas-grid-fixed-cols{% endif %}" style="grid-template-columns: repeat({{ measurement_cols }}, 1fr); grid-template-rows: repeat({{ measurement_rows }}, minmax(28pt, auto));">
-          {% for cell in item.measurement_cells %}
-          <div class="meas-cell{% if not cell.has_value %} meas-cell-empty{% endif %}" style="grid-row: {{ cell.row }}; grid-column: {{ cell.col }};">
-            {% if cell.label %}
-              {% if section.settings.show_sequence_numbers != False and cell.sequence %}<div class="meas-seq">{{ cell.sequence }}</div>{% endif %}
-              <div class="meas-label">{{ cell.label }}</div>
-              <div class="meas-value">{% if cell.has_value %}{{ cell.value }} {{ cell.unit }}{% else %}—{% endif %}</div>
-            {% endif %}
-          </div>
-          {% endfor %}
-        </div>
+        {% include "documents/order/partials/measurement_grid_table.html" with measurement_table=item.measurement_table %}
         {% if item.measurement_notes %}
           <div class="note"><strong>{{ labels.additional_notes }}</strong> {{ item.measurement_notes }}</div>
         {% endif %}
@@ -76,17 +66,7 @@
       {% if rider_measurements.measured_at %}
         <div class="note"><em>{{ labels.measured_at }} <span class="doc-ltr-date" dir="ltr">{{ rider_measurements.measured_at }}</span></em></div>
       {% endif %}
-      <div class="meas-grid{% if section.settings.measurement_grid_ltr != False and not is_rtl %} meas-grid-fixed-cols{% endif %}" style="grid-template-columns: repeat({{ measurement_cols }}, 1fr); grid-template-rows: repeat({{ measurement_rows }}, minmax(28pt, auto));">
-        {% for cell in rider_measurements.cells %}
-        <div class="meas-cell{% if not cell.has_value %} meas-cell-empty{% endif %}" style="grid-row: {{ cell.row }}; grid-column: {{ cell.col }};">
-          {% if cell.label %}
-            {% if section.settings.show_sequence_numbers != False and cell.sequence %}<div class="meas-seq">{{ cell.sequence }}</div>{% endif %}
-            <div class="meas-label">{{ cell.label }}</div>
-            <div class="meas-value">{% if cell.has_value %}{{ cell.value }} {{ cell.unit }}{% else %}—{% endif %}</div>
-          {% endif %}
-        </div>
-        {% endfor %}
-      </div>
+      {% include "documents/order/partials/measurement_grid_table.html" with measurement_table=rider_measurements.table %}
     </div>
   </div>
   {% endif %}

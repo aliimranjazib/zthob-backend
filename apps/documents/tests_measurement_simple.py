@@ -101,6 +101,7 @@ class SimpleMeasurementPdfTest(TestCase):
         html, context, _layout = generate_order_html(case.order, lang='ar')
         self.assertTrue(context['is_rtl'])
         self.assertNotIn('meas-grid meas-grid-fixed-cols', html)
+        self.assertIn('meas-grid-table', html)
 
     def test_english_pdf_keeps_ltr_grid_columns(self):
         from apps.documents.tests import OrderDocumentEngineTest
@@ -114,4 +115,5 @@ class SimpleMeasurementPdfTest(TestCase):
 
         html, context, _layout = generate_order_html(case.order, lang='en')
         self.assertFalse(context['is_rtl'])
-        self.assertIn('meas-grid meas-grid-fixed-cols', html)
+        self.assertIn('meas-grid-table', html)
+        self.assertIn('dir="ltr"', html)

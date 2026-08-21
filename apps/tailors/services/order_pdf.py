@@ -1351,13 +1351,14 @@ def _measurements_grid_positioned(
     cell_w = page_w / cols
     grid_rows = []
     for row in range(1, rows + 1):
-        cells = []
+        cells = [''] * cols
         for col in range(1, cols + 1):
             pair = placed.get((row, col))
+            physical_idx = (cols - col) if is_rtl else (col - 1)
             if pair:
-                cells.append(_cell(pair[0], pair[1], pair[2] if len(pair) > 2 else 'cm'))
-            else:
-                cells.append('')
+                cells[physical_idx] = _cell(
+                    pair[0], pair[1], pair[2] if len(pair) > 2 else 'cm',
+                )
         grid_rows.append(cells)
 
     grid = Table(grid_rows, colWidths=[cell_w] * cols)
