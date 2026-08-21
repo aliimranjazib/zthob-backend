@@ -153,7 +153,7 @@ class OrderDocumentEngineTest(TestCase):
         self.assertIn('dir="rtl"', html)
         self.assertIn('doc-rtl', html)
         self.assertIn('معلومات العميل', html)
-        self.assertIn('meas-grid-fixed-cols', html)
+        self.assertNotIn('meas-grid meas-grid-fixed-cols', html)
         self.assertIn('text-transform: none', html)
 
     @override_settings(ORDER_PDF_ENGINE='reportlab')

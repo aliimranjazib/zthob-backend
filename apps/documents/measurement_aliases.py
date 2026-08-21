@@ -13,7 +13,6 @@ LEGACY_TO_CANONICAL = {
     'tall_front': 'front_length',
     'tall_back': 'back_length',
     'armpit': 'armhole',
-    'shoulder_opening': 'armhole',
     'sleeve': 'plain_sleeve',
     'standard_hand': 'plain_sleeve',
     'cufflink': 'cuff_sleeve',
@@ -43,11 +42,6 @@ def _build_canonical_lookup():
         aliases = lookup.setdefault(canonical_key, [canonical_key])
         if legacy_key not in aliases:
             aliases.append(legacy_key)
-    # Prefer shoulder_opening over armpit when both exist (same grid cell).
-    armhole_aliases = lookup.get('armhole', ['armhole'])
-    if 'shoulder_opening' in armhole_aliases and 'armpit' in armhole_aliases:
-        armhole_aliases.remove('shoulder_opening')
-        armhole_aliases.insert(1, 'shoulder_opening')
     return lookup
 
 

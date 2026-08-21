@@ -32,7 +32,7 @@
 
       {% if section.settings.show_measurements != False and item.measurement_cells %}
         {% if item.measurement_title %}<div class="note"><strong>{{ item.measurement_title }}</strong></div>{% endif %}
-        <div class="meas-grid{% if section.settings.measurement_grid_ltr != False %} meas-grid-fixed-cols{% endif %}" style="grid-template-columns: repeat({{ measurement_cols }}, 1fr); grid-template-rows: repeat({{ measurement_rows }}, minmax(28pt, auto));">
+        <div class="meas-grid{% if section.settings.measurement_grid_ltr != False and not is_rtl %} meas-grid-fixed-cols{% endif %}" style="grid-template-columns: repeat({{ measurement_cols }}, 1fr); grid-template-rows: repeat({{ measurement_rows }}, minmax(28pt, auto));">
           {% for cell in item.measurement_cells %}
           <div class="meas-cell{% if not cell.has_value %} meas-cell-empty{% endif %}" style="grid-row: {{ cell.row }}; grid-column: {{ cell.col }};">
             {% if cell.label %}
@@ -76,7 +76,7 @@
       {% if rider_measurements.measured_at %}
         <div class="note"><em>{{ labels.measured_at }} {{ rider_measurements.measured_at }}</em></div>
       {% endif %}
-      <div class="meas-grid{% if section.settings.measurement_grid_ltr != False %} meas-grid-fixed-cols{% endif %}" style="grid-template-columns: repeat({{ measurement_cols }}, 1fr); grid-template-rows: repeat({{ measurement_rows }}, minmax(28pt, auto));">
+      <div class="meas-grid{% if section.settings.measurement_grid_ltr != False and not is_rtl %} meas-grid-fixed-cols{% endif %}" style="grid-template-columns: repeat({{ measurement_cols }}, 1fr); grid-template-rows: repeat({{ measurement_rows }}, minmax(28pt, auto));">
         {% for cell in rider_measurements.cells %}
         <div class="meas-cell{% if not cell.has_value %} meas-cell-empty{% endif %}" style="grid-row: {{ cell.row }}; grid-column: {{ cell.col }};">
           {% if cell.label %}

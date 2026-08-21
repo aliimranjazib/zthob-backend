@@ -1,6 +1,6 @@
 """Shared measurement grid layout for PDF studio and document rendering."""
 
-from apps.documents.measurement_aliases import canonical_key_for_legacy, resolve_measurement_value
+from apps.documents.measurement_aliases import resolve_measurement_value
 from apps.orders.measurement_utils import ordered_measurement_keys
 
 
@@ -27,6 +27,16 @@ def _label_from_meta(name, meta, lang, label_fn):
     if lang == 'ar':
         return meta.get('label_ar') or meta.get('label_en') or fallback
     return meta.get('label_en') or fallback
+
+
+def _measurement_value(measurements, field_name):
+    """Read a value by field name; fall back to thobe aliases for old grids."""
+    if not isinstance(measurements, dict):
+        return None
+    value = measurements.get(field_name)
+    if value not in (None, '', 'null'):
+        return value
+    return resolve_measurement_value(measurements, field_name)
 
 
 def build_measurement_grid_cells(
@@ -67,7 +77,7 @@ def build_measurement_grid_cells(
                     })
                     continue
                 name, meta = entry
-                value = resolve_measurement_value(measurements, name)
+                value = _measurement_value(measurements, name)
                 has_value = value not in (None, '', 'null')
                 cells.append({
                     'key': name,
@@ -89,8 +99,7 @@ def build_measurement_grid_cells(
         if value in (None, '', 'null'):
             continue
         sequence += 1
-        canonical = canonical_key_for_legacy(key)
-        meta = field_map.get(canonical) or field_map.get(key, {})
+        meta = field_map.get(key, {})
         row = meta.get('pdf_grid_row')
         col = meta.get('pdf_grid_col')
         if not row or not col:
@@ -105,8 +114,8 @@ def build_measurement_grid_cells(
         col = int(col or 1)
         used.add((row, col))
         cells.append({
-            'key': canonical,
-            'label': _label_from_meta(canonical, meta, lang, label_fn),
+            'key': key,
+            'label': _label_from_meta(key, meta, lang, label_fn),
             'value': value,
             'unit': measurements.get('unit') or meta.get('unit') or 'cm',
             'row': row,

@@ -1196,31 +1196,11 @@ def _append_measurement_notes(block, measurements, page_w, s, lang):
 def _measurement_field_map():
     """
     Return active measurement field metadata keyed by JSON field name.
-    The PDF uses this as the source of truth for labels. Field order follows the payload.
+    Uses the same template as the mobile app (measurements_template).
     """
-    try:
-        from apps.customization.models import MeasurementField
-        fields = MeasurementField.objects.select_related('template').filter(
-            is_active=True,
-            template__is_active=True,
-        ).order_by('template__display_order', 'display_order', 'name')
-    except Exception as exc:
-        logger.debug("Unable to load measurement field metadata for PDF: %s", exc)
-        return {}
+    from apps.documents.measurement_config import build_pdf_field_map
 
-    field_map = {}
-    for idx, field in enumerate(fields):
-        field_map.setdefault(field.name, {
-            'label_en': field.display_name or field.name.replace('_', ' ').title(),
-            'label_ar': field.display_name_ar or field.display_name or field.name,
-            'label_ur': field.display_name_ur or field.display_name or field.name,
-            'order': idx,
-            'display_order': field.display_order,
-            'pdf_grid_row': getattr(field, 'pdf_grid_row', None),
-            'pdf_grid_col': getattr(field, 'pdf_grid_col', None),
-            'unit': getattr(field.template, 'default_unit', 'cm') or 'cm',
-        })
-    return field_map
+    return build_pdf_field_map()
 
 
 def _format_measurement_pairs(measurements, lang='en', field_map=None):

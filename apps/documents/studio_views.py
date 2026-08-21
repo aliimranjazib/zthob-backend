@@ -94,9 +94,9 @@ def _build_field_map_overrides(measurement_fields):
     """Merge studio draft measurement positions into the PDF field map."""
     if not measurement_fields:
         return None
-    from apps.tailors.services.order_pdf import _measurement_field_map
+    from apps.documents.measurement_config import build_pdf_field_map
 
-    field_map = _measurement_field_map()
+    field_map = build_pdf_field_map()
     for item in measurement_fields:
         name = item.get('name')
         if not name or name not in field_map:

@@ -1,37 +1,26 @@
 """Measurement field metadata shared by PDF output and Layout Studio."""
 
+from apps.documents.measurement_config import build_pdf_field_map, get_pdf_measurement_template
+
 
 def serialize_measurement_fields_for_studio():
-    """
-    Return measurement fields exactly as the order PDF resolves them.
-
-    Uses the same name de-duplication and label source as ``_measurement_field_map``
-    so studio chip labels match downloaded PDF labels (e.g. HEM, TALL BACK).
-    """
+    """Return measurement fields for the PDF/studio template (same keys as the app)."""
     from apps.customization.models import MeasurementField
-    from apps.tailors.services.order_pdf import _measurement_field_map
 
-    field_map = _measurement_field_map()
-    if not field_map:
+    template = get_pdf_measurement_template()
+    if template is None:
         return []
 
-    names = list(field_map.keys())
-    db_fields = {
-        field.name: field
-        for field in MeasurementField.objects.filter(
-            name__in=names,
-            is_active=True,
-            template__is_active=True,
-        ).select_related('template')
-    }
+    field_map = build_pdf_field_map()
+    fields = MeasurementField.objects.filter(
+        template=template,
+        is_active=True,
+    ).select_related('template').order_by('display_order', 'name')
 
     entries = []
-    for name in names:
-        field = db_fields.get(name)
-        if field is None:
-            continue
-        meta = field_map[name]
-        label_en = meta.get('label_en') or field.display_name or name
+    for field in fields:
+        meta = field_map.get(field.name, {})
+        label_en = meta.get('label_en') or field.display_name or field.name
         entries.append({
             'id': field.id,
             'name': field.name,
@@ -42,8 +31,6 @@ def serialize_measurement_fields_for_studio():
             'display_order': meta.get('display_order', field.display_order),
             'pdf_grid_row': meta.get('pdf_grid_row') or field.pdf_grid_row,
             'pdf_grid_col': meta.get('pdf_grid_col') or field.pdf_grid_col,
-            'template': field.template.name,
+            'template': template.name,
         })
-
-    entries.sort(key=lambda item: (item['display_order'], item['name']))
     return entries

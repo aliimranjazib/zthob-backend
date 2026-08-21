@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.utils.html import escape
 
 from apps.documents.catalog import PERSON_ITEMS
+from apps.documents.measurement_config import build_pdf_field_map
 from apps.documents.section_schemas import merge_section_settings, STATUS_HISTORY
 from apps.documents.measurement_grid import build_measurement_grid_cells
 from apps.tailors.services.order_pdf import (
@@ -24,7 +25,6 @@ from apps.tailors.services.order_pdf import (
     _fmt_datetime,
     _item_fabric_display_name,
     _localized_note,
-    _measurement_field_map,
     _measurement_taken_by_name,
     _order_delivery_address,
     _person_header_detail_text,
@@ -224,7 +224,7 @@ def _tailor_payload(order):
 def build_order_document_context(order, lang, layout, measurement_field_map=None):
     """Pure presentation context for the complete order document."""
     lang = lang if lang in ('en', 'ar', 'ur') else 'en'
-    field_map = measurement_field_map if measurement_field_map is not None else _measurement_field_map()
+    field_map = measurement_field_map if measurement_field_map is not None else build_pdf_field_map()
     items, measurement_cols, measurement_rows = _build_items(order, lang, layout, field_map)
     person_settings = merge_section_settings(PERSON_ITEMS, _section_settings(layout, PERSON_ITEMS))
 
