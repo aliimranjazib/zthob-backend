@@ -64,6 +64,7 @@ DEFAULT_SECTION_SETTINGS = {
         'measurement_rows': 4,
         'measurement_grid_ltr': True,
         'show_sequence_numbers': True,
+        'show_all_measurement_slots': True,
     },
     ORDER_SUMMARY: {
         'show_tailor_block': True,

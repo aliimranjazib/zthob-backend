@@ -13,7 +13,7 @@ from django.utils.html import escape
 
 from apps.documents.catalog import PERSON_ITEMS
 from apps.documents.section_schemas import merge_section_settings, STATUS_HISTORY
-from apps.orders.measurement_utils import ordered_measurement_keys
+from apps.documents.measurement_grid import build_measurement_grid_cells
 from apps.tailors.services.order_pdf import (
     PDF_STATUS_HISTORY_MAX_ROWS,
     _choice_display,
@@ -82,42 +82,16 @@ def _measurement_label(key, meta, lang):
     return meta.get('label_en') or fallback
 
 
-def _build_measurement_cells(measurements, field_map, lang, cols, rows):
-    if not measurements or not isinstance(measurements, dict):
-        return []
-
-    cells = []
-    used = set()
-    sequence = 0
-    for key in ordered_measurement_keys(measurements):
-        value = measurements.get(key)
-        if value in (None, '', 'null'):
-            continue
-        sequence += 1
-        meta = field_map.get(key, {})
-        row = meta.get('pdf_grid_row')
-        col = meta.get('pdf_grid_col')
-        if not row or not col:
-            for candidate_row in range(1, rows + 1):
-                for candidate_col in range(1, cols + 1):
-                    if (candidate_row, candidate_col) not in used:
-                        row, col = candidate_row, candidate_col
-                        break
-                if row and col and (row, col) not in used:
-                    break
-        row = int(row or 1)
-        col = int(col or 1)
-        used.add((row, col))
-        cells.append({
-            'key': key,
-            'label': _measurement_label(key, meta, lang),
-            'value': value,
-            'unit': measurements.get('unit') or meta.get('unit') or 'cm',
-            'row': row,
-            'col': col,
-            'sequence': sequence,
-        })
-    return cells
+def _build_measurement_cells(measurements, field_map, lang, cols, rows, *, show_all_slots=True):
+    return build_measurement_grid_cells(
+        measurements,
+        field_map,
+        lang,
+        cols,
+        rows,
+        show_all_slots=show_all_slots,
+        label_fn=_measurement_label,
+    )
 
 
 def _style_cards(styles, lang):
@@ -185,7 +159,14 @@ def _build_items(order, lang, layout, field_map):
             ],
             'measurement_title': measurements.get('title') or '',
             'measurement_notes': measurements.get('notes') or '',
-            'measurement_cells': _build_measurement_cells(measurements, field_map, lang, cols, rows),
+            'measurement_cells': _build_measurement_cells(
+                measurements,
+                field_map,
+                lang,
+                cols,
+                rows,
+                show_all_slots=bool(settings.get('show_all_measurement_slots', True)),
+            ),
             'styles': _style_cards(item.custom_styles, lang),
             'instructions': item.custom_instructions or '',
         })
@@ -252,7 +233,12 @@ def build_order_document_context(order, lang, layout, measurement_field_map=None
         rider_measurements = {
             'measured_at': _fmt_datetime(order.measurement_taken_at) if order.measurement_taken_at else '',
             'cells': _build_measurement_cells(
-                order.rider_measurements, field_map, lang, measurement_cols, measurement_rows,
+                order.rider_measurements,
+                field_map,
+                lang,
+                measurement_cols,
+                measurement_rows,
+                show_all_slots=bool(person_settings.get('show_all_measurement_slots', True)),
             ),
             'notes': order.rider_measurements.get('notes') or '',
         }

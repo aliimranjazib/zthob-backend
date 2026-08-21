@@ -1277,34 +1277,25 @@ def _single_measurement_pair(key, value, measurements, field_map, lang):
     return label, value, unit or meta.get('unit', 'cm')
 
 
-def _positioned_measurement_cells(measurements, field_map, lang, cols, rows):
-    """Map measurement values to fixed (row, col) cells using field_map grid metadata."""
-    from apps.orders.measurement_utils import ordered_measurement_keys
+def _positioned_measurement_cells(measurements, field_map, lang, cols, rows, show_all_slots=True):
+    """Map grid positions to label/value/unit tuples for ReportLab rendering."""
+    from apps.documents.measurement_grid import build_measurement_grid_cells
 
-    if not measurements or not isinstance(measurements, dict):
-        return {}
-
+    cells = build_measurement_grid_cells(
+        measurements,
+        field_map,
+        lang,
+        cols,
+        rows,
+        show_all_slots=show_all_slots,
+    )
     placed = {}
-    used = set()
-    for key in ordered_measurement_keys(measurements):
-        value = measurements.get(key)
-        if value in (None, '', 'null'):
+    for cell in cells:
+        if not cell.get('label'):
             continue
-        meta = field_map.get(key, {})
-        row = meta.get('pdf_grid_row')
-        col = meta.get('pdf_grid_col')
-        if not row or not col:
-            for candidate_row in range(1, rows + 1):
-                for candidate_col in range(1, cols + 1):
-                    if (candidate_row, candidate_col) not in used:
-                        row, col = candidate_row, candidate_col
-                        break
-                if row and col and (row, col) not in used:
-                    break
-        row = int(row or 1)
-        col = int(col or 1)
-        used.add((row, col))
-        placed[(row, col)] = _single_measurement_pair(key, value, measurements, field_map, lang)
+        value = cell['value'] if cell.get('has_value') else '—'
+        unit = cell.get('unit', 'cm') if cell.get('has_value') else ''
+        placed[(cell['row'], cell['col'])] = (cell['label'], value, unit)
     return placed
 
 
@@ -1889,19 +1880,20 @@ def _build_person_blocks(order, items, page_w, s, lang, measurement_fields):
             block.append(Spacer(1, PDF_ITEM_SPACER))
 
         has_content = True
-        if item.measurements and isinstance(item.measurements, dict):
-            meas_title = item.measurements.get('title', '')
-            grid = _measurements_grid_positioned(
-                item.measurements,
-                measurement_fields,
-                page_w,
-                s,
-                lang,
-                title=meas_title,
-            )
-            if grid:
-                block.append(grid)
-                _append_measurement_notes(block, item.measurements, page_w, s, lang)
+        meas = item.measurements if isinstance(item.measurements, dict) else {}
+        meas_title = meas.get('title', '')
+        grid = _measurements_grid_positioned(
+            meas,
+            measurement_fields,
+            page_w,
+            s,
+            lang,
+            title=meas_title,
+        )
+        if grid:
+            block.append(grid)
+            if meas:
+                _append_measurement_notes(block, meas, page_w, s, lang)
 
         if item.custom_styles and isinstance(item.custom_styles, list):
             style_section = _custom_style_section(item.custom_styles, page_w, s, lang)
@@ -1922,8 +1914,9 @@ def _build_person_blocks(order, items, page_w, s, lang, measurement_fields):
             blocks.append(block)
 
     if order.rider_measurements and isinstance(order.rider_measurements, dict) and order.rider_measurements:
+        rider_meas = order.rider_measurements
         rider_grid = _measurements_grid_positioned(
-            order.rider_measurements,
+            rider_meas,
             measurement_fields,
             page_w,
             s,
@@ -1941,7 +1934,7 @@ def _build_person_blocks(order, items, page_w, s, lang, measurement_fields):
                 ))
                 rider_block.append(Spacer(1, PDF_ITEM_SPACER))
             rider_block.append(rider_grid)
-            _append_measurement_notes(rider_block, order.rider_measurements, page_w, s, lang)
+            _append_measurement_notes(rider_block, rider_meas, page_w, s, lang)
             blocks.append(rider_block)
 
     if not blocks:

@@ -612,6 +612,7 @@
     }
 
     function fieldLabelForLang(field, lang) {
+      if (lang === 'en' && field.pdf_label_en) return field.pdf_label_en;
       const en = (field.display_name || '').trim();
       const ar = (field.display_name_ar || '').trim();
       const ur = (field.display_name_ur || '').trim();
@@ -622,8 +623,9 @@
 
     function fieldFallbackLabel(field, lang) {
       const primary = fieldLabelForLang(field, lang);
-      const en = (field.display_name || '').trim();
+      const en = (field.pdf_label_en || field.display_name || '').trim();
       if (lang !== 'en' && en && en !== primary) return en;
+      if (lang === 'en' && field.name && field.name !== primary) return field.name;
       return '';
     }
 

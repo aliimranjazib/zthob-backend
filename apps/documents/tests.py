@@ -123,11 +123,38 @@ class OrderDocumentEngineTest(TestCase):
         self.assertIn('grid-row: 4', html)
         self.assertIn('Sleeve Width', html)
 
+    def test_measurement_grid_shows_all_slots_including_empty(self):
+        thobe = MeasurementTemplate.objects.filter(name='thobe').first()
+        if thobe is None:
+            self.skipTest('Thobe measurement template was not seeded')
+        for index, field in enumerate(
+            MeasurementField.objects.filter(template=thobe, is_active=True).order_by('display_order')[:20],
+            start=1,
+        ):
+            row = ((index - 1) % 4) + 1
+            col = ((index - 1) // 4) + 1
+            field.pdf_grid_row = row
+            field.pdf_grid_col = col
+            field.display_order = index
+            field.save(update_fields=['pdf_grid_row', 'pdf_grid_col', 'display_order', 'updated_at'])
+
+        layout = resolve_layout()
+        context = build_order_document_context(self.order, 'en', layout)
+        cells = context['items'][0]['measurement_cells']
+        self.assertEqual(len(cells), 20)
+        empty_cells = [cell for cell in cells if not cell.get('has_value') and cell.get('label')]
+        self.assertGreater(len(empty_cells), 0)
+        html, _ctx, _layout = generate_order_html(self.order, lang='en')
+        self.assertIn('—', html)
+
     def test_arabic_html_uses_rtl_and_arabic_labels(self):
         html, context, _layout = generate_order_html(self.order, lang='ar')
         self.assertTrue(context['is_rtl'])
         self.assertIn('dir="rtl"', html)
+        self.assertIn('doc-rtl', html)
         self.assertIn('معلومات العميل', html)
+        self.assertIn('meas-grid-fixed-cols', html)
+        self.assertIn('text-transform: none', html)
 
     @override_settings(ORDER_PDF_ENGINE='reportlab')
     def test_document_engine_can_fall_back_to_reportlab(self):

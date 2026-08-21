@@ -75,9 +75,14 @@ SECTION_SETTING_SCHEMAS = {
         _field('show_instructions', 'bool', 'Show instructions', group='Fields', default=True),
         _field('show_sequence_numbers', 'bool', 'Show sequence numbers', group='Fields', default=True),
         _field(
-            'measurement_grid_ltr', 'bool', 'Force LTR measurement grid',
+            'show_all_measurement_slots', 'bool', 'Show all grid slots (including empty)',
             group='Layout', default=True,
-            hint='Keep column 1 on the left even in Arabic PDFs.',
+            hint='Always render the full measurement grid with labels; empty values show as —.',
+        ),
+        _field(
+            'measurement_grid_ltr', 'bool', 'Keep grid columns left-to-right',
+            group='Layout', default=True,
+            hint='When on, column 1 stays on the left (client sheet layout). Arabic/Urdu labels still render RTL inside each cell.',
         ),
     ],
     ORDER_SUMMARY: [

@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_GET, require_http_methods
 
 from apps.customization.models import MeasurementField
+from apps.documents.measurement_fields import serialize_measurement_fields_for_studio
 from apps.documents.catalog import PERSON_ITEMS, SECTION_CHOICES
 from apps.documents.layout import resolve_layout, resolve_layout_from_draft
 from apps.documents.models import PdfDocumentSection, PdfDocumentTemplate
@@ -78,30 +79,7 @@ def _serialize_sections(template):
 
 
 def _serialize_measurement_fields():
-    fields = MeasurementField.objects.filter(
-        is_active=True,
-        template__is_active=True,
-        template__name='thobe',
-    ).select_related('template').order_by('display_order', 'name')
-    if not fields.exists():
-        fields = MeasurementField.objects.filter(
-            is_active=True,
-            template__is_active=True,
-        ).select_related('template').order_by('template__display_order', 'display_order', 'name')
-    return [
-        {
-            'id': field.id,
-            'name': field.name,
-            'display_name': field.display_name,
-            'display_name_ar': field.display_name_ar,
-            'display_name_ur': field.display_name_ur,
-            'display_order': field.display_order,
-            'pdf_grid_row': field.pdf_grid_row,
-            'pdf_grid_col': field.pdf_grid_col,
-            'template': field.template.name,
-        }
-        for field in fields
-    ]
+    return serialize_measurement_fields_for_studio()
 
 
 def _sample_orders(limit=20):

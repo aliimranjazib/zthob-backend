@@ -91,6 +91,8 @@ class PdfLayoutStudioTest(TestCase):
         sample = fields[0]
         self.assertIn('display_name_ar', sample)
         self.assertIn('display_name_ur', sample)
+        self.assertIn('pdf_label_en', sample)
+        self.assertEqual(sample['pdf_label_en'], (sample['display_name'] or '').upper())
         with_ar = [f for f in fields if f.get('display_name_ar')]
         self.assertGreater(len(with_ar), 0, 'Expected Arabic labels on measurement fields')
 
