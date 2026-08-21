@@ -440,7 +440,8 @@ PDF_MARGIN_V = 8 * mm
 PDF_SECTION_SPACER = 2.5 * mm
 PDF_ITEM_SPACER = 1.5 * mm
 PDF_PERSON_BLOCK_SPACER = 5 * mm
-PDF_MEASUREMENT_COLS = 6
+PDF_MEASUREMENT_COLS = 5
+PDF_MEASUREMENT_ROWS = 4
 PDF_STYLE_GRID_COLS = 5
 PDF_STYLE_THUMB_SIZE = 13 * mm
 PDF_REF_THUMB_SIZE = 11 * mm
@@ -1259,6 +1260,162 @@ def _format_measurement_pairs(measurements, lang='en', field_map=None):
     return formatted
 
 
+def _single_measurement_pair(key, value, measurements, field_map, lang):
+    """Format one measurement key into (label, value, unit)."""
+    meta = field_map.get(key, {})
+    fallback = str(key).replace('_', ' ').title()
+    if _is_rtl(lang):
+        label_attr = 'label_ur' if lang == 'ur' else 'label_ar'
+        labels = _labels_for(lang)
+        raw_label = meta.get(label_attr) or meta.get('label_en') or fallback
+        if not _contains_arabic(raw_label):
+            raw_label = labels.get(raw_label, labels.get(fallback, raw_label))
+        label = _shape_arabic(_normalize_rtl_text(raw_label))
+    else:
+        label = meta.get('label_en') or fallback
+    unit = measurements.get('unit') if isinstance(measurements, dict) else None
+    return label, value, unit or meta.get('unit', 'cm')
+
+
+def _positioned_measurement_cells(measurements, field_map, lang, cols, rows):
+    """Map measurement values to fixed (row, col) cells using field_map grid metadata."""
+    from apps.orders.measurement_utils import ordered_measurement_keys
+
+    if not measurements or not isinstance(measurements, dict):
+        return {}
+
+    placed = {}
+    used = set()
+    for key in ordered_measurement_keys(measurements):
+        value = measurements.get(key)
+        if value in (None, '', 'null'):
+            continue
+        meta = field_map.get(key, {})
+        row = meta.get('pdf_grid_row')
+        col = meta.get('pdf_grid_col')
+        if not row or not col:
+            for candidate_row in range(1, rows + 1):
+                for candidate_col in range(1, cols + 1):
+                    if (candidate_row, candidate_col) not in used:
+                        row, col = candidate_row, candidate_col
+                        break
+                if row and col and (row, col) not in used:
+                    break
+        row = int(row or 1)
+        col = int(col or 1)
+        used.add((row, col))
+        placed[(row, col)] = _single_measurement_pair(key, value, measurements, field_map, lang)
+    return placed
+
+
+def _measurements_grid_positioned(
+    measurements,
+    field_map,
+    page_w,
+    s,
+    lang='en',
+    title='',
+    cols=None,
+    rows=None,
+):
+    """Render measurements in a fixed rows x cols grid using pdf_grid_row/col metadata."""
+    cols = cols or PDF_MEASUREMENT_COLS
+    rows = rows or PDF_MEASUREMENT_ROWS
+    placed = _positioned_measurement_cells(measurements, field_map, lang, cols, rows)
+    if not placed:
+        return None
+
+    is_rtl = _is_rtl(lang)
+    font_bold = _AR_FONT_BOLD if (is_rtl and _ARABIC_FONT_AVAILABLE) else 'Helvetica-Bold'
+    align = TA_RIGHT if is_rtl else TA_LEFT
+    lbl_style = ParagraphStyle(
+        f'MeasLblPos_{lang}', fontSize=5.5, fontName=font_bold,
+        textColor=BRAND_ACCENT, alignment=align, spaceAfter=0, leading=6,
+    )
+    val_style = ParagraphStyle(
+        f'MeasValPos_{lang}', fontSize=7.5, fontName=font_bold,
+        textColor=BRAND_TEXT, alignment=align, leading=8,
+    )
+
+    def _is_numeric(v):
+        try:
+            float(str(v).replace(',', ''))
+            return True
+        except ValueError:
+            return False
+
+    def _cell(lbl, val, unit=None):
+        if not lbl:
+            return ''
+        lbl_text = str(lbl).upper() if not is_rtl else str(lbl)
+        val_text = str(val)
+        unit_text = unit if _is_numeric(val) else ''
+        if unit_text:
+            val_text = f'{val_text} {unit_text}'
+        inner = [
+            [Paragraph(_safe_text(lbl_text), lbl_style)],
+            [Paragraph(_safe_text(val_text), val_style)],
+        ]
+        inner_tbl = Table(inner, colWidths=['100%'])
+        inner_tbl.setStyle(TableStyle([
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        return inner_tbl
+
+    cell_w = page_w / cols
+    grid_rows = []
+    for row in range(1, rows + 1):
+        cells = []
+        for col in range(1, cols + 1):
+            pair = placed.get((row, col))
+            if pair:
+                cells.append(_cell(pair[0], pair[1], pair[2] if len(pair) > 2 else 'cm'))
+            else:
+                cells.append('')
+        grid_rows.append(cells)
+
+    grid = Table(grid_rows, colWidths=[cell_w] * cols)
+    grid.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('GRID', (0, 0), (-1, -1), 0.5, BRAND_MID),
+        ('ROWBACKGROUNDS', (0, 0), (-1, -1), [WHITE, BRAND_LIGHT]),
+        ('LINEABOVE', (0, 0), (-1, 0), 1, BRAND_ACCENT),
+        ('LINEBELOW', (0, -1), (-1, -1), 1, BRAND_MID),
+    ]))
+
+    if title:
+        title_text = _shape_arabic(title) if is_rtl else title.upper()
+        title_cell = Paragraph(_safe_text(title_text), ParagraphStyle(
+            f'MeasTitlePos_{lang}', fontSize=6.5, fontName=font_bold,
+            textColor=WHITE, alignment=TA_CENTER, leading=8,
+        ))
+        title_row_tbl = Table([[title_cell]], colWidths=[page_w])
+        title_row_tbl.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), BRAND_PRIMARY),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        outer = Table([[title_row_tbl], [grid]], colWidths=[page_w])
+        outer.setStyle(TableStyle([
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        return outer
+
+    return grid
+
+
 def _measurement_grid_rows(pairs, cols, is_rtl=False):
     """
     Fill the measurement grid top-to-bottom, then the next column.
@@ -1732,14 +1889,19 @@ def _build_person_blocks(order, items, page_w, s, lang, measurement_fields):
             block.append(Spacer(1, PDF_ITEM_SPACER))
 
         has_content = True
-        meas_pairs = []
         if item.measurements and isinstance(item.measurements, dict):
-            meas_pairs = _format_measurement_pairs(item.measurements, lang, measurement_fields)
-
-        if meas_pairs:
             meas_title = item.measurements.get('title', '')
-            block.append(_measurements_grid(meas_pairs, page_w, s, lang, title=meas_title))
-            _append_measurement_notes(block, item.measurements, page_w, s, lang)
+            grid = _measurements_grid_positioned(
+                item.measurements,
+                measurement_fields,
+                page_w,
+                s,
+                lang,
+                title=meas_title,
+            )
+            if grid:
+                block.append(grid)
+                _append_measurement_notes(block, item.measurements, page_w, s, lang)
 
         if item.custom_styles and isinstance(item.custom_styles, list):
             style_section = _custom_style_section(item.custom_styles, page_w, s, lang)
@@ -1760,8 +1922,14 @@ def _build_person_blocks(order, items, page_w, s, lang, measurement_fields):
             blocks.append(block)
 
     if order.rider_measurements and isinstance(order.rider_measurements, dict) and order.rider_measurements:
-        meas_pairs = _format_measurement_pairs(order.rider_measurements, lang, measurement_fields)
-        if meas_pairs:
+        rider_grid = _measurements_grid_positioned(
+            order.rider_measurements,
+            measurement_fields,
+            page_w,
+            s,
+            lang,
+        )
+        if rider_grid:
             rider_block = [
                 Paragraph(_t('RIDER MEASUREMENTS', lang), s['section_header']),
                 HRFlowable(width=page_w, color=BRAND_ACCENT, thickness=0.5, spaceAfter=PDF_HR_SPACE_AFTER),
@@ -1772,7 +1940,7 @@ def _build_person_blocks(order, items, page_w, s, lang, measurement_fields):
                     s['small'],
                 ))
                 rider_block.append(Spacer(1, PDF_ITEM_SPACER))
-            rider_block.append(_measurements_grid(meas_pairs, page_w, s, lang))
+            rider_block.append(rider_grid)
             _append_measurement_notes(rider_block, order.rider_measurements, page_w, s, lang)
             blocks.append(rider_block)
 

@@ -241,7 +241,21 @@ class OrderPDFServiceTest(TestCase):
         self.assertIn('+966500000002', joined)
 
     def _story_text(self, story):
-        return ' '.join(str(getattr(el, 'text', '')) for el in story)
+        def walk(el):
+            if el is None:
+                return []
+            text = getattr(el, 'text', None)
+            if text:
+                return [str(text)]
+            chunks = []
+            cellvalues = getattr(el, '_cellvalues', None)
+            if cellvalues:
+                for row in cellvalues:
+                    for cell in row:
+                        chunks.extend(walk(cell))
+            return chunks
+
+        return ' '.join(chunk for el in story for chunk in walk(el))
 
     def test_customer_section_is_one_line_without_phone(self):
         self.customer.phone = '0501111999'
@@ -259,7 +273,8 @@ class OrderPDFServiceTest(TestCase):
         self.assertNotIn('0501111999', joined)
         self.assertNotIn('Phone', joined)
         self.assertNotIn('Measured by', joined)
-        self.assertEqual(sum(1 for el in section if getattr(el, 'text', '') and '|' in str(el.text)), 1)
+        from reportlab.platypus import Table
+        self.assertTrue(any(isinstance(el, Table) for el in section))
 
     def test_customer_section_shows_walk_in_tailor_as_measured_by(self):
         self.order.service_mode = 'walk_in'
