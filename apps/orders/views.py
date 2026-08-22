@@ -474,16 +474,16 @@ class OrderCreateView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
             except Exception as e:
-            # Edge Case: Unexpected errors
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.error(f"Order creation error: {str(e)}", exc_info=True)
-            
+
                 return api_response(
-                success=False,
-                message="An error occurred while creating your order. Please try again.",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+                    success=False,
+                    message="An error occurred while creating your order. Please try again.",
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    exception=e,
+                )
         else:
             return api_response(
             success=False,
@@ -2288,10 +2288,15 @@ class WorkOrderPDFView(APIView):
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"Error generating PDF: {str(e)}")
-            return api_response(success=False, message='Error generating work order PDF',
-                              errors=str(e), status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                              request=request)
+            logger.error(f"Error generating PDF: {str(e)}", exc_info=True)
+            return api_response(
+                success=False,
+                message='Error generating work order PDF',
+                errors=str(e),
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                request=request,
+                exception=e,
+            )
 
 class OrderActionView(APIView):
     """

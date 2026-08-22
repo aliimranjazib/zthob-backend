@@ -126,6 +126,7 @@ class TailorOrderDownloadPDFView(BaseTailorAPIView):
                 success=False,
                 message="Failed to generate PDF. Please try again later.",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                exception=exc,
             )
 
         filename = f"order_{order.order_number}.pdf"

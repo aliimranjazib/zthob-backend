@@ -1,5 +1,6 @@
 import os
 from celery import Celery
+from celery.signals import worker_process_init
 
 # Set the default Django settings module for the 'celery' program.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'zthob.settings')
@@ -14,6 +15,13 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 
 # Load task modules from all registered Django apps.
 app.autodiscover_tasks()
+
+
+@worker_process_init.connect
+def _init_sentry_for_worker(**kwargs):
+    from zthob.monitoring.sentry import init_sentry
+    init_sentry()
+
 
 @app.task(bind=True, ignore_result=True)
 def debug_task(self):

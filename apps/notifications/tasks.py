@@ -1,5 +1,7 @@
 from celery import shared_task
 from django.contrib.auth import get_user_model
+
+from zthob.monitoring.sentry import capture_task_exception
 from .services import NotificationService
 import logging
 
@@ -26,6 +28,11 @@ def send_notification_task(user_id, title, body, notification_type, category, da
     except User.DoesNotExist:
         logger.error(f"User with id {user_id} not found for notification")
         return False
+    except Exception as exc:
+        logger.exception("send_notification_task failed for user %s", user_id)
+        capture_task_exception(exc, task_name='send_notification_task', user_id=user_id)
+        raise
+
 @shared_task(name="apps.notifications.tasks.send_order_status_notification_task")
 def send_order_status_notification_task(order_id, old_status, new_status, user_id=None):
     from apps.orders.models import Order
@@ -35,9 +42,14 @@ def send_order_status_notification_task(order_id, old_status, new_status, user_i
         user = User.objects.get(id=user_id) if user_id else None
         NotificationService.send_order_status_notification(order, old_status, new_status, user)
         return True
-    except Exception as e:
-        logger.error(f"Error in send_order_status_notification_task: {str(e)}")
-        return False
+    except Exception as exc:
+        logger.exception("send_order_status_notification_task failed for order %s", order_id)
+        capture_task_exception(
+            exc,
+            task_name='send_order_status_notification_task',
+            order_id=order_id,
+        )
+        raise
 
 @shared_task(name="apps.notifications.tasks.send_tailor_status_notification_task")
 def send_tailor_status_notification_task(order_id, old_status, new_status, user_id=None):
@@ -48,9 +60,14 @@ def send_tailor_status_notification_task(order_id, old_status, new_status, user_
         user = User.objects.get(id=user_id) if user_id else None
         NotificationService.send_tailor_status_notification(order, old_status, new_status, user)
         return True
-    except Exception as e:
-        logger.error(f"Error in send_tailor_status_notification_task: {str(e)}")
-        return False
+    except Exception as exc:
+        logger.exception("send_tailor_status_notification_task failed for order %s", order_id)
+        capture_task_exception(
+            exc,
+            task_name='send_tailor_status_notification_task',
+            order_id=order_id,
+        )
+        raise
 
 @shared_task(name="apps.notifications.tasks.send_rider_status_notification_task")
 def send_rider_status_notification_task(order_id, old_status, new_status, user_id=None):
@@ -61,6 +78,11 @@ def send_rider_status_notification_task(order_id, old_status, new_status, user_i
         user = User.objects.get(id=user_id) if user_id else None
         NotificationService.send_rider_status_notification(order, old_status, new_status, user)
         return True
-    except Exception as e:
-        logger.error(f"Error in send_rider_status_notification_task: {str(e)}")
-        return False
+    except Exception as exc:
+        logger.exception("send_rider_status_notification_task failed for order %s", order_id)
+        capture_task_exception(
+            exc,
+            task_name='send_rider_status_notification_task',
+            order_id=order_id,
+        )
+        raise
