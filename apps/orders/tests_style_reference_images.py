@@ -7,7 +7,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.customization.models import CustomStyle, CustomStyleCategory
-from apps.customers.models import CustomerProfile
+from apps.customers.models import Address, CustomerProfile
 from apps.orders.models import CustomerFabricImage, Order, StyleReferenceImage
 from apps.orders.serializers import OrderUpdateSerializer, format_custom_styles_for_response
 from apps.orders.style_references import MAX_STYLE_REFERENCE_IMAGES
@@ -279,6 +279,12 @@ class StyleReferenceOrderCreateAPITest(TestCase):
         )
         self.client = APIClient()
         self.client.force_authenticate(user=self.customer)
+        self.address = Address.objects.create(
+            user=self.customer,
+            street='123 Style Ref St',
+            city='Riyadh',
+            country='Saudi Arabia',
+        )
 
     def test_create_order_with_reference_images_on_item(self):
         uploaded = upload_style_reference(self.client)
@@ -347,6 +353,134 @@ class StyleReferenceOrderCreateAPITest(TestCase):
         self.assertEqual(len(item_styles[0]['reference_images']), 1)
         self.assertIn('/api/media/style_references/', item_styles[0]['reference_images'][0])
         self.assertEqual(item_styles[0]['reference_image_ids'], [uploaded['id']])
+
+    def test_checkout_reuses_tailor_uploaded_reference_images_from_customer_walk_in_order(self):
+        tailor_reference = StyleReferenceImage.objects.create(
+            image=make_test_png('walk_in_tailor_reference.png'),
+            uploaded_by=self.tailor_user,
+        )
+        from apps.orders.models import OrderItem
+
+        walk_in_order = Order.objects.create(
+            customer=self.customer,
+            tailor=self.tailor_user,
+            order_type='fabric_with_stitching',
+            service_mode='walk_in',
+            payment_method='cod',
+            subtotal=Decimal('100.00'),
+            total_amount=Decimal('100.00'),
+        )
+        OrderItem.objects.create(
+            order=walk_in_order,
+            fabric=self.fabric,
+            quantity=1,
+            unit_price=Decimal('100.00'),
+            total_price=Decimal('100.00'),
+            recipient_display_name='Walk-in Customer',
+            custom_styles=[{
+                'style_id': self.style.id,
+                'style_type': 'collar',
+                'index': 3,
+                'label': 'Classic Collar',
+                'asset_path': 'custom_styles/classic_collar.png',
+                'text': 'Tailor captured this collar photo',
+                'reference_images': [tailor_reference.image.name],
+            }],
+        )
+
+        checkout_response = self.client.post(
+            '/api/orders/checkout/',
+            {
+                'tailor': self.tailor_user.id,
+                'order_type': 'fabric_with_stitching',
+                'service_mode': 'home_delivery',
+                'payment_method': 'cod',
+                'delivery_address': self.address.id,
+                'stitching_price': '150.00',
+                'items': [{
+                    'fabric': self.fabric.id,
+                    'quantity': 1,
+                    'custom_styles': [{
+                        'style_id': self.style.id,
+                        'text': 'Tailor captured this collar photo',
+                        'reference_image_ids': [tailor_reference.id],
+                    }],
+                }],
+            },
+            format='json',
+        )
+        self.assertEqual(checkout_response.status_code, 201, checkout_response.data)
+
+        booking_key = checkout_response.data['data']['bookingUniqueKey']
+        create_response = self.client.post(
+            '/api/orders/checkout/create-order/',
+            {'bookingUniqueKey': booking_key, 'payment_method': 'cod'},
+            format='json',
+        )
+        self.assertEqual(create_response.status_code, 201, create_response.data)
+        item_styles = create_response.data['data']['items'][0]['custom_styles']
+        self.assertEqual(len(item_styles[0]['reference_images']), 1)
+        self.assertEqual(item_styles[0]['reference_image_ids'], [tailor_reference.id])
+
+    def test_checkout_rejects_reference_images_from_another_customers_walk_in_order(self):
+        other_customer = User.objects.create_user(
+            username='style_ref_other_customer',
+            password='testpass123',
+            role='USER',
+        )
+        from apps.orders.models import OrderItem
+
+        tailor_reference = StyleReferenceImage.objects.create(
+            image=make_test_png('other_customer_reference.png'),
+            uploaded_by=self.tailor_user,
+        )
+        other_order = Order.objects.create(
+            customer=other_customer,
+            tailor=self.tailor_user,
+            order_type='fabric_with_stitching',
+            service_mode='walk_in',
+            payment_method='cod',
+            subtotal=Decimal('100.00'),
+            total_amount=Decimal('100.00'),
+        )
+        OrderItem.objects.create(
+            order=other_order,
+            fabric=self.fabric,
+            quantity=1,
+            unit_price=Decimal('100.00'),
+            total_price=Decimal('100.00'),
+            recipient_display_name='Other Customer',
+            custom_styles=[{
+                'style_id': self.style.id,
+                'style_type': 'collar',
+                'index': 3,
+                'label': 'Classic Collar',
+                'asset_path': 'custom_styles/classic_collar.png',
+                'reference_images': [tailor_reference.image.name],
+            }],
+        )
+
+        checkout_response = self.client.post(
+            '/api/orders/checkout/',
+            {
+                'tailor': self.tailor_user.id,
+                'order_type': 'fabric_with_stitching',
+                'service_mode': 'home_delivery',
+                'payment_method': 'cod',
+                'delivery_address': self.address.id,
+                'items': [{
+                    'fabric': self.fabric.id,
+                    'quantity': 1,
+                    'custom_styles': [{
+                        'style_id': self.style.id,
+                        'reference_image_ids': [tailor_reference.id],
+                    }],
+                }],
+            },
+            format='json',
+        )
+        self.assertEqual(checkout_response.status_code, 400, checkout_response.data)
+        self.assertIn('Invalid or unauthorized reference image IDs', str(checkout_response.data['errors']))
 
 
 @override_settings(

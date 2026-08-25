@@ -1,9 +1,11 @@
 """Helpers for style reference image uploads and custom_styles enrichment."""
 
+from django.db.models import Q
+
 from rest_framework import serializers
 
 from apps.core.media_utils import build_public_media_url
-from apps.orders.models import StyleReferenceImage
+from apps.orders.models import OrderItem, StyleReferenceImage
 from apps.tailors.shop_access import shop_media_uploader_ids
 
 MAX_STYLE_REFERENCE_IMAGES = 4
@@ -36,6 +38,47 @@ def allowed_style_reference_uploader_ids(user, customer=None):
     if customer_id:
         allowed.add(customer_id)
     return allowed
+
+
+def _customer_id(customer):
+    if customer is None:
+        return None
+    return customer.id if hasattr(customer, 'id') else customer
+
+
+def reference_ids_reused_from_customer_orders(customer, image_ids):
+    """
+    Return reference image IDs that already appear on this customer's past orders.
+
+    Lets customers reattach tailor-uploaded photos from their own walk-in orders
+    when placing a new checkout, without re-uploading the files.
+    """
+    if not customer or not image_ids:
+        return set()
+
+    customer_id = _customer_id(customer)
+    if not customer_id:
+        return set()
+
+    candidate_ids = set(image_ids)
+    items = (
+        OrderItem.objects.filter(order__customer_id=customer_id)
+        .exclude(Q(custom_styles__isnull=True) | Q(custom_styles=[]))
+        .only('custom_styles')
+    )
+
+    reused_ids = set()
+    for item in items:
+        for style in item.custom_styles or []:
+            if not isinstance(style, dict):
+                continue
+            style_reference_ids = set(style.get('reference_image_ids') or [])
+            style_reference_ids.update(
+                resolve_reference_image_ids_from_paths(style.get('reference_images') or [])
+            )
+            reused_ids.update(candidate_ids.intersection(style_reference_ids))
+
+    return reused_ids
 
 
 def resolve_reference_image_ids(reference_image_ids, user, style_index, customer=None):
@@ -73,6 +116,14 @@ def resolve_reference_image_ids(reference_image_ids, user, style_index, customer
     )
     images_by_id = {image.id: image for image in images}
     missing_ids = [image_id for image_id in normalized_ids if image_id not in images_by_id]
+    if missing_ids:
+        reusable_ids = reference_ids_reused_from_customer_orders(customer or user, missing_ids)
+        if reusable_ids:
+            reused_images = StyleReferenceImage.objects.filter(id__in=reusable_ids)
+            for image in reused_images:
+                images_by_id[image.id] = image
+            missing_ids = [image_id for image_id in missing_ids if image_id not in images_by_id]
+
     if missing_ids:
         from apps.orders.models import CustomerFabricImage
 
