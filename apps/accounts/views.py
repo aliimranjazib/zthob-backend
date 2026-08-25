@@ -357,7 +357,8 @@ class PhoneLoginView(APIView):
                     message="Failed to send OTP",
                     errors=str(e),
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    request=request
+                    request=request,
+                    exception=e,
                 )
         
         return api_response(
@@ -595,7 +596,8 @@ class PhoneResendOTPView(APIView):
                     message="Failed to resend OTP",
                     errors=str(e),
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    request=request
+                    request=request,
+                    exception=e,
                 )
         
         return api_response(

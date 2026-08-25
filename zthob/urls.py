@@ -79,35 +79,45 @@ def custom_admin_index(request, extra_context=None):
     weekly_orders = Order.objects.filter(created_at__gte=week_start)
     monthly_orders = Order.objects.filter(created_at__gte=month_start)
     
-    # Calculate order counts and revenue
+    def _status_snapshot(qs):
+        return {
+            'pending': qs.filter(status='pending').count(),
+            'confirmed': qs.filter(status='confirmed').count(),
+            'in_progress': qs.filter(status='in_progress').count(),
+            'ready': qs.filter(status__in=['ready_for_delivery', 'ready_for_pickup']).count(),
+            'completed': qs.filter(status__in=['delivered', 'collected']).count(),
+            'cancelled': qs.filter(status='cancelled').count(),
+        }
+
+    # Calculate order counts and revenue (paid orders only for revenue KPI)
     order_stats = {
         'today': {
             'count': today_orders.count(),
-            'revenue': today_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00'),
-            'pending': today_orders.filter(status='pending').count(),
-            'confirmed': today_orders.filter(status='confirmed').count(),
-            'delivered': today_orders.filter(status='delivered').count(),
+            'revenue': today_orders.filter(payment_status__in=['paid', 'partially_paid']).aggregate(
+                total=Sum('paid_amount')
+            )['total'] or Decimal('0.00'),
+            **_status_snapshot(today_orders),
         },
         'yesterday': {
             'count': yesterday_orders.count(),
-            'revenue': yesterday_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00'),
-            'pending': yesterday_orders.filter(status='pending').count(),
-            'confirmed': yesterday_orders.filter(status='confirmed').count(),
-            'delivered': yesterday_orders.filter(status='delivered').count(),
+            'revenue': yesterday_orders.filter(payment_status__in=['paid', 'partially_paid']).aggregate(
+                total=Sum('paid_amount')
+            )['total'] or Decimal('0.00'),
+            **_status_snapshot(yesterday_orders),
         },
         'weekly': {
             'count': weekly_orders.count(),
-            'revenue': weekly_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00'),
-            'pending': weekly_orders.filter(status='pending').count(),
-            'confirmed': weekly_orders.filter(status='confirmed').count(),
-            'delivered': weekly_orders.filter(status='delivered').count(),
+            'revenue': weekly_orders.filter(payment_status__in=['paid', 'partially_paid']).aggregate(
+                total=Sum('paid_amount')
+            )['total'] or Decimal('0.00'),
+            **_status_snapshot(weekly_orders),
         },
         'monthly': {
             'count': monthly_orders.count(),
-            'revenue': monthly_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00'),
-            'pending': monthly_orders.filter(status='pending').count(),
-            'confirmed': monthly_orders.filter(status='confirmed').count(),
-            'delivered': monthly_orders.filter(status='delivered').count(),
+            'revenue': monthly_orders.filter(payment_status__in=['paid', 'partially_paid']).aggregate(
+                total=Sum('paid_amount')
+            )['total'] or Decimal('0.00'),
+            **_status_snapshot(monthly_orders),
         },
     }
     
@@ -232,6 +242,10 @@ api_patterns = [
     path('config/', include('apps.core.urls')),
 ]
 
+api_v2_patterns = [
+    path('customization/', include('apps.customization.urls_v2')),
+]
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path('studio/', include('apps.documents.urls')),
@@ -242,6 +256,9 @@ urlpatterns = [
     
     # 2. Versioned API routes (With v1 prefix)
     path('api/v1/', include((api_patterns, 'v1'), namespace='v1')),
+
+    # 3. v2 API routes (new response shapes; CRUD may remain on v1)
+    path('api/v2/', include((api_v2_patterns, 'v2'), namespace='v2')),
     
     # API documentation URLs
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

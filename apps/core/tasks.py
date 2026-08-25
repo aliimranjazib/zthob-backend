@@ -1,6 +1,7 @@
 from celery import shared_task
 from .taqnyat_service import TaqnyatSMSService, TaqnyatVerifyService
 from .phone_format import format_phone_e164
+from zthob.monitoring.sentry import capture_task_exception
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,8 +18,9 @@ def send_otp_sms_task(phone_number, otp_code):
         if not success:
             logger.error(f"Failed to send SMS OTP to {formatted_phone}: {message}")
         return success
-    except Exception as e:
-        logger.error(f"Error in send_otp_sms_task: {str(e)}")
+    except Exception as exc:
+        logger.exception("Error in send_otp_sms_task for %s", phone_number)
+        capture_task_exception(exc, task_name='send_otp_sms_task', phone_number=phone_number)
         return False
 
 
@@ -34,8 +36,9 @@ def send_sms_task(phone_number, body):
         if not success:
             logger.error(f"Failed to send SMS to {formatted_phone}: {message}")
         return success
-    except Exception as e:
-        logger.error(f"Error in send_sms_task: {str(e)}")
+    except Exception as exc:
+        logger.exception("Error in send_sms_task for %s", phone_number)
+        capture_task_exception(exc, task_name='send_sms_task', phone_number=phone_number)
         return False
 
 @shared_task(name="apps.core.tasks.send_verification_code_task")
@@ -55,6 +58,12 @@ def send_verification_code_task(phone_number, locale='ar', verification_id=None)
     except PhoneVerification.DoesNotExist:
         logger.error(f"PhoneVerification {verification_id} not found for Taqnyat send task")
         return False
-    except Exception as e:
-        logger.error(f"Error in send_verification_code_task: {str(e)}")
+    except Exception as exc:
+        logger.exception("Error in send_verification_code_task for %s", phone_number)
+        capture_task_exception(
+            exc,
+            task_name='send_verification_code_task',
+            phone_number=phone_number,
+            verification_id=verification_id,
+        )
         return False

@@ -32,6 +32,12 @@ except ImportError:
 APP_ENV = os.getenv('APP_ENV', 'development')
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
+# Sentry (staging/production when SENTRY_DSN is set)
+SENTRY_DSN = os.getenv('SENTRY_DSN', '').strip()
+SENTRY_ENVIRONMENT = os.getenv('SENTRY_ENVIRONMENT', APP_ENV).strip()
+SENTRY_RELEASE = os.getenv('SENTRY_RELEASE', os.getenv('GIT_COMMIT', '')).strip() or None
+SENTRY_TRACES_SAMPLE_RATE = os.getenv('SENTRY_TRACES_SAMPLE_RATE', '').strip() or None
+
 # auto = HTML (WeasyPrint) with ReportLab fallback
 ORDER_PDF_ENGINE = os.getenv('ORDER_PDF_ENGINE', 'auto').strip().lower() or 'auto'
 
@@ -95,6 +101,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "zthob.middleware.TranslationMiddleware",  # For automatic API response translation
+    "zthob.monitoring.middleware.SentryContextMiddleware",
 ]
 
 ROOT_URLCONF = "zthob.urls"
@@ -497,6 +504,9 @@ JAZZMIN_SETTINGS = {
         "orders.Order": "fas fa-shopping-cart",
         "orders.OrderItem": "fas fa-shopping-bag",
         "orders.OrderStatusHistory": "fas fa-history",
+        "orders.OrderPayment": "fas fa-receipt",
+        "orders.RemainingPaymentSession": "fas fa-money-check-alt",
+        "orders.CheckoutPaymentAttempt": "fas fa-credit-card",
         
         # Riders
         "riders.RiderProfile": "fas fa-motorcycle",
@@ -540,3 +550,8 @@ JAZZMIN_SETTINGS = {
     "custom_css": ["admin/css/custom_admin.css", "admin/css/dashboard_widgets.css"],
     "custom_js": None,
 }
+
+# Initialize Sentry after all settings are loaded (no-op when SENTRY_DSN is unset).
+from zthob.monitoring.sentry import init_sentry  # noqa: E402
+
+init_sentry()

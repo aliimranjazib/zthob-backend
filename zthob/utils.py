@@ -29,7 +29,17 @@ class StandardResultsSetPagination(PageNumberPagination):
         )
 
 
-def api_response(*,success:bool, message:str, data:dict=None, errors:dict=None, status_code:int=200, request=None, message_kwargs=None):
+def api_response(
+    *,
+    success: bool,
+    message: str,
+    data: dict = None,
+    errors: dict = None,
+    status_code: int = 200,
+    request=None,
+    message_kwargs=None,
+    exception=None,
+):
     """
     Standardized API response format with automatic translation support
     
@@ -144,7 +154,17 @@ def api_response(*,success:bool, message:str, data:dict=None, errors:dict=None, 
     
     # Translate the main message
     translated_message = translate_message(message, language, **(message_kwargs or {}))
-    
+
+    if not success and status_code >= 400:
+        from zthob.monitoring.sentry import report_api_error
+        report_api_error(
+            message=translated_message,
+            request=request,
+            errors=formatted_errors or errors,
+            status_code=status_code,
+            exception=exception,
+        )
+
     return Response({
         'success': success,
         'message': translated_message,
@@ -214,5 +234,11 @@ def custom_exception_handler(exc, context):
                 status_code=response.status_code,
                 request=request
             )
-    
-    return response
+
+    return api_response(
+        success=False,
+        message="An unexpected error occurred. Please try again later.",
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        request=request,
+        exception=exc,
+    )

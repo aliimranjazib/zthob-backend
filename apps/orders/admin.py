@@ -14,8 +14,44 @@ from .models import (
     MyFatoorahWebhookEvent,
     Order,
     OrderItem,
+    OrderPayment,
     OrderStatusHistory,
+    RemainingPaymentSession,
 )
+
+# Status groupings aligned with Order.ORDER_STATUS_CHOICES (admin-only; no API impact).
+TERMINAL_ORDER_STATUSES = frozenset({'delivered', 'collected', 'cancelled'})
+IN_PROGRESS_ORDER_STATUSES = frozenset({
+    'confirmed',
+    'in_progress',
+    'ready_for_delivery',
+    'ready_for_pickup',
+})
+COMPLETED_ORDER_STATUSES = frozenset({'delivered', 'collected'})
+
+
+def format_sar(amount) -> str:
+    try:
+        return f'SAR {float(amount):,.2f}'
+    except (TypeError, ValueError):
+        return 'N/A'
+
+
+def record_admin_order_status(order, new_status, user, notes='Updated via Django admin'):
+    """Write status change + history without triggering API payment/wallet side effects."""
+    if order.status == new_status:
+        return False
+    previous_status = order.status
+    order.status = new_status
+    order.save(update_fields=['status', 'updated_at'])
+    OrderStatusHistory.objects.create(
+        order=order,
+        status=new_status,
+        previous_status=previous_status,
+        changed_by=user,
+        notes=notes,
+    )
+    return True
 
 
 # ============================================================================
@@ -23,33 +59,109 @@ from .models import (
 # ============================================================================
 
 class OrderItemInline(admin.TabularInline):
-    """Inline admin for OrderItems - shows items directly in Order detail view"""
+    """Read-focused line items on the order detail page (fabric qty, customer fabric meters)."""
     model = OrderItem
     extra = 0
-    readonly_fields = ['total_price', 'created_at', 'updated_at']
-    fields = [
-        'fabric',
+    readonly_fields = [
+        'fabric_line_display',
+        'recipient_display',
         'quantity',
         'customer_fabric_quantity',
         'unit_price',
         'total_price',
         'is_ready',
-        'created_at'
+        'created_at',
     ]
-    can_delete = True
+    fields = readonly_fields
+    can_delete = False
     show_change_link = True
-    
+
+    def fabric_line_display(self, obj):
+        if not obj or not obj.pk:
+            return '-'
+        if obj.fabric_id:
+            sku = getattr(obj.fabric, 'sku', None) or '—'
+            return format_html(
+                '<strong>{}</strong><br><small>SKU: {}</small>',
+                obj.fabric.name,
+                sku,
+            )
+        if obj.customer_fabric_quantity is not None:
+            return format_html(
+                '<strong>Customer-provided fabric</strong><br><small>{} m</small>',
+                obj.customer_fabric_quantity,
+            )
+        return format_html('<em>No fabric linked</em>')
+    fabric_line_display.short_description = 'Fabric'
+
+    def recipient_display(self, obj):
+        if not obj or not obj.pk:
+            return '-'
+        name = obj.recipient_display_name or (
+            obj.family_member.name if obj.family_member_id else 'Customer'
+        )
+        relationship = obj.recipient_relationship or ''
+        if relationship:
+            return format_html('{}<br><small>{}</small>', name, relationship)
+        return name
+    recipient_display.short_description = 'For'
+
     def has_add_permission(self, request, obj=None):
-        """Allow adding items only if order is not delivered/cancelled"""
-        if obj:
-            return obj.status not in ['delivered', 'cancelled']
-        return True
-    
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        # View line items on the order page; edit via Order Items admin if needed.
+        return False
+
     def has_delete_permission(self, request, obj=None):
-        """Allow deleting items only if order is pending"""
-        if obj:
-            return obj.status == 'pending'
-        return True
+        return False
+
+
+class OrderPaymentInline(admin.TabularInline):
+    model = OrderPayment
+    extra = 0
+    can_delete = False
+    readonly_fields = [
+        'payment_type',
+        'amount',
+        'payment_method',
+        'status',
+        'payment_reference',
+        'collected_by',
+        'notes',
+        'created_at',
+    ]
+    fields = readonly_fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+class RemainingPaymentSessionInline(admin.TabularInline):
+    model = RemainingPaymentSession
+    extra = 0
+    can_delete = False
+    fk_name = 'order'
+    readonly_fields = [
+        'booking_unique_key',
+        'status',
+        'amount',
+        'currency',
+        'payment_reference',
+        'payment_confirmed_at',
+        'expires_at',
+        'created_at',
+    ]
+    fields = readonly_fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 class OrderStatusHistoryInline(admin.TabularInline):
@@ -85,13 +197,13 @@ class OrderStatusFilter(admin.SimpleListFilter):
     
     def queryset(self, request, queryset):
         if self.value() == 'active':
-            return queryset.exclude(status__in=['delivered', 'cancelled'])
+            return queryset.exclude(status__in=TERMINAL_ORDER_STATUSES)
         elif self.value() == 'pending':
             return queryset.filter(status='pending')
         elif self.value() == 'in_progress':
-            return queryset.filter(status__in=['confirmed', 'measuring', 'cutting', 'stitching', 'ready_for_delivery'])
+            return queryset.filter(status__in=IN_PROGRESS_ORDER_STATUSES)
         elif self.value() == 'completed':
-            return queryset.filter(status='delivered')
+            return queryset.filter(status__in=COMPLETED_ORDER_STATUSES)
         elif self.value() == 'cancelled':
             return queryset.filter(status='cancelled')
 
@@ -104,6 +216,7 @@ class PaymentStatusFilter(admin.SimpleListFilter):
     def lookups(self, request, model_admin):
         return (
             ('pending', 'Pending Payment'),
+            ('partially_paid', 'Partially Paid'),
             ('paid', 'Paid'),
             ('refunded', 'Refunded'),
         )
@@ -120,9 +233,9 @@ class HighValueOrderFilter(admin.SimpleListFilter):
     
     def lookups(self, request, model_admin):
         return (
-            ('high', 'High Value (>$500)'),
-            ('medium', 'Medium Value ($100-$500)'),
-            ('low', 'Low Value (<$100)'),
+            ('high', 'High Value (≥ SAR 500)'),
+            ('medium', 'Medium Value (SAR 100–499)'),
+            ('low', 'Low Value (< SAR 100)'),
         )
     
     def queryset(self, request, queryset):
@@ -157,6 +270,7 @@ class OrderAdmin(admin.ModelAdmin):
         'order_number_link',
         'customer_info',
         'tailor_info',
+        'service_mode_display',
         'order_type_display',
         'status_badge',
         'items_count_display',
@@ -177,6 +291,7 @@ class OrderAdmin(admin.ModelAdmin):
         'payment_status', 
         'payment_method',
         'order_type',
+        'service_mode',
         'created_at',
     ]
     
@@ -195,7 +310,12 @@ class OrderAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
     
     # Inline Admins
-    inlines = [OrderItemInline, OrderStatusHistoryInline]
+    inlines = [
+        OrderItemInline,
+        OrderPaymentInline,
+        RemainingPaymentSessionInline,
+        OrderStatusHistoryInline,
+    ]
     
     # Readonly Fields
     readonly_fields = [
@@ -204,8 +324,14 @@ class OrderAdmin(admin.ModelAdmin):
         'updated_at',
         'created_by',
         'items_count_display',
+        'items_fabric_summary',
         'total_amount_formatted',
         'status_history_link',
+        'tailor_status',
+        'rider_status',
+        'paid_amount',
+        'remaining_amount',
+        'deposit_amount',
     ]
     
     # Fieldsets - Organized for better UX
@@ -217,17 +343,35 @@ class OrderAdmin(admin.ModelAdmin):
                 'family_member',
                 'tailor',
                 'order_type',
+                'service_mode',
                 'status',
+                'tailor_status',
+                'rider_status',
             ),
             'classes': ('wide',)
         }),
-        ('Financial Summary', {
+        ('Line Items Summary', {
             'fields': (
                 'items_count_display',
+                'items_fabric_summary',
+            ),
+            'description': 'Fabric quantities and customer-provided fabric meters per line item.',
+        }),
+        ('Financial Summary', {
+            'fields': (
                 'subtotal',
+                'stitching_price',
                 'tax_amount',
                 'delivery_fee',
+                'system_fee',
+                'measurement_fee',
+                'express_fee',
+                'is_express',
                 'total_amount_formatted',
+                'payment_plan',
+                'deposit_amount',
+                'paid_amount',
+                'remaining_amount',
             ),
             'classes': ('wide',)
         }),
@@ -235,11 +379,23 @@ class OrderAdmin(admin.ModelAdmin):
             'fields': (
                 'payment_status',
                 'payment_method',
+                'payment_option',
+                'payment_reference',
             )
+        }),
+        ('Rider Assignment', {
+            'fields': (
+                'rider',
+                'assigned_rider',
+                'measurement_rider',
+                'delivery_rider',
+            ),
+            'classes': ('collapse',),
         }),
         ('Delivery Information', {
             'fields': (
                 'delivery_address',
+                'delivery_formatted_address',
                 'estimated_delivery_date',
                 'actual_delivery_date',
             )
@@ -248,6 +404,7 @@ class OrderAdmin(admin.ModelAdmin):
             'fields': (
                 'special_instructions',
                 'notes',
+                'rejection_reason_code',
             ),
             'classes': ('collapse',)
         }),
@@ -271,6 +428,7 @@ class OrderAdmin(admin.ModelAdmin):
         'mark_as_confirmed',
         'mark_as_ready_for_delivery',
         'mark_as_delivered',
+        'mark_as_collected',
         'mark_payment_as_paid',
         'export_orders_csv',
         'recalculate_totals',
@@ -339,6 +497,8 @@ class OrderAdmin(admin.ModelAdmin):
         colors = {
             'fabric_only': 'blue',
             'fabric_with_stitching': 'green',
+            'stitching_only': 'purple',
+            'measurement_service': 'teal',
         }
         color = colors.get(obj.order_type, 'gray')
         return format_html(
@@ -348,17 +508,31 @@ class OrderAdmin(admin.ModelAdmin):
         )
     order_type_display.short_description = 'Order Type'
     order_type_display.admin_order_field = 'order_type'
+
+    def service_mode_display(self, obj):
+        colors = {
+            'home_delivery': '#17a2b8',
+            'walk_in': '#6f42c1',
+        }
+        color = colors.get(obj.service_mode, '#6c757d')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px;">{}</span>',
+            color,
+            obj.get_service_mode_display() if obj.service_mode else '—',
+        )
+    service_mode_display.short_description = 'Service'
+    service_mode_display.admin_order_field = 'service_mode'
     
     def status_badge(self, obj):
         """Display status with color-coded badge"""
         colors = {
             'pending': '#ffc107',
             'confirmed': '#17a2b8',
-            'measuring': '#6c757d',
-            'cutting': '#6c757d',
-            'stitching': '#6c757d',
+            'in_progress': '#6c757d',
             'ready_for_delivery': '#28a745',
+            'ready_for_pickup': '#20c997',
             'delivered': '#28a745',
+            'collected': '#20c997',
             'cancelled': '#dc3545',
         }
         color = colors.get(obj.status, '#6c757d')
@@ -379,17 +553,35 @@ class OrderAdmin(admin.ModelAdmin):
             's' if count != 1 else ''
         )
     items_count_display.short_description = 'Items'
+
+    def items_fabric_summary(self, obj):
+        """Readable fabric / quantity breakdown for support staff."""
+        if not obj or not obj.pk:
+            return '-'
+        lines = []
+        for item in obj.order_items.select_related('fabric').all():
+            recipient = item.recipient_display_name or 'Customer'
+            if item.fabric_id:
+                lines.append(
+                    f'• {item.fabric.name}: qty {item.quantity} @ {format_sar(item.unit_price)} — {recipient}'
+                )
+            elif item.customer_fabric_quantity is not None:
+                lines.append(
+                    f'• Customer fabric: {item.customer_fabric_quantity} m, qty {item.quantity} — {recipient}'
+                )
+            else:
+                lines.append(f'• Qty {item.quantity} @ {format_sar(item.unit_price)} — {recipient}')
+        if not lines:
+            return 'No line items'
+        return format_html('<br>'.join(lines))
+    items_fabric_summary.short_description = 'Fabrics & quantities'
     
     def total_amount_formatted(self, obj):
         """Display total amount with currency formatting"""
-        try:
-            amount = float(obj.total_amount) if obj.total_amount else 0.0
-            return format_html(
-                '<strong style="color: #28a745; font-size: 14px;">${:,.2f}</strong>',
-                amount
-            )
-        except (ValueError, TypeError):
-            return format_html('<em style="color: #999;">N/A</em>')
+        return format_html(
+            '<strong style="color: #28a745; font-size: 14px;">{}</strong>',
+            format_sar(obj.total_amount),
+        )
     total_amount_formatted.short_description = 'Total Amount'
     total_amount_formatted.admin_order_field = 'total_amount'
     
@@ -397,6 +589,7 @@ class OrderAdmin(admin.ModelAdmin):
         """Display payment status with color-coded badge"""
         colors = {
             'pending': '#ffc107',
+            'partially_paid': '#fd7e14',
             'paid': '#28a745',
             'refunded': '#dc3545',
         }
@@ -456,64 +649,86 @@ class OrderAdmin(admin.ModelAdmin):
     
     # Custom Actions
     def mark_as_confirmed(self, request, queryset):
-        """Bulk action to mark orders as confirmed"""
+        """Bulk action to mark orders as confirmed (records status history only)."""
         count = 0
         for order in queryset.filter(status='pending'):
-            order.status = 'confirmed'
-            order.save()
-            count += 1
+            if record_admin_order_status(order, 'confirmed', request.user, notes='Bulk: marked confirmed'):
+                count += 1
         self.message_user(
             request,
-            f'Successfully marked {count} order(s) as confirmed.',
+            f'Marked {count} order(s) as confirmed (history recorded; no push/wallet side effects).',
             messages.SUCCESS
         )
     mark_as_confirmed.short_description = 'Mark selected orders as confirmed'
     
     def mark_as_ready_for_delivery(self, request, queryset):
-        """Bulk action to mark orders as ready for delivery"""
+        """Bulk action to mark home-delivery orders as ready for delivery."""
         count = 0
-        allowed_statuses = ['confirmed', 'measuring', 'cutting', 'stitching']
-        for order in queryset.filter(status__in=allowed_statuses):
-            order.status = 'ready_for_delivery'
-            order.save()
-            count += 1
+        for order in queryset.filter(
+            service_mode='home_delivery',
+            status__in=['confirmed', 'in_progress'],
+        ):
+            if record_admin_order_status(
+                order, 'ready_for_delivery', request.user, notes='Bulk: ready for delivery'
+            ):
+                count += 1
         self.message_user(
             request,
-            f'Successfully marked {count} order(s) as ready for delivery.',
+            f'Marked {count} home-delivery order(s) as ready for delivery.',
             messages.SUCCESS
         )
-    mark_as_ready_for_delivery.short_description = 'Mark selected orders as ready for delivery'
+    mark_as_ready_for_delivery.short_description = 'Mark selected as ready for delivery (home delivery)'
     
     def mark_as_delivered(self, request, queryset):
-        """Bulk action to mark orders as delivered"""
+        """Bulk action to mark home-delivery orders as delivered."""
         count = 0
-        for order in queryset.filter(status='ready_for_delivery'):
-            order.status = 'delivered'
-            if not order.actual_delivery_date:
-                from django.utils import timezone
-                order.actual_delivery_date = timezone.now().date()
-            order.save()
-            count += 1
+        for order in queryset.filter(
+            service_mode='home_delivery',
+            status='ready_for_delivery',
+        ):
+            if record_admin_order_status(order, 'delivered', request.user, notes='Bulk: delivered'):
+                if not order.actual_delivery_date:
+                    from django.utils import timezone
+                    order.actual_delivery_date = timezone.now().date()
+                    order.save(update_fields=['actual_delivery_date', 'updated_at'])
+                count += 1
         self.message_user(
             request,
-            f'Successfully marked {count} order(s) as delivered.',
+            f'Marked {count} order(s) as delivered.',
             messages.SUCCESS
         )
-    mark_as_delivered.short_description = 'Mark selected orders as delivered'
+    mark_as_delivered.short_description = 'Mark selected as delivered (home delivery)'
+
+    def mark_as_collected(self, request, queryset):
+        """Bulk action to mark walk-in orders as collected."""
+        count = 0
+        for order in queryset.filter(
+            service_mode='walk_in',
+            status='ready_for_pickup',
+        ):
+            if record_admin_order_status(order, 'collected', request.user, notes='Bulk: collected (walk-in)'):
+                count += 1
+        self.message_user(
+            request,
+            f'Marked {count} walk-in order(s) as collected.',
+            messages.SUCCESS
+        )
+    mark_as_collected.short_description = 'Mark selected as collected (walk-in)'
     
     def mark_payment_as_paid(self, request, queryset):
-        """Bulk action to mark payment status as paid"""
+        """Update payment_status only — does not run gateway settlement or wallet credit."""
         count = 0
-        for order in queryset.filter(payment_status='pending'):
+        for order in queryset.filter(payment_status__in=['pending', 'partially_paid']):
             order.payment_status = 'paid'
-            order.save()
+            order.save(update_fields=['payment_status', 'updated_at'])
             count += 1
         self.message_user(
             request,
-            f'Successfully marked {count} order(s) payment as paid.',
-            messages.SUCCESS
+            f'Updated payment status to paid for {count} order(s). '
+            f'No wallet/gateway side effects — use finance tools if money movement is needed.',
+            messages.WARNING if count else messages.INFO,
         )
-    mark_payment_as_paid.short_description = 'Mark selected orders payment as paid'
+    mark_payment_as_paid.short_description = 'Mark payment status as paid (status only)'
     
     def export_orders_csv(self, request, queryset):
         """Export selected orders to CSV"""
@@ -712,7 +927,10 @@ class OrderAdmin(admin.ModelAdmin):
             'created_by'
         ).prefetch_related(
             'order_items',
-            'status_history'
+            'order_items__fabric',
+            'status_history',
+            'payments',
+            'remaining_payment_sessions',
         )
 
 
@@ -835,24 +1053,16 @@ class OrderItemAdmin(admin.ModelAdmin):
     
     def unit_price_formatted(self, obj):
         """Format unit price"""
-        try:
-            price = float(obj.unit_price) if obj.unit_price is not None else 0.0
-            return f'${price:,.2f}'
-        except (ValueError, TypeError):
-            return 'N/A'
+        return format_sar(obj.unit_price)
     unit_price_formatted.short_description = 'Unit Price'
     unit_price_formatted.admin_order_field = 'unit_price'
     
     def total_price_formatted(self, obj):
         """Format total price"""
-        try:
-            price = float(obj.total_price) if obj.total_price is not None else 0.0
-            return format_html(
-                '<strong style="color: #28a745;">${:,.2f}</strong>',
-                price
-            )
-        except (ValueError, TypeError):
-            return format_html('<em style="color: #999;">N/A</em>')
+        return format_html(
+            '<strong style="color: #28a745;">{}</strong>',
+            format_sar(obj.total_price),
+        )
     total_price_formatted.short_description = 'Total Price'
     total_price_formatted.admin_order_field = 'total_price'
     
@@ -1122,6 +1332,95 @@ class MyFatoorahWebhookEventAdmin(admin.ModelAdmin):
     readonly_fields = [field.name for field in MyFatoorahWebhookEvent._meta.fields]
 
     def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(OrderPayment)
+class OrderPaymentAdmin(admin.ModelAdmin):
+    """Read-only ledger of order payments (MyFatoorah, COD, deposits, refunds)."""
+
+    list_display = [
+        'id',
+        'order_link',
+        'payment_type',
+        'amount_display',
+        'payment_method',
+        'status',
+        'payment_reference',
+        'collected_by',
+        'created_at',
+    ]
+    list_filter = ['payment_type', 'status', 'payment_method', 'created_at']
+    search_fields = [
+        'order__order_number',
+        'payment_reference',
+        'order__customer__phone',
+        'order__customer__username',
+    ]
+    readonly_fields = [field.name for field in OrderPayment._meta.fields]
+    date_hierarchy = 'created_at'
+
+    def order_link(self, obj):
+        url = reverse('admin:orders_order_change', args=[obj.order_id])
+        return format_html('<a href="{}">{}</a>', url, obj.order.order_number)
+    order_link.short_description = 'Order'
+
+    def amount_display(self, obj):
+        return format_sar(obj.amount)
+    amount_display.short_description = 'Amount'
+    amount_display.admin_order_field = 'amount'
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(RemainingPaymentSession)
+class RemainingPaymentSessionAdmin(admin.ModelAdmin):
+    """Read-only remaining-balance payment sessions."""
+
+    list_display = [
+        'booking_unique_key',
+        'order_link',
+        'customer',
+        'status',
+        'amount_display',
+        'currency',
+        'payment_reference',
+        'expires_at',
+        'created_at',
+    ]
+    list_filter = ['status', 'currency', 'created_at', 'expires_at']
+    search_fields = [
+        'booking_unique_key',
+        'payment_reference',
+        'order__order_number',
+        'customer__username',
+        'customer__phone',
+    ]
+    readonly_fields = [field.name for field in RemainingPaymentSession._meta.fields]
+
+    def order_link(self, obj):
+        url = reverse('admin:orders_order_change', args=[obj.order_id])
+        return format_html('<a href="{}">{}</a>', url, obj.order.order_number)
+    order_link.short_description = 'Order'
+
+    def amount_display(self, obj):
+        return format_sar(obj.amount)
+    amount_display.short_description = 'Amount'
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
         return False
 
     def has_delete_permission(self, request, obj=None):
