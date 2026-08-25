@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from .models import CustomStyleCategory, CustomStyle, UserStylePreset, MeasurementTemplate
+from .order_styles import get_customer_order_style_presets
 from .serializers import (
     CustomStyleCategorySerializer,
     CustomStyleListSerializer,
@@ -73,7 +74,7 @@ class UserStylePresetViewSet(viewsets.ModelViewSet):
         if self.action in ['create', 'update', 'partial_update']:
             return UserStylePresetCreateSerializer
         return UserStylePresetSerializer
-    
+
     @action(detail=True, methods=['post'])
     def set_default(self, request, pk=None):
         """Set this preset as user's default"""
@@ -89,6 +90,38 @@ class UserStylePresetViewSet(viewsets.ModelViewSet):
         preset.increment_usage()
         serializer = self.get_serializer(preset)
         return Response(serializer.data)
+
+
+@extend_schema(
+    tags=["Customization"],
+    summary="List presets and read-only order styles (v2)",
+    description=(
+        "Returns saved user presets plus read-only walk-in order styles "
+        "in a unified preset shape for the customer app."
+    ),
+)
+class UserStylePresetV2ListView(generics.GenericAPIView):
+    """
+    GET /api/v2/customization/presets/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        presets = UserStylePreset.objects.filter(user=request.user)
+        preset_data = UserStylePresetSerializer(
+            presets,
+            many=True,
+            context={'request': request},
+        ).data
+        for entry in preset_data:
+            entry['source'] = 'preset'
+            entry['read_only'] = False
+
+        order_styles = get_customer_order_style_presets(request.user, request)
+        return Response({
+            'presets': preset_data,
+            'order_styles': order_styles,
+        })
 
 
 @extend_schema(tags=["Customization"])

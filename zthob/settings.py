@@ -504,6 +504,9 @@ JAZZMIN_SETTINGS = {
         "orders.Order": "fas fa-shopping-cart",
         "orders.OrderItem": "fas fa-shopping-bag",
         "orders.OrderStatusHistory": "fas fa-history",
+        "orders.OrderPayment": "fas fa-receipt",
+        "orders.RemainingPaymentSession": "fas fa-money-check-alt",
+        "orders.CheckoutPaymentAttempt": "fas fa-credit-card",
         
         # Riders
         "riders.RiderProfile": "fas fa-motorcycle",
