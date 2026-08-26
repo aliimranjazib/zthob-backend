@@ -44,6 +44,11 @@ def _apply_permissions(employee, permissions_list):
         setattr(employee, key, key in permissions_list)
 
 
+def _is_assignable_for_stitching_query(request):
+    assignable = request.query_params.get('assignable_for_stitching')
+    return assignable is not None and str(assignable).lower() in ('1', 'true', 'yes')
+
+
 class TailorEmployeeListCreateView(BaseTailorAPIView):
     """
     GET  /tailor/employees/  — list all employees of the authenticated tailor
@@ -51,6 +56,15 @@ class TailorEmployeeListCreateView(BaseTailorAPIView):
     """
     permission_classes = [IsAuthenticated, IsShopStaff]
     required_employee_permission = 'can_manage_employees'
+
+    def get_required_employee_permissions(self, request):
+        if request.method == 'GET' and _is_assignable_for_stitching_query(request):
+            return (
+                'can_manage_employees',
+                'can_manage_orders',
+                'can_stitch_orders',
+            )
+        return ('can_manage_employees',)
 
 
     @extend_schema(
@@ -75,8 +89,7 @@ class TailorEmployeeListCreateView(BaseTailorAPIView):
             .select_related('user')   # single JOIN — no N+1
             .order_by('-joined_at')
         )
-        assignable = request.query_params.get('assignable_for_stitching')
-        if assignable is not None and str(assignable).lower() in ('1', 'true', 'yes'):
+        if _is_assignable_for_stitching_query(request):
             employees = employees.filter(is_active=True, can_stitch_orders=True)
         serializer = TailorEmployeeResponseSerializer(employees, many=True)
         return api_response(

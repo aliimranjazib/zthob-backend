@@ -4,7 +4,11 @@ from rest_framework import permissions
 from apps.tailors.shop_access import user_can_manage_shop_order, user_can_record_shop_measurements
 
 
-def _get_required_permissions(view):
+def _get_required_permissions(view, request=None):
+    if request is not None and hasattr(view, 'get_required_employee_permissions'):
+        perms = view.get_required_employee_permissions(request)
+        if perms is not None:
+            return tuple(perms)
     perms = getattr(view, 'required_employee_permissions', None)
     if perms:
         return tuple(perms)
@@ -12,8 +16,8 @@ def _get_required_permissions(view):
     return (perm,) if perm else ()
 
 
-def _employee_has_view_permission(employee, view):
-    required = _get_required_permissions(view)
+def _employee_has_view_permission(employee, view, request=None):
+    required = _get_required_permissions(view, request)
     if not required:
         return True
     return any(getattr(employee, perm, False) for perm in required)
@@ -62,7 +66,7 @@ class IsShopStaff(permissions.BasePermission):
             if not employee.is_active:
                 return False
 
-            return _employee_has_view_permission(employee, view)
+            return _employee_has_view_permission(employee, view, request)
 
         if hasattr(request.user, 'tailor_profile'):
             return True
@@ -90,7 +94,7 @@ class IsShopStaff(permissions.BasePermission):
                     return False
                 if getattr(view, 'allow_pos_measurements', False):
                     return user_can_record_shop_measurements(user, obj)
-                required = _get_required_permissions(view)
+                required = _get_required_permissions(view, request)
                 if not required:
                     return user_can_manage_shop_order(user, obj, employee_permission='can_manage_orders')
                 return any(
@@ -121,6 +125,6 @@ class IsShopStaff(permissions.BasePermission):
             if employee.is_active and employee.tailor_id == target_tailor_id:
                 if required_perm:
                     return getattr(employee, required_perm, False)
-                return _employee_has_view_permission(employee, view)
+                return _employee_has_view_permission(employee, view, request)
 
         return False
