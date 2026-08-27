@@ -85,6 +85,19 @@ def get_active_tailors_queryset(*, nearby_user_ids=None):
     return queryset
 
 
+def apply_free_measurement_filter(queryset, request):
+    """
+    When free_measurement=true, return only tailors who are not charging
+    a measurement fee. Omitted or false leaves the queryset unchanged.
+    """
+    raw = request.query_params.get('free_measurement')
+    if raw is None:
+        return queryset
+    if str(raw).strip().lower() in ('1', 'true', 'yes'):
+        return queryset.filter(is_measurement_fee_enabled=False)
+    return queryset
+
+
 def apply_tailor_section(queryset, section: str):
     """Apply the same filter/sort rules used by customer home preview arrays."""
     if section == 'new':

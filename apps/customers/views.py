@@ -15,8 +15,10 @@ from apps.customers.serializers import (
 from apps.orders.models import Order
 from apps.customers.services.home_tailor_sections import (
     allowed_tailor_sections_display,
+    apply_free_measurement_filter,
     apply_tailor_section,
     get_active_tailors_queryset,
+    get_home_nearby_user_ids,
     is_valid_tailor_section,
     parse_section_geo_params,
 )
@@ -370,7 +372,9 @@ class CustomerProfileAPIView(APIView):
         "Pass `section` to paginate a customer-home tailor section (See All): "
         "`featured`, `express_delivery`, `most_popular`, `new`, or `top_rated`. "
         "When `section` is set, omitting `lat`/`lng` returns the national list for "
-        "that section; with location params, filtering matches `/customers/home/`."
+        "that section; with location params, filtering matches `/customers/home/`.\n\n"
+        "Pass `free_measurement=true` to return only tailors who offer free "
+        "measurement (measurement fee turned off)."
     ),
     parameters=[
         OpenApiParameter('section', OpenApiTypes.STR, OpenApiParameter.QUERY,
@@ -382,6 +386,9 @@ class CustomerProfileAPIView(APIView):
                          description='Longitude of the search centre (WGS84)', required=False),
         OpenApiParameter('radius', OpenApiTypes.FLOAT, OpenApiParameter.QUERY,
                          description='Search radius in kilometres (default 10 without section, 50 with section)',
+                         required=False),
+        OpenApiParameter('free_measurement', OpenApiTypes.BOOL, OpenApiParameter.QUERY,
+                         description='If true, return only tailors who offer free measurement',
                          required=False),
         OpenApiParameter('page', OpenApiTypes.INT, OpenApiParameter.QUERY,
                          description='Page number (default 1)', required=False),
@@ -432,9 +439,11 @@ class TailorListAPIView(APIView):
 
             lat, lng, radius_km = parse_geo_params(request)
             if lat is not None:
-                nearby_user_ids = get_nearby_user_ids(lat, lng, radius_km)
+                nearby_user_ids = get_home_nearby_user_ids(lat, lng, radius_km)
                 tailors = tailors.filter(user_id__in=nearby_user_ids)
             message = "Tailors fetched successfully"
+
+        tailors = apply_free_measurement_filter(tailors, request)
 
         service_area_names = {sa.id: sa.name for sa in ServiceArea.objects.filter(is_active=True)}
 
