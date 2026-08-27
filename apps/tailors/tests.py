@@ -40,7 +40,9 @@ class TailorMeasurementFeeAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.profile.refresh_from_db()
         self.assertEqual(str(self.profile.measurement_fee), '25.00')
+        self.assertTrue(self.profile.is_measurement_fee_enabled)
         self.assertEqual(response.data['data']['measurement_fee'], '25.00')
+        self.assertTrue(response.data['data']['is_measurement_fee_enabled'])
 
     def test_negative_measurement_fee_is_rejected(self):
         response = self.client.patch(
@@ -50,6 +52,74 @@ class TailorMeasurementFeeAPITest(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_tailor_can_disable_measurement_fee_without_clearing_amount(self):
+        setup_response = self.client.patch(
+            '/api/tailors/measurement-fee/',
+            data={
+                'is_measurement_fee_enabled': True,
+                'measurement_fee': '25.00',
+            },
+            format='json',
+        )
+        self.assertEqual(setup_response.status_code, status.HTTP_200_OK)
+
+        response = self.client.patch(
+            '/api/tailors/measurement-fee/',
+            data={'is_measurement_fee_enabled': False},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertFalse(self.profile.is_measurement_fee_enabled)
+        self.assertEqual(self.profile.measurement_fee, Decimal('25.00'))
+        self.assertFalse(response.data['data']['is_measurement_fee_enabled'])
+        self.assertEqual(response.data['data']['measurement_fee'], '25.00')
+
+    def test_cannot_enable_measurement_fee_without_amount(self):
+        response = self.client.patch(
+            '/api/tailors/measurement-fee/',
+            data={'is_measurement_fee_enabled': True},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.profile.refresh_from_db()
+        self.assertFalse(self.profile.is_measurement_fee_enabled)
+
+    def test_tailor_can_enable_measurement_fee_with_amount(self):
+        response = self.client.patch(
+            '/api/tailors/measurement-fee/',
+            data={
+                'is_measurement_fee_enabled': True,
+                'measurement_fee': '25.00',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertTrue(self.profile.is_measurement_fee_enabled)
+        self.assertEqual(self.profile.measurement_fee, Decimal('25.00'))
+
+    def test_get_measurement_fee_includes_toggle(self):
+        setup_response = self.client.patch(
+            '/api/tailors/measurement-fee/',
+            data={
+                'measurement_fee': '15.00',
+                'is_measurement_fee_enabled': True,
+            },
+            format='json',
+        )
+        self.assertEqual(setup_response.status_code, status.HTTP_200_OK)
+
+        response = self.client.get('/api/tailors/measurement-fee/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['data']['measurement_fee'], '15.00')
+        self.assertTrue(response.data['data']['is_measurement_fee_enabled'])
+        self.assertEqual(response.data['data']['currency'], 'SAR')
 
 class TailorProfileSubmissionSerializerTest(TestCase):
     """Test cases for TailorProfileSubmissionSerializer validation."""

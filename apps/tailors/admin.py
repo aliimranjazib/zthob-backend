@@ -214,6 +214,12 @@ class TailorProfileAdmin(admin.ModelAdmin):
                 '(e.g. unit=hours and days=6 means 6 Hours). Options come from System Settings.'
             ),
         }),
+        ('Measurement Fee', {
+            'fields': (
+                'is_measurement_fee_enabled',
+                'measurement_fee',
+            ),
+        }),
         ('Standard Stitching', {
             'fields': ('standard_stitching_days',),
         }),

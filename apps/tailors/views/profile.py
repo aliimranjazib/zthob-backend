@@ -184,7 +184,7 @@ class TailorProfileView(BaseTailorAuthenticatedView):
     tags=["Tailor Profile"],
     request=TailorMeasurementFeeSerializer,
     responses=TailorMeasurementFeeSerializer,
-    description="Read or update the tailor's one-time home measurement fee."
+    description="Read or update the tailor's home measurement fee amount and enable/disable toggle."
 )
 class TailorMeasurementFeeView(BaseTailorAuthenticatedView):
     serializer_class = TailorMeasurementFeeSerializer

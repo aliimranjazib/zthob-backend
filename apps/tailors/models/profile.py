@@ -120,6 +120,10 @@ class TailorProfile(models.Model):
         null=True,
         help_text="Extra fee for express delivery"
     )
+    is_measurement_fee_enabled = models.BooleanField(
+        default=False,
+        help_text="Whether this tailor charges a measurement fee"
+    )
     measurement_fee = models.DecimalField(
         max_digits=10,
         decimal_places=2,

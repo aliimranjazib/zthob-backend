@@ -160,7 +160,8 @@ class CheckoutFlowTest(TestCase):
 
     def test_checkout_adds_measurement_fee_once_for_missing_measurements(self):
         self.tailor_profile.measurement_fee = Decimal('25.00')
-        self.tailor_profile.save(update_fields=['measurement_fee'])
+        self.tailor_profile.is_measurement_fee_enabled = True
+        self.tailor_profile.save(update_fields=['measurement_fee', 'is_measurement_fee_enabled'])
         payload = self._checkout_payload()
         payload['order_type'] = 'fabric_with_stitching'
         payload['items'] = [
@@ -187,9 +188,22 @@ class CheckoutFlowTest(TestCase):
         )
         self.assertEqual(Decimal(pricing['total_amount']), calculated_total)
 
+    def test_checkout_does_not_add_measurement_fee_when_disabled(self):
+        self.tailor_profile.measurement_fee = Decimal('25.00')
+        self.tailor_profile.is_measurement_fee_enabled = False
+        self.tailor_profile.save(update_fields=['measurement_fee', 'is_measurement_fee_enabled'])
+        payload = self._checkout_payload()
+        payload['order_type'] = 'fabric_with_stitching'
+
+        response = self.client.post('/api/orders/checkout/', data=payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['data']['pricing_summary']['measurement_fee'], '0.00')
+
     def test_checkout_does_not_add_measurement_fee_when_measurements_exist(self):
         self.tailor_profile.measurement_fee = Decimal('25.00')
-        self.tailor_profile.save(update_fields=['measurement_fee'])
+        self.tailor_profile.is_measurement_fee_enabled = True
+        self.tailor_profile.save(update_fields=['measurement_fee', 'is_measurement_fee_enabled'])
         payload = self._checkout_payload()
         payload['order_type'] = 'fabric_with_stitching'
         payload['items'] = [
@@ -203,7 +217,8 @@ class CheckoutFlowTest(TestCase):
 
     def test_checkout_create_order_stores_measurement_fee_snapshot(self):
         self.tailor_profile.measurement_fee = Decimal('25.00')
-        self.tailor_profile.save(update_fields=['measurement_fee'])
+        self.tailor_profile.is_measurement_fee_enabled = True
+        self.tailor_profile.save(update_fields=['measurement_fee', 'is_measurement_fee_enabled'])
         payload = self._checkout_payload()
         payload['order_type'] = 'fabric_with_stitching'
 

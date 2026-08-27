@@ -42,7 +42,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             'average_stitching_time_days', 'completed_stitching_orders_count',
             'is_express_delivery_enabled', 'is_express',
             'express_delivery_unit', 'express_delivery_days', 'express_delivery_fee',
-            'measurement_fee', 'standard_stitching_days',
+            'is_measurement_fee_enabled', 'measurement_fee', 'standard_stitching_days',
         ]
 
     def _get_stitching_time_stats(self, obj):
@@ -221,11 +221,44 @@ class TailorMeasurementFeeSerializer(serializers.ModelSerializer):
         max_digits=10,
         decimal_places=2,
         min_value=Decimal('0.00'),
+        required=False,
+        default=serializers.empty,
     )
 
     class Meta:
         model = TailorProfile
-        fields = ['measurement_fee']
+        fields = ['is_measurement_fee_enabled', 'measurement_fee']
+        extra_kwargs = {
+            'is_measurement_fee_enabled': {'required': False},
+        }
+
+    def validate(self, attrs):
+        fee = attrs.get(
+            'measurement_fee',
+            getattr(self.instance, 'measurement_fee', Decimal('0.00')) if self.instance else Decimal('0.00'),
+        )
+        if fee is None:
+            fee = Decimal('0.00')
+
+        flag_in_payload = 'is_measurement_fee_enabled' in attrs
+        if flag_in_payload:
+            enabled = attrs['is_measurement_fee_enabled']
+        elif 'measurement_fee' in attrs:
+            # Older clients only send the amount. A positive fee turns charging on.
+            enabled = fee > Decimal('0.00')
+            attrs['is_measurement_fee_enabled'] = enabled
+        else:
+            enabled = (
+                getattr(self.instance, 'is_measurement_fee_enabled', False)
+                if self.instance
+                else False
+            )
+
+        if enabled and fee <= Decimal('0.00'):
+            raise serializers.ValidationError({
+                'measurement_fee': 'Measurement fee must be greater than 0.00 when the fee is enabled.'
+            })
+        return attrs
 
 class TailorProfileSubmissionSerializer(serializers.ModelSerializer):
     """Serializer for tailor profile submission for review."""

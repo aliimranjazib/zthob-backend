@@ -186,10 +186,14 @@ class OrderCalculationService:
             return Decimal('0.00')
 
         try:
-            fee = tailor.tailor_profile.measurement_fee or Decimal('0.00')
+            tailor_profile = tailor.tailor_profile
         except TailorProfile.DoesNotExist:
             return Decimal('0.00')
 
+        if not tailor_profile.is_measurement_fee_enabled:
+            return Decimal('0.00')
+
+        fee = tailor_profile.measurement_fee or Decimal('0.00')
         if fee <= Decimal('0.00'):
             return Decimal('0.00')
         return Decimal(fee).quantize(Decimal('0.01'))
