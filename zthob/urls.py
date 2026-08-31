@@ -28,6 +28,7 @@ from drf_spectacular.views import (
     SpectacularRedocView,
 )
 from apps.core.views import PublicMediaServeView
+from apps.tailors.views.help import tailor_help_view
 
 # Customize admin site
 admin.site.site_header = "Mgask Administration"
@@ -250,6 +251,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path('studio/', include('apps.documents.urls')),
     path('payment-result', payment_result_view, name='payment-result'),
+    path('tailor-help/', tailor_help_view, name='tailor-help'),
     
     # 1. Legacy API routes (No version prefix - for backward compatibility)
     path('api/', include(api_patterns)),

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{% if is_rtl %}rtl{% else %}ltr{% endif %}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{ content.subtitle }}">
+    <title>{{ content.page_title }}</title>
+    <style>
+        :root {
+            --primary: #8B1538;
+            --primary-dark: #6d102c;
+            --bg: #f5f6f8;
+            --card: #ffffff;
+            --text: #1a1d26;
+            --muted: #5c667a;
+            --border: #e4e8ef;
+            --shadow: 0 10px 30px rgba(26, 29, 38, 0.08);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: {% if is_rtl %}'Segoe UI', Tahoma, Arial, sans-serif{% else %}-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif{% endif %};
+            background: linear-gradient(180deg, #faf4f6 0%, var(--bg) 220px);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .page {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 20px 16px 48px;
+        }
+
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .brand {
+            font-weight: 800;
+            font-size: 18px;
+            color: var(--primary);
+            letter-spacing: -0.02em;
+        }
+
+        .lang-switch {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .lang-switch a {
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            background: var(--card);
+        }
+
+        .lang-switch a.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #fff;
+        }
+
+        .hero {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px 20px;
+            box-shadow: var(--shadow);
+            margin-bottom: 16px;
+        }
+
+        .hero h1 {
+            font-size: 28px;
+            line-height: 1.2;
+            margin-bottom: 8px;
+            letter-spacing: -0.03em;
+        }
+
+        .hero p {
+            color: var(--muted);
+            font-size: 15px;
+        }
+
+        .search-wrap {
+            margin-bottom: 16px;
+        }
+
+        .search-wrap input {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 16px;
+            font-size: 15px;
+            background: var(--card);
+            color: var(--text);
+        }
+
+        .search-wrap input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(139, 21, 56, 0.12);
+        }
+
+        .category {
+            margin-bottom: 14px;
+        }
+
+        .category-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--primary);
+            margin: 0 4px 8px;
+        }
+
+        details {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+
+        details[open] {
+            border-color: rgba(139, 21, 56, 0.25);
+            box-shadow: 0 4px 16px rgba(139, 21, 56, 0.06);
+        }
+
+        summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 16px 44px 16px 16px;
+            font-weight: 600;
+            font-size: 15px;
+            position: relative;
+        }
+
+        html[dir="rtl"] summary {
+            padding: 16px 16px 16px 44px;
+        }
+
+        summary::-webkit-details-marker { display: none; }
+
+        summary::after {
+            content: '+';
+            position: absolute;
+            top: 50%;
+            right: 16px;
+            transform: translateY(-50%);
+            color: var(--primary);
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        html[dir="rtl"] summary::after {
+            right: auto;
+            left: 16px;
+        }
+
+        details[open] summary::after { content: '−'; }
+
+        .answer {
+            padding: 0 16px 16px;
+            color: var(--muted);
+            font-size: 14px;
+            border-top: 1px solid var(--border);
+        }
+
+        .empty-state {
+            display: none;
+            text-align: center;
+            color: var(--muted);
+            padding: 28px 16px;
+            background: var(--card);
+            border: 1px dashed var(--border);
+            border-radius: 12px;
+        }
+
+        .support-card {
+            margin-top: 24px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: #fff;
+            border-radius: 16px;
+            padding: 22px 20px;
+            box-shadow: var(--shadow);
+        }
+
+        .support-card h2 {
+            font-size: 18px;
+            margin-bottom: 6px;
+        }
+
+        .support-card p {
+            font-size: 14px;
+            opacity: 0.92;
+            margin-bottom: 14px;
+        }
+
+        .support-card a {
+            display: inline-block;
+            background: #fff;
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 14px;
+            padding: 12px 16px;
+            border-radius: 10px;
+        }
+
+        @media (min-width: 768px) {
+            .page { padding-top: 32px; }
+            .hero h1 { font-size: 32px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="top-bar">
+            <div class="brand">Mgask Tailor</div>
+            <div class="lang-switch">
+                <a href="?lang=en" class="{% if lang == 'en' %}active{% endif %}">EN</a>
+                <a href="?lang=ar" class="{% if lang == 'ar' %}active{% endif %}">AR</a>
+                <a href="?lang=ur" class="{% if lang == 'ur' %}active{% endif %}">UR</a>
+            </div>
+        </div>
+
+        <section class="hero">
+            <h1>{{ content.heading }}</h1>
+            <p>{{ content.subtitle }}</p>
+        </section>
+
+        <div class="search-wrap">
+            <input
+                id="faq-search"
+                type="search"
+                placeholder="{{ content.search_placeholder }}"
+                autocomplete="off"
+            >
+        </div>
+
+        <div id="faq-list">
+            {% for category in content.categories %}
+                <section class="category" data-category>
+                    <h2 class="category-title">{{ category.title }}</h2>
+                    {% for item in category.items %}
+                        <details class="faq-item" data-faq-item>
+                            <summary>{{ item.q }}</summary>
+                            <div class="answer">{{ item.a }}</div>
+                        </details>
+                    {% endfor %}
+                </section>
+            {% endfor %}
+        </div>
+
+        <div id="faq-empty" class="empty-state">{{ content.no_results }}</div>
+
+        <section class="support-card">
+            <h2>{{ content.still_need_help }}</h2>
+            <p>{{ content.support_hint }}</p>
+            <a href="https://wa.me/966503349845" target="_blank" rel="noopener noreferrer">{{ content.contact_support }}</a>
+        </section>
+    </div>
+
+    <script>
+        (function () {
+            const input = document.getElementById('faq-search');
+            const items = Array.from(document.querySelectorAll('[data-faq-item]'));
+            const categories = Array.from(document.querySelectorAll('[data-category]'));
+            const empty = document.getElementById('faq-empty');
+
+            function normalize(value) {
+                return (value || '').toLowerCase().trim();
+            }
+
+            function applyFilter() {
+                const query = normalize(input.value);
+                let visibleCount = 0;
+
+                items.forEach((item) => {
+                    const text = normalize(item.innerText);
+                    const match = !query || text.includes(query);
+                    item.style.display = match ? '' : 'none';
+                    if (match) visibleCount += 1;
+                });
+
+                categories.forEach((category) => {
+                    const hasVisible = Array.from(category.querySelectorAll('[data-faq-item]'))
+                        .some((item) => item.style.display !== 'none');
+                    category.style.display = hasVisible ? '' : 'none';
+                });
+
+                empty.style.display = visibleCount === 0 ? 'block' : 'none';
+            }
+
+            input.addEventListener('input', applyFilter);
+        })();
+    </script>
+</body>
+</html>
