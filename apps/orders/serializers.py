@@ -1323,11 +1323,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'stitching_price': 'Stitching price is required for stitching-only orders.'
                 })
-            for index, item in enumerate(data.get('items', [])):
-                if not item.get('customer_fabric_image_ids'):
-                    raise serializers.ValidationError({
-                        'items': f"Item {index + 1}: customer_fabric_image_ids is required for stitching-only orders."
-                    })
+            # Customer fabric photos are optional; when provided they are validated
+            # in validate_items() and attached in _create_order_item().
         
         # Check context for one-time address (current location)
         using_current_location = self.context.get('using_current_location', False)
