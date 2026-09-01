@@ -50,14 +50,22 @@ def require_approved_rider(request):
 def get_customer_user_or_none(customer_id):
     """Return customer user with profile, or None if invalid."""
     try:
-        customer = User.objects.select_related('customer_profile').get(
-            id=customer_id,
-            role='USER',
-        )
-    except User.DoesNotExist:
+        customer_id = int(customer_id)
+    except (TypeError, ValueError):
         return None
 
-    if not hasattr(customer, 'customer_profile'):
+    if customer_id <= 0:
+        return None
+
+    from apps.customers.models import CustomerProfile
+
+    try:
+        profile = CustomerProfile.objects.select_related('user').get(user_id=customer_id)
+    except CustomerProfile.DoesNotExist:
+        return None
+
+    customer = profile.user
+    if customer is None or customer.is_deleted or not customer.is_active:
         return None
 
     return customer
