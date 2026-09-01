@@ -192,7 +192,7 @@ class CustomerWelcomeSmsPosTest(TestCase):
         self.client.force_authenticate(user=self.tailor_user)
         self.create_url = '/api/tailors/pos/customers/create/'
 
-    @patch('apps.customers.services.welcome_sms.queue_customer_welcome_sms')
+    @patch('apps.customers.services.customer_provisioning.queue_customer_welcome_sms')
     def test_pos_new_customer_triggers_welcome_sms(self, mock_queue):
         response = self.client.post(
             self.create_url,

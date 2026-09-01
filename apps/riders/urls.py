@@ -34,6 +34,12 @@ from .views_rider import (
     join_tailor_team,
     rider_my_tailors,
 )
+from .views.customers import (
+    RiderCustomerLookupOrCreateView,
+    RiderCustomerDetailView,
+    RiderCustomerMeasurementsView,
+    RiderCustomerStylesView,
+)
 
 app_name = 'riders'
 
@@ -82,4 +88,10 @@ urlpatterns = [
     # Rider - Join Team & View Tailors
     path('join-team/', join_tailor_team, name='join-team'),
     path('my-tailors/', rider_my_tailors, name='my-tailors'),
+
+    # Rider - Customer field
+    path('customers/lookup-or-create/', RiderCustomerLookupOrCreateView.as_view(), name='rider-customer-lookup-or-create'),
+    path('customers/<int:customer_id>/', RiderCustomerDetailView.as_view(), name='rider-customer-detail'),
+    path('customers/<int:customer_id>/measurements/', RiderCustomerMeasurementsView.as_view(), name='rider-customer-measurements'),
+    path('customers/<int:customer_id>/styles/', RiderCustomerStylesView.as_view(), name='rider-customer-styles'),
 ]

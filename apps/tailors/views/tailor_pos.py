@@ -154,94 +154,49 @@ class TailorCreateCustomerView(BaseTailorAPIView):
         serializer = CreateCustomerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        phone = normalize_phone_to_local(serializer.validated_data['phone'])
+        from apps.customers.services.customer_provisioning import (
+            lookup_or_create_customer,
+            normalize_customer_phone,
+        )
+
+        phone = normalize_customer_phone(serializer.validated_data['phone'])
         name = serializer.validated_data['name']
 
-        existing_user = User.objects.filter(phone__in=phone_lookup_variations(phone)).first()
+        result = lookup_or_create_customer(
+            phone=phone,
+            name=name,
+            pos_created_by=owner_user,
+        )
 
-        if existing_user:
-            if existing_user.phone != phone:
-                existing_user.phone = phone
-                existing_user.save(update_fields=['phone'])
-            # Update name if provided
-            name_parts = name.strip().split(' ', 1)
-            existing_user.first_name = name_parts[0]
-            existing_user.last_name = name_parts[1] if len(name_parts) > 1 else ''
-            existing_user.save(update_fields=['first_name', 'last_name'])
-
-            # Tag with this tailor if not already tagged
-            try:
-                cust_profile = existing_user.customer_profile
-                if not cust_profile.pos_created_by:
-                    cust_profile.pos_created_by = owner_user
-                    cust_profile.save(update_fields=['pos_created_by'])
-                measurements = cust_profile.measurements
-            except CustomerProfile.DoesNotExist:
-                cust_profile = CustomerProfile.objects.create(
-                    user=existing_user,
-                    pos_created_by=owner_user
-                )
-                measurements = None
-
+        if result.is_existing:
             total_orders = Order.objects.filter(
-                customer=existing_user, tailor=owner_user
+                customer=result.user, tailor=owner_user
             ).count()
-
 
             return api_response(
                 success=True,
                 message="Customer already exists",
                 data={
-                    'id': existing_user.id,
-                    'name': existing_user.get_full_name() or existing_user.username,
-                    'phone': existing_user.phone,
-                    'email': existing_user.email,
+                    'id': result.user.id,
+                    'name': result.user.get_full_name() or result.user.username,
+                    'phone': result.user.phone,
+                    'email': result.user.email,
                     'total_orders': total_orders,
                     'last_order_date': None,
-                    'measurements': measurements,
+                    'measurements': result.profile.measurements,
                     'is_existing': True,
                 },
                 status_code=status.HTTP_200_OK,
             )
 
-        # Split name into first + last
-        name_parts = name.strip().split(' ', 1)
-        first_name = name_parts[0]
-        last_name = name_parts[1] if len(name_parts) > 1 else ''
-
-        # Create user with canonical local phone (matches login flow)
-        username = f"user_{phone}"
-        counter = 1
-        while User.objects.filter(username=username).exists():
-            username = f"user_{phone}_{counter}"
-            counter += 1
-
-        user = User.objects.create(
-            username=username,
-            phone=phone,
-            first_name=first_name,
-            last_name=last_name,
-            role='USER',
-            is_active=True,
-        )
-
-        # Create customer profile and tag it with the tailor shop owner
-        CustomerProfile.objects.create(
-            user=user,
-            pos_created_by=owner_user,  # track which shop owns this customer
-        )
-
-        from apps.customers.services.welcome_sms import queue_customer_welcome_sms
-        queue_customer_welcome_sms(user.id)
-
         return api_response(
             success=True,
             message="Customer created successfully",
             data={
-                'id': user.id,
-                'name': user.get_full_name(),
-                'phone': user.phone,
-                'email': user.email,
+                'id': result.user.id,
+                'name': result.user.get_full_name(),
+                'phone': result.user.phone,
+                'email': result.user.email,
                 'total_orders': 0,
                 'last_order_date': None,
                 'measurements': None,

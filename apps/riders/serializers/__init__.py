@@ -49,6 +49,9 @@ try:
     TailorRiderAssociationUpdateSerializer = _module.TailorRiderAssociationUpdateSerializer
     JoinTailorTeamSerializer = _module.JoinTailorTeamSerializer
     TailorBasicInfoSerializer = _module.TailorBasicInfoSerializer
+    RiderCustomerLookupSerializer = _module.RiderCustomerLookupSerializer
+    RiderCustomerMeasurementsSerializer = _module.RiderCustomerMeasurementsSerializer
+    RiderCustomerStylePresetSerializer = _module.RiderCustomerStylePresetSerializer
 finally:
     # Restore if needed
     if _old_module:
@@ -77,4 +80,7 @@ __all__ = [
     'TailorRiderAssociationUpdateSerializer',
     'JoinTailorTeamSerializer',
     'TailorBasicInfoSerializer',
+    'RiderCustomerLookupSerializer',
+    'RiderCustomerMeasurementsSerializer',
+    'RiderCustomerStylePresetSerializer',
 ]

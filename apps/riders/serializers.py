@@ -1375,3 +1375,69 @@ class RiderUpdateStyleSerializer(serializers.Serializer):
                 customer=customer,
             )
         return attrs
+
+
+class RiderCustomerLookupSerializer(serializers.Serializer):
+    """Lookup or create a customer by phone and name."""
+
+    phone = serializers.CharField(max_length=15)
+    name = serializers.CharField(max_length=150)
+
+    def validate_phone(self, value):
+        from apps.core.phone_format import format_phone_e164, is_valid_saudi_phone, normalize_phone_to_local
+
+        if not is_valid_saudi_phone(value):
+            raise serializers.ValidationError('Enter a valid Saudi mobile number.')
+        return normalize_phone_to_local(format_phone_e164(value))
+
+
+class RiderCustomerMeasurementsSerializer(serializers.Serializer):
+    """Save customer profile measurements from rider field visit."""
+
+    unit = serializers.ChoiceField(
+        choices=[('cm', 'Centimeters'), ('inches', 'Inches')],
+        required=False,
+        default='cm',
+    )
+    title = serializers.CharField(required=False, allow_blank=True)
+    measurements = serializers.JSONField(required=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+    replace_existing = serializers.BooleanField(default=False)
+
+    def validate_measurements(self, value):
+        from apps.orders.measurement_utils import has_measurement_values
+
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('Measurements must be a dictionary/JSON object')
+        if not has_measurement_values(value):
+            raise serializers.ValidationError('Measurements cannot be empty')
+        return value
+
+
+class RiderCustomerStylePresetSerializer(serializers.Serializer):
+    """Create or update a customer style preset from rider field visit."""
+
+    preset_name = serializers.CharField(max_length=100)
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    styles = RiderStyleSelectionSerializer(many=True, required=True)
+    set_as_default = serializers.BooleanField(default=False)
+
+    def validate_styles(self, value):
+        if not value:
+            raise serializers.ValidationError('Styles list cannot be empty')
+        return value
+
+    def validate(self, attrs):
+        from apps.orders.style_references import resolve_reference_image_ids
+
+        request = self.context.get('request')
+        user = request.user if request else None
+        customer = self.context.get('style_owner_customer')
+        for idx, style in enumerate(attrs.get('styles', [])):
+            resolve_reference_image_ids(
+                style.get('reference_image_ids'),
+                user,
+                idx,
+                customer=customer,
+            )
+        return attrs

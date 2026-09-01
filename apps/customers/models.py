@@ -154,6 +154,7 @@ class CustomerDataAuditLog(models.Model):
     SOURCE_CHOICES = (
         ('customer_app', 'Customer App'),
         ('tailor_pos', 'Tailor POS'),
+        ('rider_app', 'Rider App'),
         ('system', 'System'),
     )
 
