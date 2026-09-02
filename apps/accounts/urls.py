@@ -12,7 +12,13 @@ from apps.accounts.views import (
     DeleteAccountView,
     PublicDeleteAccountRequestView,
     PublicDeleteAccountSendOTPView,
-    test_deployment)
+    test_deployment,
+)
+from apps.accounts.views_owner import (
+    OwnerAuthContextView,
+    OwnerPhoneVerifyView,
+    OwnerSwitchShopView,
+)
 
 app_name = 'accounts'
 urlpatterns = [
@@ -26,6 +32,10 @@ urlpatterns = [
     path('phone-verify/',PhoneVerifyView.as_view(),name='phone-verify'),
     path('phone-resend-otp/',PhoneResendOTPView.as_view(),name='phone-resend-otp'),
     path('test-deployment/', test_deployment, name='test-deployment'),
+
+    path('owner/phone-verify/', OwnerPhoneVerifyView.as_view(), name='owner-phone-verify'),
+    path('owner/switch-shop/', OwnerSwitchShopView.as_view(), name='owner-switch-shop'),
+    path('owner/context/', OwnerAuthContextView.as_view(), name='owner-auth-context'),
     
     # Public account deletion endpoints (Google Play compliance)
     path('delete-account-request/', PublicDeleteAccountRequestView.as_view(), name='delete-account-request'),

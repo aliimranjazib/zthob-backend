@@ -39,11 +39,11 @@ class TailorCustomerListView(BaseTailorAPIView):
         if not profile:
              return api_response(success=False, message="Shop profile not found", status_code=404)
         
-        owner_user = profile.user
+        owner_user = profile.shop_owner_user
         
         # --- Source 1: Customers who placed orders with this shop ---
         order_customer_data = (
-            Order.objects.filter(tailor=owner_user)
+            Order.objects.filter(tailor=owner_user, shop=profile)
 
             .values('customer')
             .annotate(
@@ -149,7 +149,7 @@ class TailorCreateCustomerView(BaseTailorAPIView):
         profile = self.get_tailor_profile(request.user)
         if not profile:
              return api_response(success=False, message="Shop profile not found", status_code=404)
-        owner_user = profile.user
+        owner_user = profile.shop_owner_user
 
         serializer = CreateCustomerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -170,7 +170,7 @@ class TailorCreateCustomerView(BaseTailorAPIView):
 
         if result.is_existing:
             total_orders = Order.objects.filter(
-                customer=result.user, tailor=owner_user
+                customer=result.user, tailor=owner_user, shop=profile
             ).count()
 
             return api_response(
@@ -220,7 +220,11 @@ class TailorPOSCustomerOrdersView(BaseTailorAPIView):
             return api_response(success=False, message="Shop profile not found", status_code=404)
 
         orders = (
-            Order.objects.filter(customer_id=customer_id, tailor=profile.user)
+            Order.objects.filter(
+                customer_id=customer_id,
+                tailor=profile.shop_owner_user,
+                shop=profile,
+            )
             .select_related('customer', 'tailor', 'delivery_address', 'rider')
             .prefetch_related('order_items__fabric', 'order_items__customer_fabric_images')
             .order_by('-created_at')
@@ -266,7 +270,12 @@ class TailorPOSCustomerOrderDetailView(BaseTailorAPIView):
                     'family_member',
                 )
                 .prefetch_related('order_items__fabric', 'order_items__customer_fabric_images', 'status_history')
-                .get(id=order_id, customer_id=customer_id, tailor=profile.user)
+                .get(
+                    id=order_id,
+                    customer_id=customer_id,
+                    tailor=profile.shop_owner_user,
+                    shop=profile,
+                )
             )
         except Order.DoesNotExist:
             return api_response(

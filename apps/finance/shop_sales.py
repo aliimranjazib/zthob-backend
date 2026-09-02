@@ -16,7 +16,13 @@ def _money(value):
     return f'{amount.quantize(Decimal("0.01")):.2f}'
 
 
-def get_shop_sales_summary(tailor_user, period=SHOP_SALES_DEFAULT_PERIOD, from_date=None, to_date=None):
+def get_shop_sales_summary(
+    tailor_user,
+    period=SHOP_SALES_DEFAULT_PERIOD,
+    from_date=None,
+    to_date=None,
+    shop_id=None,
+):
     """
     Aggregate walk-in shop cash collected by the tailor for a period.
 
@@ -30,6 +36,8 @@ def get_shop_sales_summary(tailor_user, period=SHOP_SALES_DEFAULT_PERIOD, from_d
         status='collected',
         payment_status='paid',
     )
+    if shop_id is not None:
+        queryset = queryset.filter(shop_id=shop_id)
     queryset = annotate_completed_at(queryset)
     queryset = queryset.filter(
         completed_at__gte=start,

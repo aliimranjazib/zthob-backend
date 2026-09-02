@@ -65,6 +65,20 @@ from apps.tailors.views import (
     TailorEmployeeListCreateView,
     TailorEmployeeDetailView,
 
+    # Owner views
+    OwnerShopListCreateView,
+    OwnerShopDetailView,
+    OwnerShopPinView,
+    OwnerStaffListCreateView,
+    OwnerStaffDetailView,
+    OwnerStaffAssignmentListCreateView,
+    OwnerStaffAssignmentDetailView,
+
+    # Owner orders/reports
+    OwnerOrderListView,
+    OwnerOrderDetailView,
+    OwnerReportsView,
+
     # Home/Dashboard
     TailorHomeAPIView,
 )
@@ -146,4 +160,27 @@ urlpatterns = [
     # Employee URLs
     path('employees/', TailorEmployeeListCreateView.as_view(), name='tailor-employees'),
     path('employees/<int:pk>/', TailorEmployeeDetailView.as_view(), name='tailor-employee-detail'),
+
+    # Owner shop management
+    path('owner/shops/', OwnerShopListCreateView.as_view(), name='owner-shops'),
+    path('owner/shops/<int:shop_id>/', OwnerShopDetailView.as_view(), name='owner-shop-detail'),
+    path('owner/shops/<int:shop_id>/pin/', OwnerShopPinView.as_view(), name='owner-shop-pin'),
+
+    # Owner staff roster
+    path('owner/staff/', OwnerStaffListCreateView.as_view(), name='owner-staff'),
+    path('owner/staff/<int:staff_id>/', OwnerStaffDetailView.as_view(), name='owner-staff-detail'),
+    path(
+        'owner/staff/<int:staff_id>/assignments/',
+        OwnerStaffAssignmentListCreateView.as_view(),
+        name='owner-staff-assignments',
+    ),
+    path(
+        'owner/staff/<int:staff_id>/assignments/<int:assignment_id>/',
+        OwnerStaffAssignmentDetailView.as_view(),
+        name='owner-staff-assignment-detail',
+    ),
+
+    path('owner/orders/', OwnerOrderListView.as_view(), name='owner-orders'),
+    path('owner/orders/<int:order_id>/', OwnerOrderDetailView.as_view(), name='owner-order-detail'),
+    path('owner/reports/', OwnerReportsView.as_view(), name='owner-reports'),
 ]

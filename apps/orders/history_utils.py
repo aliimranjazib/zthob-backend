@@ -94,13 +94,21 @@ def annotate_completed_at(queryset):
     )
 
 
-def get_tailor_completed_orders(tailor_user, period=DEFAULT_PERIOD, from_date=None, to_date=None):
+def get_tailor_completed_orders(
+    tailor_user,
+    period=DEFAULT_PERIOD,
+    from_date=None,
+    to_date=None,
+    shop_id=None,
+):
     start, end = resolve_period_bounds(period, from_date=from_date, to_date=to_date)
 
     queryset = Order.objects.filter(
         tailor=tailor_user,
         status__in=COMPLETED_STATUSES,
     )
+    if shop_id is not None:
+        queryset = queryset.filter(shop_id=shop_id)
     queryset = annotate_completed_at(queryset)
     queryset = queryset.filter(
         completed_at__gte=start,

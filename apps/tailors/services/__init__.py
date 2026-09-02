@@ -1,4 +1,3 @@
-from .order_pdf import generate_order_pdf
-from .analytics import TailorAnalyticsService
+from apps.tailors.services.analytics import TailorAnalyticsService
 
-__all__ = ['generate_order_pdf', 'TailorAnalyticsService']
+__all__ = ['TailorAnalyticsService']

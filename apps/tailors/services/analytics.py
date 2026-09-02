@@ -19,18 +19,21 @@ class TailorAnalyticsService:
     """
 
     @staticmethod
-    def get_tailor_orders(tailor_user, status_filter=None):
+    def get_tailor_orders(tailor_user, status_filter=None, shop_id=None):
         """
         Get orders for a specific tailor with optional status filter.
 
         Args:
             tailor_user: User instance with TAILOR role
             status_filter: Optional status filter (e.g., 'delivered', 'pending')
+            shop_id: Optional TailorProfile id for multi-shop scoping
 
         Returns:
             QuerySet of Order objects
         """
         queryset = Order.objects.filter(tailor=tailor_user)
+        if shop_id is not None:
+            queryset = queryset.filter(shop_id=shop_id)
 
         if status_filter:
             queryset = queryset.filter(status=status_filter)

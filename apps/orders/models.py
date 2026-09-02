@@ -127,6 +127,14 @@ class Order(BaseModel):
     related_name='tailor_orders',
     help_text='Tailor assigned to this order'
     )
+    shop=models.ForeignKey(
+        'tailors.TailorProfile',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='shop_orders',
+        help_text='Tailor shop this order belongs to (multi-shop scoping)',
+    )
     rider=models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

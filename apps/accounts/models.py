@@ -31,7 +31,14 @@ class CustomUser(AbstractUser):
     @property
     def is_tailor(self):
         """Check if user has a tailor profile or TAILOR role"""
-        return hasattr(self, 'tailor_profile') or self.role == 'TAILOR'
+        if self.role == 'TAILOR':
+            return True
+        if hasattr(self, 'tailor_profile'):
+            return True
+        try:
+            return self.owned_shops.exists()
+        except Exception:
+            return False
     
     @property
     def is_rider(self):
@@ -59,8 +66,9 @@ class CustomUser(AbstractUser):
         """
         role_name = role_name.upper()
         
-        if role_name == 'TAILOR' and hasattr(self, 'tailor_profile'):
-            self.tailor_profile.delete()
+        if role_name == 'TAILOR':
+            from apps.tailors.models import TailorProfile
+            TailorProfile.objects.filter(owner=self).delete()
             # Delete FCM tokens for this role
             from apps.notifications.models import FCMDeviceToken
             FCMDeviceToken.objects.filter(user=self, app_role='TAILOR').delete()

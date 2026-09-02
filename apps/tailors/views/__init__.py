@@ -66,6 +66,18 @@ from .employee import (
     TailorEmployeeListCreateView,
     TailorEmployeeDetailView,
 )
+from .owner import (
+    OwnerShopDetailView,
+    OwnerShopListCreateView,
+    OwnerShopPinView,
+    OwnerStaffAssignmentDetailView,
+    OwnerStaffAssignmentListCreateView,
+    OwnerStaffDetailView,
+    OwnerStaffListCreateView,
+    OwnerOrderDetailView,
+    OwnerOrderListView,
+    OwnerReportsView,
+)
 
 # Export all views
 __all__ = [
@@ -134,4 +146,20 @@ __all__ = [
     # Employee views
     'TailorEmployeeListCreateView',
     'TailorEmployeeDetailView',
+
+    # Owner shop views
+    'OwnerShopListCreateView',
+    'OwnerShopDetailView',
+    'OwnerShopPinView',
+
+    # Owner staff views
+    'OwnerStaffListCreateView',
+    'OwnerStaffDetailView',
+    'OwnerStaffAssignmentListCreateView',
+    'OwnerStaffAssignmentDetailView',
+
+    # Owner orders/reports
+    'OwnerOrderListView',
+    'OwnerOrderDetailView',
+    'OwnerReportsView',
 ]
