@@ -37,7 +37,7 @@ Use this when the user picks **“Shop owner”** on the login screen.
 
 ```
 1. POST /api/accounts/phone-login/          → send OTP
-2. POST /api/accounts/owner/phone-verify/   → login + get tokens
+2. POST /api/accounts/phone-verify/         → login + get tokens (app_entry=owner)
 3. Open owner dashboard (Shops / Staff / Reports tabs)
 ```
 
@@ -67,7 +67,7 @@ Staff uses the **same owner verify endpoint**, not a separate login API.
 
 ```
 1. POST /api/accounts/phone-login/
-2. POST /api/accounts/owner/phone-verify/
+2. POST /api/accounts/phone-verify/         → app_entry=staff, role=TAILOR
 3. Read assigned_shops from tailor_context
 4. POST /api/accounts/owner/switch-shop/   → pick assigned shop
 5. access_mode becomes "employee" — use tailor APIs with limited permissions
@@ -124,26 +124,38 @@ Staff uses the **same owner verify endpoint**, not a separate login API.
 
 ---
 
-## Owner login / register
+## Owner / staff login (same endpoint as everyone)
 
-**What:** Verifies OTP and logs the user into the **owner app**. Creates account if new. Returns JWT + owner navigation data.
+**What:** Verifies OTP and logs into the **owner app** or **staff app**. Same URL as customer/tailor login — pass `app_entry` to get owner dashboard data.
 
 | | |
 |---|---|
 | **Method** | `POST` |
-| **URL** | `/api/accounts/owner/phone-verify/` |
+| **URL** | `/api/accounts/phone-verify/` |
 | **Auth** | None |
 
-**Do not use** `/api/accounts/phone-verify/` for the owner app — that one is for customer/legacy tailor apps.
-
-**Request:**
+**Request (owner app):**
 ```json
 {
   "verification_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "otp_code": "1234",
-  "name": "Ahmed Ali"
+  "name": "Ahmed Ali",
+  "role": "TAILOR",
+  "app_entry": "owner"
 }
 ```
+
+**Request (staff app):**
+```json
+{
+  "verification_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "otp_code": "1234",
+  "role": "TAILOR",
+  "app_entry": "staff"
+}
+```
+
+**Important:** Omit `app_entry` only for legacy customer/tailor apps — they get the compact old `tailor_context`.
 
 **Response (201 new user / 200 existing):**
 ```json
@@ -776,7 +788,7 @@ switch-shop (shop_id=12) → save token → GET /api/orders/tailor/my-orders/
 | # | Method | Endpoint | Purpose |
 |---|--------|----------|---------|
 | 1 | POST | `/api/accounts/phone-login/` | Send OTP |
-| 2 | POST | `/api/accounts/owner/phone-verify/` | Owner login |
+| 2 | POST | `/api/accounts/phone-verify/` | Login (`app_entry=owner` or `staff`) |
 | 3 | POST | `/api/accounts/owner/switch-shop/` | Enter shop session |
 | 4 | GET | `/api/accounts/owner/context/` | Refresh context |
 | 5 | GET | `/api/tailors/owner/shops/` | List shops |
@@ -797,8 +809,8 @@ switch-shop (shop_id=12) → save token → GET /api/orders/tailor/my-orders/
 
 # Important notes
 
-1. **Owner app must use** `/owner/phone-verify/` — not the generic phone verify.
+1. **Owner/staff login** uses `/api/accounts/phone-verify/` with `role: TAILOR` and `app_entry: owner` or `staff`.
 2. **No separate OWNER role** — everyone uses `role: TAILOR`; owner vs staff is determined by `tailor_context` and JWT claims.
 3. **After switch-shop**, always save the new `access_token`.
 4. **Owner does not need** a staff record to work in their own shop — only `switch-shop` is required.
-5. **Legacy tailor app** is unchanged — it still uses `/api/accounts/phone-verify/` without owner fields.
+5. **Legacy tailor app** is unchanged — it still uses `/api/accounts/phone-verify/` **without** `app_entry`.
