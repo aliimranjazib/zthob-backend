@@ -89,7 +89,10 @@ class ShopStaffAssignment(models.Model):
             ),
         ]
         indexes = [
-            models.Index(fields=['shop', 'is_active']),
+            models.Index(
+                fields=['shop', 'is_active'],
+                name='tailors_sho_shop_id_6f8b0d_idx',
+            ),
         ]
 
     def __str__(self):
