@@ -12,13 +12,14 @@ class BaseTailorAPIView(APIView):
     
     def get_tailor_profile(self, user):
         """Helper method to get tailor profile (handles owners and employees)."""
-        from ..shop_access import get_tailor_profile
-        return get_tailor_profile(user)
+        from ..shop_access import get_tailor_profile, get_token_shop_id
+        shop_id = get_token_shop_id(getattr(self, 'request', None))
+        return get_tailor_profile(user, shop_id=shop_id)
 
     def get_tailor_owner_user(self, user):
         """Return the owner user for the resolved tailor shop."""
         profile = self.get_tailor_profile(user)
-        return profile.user if profile else None
+        return profile.shop_owner_user if profile else None
 
     def employee_has_permission(self, user, permission_key):
         """Return True when the active employee has the requested permission."""

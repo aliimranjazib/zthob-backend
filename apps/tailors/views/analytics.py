@@ -79,12 +79,15 @@ class TailorAnalyticsView(APIView):
             )
         
         # Determine the target shop owner user
-        target_owner = None
-        if hasattr(request.user, 'tailor_profile'):
+        from apps.tailors.shop_access import get_shop_owner_user, get_token_shop_id
+
+        target_owner = get_shop_owner_user(request.user, shop_id=get_token_shop_id(request))
+        if target_owner is None and hasattr(request.user, 'tailor_profile'):
             target_owner = request.user
-        elif hasattr(request.user, 'tailor_employee'):
-            # Use the owner of the shop the employee works for
-            target_owner = request.user.tailor_employee.tailor.user
+        elif target_owner is None and hasattr(request.user, 'tailor_employee'):
+            employee = request.user.tailor_employee
+            if employee.is_active:
+                target_owner = employee.tailor.shop_owner_user
             
         if not target_owner:
             return api_response(

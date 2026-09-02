@@ -6,11 +6,20 @@ from decimal import Decimal
 
 class TailorProfile(models.Model):
     """Model representing a tailor's profile information."""
-    
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='owned_shops',
+        help_text="Shop owner who manages this tailor shop",
+    )
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='tailor_profile'
+        related_name='tailor_profile',
+        null=True,
+        blank=True,
+        help_text="Legacy primary profile link for backward compatibility",
     )
     shop_name = models.CharField(
         max_length=100,
@@ -49,6 +58,10 @@ class TailorProfile(models.Model):
     shop_status = models.BooleanField(
         default=True,
         help_text="Whether the shop is currently open"
+    )
+    is_pinned = models.BooleanField(
+        default=True,
+        help_text="Whether this shop appears in the owner quick-access list",
     )
     is_featured = models.BooleanField(
         default=False,
@@ -143,6 +156,17 @@ class TailorProfile(models.Model):
         verbose_name = "Tailor Profile"
         verbose_name_plural = "Tailor Profiles"
         ordering = ['-created_at']
+
+    @property
+    def shop_owner_user(self):
+        """User account that owns this shop for orders and legacy integrations."""
+        return self.owner if self.owner_id else self.user
+
+    @property
+    def shop_owner_user_id(self):
+        owner_user = self.shop_owner_user
+        return owner_user.id if owner_user else None
     
     def __str__(self):
-        return f"{self.shop_name or self.user.get_full_name() or self.user.username}"
+        owner_user = self.shop_owner_user
+        return f"{self.shop_name or (owner_user.get_full_name() if owner_user else '') or 'Shop'}"

@@ -1656,6 +1656,13 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             validated_data['tailor_status'] = 'accepted'
             validated_data['status'] = 'confirmed'
 
+        from apps.orders.shop_scoping import attach_shop_to_order_data
+        attach_shop_to_order_data(
+            validated_data,
+            tailor_user=tailor,
+            shop_id=self.context.get('shop_id'),
+        )
+
         order = Order.objects.create(**validated_data)
         order_customer = order.customer
         apply_order_family_member_to_untagged_items(

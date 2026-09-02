@@ -21,7 +21,11 @@ class IdentityService:
         if role == 'USER' or role == 'CUSTOMER':
             profile, created = CustomerProfile.objects.get_or_create(user=user)
         elif role == 'TAILOR':
-            profile, created = TailorProfile.objects.get_or_create(user=user)
+            profile, created = TailorProfile.objects.get_or_create(
+                owner=user,
+                user=user,
+                defaults={},
+            )
         elif role == 'RIDER':
             profile, created = RiderProfile.objects.get_or_create(user=user)
         

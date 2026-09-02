@@ -8,7 +8,11 @@ from apps.tailors.models import TailorProfile
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def create_tailor_profile(sender, instance, created, **kwargs):
     if getattr(instance, 'role', '') == 'TAILOR':
-        TailorProfile.objects.get_or_create(user=instance)
+        TailorProfile.objects.get_or_create(
+            owner=instance,
+            user=instance,
+            defaults={},
+        )
 
 
 def _update_tailor_rating_aggregates(tailor_profile):

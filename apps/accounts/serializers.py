@@ -9,7 +9,14 @@ class UnifiedRefreshToken(RefreshToken):
     This enables the frontend to be 'app-aware' without extra API calls.
     """
     @classmethod
-    def for_user(cls, user):
+    def for_user(
+        cls,
+        user,
+        *,
+        shop_id=None,
+        access_mode=None,
+        app_entry=None,
+    ):
         token = super().for_user(user)
         
         # Add profile availability flags
@@ -23,10 +30,17 @@ class UnifiedRefreshToken(RefreshToken):
         # Add profile IDs if they exist
         if user.is_customer:
             token['customer_id'] = user.customer_profile.id
-        if user.is_tailor:
+        if user.is_tailor and hasattr(user, 'tailor_profile'):
             token['tailor_id'] = user.tailor_profile.id
         if user.is_rider:
             token['rider_id'] = user.rider_profile.id
+
+        if shop_id is not None:
+            token['shop_id'] = shop_id
+        if access_mode is not None:
+            token['access_mode'] = access_mode
+        if app_entry is not None:
+            token['app_entry'] = app_entry
             
         return token
 
@@ -129,30 +143,17 @@ class UserProfileSerializer(serializers.ModelSerializer):
         Returns shop context if user is an owner or employee.
         Prioritizes employee context over owner context to avoid confusion for hired staff.
         """
-        context = {
-            'is_owner': False,
-            'is_employee': False,
-            'shop_id': None,
-            'roles': [],
-            'permissions': {}
-        }
-        
-        # 1. First priority: Check if they are currently working as staff for a shop
-        if hasattr(user, 'tailor_employee') and user.tailor_employee.is_active:
-            emp = user.tailor_employee
-            context['is_employee'] = True
-            context['shop_id'] = emp.tailor_id
-            context['roles'] = emp.roles
-            context['permissions'] = emp.permissions_dict
-            return context # If they are an employee, this is their primarily role in the app
-            
-        # 2. Second priority: Check if they are a shop owner
-        # We check for shop_name to ensure it's a real shop registration, not a stub profile
-        if hasattr(user, 'tailor_profile') and user.tailor_profile.shop_name:
-            context['is_owner'] = True
-            context['shop_id'] = user.tailor_profile.id
-            
-        return context
+        from apps.accounts.services.tailor_auth import (
+            APP_ENTRY_OWNER,
+            build_owner_auth_context,
+            build_legacy_tailor_context,
+        )
+
+        app_entry = self.context.get('app_entry')
+        if app_entry == APP_ENTRY_OWNER:
+            return build_owner_auth_context(user, app_entry=APP_ENTRY_OWNER)
+
+        return build_legacy_tailor_context(user)
 
 
 
@@ -193,6 +194,11 @@ class PhoneVerifySerializer(serializers.Serializer):
     name = serializers.CharField(max_length=200, required=False, allow_blank=True)
     role = serializers.ChoiceField(choices=CustomUser.USER_ROLES, required=False, default='USER')
     date_of_birth = serializers.DateField(required=False, allow_null=True)
+    app_entry = serializers.ChoiceField(
+        choices=[('owner', 'Owner'), ('staff', 'Staff')],
+        required=False,
+        allow_null=True,
+    )
 
     def validate_otp_code(self, value):
         """Validate OTP format"""

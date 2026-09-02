@@ -61,6 +61,7 @@ from apps.orders.history_utils import (
     DEFAULT_PERIOD,
     get_tailor_completed_orders,
 )
+from apps.orders.shop_scoping import apply_shop_session_filter, shop_id_from_request
 from apps.orders.alinma import (
     AlinmaConfigurationError,
     AlinmaGatewayError,
@@ -76,8 +77,11 @@ from apps.orders.alinma import (
 
 def _get_tailor_owner_user(request):
     """Resolve the owner tailor user for owner/staff sessions."""
-    if hasattr(request.user, 'tailor_employee') and request.user.tailor_employee.is_active:
-        return request.user.tailor_employee.tailor.user
+    from apps.tailors.shop_access import get_shop_owner_user
+
+    owner = get_shop_owner_user(request.user, shop_id=shop_id_from_request(request))
+    if owner:
+        return owner
 
     try:
         TailorProfile.objects.get(user=request.user)
@@ -456,7 +460,13 @@ class OrderCreateView(APIView):
             data['customer'] = request.user.id
         # For TAILOR and ADMIN, we respect the 'customer' ID passed in the request.
         # This ensures that when a tailor/admin creates an order, the correct customer is linked.
-        serializer = OrderCreateSerializer(data=data, context={'request':request})
+        serializer = OrderCreateSerializer(
+            data=data,
+            context={
+                'request': request,
+                'shop_id': shop_id_from_request(request),
+            },
+        )
         if serializer.is_valid():
             try:
                 order=serializer.save()
@@ -1445,6 +1455,7 @@ class TailorAvailableOrdersView(APIView):
             'assigned_employee__user',
         ).prefetch_related('order_items__fabric', 'order_items__customer_fabric_images').order_by('-created_at')
 
+        orders = apply_shop_session_filter(orders, request)
         orders = filter_orders_for_shop_staff(orders, request.user)
         
         # Filter by payment status
@@ -1507,6 +1518,7 @@ class TailorOrderListView(APIView):
         
         # Filter by payment status
 
+        orders = apply_shop_session_filter(orders, request)
         orders = filter_orders_for_shop_staff(orders, request.user)
         
         # Filters
@@ -1643,6 +1655,7 @@ class TailorOrderHistoryView(APIView):
                 period=period,
                 from_date=from_date,
                 to_date=to_date,
+                shop_id=shop_id_from_request(request),
             )
         except ValidationError as exc:
             return api_response(
@@ -1724,6 +1737,7 @@ class TailorPaidOrdersView(APIView):
             'assigned_employee__user',
         ).prefetch_related('order_items', 'order_items__customer_fabric_images').order_by('-created_at')
 
+        orders = apply_shop_session_filter(orders, request)
         orders = filter_orders_for_shop_staff(orders, request.user)
         
         # Filter by status if provided
@@ -1770,18 +1784,26 @@ class TailorOrderDetailView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
         order = get_object_or_404(
-            Order.objects.select_related(
-                'customer',
-                'delivery_address',
-                'rider__rider_profile',
-                'assigned_rider__rider_profile',
-                'measurement_rider__rider_profile',
-                'delivery_rider__rider_profile',
-                'assigned_employee__user',
-                'family_member'
-            ).prefetch_related('order_items__fabric', 'order_items__customer_fabric_images', 'status_history'),
+            apply_shop_session_filter(
+                Order.objects.select_related(
+                    'customer',
+                    'delivery_address',
+                    'rider__rider_profile',
+                    'assigned_rider__rider_profile',
+                    'measurement_rider__rider_profile',
+                    'delivery_rider__rider_profile',
+                    'assigned_employee__user',
+                    'family_member',
+                    'shop',
+                ).prefetch_related(
+                    'order_items__fabric',
+                    'order_items__customer_fabric_images',
+                    'status_history',
+                ),
+                request,
+            ),
             id=order_id,
-            tailor=tailor_user
+            tailor=tailor_user,
         )
         if not user_can_see_stitch_order(request.user, order) and not user_can_manage_shop_order(request.user, order):
             return api_response(

@@ -387,130 +387,32 @@ class PhoneVerifyView(APIView):
     def post(self, request):
         serializer = PhoneVerifySerializer(data=request.data)
         if serializer.is_valid():
-            phone = serializer.validated_data.get('phone') or ''
-            verification_id = serializer.validated_data.get('verification_id')
-            otp_code = serializer.validated_data['otp_code']
-            name = serializer.validated_data.get('name', '')
+            user, is_new_user, error_response = self._verify_and_prepare_user(
+                request,
+                serializer.validated_data,
+            )
+            if error_response is not None:
+                return error_response
+
             role = serializer.validated_data.get('role', 'USER')
-            date_of_birth = serializer.validated_data.get('date_of_birth', None)
+            app_entry = serializer.validated_data.get('app_entry')
 
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
-
-            pending_session = PhoneVerificationService._get_verification_session(
-                verification_id=verification_id,
-                phone_number=phone or None,
-            )
-            local_phone = (
-                PhoneVerificationService.normalize_phone_to_local(phone)
-                if phone
-                else (
-                    PhoneVerificationService.normalize_phone_to_local(pending_session.phone_number)
-                    if pending_session
-                    else None
-                )
-            )
-            user_before_verify = (
-                User.objects.filter(phone=local_phone).first()
-                if local_phone
-                else (pending_session.user if pending_session else None)
-            )
-
-            def _is_established_account(user):
-                if not user:
-                    return False
-                if user.phone_verified:
-                    return True
-                if (user.first_name or '').strip() or (user.email or '').strip():
-                    return True
-                return PhoneVerification.objects.filter(user=user, is_verified=True).exists()
-
-            is_new_user = (
-                not _is_established_account(user_before_verify)
-                or (user_before_verify and user_before_verify.is_deleted)
-            )
-
-            verify_result = PhoneVerificationService.verify_otp_for_phone(
-                phone_number=phone or None,
-                otp_code=otp_code,
-                locale=get_language_from_request(request),
-                verification_id=verification_id,
-            )
-
-            if not verify_result.success or not verify_result.user:
-                return api_response(
-                    success=False,
-                    message=verify_result.message,
-                    errors=verify_result.error_code,
-                    status_code=verify_result.status_code,
-                    request=request
-                )
-
-            user = verify_result.user
-            profile_fields = []
-            if name:
-                name_parts = name.strip().split(' ', 1)
-                user.first_name = name_parts[0]
-                user.last_name = name_parts[1] if len(name_parts) > 1 else ''
-                profile_fields.extend(['first_name', 'last_name'])
-            if is_new_user:
-                if role:
-                    user.role = role
-                    profile_fields.append('role')
-                if date_of_birth:
-                    user.date_of_birth = date_of_birth
-                    profile_fields.append('date_of_birth')
-
-                # Restore soft-deleted account
-                user.is_active = True
-                user.is_deleted = False
-                profile_fields.extend(['is_active', 'is_deleted'])
-            elif date_of_birth and not user.date_of_birth:
-                user.date_of_birth = date_of_birth
-                profile_fields.append('date_of_birth')
-
-            if profile_fields:
-                user.save(update_fields=profile_fields)
-
-            # Ensure requested role profile exists (Multi-Role Logic)
             from apps.accounts.services import IdentityService
             IdentityService.ensure_profile(user, role)
 
-            was_deleted_re_register = bool(user_before_verify and user_before_verify.is_deleted)
+            was_deleted_re_register = bool(
+                serializer.validated_data.get('_was_deleted_re_register')
+            )
             if is_new_user and role == 'USER' and not was_deleted_re_register:
                 from apps.customers.services.welcome_sms import queue_customer_welcome_sms
                 queue_customer_welcome_sms(user.id)
-            
-            # Generate JWT tokens (Role-Aware)
-            from apps.accounts.serializers import UnifiedRefreshToken
-            refresh = UnifiedRefreshToken.for_user(user)
-            # Prepare serialized user data
-            user_data = UserProfileSerializer(user).data
-            
-            # Extract tailor_context from the serialized data
-            tailor_context = user_data.get('tailor_context', {})
 
-
-            
-            response_data = {
-                'tokens': {
-                    'access_token': str(refresh.access_token),
-                    'refresh_token': str(refresh)
-                },
-                'user': user_data,
-                'tailor_context': tailor_context,
-                'is_new_user': is_new_user
-            }
-            
-            status_code = status.HTTP_201_CREATED if is_new_user else status.HTTP_200_OK
-            success_message = "Registration and login successful" if is_new_user else "Login successful"
-            
-            return api_response(
-                success=True,
-                message=success_message,
-                data=response_data,
-                status_code=status_code,
-                request=request
+            from apps.accounts.services.phone_verify_response import build_phone_auth_api_response
+            return build_phone_auth_api_response(
+                request,
+                user,
+                is_new_user=is_new_user,
+                app_entry=app_entry,
             )
         
         return api_response(
@@ -520,6 +422,101 @@ class PhoneVerifyView(APIView):
             status_code=status.HTTP_400_BAD_REQUEST,
             request=request
         )
+
+    def _verify_and_prepare_user(self, request, validated_data):
+        """
+        Shared OTP verification and user profile preparation.
+
+        Returns (user, is_new_user, error_response).
+        """
+        phone = validated_data.get('phone') or ''
+        verification_id = validated_data.get('verification_id')
+        otp_code = validated_data['otp_code']
+        name = validated_data.get('name', '')
+        role = validated_data.get('role', 'USER')
+        date_of_birth = validated_data.get('date_of_birth', None)
+
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        pending_session = PhoneVerificationService._get_verification_session(
+            verification_id=verification_id,
+            phone_number=phone or None,
+        )
+        local_phone = (
+            PhoneVerificationService.normalize_phone_to_local(phone)
+            if phone
+            else (
+                PhoneVerificationService.normalize_phone_to_local(pending_session.phone_number)
+                if pending_session
+                else None
+            )
+        )
+        user_before_verify = (
+            User.objects.filter(phone=local_phone).first()
+            if local_phone
+            else (pending_session.user if pending_session else None)
+        )
+
+        def _is_established_account(user):
+            if not user:
+                return False
+            if user.phone_verified:
+                return True
+            if (user.first_name or '').strip() or (user.email or '').strip():
+                return True
+            return PhoneVerification.objects.filter(user=user, is_verified=True).exists()
+
+        is_new_user = (
+            not _is_established_account(user_before_verify)
+            or (user_before_verify and user_before_verify.is_deleted)
+        )
+        validated_data['_was_deleted_re_register'] = bool(
+            user_before_verify and user_before_verify.is_deleted
+        )
+
+        verify_result = PhoneVerificationService.verify_otp_for_phone(
+            phone_number=phone or None,
+            otp_code=otp_code,
+            locale=get_language_from_request(request),
+            verification_id=verification_id,
+        )
+
+        if not verify_result.success or not verify_result.user:
+            return None, False, api_response(
+                success=False,
+                message=verify_result.message,
+                errors=verify_result.error_code,
+                status_code=verify_result.status_code,
+                request=request
+            )
+
+        user = verify_result.user
+        profile_fields = []
+        if name:
+            name_parts = name.strip().split(' ', 1)
+            user.first_name = name_parts[0]
+            user.last_name = name_parts[1] if len(name_parts) > 1 else ''
+            profile_fields.extend(['first_name', 'last_name'])
+        if is_new_user:
+            if role:
+                user.role = role
+                profile_fields.append('role')
+            if date_of_birth:
+                user.date_of_birth = date_of_birth
+                profile_fields.append('date_of_birth')
+
+            user.is_active = True
+            user.is_deleted = False
+            profile_fields.extend(['is_active', 'is_deleted'])
+        elif date_of_birth and not user.date_of_birth:
+            user.date_of_birth = date_of_birth
+            profile_fields.append('date_of_birth')
+
+        if profile_fields:
+            user.save(update_fields=profile_fields)
+
+        return user, is_new_user, None
 
 class PhoneResendOTPView(APIView):
     """Resend OTP to phone number"""

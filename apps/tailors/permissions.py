@@ -1,7 +1,12 @@
 # apps/tailors/permissions.py
 from rest_framework import permissions
 
-from apps.tailors.shop_access import user_can_manage_shop_order, user_can_record_shop_measurements
+from apps.tailors.shop_access import (
+    get_shop_staff_context,
+    get_token_shop_id,
+    user_can_manage_shop_order,
+    user_can_record_shop_measurements,
+)
 
 
 def _get_required_permissions(view, request=None):
@@ -40,6 +45,21 @@ class IsAdmin(permissions.BasePermission):
         return bool(request.user and request.user.is_authenticated and request.user.is_admin)
 
 
+class IsShopOwner(permissions.BasePermission):
+    """Allow shop owners (including new owners with a stub profile) to manage their shops."""
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_admin:
+            return True
+        if user.is_tailor:
+            return True
+        from apps.tailors.models import TailorProfile
+        return TailorProfile.objects.filter(owner=user).exists()
+
+
 class IsShopStaff(permissions.BasePermission):
 
     """
@@ -61,14 +81,18 @@ class IsShopStaff(permissions.BasePermission):
         if request.user.is_admin:
             return True
 
-        if hasattr(request.user, 'tailor_employee'):
-            employee = request.user.tailor_employee
-            if not employee.is_active:
+        shop_id = get_token_shop_id(request)
+        staff = get_shop_staff_context(request.user, shop_id=shop_id)
+        if staff:
+            if not staff.is_active:
                 return False
-
-            return _employee_has_view_permission(employee, view, request)
+            return _employee_has_view_permission(staff, view, request)
 
         if hasattr(request.user, 'tailor_profile'):
+            return True
+
+        from apps.tailors.models import TailorProfile
+        if TailorProfile.objects.filter(owner=request.user).exists():
             return True
 
         return False
@@ -81,6 +105,7 @@ class IsShopStaff(permissions.BasePermission):
         from apps.orders.models import Order
 
         user = request.user
+        shop_id = get_token_shop_id(request)
 
         # Order.tailor is a User id — compare via shop owner, not TailorProfile id.
         if isinstance(obj, Order):
@@ -88,9 +113,9 @@ class IsShopStaff(permissions.BasePermission):
                 return True
             if hasattr(user, 'tailor_profile') and obj.tailor_id == user.id:
                 return True
-            if hasattr(user, 'tailor_employee'):
-                employee = user.tailor_employee
-                if not employee.is_active:
+            staff = get_shop_staff_context(user, shop_id=shop_id)
+            if staff:
+                if not staff.is_active:
                     return False
                 if getattr(view, 'allow_pos_measurements', False):
                     return user_can_record_shop_measurements(user, obj)
@@ -120,11 +145,11 @@ class IsShopStaff(permissions.BasePermission):
             return True
 
         # 2. Staff Check: Does this employee work for this specific shop?
-        if hasattr(user, 'tailor_employee'):
-            employee = user.tailor_employee
-            if employee.is_active and employee.tailor_id == target_tailor_id:
-                if required_perm:
-                    return getattr(employee, required_perm, False)
-                return _employee_has_view_permission(employee, view, request)
+        shop_id = get_token_shop_id(request)
+        staff = get_shop_staff_context(user, shop_id=shop_id or target_tailor_id)
+        if staff and staff.is_active and staff.tailor_id == target_tailor_id:
+            if required_perm:
+                return getattr(staff, required_perm, False)
+            return _employee_has_view_permission(staff, view, request)
 
         return False
