@@ -496,6 +496,12 @@ class Order(BaseModel):
         ordering=['-created_at']
         verbose_name='Order'
         verbose_name_plural='Orders'
+        indexes = [
+            models.Index(
+                fields=['shop', 'status'],
+                name='orders_orde_shop_id_8a1f2b_idx',
+            ),
+        ]
 
     def clean(self):
         """Validate that tailor has TAILOR role"""
