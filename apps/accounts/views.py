@@ -381,7 +381,10 @@ class PhoneVerifyView(APIView):
         summary="Verify OTP and login/register",
         description=(
             "Verify OTP and complete phone-based authentication. "
-            "Prefer verification_id from phone-login; phone alone is supported for backward compatibility."
+            "Prefer verification_id from phone-login; phone alone is supported for backward compatibility. "
+            "For the owner app send role=TAILOR and app_entry=owner. "
+            "For staff send role=TAILOR and app_entry=staff. "
+            "Legacy tailor/customer apps omit app_entry."
         )
     )
     def post(self, request):

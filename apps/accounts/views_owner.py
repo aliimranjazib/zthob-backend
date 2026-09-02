@@ -1,13 +1,12 @@
 """
-Owner-side authentication endpoints.
+Owner-side session endpoints (switch shop, refresh context).
 
-These routes are additive. Existing /accounts/phone-verify/ behavior is unchanged
-so customer, legacy tailor, rider, and staff flows keep working as before.
+Owner/staff login uses the shared POST /accounts/phone-verify/ endpoint with
+``app_entry`` set to ``owner`` or ``staff``.
 """
 
 from __future__ import annotations
 
-from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.utils.translation import gettext as _
 from drf_spectacular.utils import extend_schema
@@ -15,8 +14,7 @@ from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from apps.accounts.serializers import PhoneVerifySerializer, UserProfileSerializer
-from apps.accounts.services.phone_verify_response import build_phone_auth_api_response
+from apps.accounts.serializers import UserProfileSerializer
 from apps.accounts.services.tailor_auth import (
     APP_ENTRY_OWNER,
     TailorSession,
@@ -25,65 +23,11 @@ from apps.accounts.services.tailor_auth import (
     resolve_shop_session,
     tokens_payload,
 )
-from apps.accounts.views import PhoneVerifyView
 from zthob.utils import api_response
-
-User = get_user_model()
 
 
 class OwnerSwitchShopSerializer(serializers.Serializer):
     shop_id = serializers.IntegerField(min_value=1)
-
-
-class OwnerPhoneVerifyView(PhoneVerifyView):
-    """
-    Owner-app OTP verify.
-
-    Same OTP flow as phone-verify, but returns owner dashboard auth metadata.
-    The generic /accounts/phone-verify/ endpoint is unchanged.
-    """
-
-    @extend_schema(
-        request=PhoneVerifySerializer,
-        responses={200: PhoneVerifySerializer},
-        tags=['Owner Authentication'],
-        summary='Verify OTP for shop owner app',
-        description=(
-            'Owner tailor-app login/register via OTP. Uses role=TAILOR by default '
-            'and returns owner dashboard routing metadata.'
-        ),
-    )
-    def post(self, request):
-        payload = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
-        payload.setdefault('role', 'TAILOR')
-
-        serializer = PhoneVerifySerializer(data=payload)
-        if not serializer.is_valid():
-            return api_response(
-                success=False,
-                message='OTP verification failed',
-                errors=serializer.errors,
-                status_code=status.HTTP_400_BAD_REQUEST,
-                request=request,
-            )
-
-        user, is_new_user, error_response = self._verify_and_prepare_user(
-            request,
-            serializer.validated_data,
-        )
-        if error_response is not None:
-            return error_response
-
-        from apps.accounts.services import IdentityService
-
-        IdentityService.ensure_profile(user, serializer.validated_data.get('role', 'TAILOR'))
-
-        return build_phone_auth_api_response(
-            request,
-            user,
-            is_new_user=is_new_user,
-            app_entry=APP_ENTRY_OWNER,
-        )
 
 
 class OwnerSwitchShopView(APIView):

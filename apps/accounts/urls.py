@@ -16,7 +16,6 @@ from apps.accounts.views import (
 )
 from apps.accounts.views_owner import (
     OwnerAuthContextView,
-    OwnerPhoneVerifyView,
     OwnerSwitchShopView,
 )
 
@@ -33,7 +32,6 @@ urlpatterns = [
     path('phone-resend-otp/',PhoneResendOTPView.as_view(),name='phone-resend-otp'),
     path('test-deployment/', test_deployment, name='test-deployment'),
 
-    path('owner/phone-verify/', OwnerPhoneVerifyView.as_view(), name='owner-phone-verify'),
     path('owner/switch-shop/', OwnerSwitchShopView.as_view(), name='owner-switch-shop'),
     path('owner/context/', OwnerAuthContextView.as_view(), name='owner-auth-context'),
     
