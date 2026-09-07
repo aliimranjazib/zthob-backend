@@ -426,6 +426,28 @@ All shop APIs require **Bearer token** (logged-in owner).
 
 **Required:** `shop_name` (non-empty)
 
+**Response (201):** Full shop object in `data` (not `tailor_context.owned_shops`):
+```json
+{
+  "success": true,
+  "message": "Shop created successfully",
+  "data": {
+    "id": 12,
+    "shop_name": "Mall Branch",
+    "contact_number": "0511111111",
+    "address": "Jeddah, Al Rawdah",
+    "working_hours": {
+      "monday": {"is_open": true, "start_time": "09:00", "end_time": "18:00"}
+    },
+    "service_area": {"id": 1, "name": "Al Rawdah", "city": "Jeddah"},
+    "shop_status": true,
+    "is_pinned": true
+  }
+}
+```
+
+**Multipart note:** If uploading `shop_image`, send `working_hours` as a **JSON string** field, not nested form keys.
+
 ---
 
 ## Get shop details

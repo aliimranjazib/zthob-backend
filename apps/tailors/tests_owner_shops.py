@@ -1,5 +1,7 @@
 """Tests for owner shop management APIs."""
 
+import json
+
 from django.conf import settings
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -104,8 +106,8 @@ class OwnerShopAPITestCase(TestCase):
         }
 
         response = self.client.post(self.shops_url, {
-            'shop_name': 'Full Profile Shop',
-            'address': 'Riyadh, King Fahd Road',
+            'shop_name': 'Mall Branch',
+            'address': 'Jeddah, Al Rawdah',
             'contact_number': '0511111111',
             'working_hours': working_hours,
             'service_areas': area.id,
@@ -114,10 +116,31 @@ class OwnerShopAPITestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         data = response.data['data']
         self.assertEqual(data['contact_number'], '0511111111')
-        self.assertEqual(data['address'], 'Riyadh, King Fahd Road')
+        self.assertEqual(data['address'], 'Jeddah, Al Rawdah')
         self.assertEqual(data['working_hours'], working_hours)
         self.assertEqual(data['service_area']['id'], area.id)
         self.assertEqual(data['service_area']['name'], 'North Riyadh')
+
+    def test_owner_shop_create_multipart_parses_working_hours_json_string(self):
+        self._login_owner()
+        area = ServiceArea.objects.create(name='Al Rawdah', city='Jeddah', is_active=True)
+        working_hours = {
+            'monday': {'is_open': True, 'start_time': '09:00', 'end_time': '18:00'},
+        }
+
+        response = self.client.post(self.shops_url, {
+            'shop_name': 'Mall Branch',
+            'address': 'Jeddah, Al Rawdah',
+            'contact_number': '0511111111',
+            'working_hours': json.dumps(working_hours),
+            'service_areas': str(area.id),
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.data['data']
+        self.assertEqual(data['address'], 'Jeddah, Al Rawdah')
+        self.assertEqual(data['working_hours'], working_hours)
+        self.assertEqual(data['service_area']['id'], area.id)
 
     def test_legacy_phone_verify_still_returns_compact_tailor_context(self):
         self.client.post(self.phone_login_url, {'phone': '0500000004'})

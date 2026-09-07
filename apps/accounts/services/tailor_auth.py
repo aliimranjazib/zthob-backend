@@ -62,13 +62,31 @@ def build_legacy_tailor_context(user) -> dict[str, Any]:
     return context
 
 
-def _serialize_owned_shop(profile) -> dict[str, Any]:
+def _serialize_owned_shop(profile, *, service_area_by_id=None) -> dict[str, Any]:
+    service_area = None
+    review = getattr(profile, 'review', None)
+    if review and review.service_areas:
+        area_id = review.service_areas[0]
+        area = (service_area_by_id or {}).get(area_id)
+        if area is None:
+            service_area = {'id': area_id, 'name': None, 'city': None}
+        else:
+            service_area = {
+                'id': area.id,
+                'name': area.name,
+                'city': area.city,
+            }
+
     return {
         'id': profile.id,
         'shop_name': profile.shop_name or '',
+        'contact_number': profile.contact_number,
+        'address': profile.address,
+        'working_hours': profile.working_hours or {},
         'shop_status': bool(profile.shop_status),
         'is_verified': bool(getattr(profile, 'is_verified', False)),
         'is_pinned': bool(getattr(profile, 'is_pinned', True)),
+        'service_area': service_area,
     }
 
 
@@ -77,10 +95,27 @@ def _owned_shop_queryset(user):
 
     return (
         TailorProfile.objects.filter(owner=user)
+        .select_related('review')
         .exclude(shop_name__isnull=True)
         .exclude(shop_name='')
         .order_by('-is_pinned', '-created_at')
     )
+
+
+def _service_area_lookup(profiles):
+    from apps.tailors.models import ServiceArea
+
+    area_ids = set()
+    for profile in profiles:
+        review = getattr(profile, 'review', None)
+        if review and review.service_areas:
+            area_ids.add(review.service_areas[0])
+    if not area_ids:
+        return {}
+    return {
+        area.id: area
+        for area in ServiceArea.objects.filter(id__in=area_ids)
+    }
 
 
 def _assigned_shop_entries(user) -> list[dict[str, Any]]:
@@ -120,7 +155,12 @@ def build_owner_auth_context(user, *, app_entry: str = APP_ENTRY_OWNER) -> dict[
     Always includes legacy keys so older parsers continue to work.
     """
     legacy = build_legacy_tailor_context(user)
-    owned_shops = [_serialize_owned_shop(profile) for profile in _owned_shop_queryset(user)]
+    owned_profiles = list(_owned_shop_queryset(user))
+    service_area_by_id = _service_area_lookup(owned_profiles)
+    owned_shops = [
+        _serialize_owned_shop(profile, service_area_by_id=service_area_by_id)
+        for profile in owned_profiles
+    ]
     assigned_shops = _assigned_shop_entries(user)
 
     if app_entry == APP_ENTRY_OWNER:

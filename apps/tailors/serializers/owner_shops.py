@@ -1,6 +1,63 @@
+import json
+
+from django.db.models import Q
 from rest_framework import serializers
 
 from apps.tailors.models import TailorProfile, ServiceArea
+
+
+class FlexibleJSONField(serializers.JSONField):
+    """Accept JSON objects or JSON strings (common with multipart/form-data)."""
+
+    def to_internal_value(self, data):
+        if isinstance(data, str):
+            stripped = data.strip()
+            if not stripped:
+                return {}
+            try:
+                data = json.loads(stripped)
+            except json.JSONDecodeError as exc:
+                raise serializers.ValidationError('Must be valid JSON.') from exc
+        return super().to_internal_value(data)
+
+
+class ServiceAreaIdField(serializers.Field):
+    """Accept service area as int, numeric string, or single-item list."""
+
+    def to_internal_value(self, data):
+        if data in (None, ''):
+            return None
+        if isinstance(data, (list, tuple)):
+            if not data:
+                return None
+            data = data[0]
+        if isinstance(data, str):
+            stripped = data.strip()
+            if not stripped:
+                return None
+            try:
+                data = int(stripped)
+            except ValueError as exc:
+                raise serializers.ValidationError(
+                    'Must be a valid service area ID.'
+                ) from exc
+        if not isinstance(data, int):
+            raise serializers.ValidationError('Must be a valid service area ID.')
+        try:
+            ServiceArea.objects.get(id=data, is_active=True)
+        except ServiceArea.DoesNotExist as exc:
+            raise serializers.ValidationError(
+                f'Invalid or inactive service area ID: {data}'
+            ) from exc
+        return data
+
+
+def _find_empty_owner_stub(owner):
+    return (
+        TailorProfile.objects.filter(owner=owner, user=owner)
+        .filter(Q(shop_name__isnull=True) | Q(shop_name=''))
+        .first()
+    )
 
 
 class OwnerShopSerializer(serializers.ModelSerializer):
@@ -60,7 +117,8 @@ class OwnerShopSerializer(serializers.ModelSerializer):
 
 
 class OwnerShopCreateSerializer(serializers.ModelSerializer):
-    service_areas = serializers.IntegerField(
+    working_hours = FlexibleJSONField(required=False, allow_null=True)
+    service_areas = ServiceAreaIdField(
         required=False,
         allow_null=True,
         write_only=True,
@@ -100,46 +158,40 @@ class OwnerShopCreateSerializer(serializers.ModelSerializer):
             )
         return phone
 
-    def validate_service_areas(self, value):
-        if value in (None, ''):
-            return None
-        try:
-            ServiceArea.objects.get(id=value, is_active=True)
-        except ServiceArea.DoesNotExist as exc:
-            raise serializers.ValidationError(
-                f'Invalid or inactive service area ID: {value}'
-            ) from exc
-        return value
-
     def create(self, validated_data):
         service_areas_id = validated_data.pop('service_areas', None)
         owner = self.context['owner']
-        user_link = owner
-        from apps.tailors.models import TailorProfile as TailorProfileModel
-        if TailorProfileModel.objects.filter(user=owner).exists():
-            user_link = None
-
-        shop = TailorProfile.objects.create(
-            owner=owner,
-            user=user_link,
-            **validated_data,
-        )
+        stub = _find_empty_owner_stub(owner)
+        if stub is not None:
+            for field, value in validated_data.items():
+                setattr(stub, field, value)
+            stub.save()
+            shop = stub
+        else:
+            user_link = owner
+            if TailorProfile.objects.filter(user=owner).exists():
+                user_link = None
+            shop = TailorProfile.objects.create(
+                owner=owner,
+                user=user_link,
+                **validated_data,
+            )
 
         if service_areas_id is not None:
             from apps.tailors.models import TailorProfileReview
-            TailorProfileReview.objects.get_or_create(
+            review, _created = TailorProfileReview.objects.get_or_create(
                 profile=shop,
-                defaults={
-                    'review_status': 'draft',
-                    'service_areas': [service_areas_id],
-                },
+                defaults={'review_status': 'draft'},
             )
+            review.service_areas = [service_areas_id]
+            review.save(update_fields=['service_areas'])
 
         return shop
 
 
 class OwnerShopUpdateSerializer(serializers.ModelSerializer):
-    service_areas = serializers.IntegerField(
+    working_hours = FlexibleJSONField(required=False, allow_null=True)
+    service_areas = ServiceAreaIdField(
         required=False,
         allow_null=True,
         write_only=True,
@@ -171,17 +223,6 @@ class OwnerShopUpdateSerializer(serializers.ModelSerializer):
                 'Phone number must be in Saudi Arabia format (05xxxxxxxx)'
             )
         return phone
-
-    def validate_service_areas(self, value):
-        if value in (None, ''):
-            return None
-        try:
-            ServiceArea.objects.get(id=value, is_active=True)
-        except ServiceArea.DoesNotExist as exc:
-            raise serializers.ValidationError(
-                f'Invalid or inactive service area ID: {value}'
-            ) from exc
-        return value
 
     def update(self, instance, validated_data):
         service_areas_id = validated_data.pop('service_areas', serializers.empty)
