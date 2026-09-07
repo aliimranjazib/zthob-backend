@@ -239,3 +239,4 @@ config/firebase-credentials.json
 zthob-backend.code-workspace
 docs/production-launch-plan.md
 /.venv312
+docs/OWNER_API_REFERENCE.md

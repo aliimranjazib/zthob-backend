@@ -35,6 +35,7 @@ class OwnerAuthenticationTestCase(TestCase):
         self.phone_verify_url = reverse('accounts:phone-verify')
         self.owner_switch_url = reverse('accounts:owner-switch-shop')
         self.owner_context_url = reverse('accounts:owner-auth-context')
+        self.owner_profile_url = reverse('accounts:owner-profile')
         self.test_phone = '0500000001'
         self.test_otp = PhoneVerificationService.TEST_OTP
 
@@ -188,6 +189,46 @@ class OwnerAuthenticationTestCase(TestCase):
             switch_response.data['data']['tailor_context']['access_mode'],
             'employee',
         )
+
+    def test_owner_profile_get_and_patch(self):
+        response = self._owner_login(name='Owner Profile User')
+        token = response.data['data']['tokens']['access_token']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+
+        profile_response = self.client.get(self.owner_profile_url)
+        self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
+        profile = profile_response.data['data']
+        self.assertEqual(profile['first_name'], 'Owner')
+        self.assertEqual(profile['last_name'], 'Profile User')
+        self.assertIn('full_name', profile)
+        self.assertIn('phone', profile)
+
+        update_response = self.client.patch(
+            self.owner_profile_url,
+            {'language': 'ar', 'name': 'Ahmed Ali'},
+            format='json',
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        updated = update_response.data['data']
+        self.assertEqual(updated['first_name'], 'Ahmed')
+        self.assertEqual(updated['last_name'], 'Ali')
+        self.assertEqual(updated['language'], 'ar')
+
+    def test_customer_cannot_access_owner_profile(self):
+        customer_phone = '0500000005'
+        self.client.post(self.phone_login_url, {'phone': customer_phone})
+        response = self.client.post(self.phone_verify_url, {
+            'phone': customer_phone,
+            'otp_code': self.test_otp,
+            'name': 'Customer User',
+            'role': 'USER',
+        })
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        token = response.data['data']['tokens']['access_token']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+
+        profile_response = self.client.get(self.owner_profile_url)
+        self.assertEqual(profile_response.status_code, status.HTTP_403_FORBIDDEN)
 
     @staticmethod
     def _decode_jwt_payload(access_token):

@@ -14,7 +14,12 @@ from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from apps.accounts.permissions import IsOwnerAppUser
 from apps.accounts.serializers import UserProfileSerializer
+from apps.accounts.serializers_owner import (
+    OwnerProfileSerializer,
+    OwnerProfileUpdateSerializer,
+)
 from apps.accounts.services.tailor_auth import (
     APP_ENTRY_OWNER,
     TailorSession,
@@ -81,6 +86,70 @@ class OwnerSwitchShopView(APIView):
                 'tokens': tokens_payload(refresh),
                 'tailor_context': tailor_context,
             },
+            status_code=status.HTTP_200_OK,
+            request=request,
+        )
+
+
+class OwnerProfileView(APIView):
+    """
+    Owner personal profile (name, language, date of birth).
+
+    Does not change phone, role, or shop data. Generic /accounts/profile/
+    remains available for legacy apps.
+    """
+
+    permission_classes = [IsAuthenticated, IsOwnerAppUser]
+
+    @extend_schema(
+        responses={200: OwnerProfileSerializer},
+        tags=['Owner Profile'],
+        summary='Get owner personal profile',
+    )
+    def get(self, request):
+        serializer = OwnerProfileSerializer(
+            request.user,
+            context={'request': request},
+        )
+        return api_response(
+            success=True,
+            message='Owner profile fetched successfully',
+            data=serializer.data,
+            status_code=status.HTTP_200_OK,
+            request=request,
+        )
+
+    @extend_schema(
+        request=OwnerProfileUpdateSerializer,
+        responses={200: OwnerProfileSerializer},
+        tags=['Owner Profile'],
+        summary='Update owner personal profile',
+    )
+    def patch(self, request):
+        serializer = OwnerProfileUpdateSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+            context={'request': request},
+        )
+        if not serializer.is_valid():
+            return api_response(
+                success=False,
+                message='Validation failed',
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request,
+            )
+
+        user = serializer.save()
+        response_serializer = OwnerProfileSerializer(
+            user,
+            context={'request': request},
+        )
+        return api_response(
+            success=True,
+            message='Owner profile updated successfully',
+            data=response_serializer.data,
             status_code=status.HTTP_200_OK,
             request=request,
         )

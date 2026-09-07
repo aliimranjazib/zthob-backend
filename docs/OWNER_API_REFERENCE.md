@@ -298,6 +298,62 @@ Staff uses the **same owner verify endpoint**, not a separate login API.
 
 ---
 
+## Owner personal profile
+
+**What:** Read or update the **logged-in owner/staff person** (name, language, date of birth). This is **not** shop data — use shop APIs for branch details.
+
+| | |
+|---|---|
+| **GET** | `/api/accounts/owner/profile/` |
+| **PATCH** | `/api/accounts/owner/profile/` |
+| **Auth** | Bearer token (owner/staff/tailor only) |
+
+**GET response (200):**
+```json
+{
+  "success": true,
+  "message": "Owner profile fetched successfully",
+  "data": {
+    "id": 1,
+    "phone": "0511111111",
+    "first_name": "Ahmed",
+    "last_name": "Ali",
+    "full_name": "Ahmed Ali",
+    "language": "ar",
+    "date_of_birth": null,
+    "role": "TAILOR",
+    "date_joined": "2026-09-02T08:00:00Z"
+  }
+}
+```
+
+**PATCH request (send only fields to change):**
+```json
+{
+  "name": "Ahmed Ali",
+  "language": "ar",
+  "date_of_birth": "1990-05-15"
+}
+```
+
+Or update names separately:
+```json
+{
+  "first_name": "Ahmed",
+  "last_name": "Ali"
+}
+```
+
+**Read-only (cannot change here):** `phone`, `role`, `id`, `date_joined`
+
+**Errors:**
+- `403` — customer account without shop access (use owner app login)
+- `400` — invalid language or validation error
+
+**Note:** Legacy `/api/accounts/profile/` still works; prefer this endpoint in the owner app.
+
+---
+
 # Shops
 
 All shop APIs require **Bearer token** (logged-in owner).
@@ -852,19 +908,20 @@ switch-shop (shop_id=12) → save token → GET /api/orders/tailor/my-orders/
 | 2 | POST | `/api/accounts/phone-verify/` | Login (`app_entry=owner` or `staff`) |
 | 3 | POST | `/api/accounts/owner/switch-shop/` | Enter shop session |
 | 4 | GET | `/api/accounts/owner/context/` | Refresh context |
-| 5 | GET | `/api/tailors/owner/shops/` | List shops |
-| 6 | POST | `/api/tailors/owner/shops/` | Create shop |
-| 7 | GET | `/api/tailors/owner/shops/{id}/` | Shop detail |
-| 8 | PATCH | `/api/tailors/owner/shops/{id}/` | Update shop |
-| 9 | PATCH | `/api/tailors/owner/shops/{id}/pin/` | Pin/unpin |
-| 10 | GET | `/api/tailors/owner/staff/` | List staff |
-| 11 | POST | `/api/tailors/owner/staff/` | Add staff |
-| 12 | GET/PATCH/DELETE | `/api/tailors/owner/staff/{id}/` | Staff detail |
-| 13 | GET/POST | `/api/tailors/owner/staff/{id}/assignments/` | Assignments |
-| 14 | PATCH/DELETE | `/api/tailors/owner/staff/{id}/assignments/{aid}/` | Edit assignment |
-| 15 | GET | `/api/tailors/owner/orders/` | All orders |
-| 16 | GET | `/api/tailors/owner/orders/{id}/` | Order detail |
-| 17 | GET | `/api/tailors/owner/reports/` | Dashboard reports |
+| 5 | GET/PATCH | `/api/accounts/owner/profile/` | Owner personal profile |
+| 6 | GET | `/api/tailors/owner/shops/` | List shops |
+| 7 | POST | `/api/tailors/owner/shops/` | Create shop |
+| 8 | GET | `/api/tailors/owner/shops/{id}/` | Shop detail |
+| 9 | PATCH | `/api/tailors/owner/shops/{id}/` | Update shop |
+| 10 | PATCH | `/api/tailors/owner/shops/{id}/pin/` | Pin/unpin |
+| 11 | GET | `/api/tailors/owner/staff/` | List staff |
+| 12 | POST | `/api/tailors/owner/staff/` | Add staff |
+| 13 | GET/PATCH/DELETE | `/api/tailors/owner/staff/{id}/` | Staff detail |
+| 14 | GET/POST | `/api/tailors/owner/staff/{id}/assignments/` | Assignments |
+| 15 | PATCH/DELETE | `/api/tailors/owner/staff/{id}/assignments/{aid}/` | Edit assignment |
+| 16 | GET | `/api/tailors/owner/orders/` | All orders |
+| 17 | GET | `/api/tailors/owner/orders/{id}/` | Order detail |
+| 18 | GET | `/api/tailors/owner/reports/` | Dashboard reports |
 
 ---
 
