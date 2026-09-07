@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 
 from apps.accounts.models import CustomUser
 from apps.core.services import PhoneVerificationService
-from apps.tailors.models import TailorProfile
+from apps.tailors.models import ServiceArea, TailorProfile
 
 TEST_REST_FRAMEWORK = {
     **settings.REST_FRAMEWORK,
@@ -20,25 +20,25 @@ TEST_REST_FRAMEWORK = {
 class OwnerShopAPITestCase(TestCase):
     def setUp(self):
         from apps.accounts import views as account_views
-        from apps.accounts import views_owner as owner_views
 
         account_views.PhoneLoginView.throttle_classes = []
         account_views.PhoneVerifyView.throttle_classes = []
-        owner_views.OwnerPhoneVerifyView.throttle_classes = []
 
         self.client = APIClient()
         self.phone_login_url = reverse('accounts:phone-login')
-        self.owner_verify_url = reverse('accounts:owner-phone-verify')
+        self.phone_verify_url = reverse('accounts:phone-verify')
         self.shops_url = reverse('owner-shops')
         self.test_phone = '0500000003'
         self.test_otp = PhoneVerificationService.TEST_OTP
 
     def _login_owner(self):
         self.client.post(self.phone_login_url, {'phone': self.test_phone})
-        response = self.client.post(self.owner_verify_url, {
+        response = self.client.post(self.phone_verify_url, {
             'phone': self.test_phone,
             'otp_code': self.test_otp,
             'name': 'Owner User',
+            'role': 'TAILOR',
+            'app_entry': 'owner',
         })
         token = response.data['data']['tokens']['access_token']
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
@@ -95,6 +95,29 @@ class OwnerShopAPITestCase(TestCase):
         self.client.force_authenticate(user=other)
         response = self.client.get(detail_url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_owner_shop_create_returns_profile_fields(self):
+        self._login_owner()
+        area = ServiceArea.objects.create(name='North Riyadh', city='Riyadh', is_active=True)
+        working_hours = {
+            'monday': {'is_open': True, 'start_time': '09:00', 'end_time': '18:00'},
+        }
+
+        response = self.client.post(self.shops_url, {
+            'shop_name': 'Full Profile Shop',
+            'address': 'Riyadh, King Fahd Road',
+            'contact_number': '0511111111',
+            'working_hours': working_hours,
+            'service_areas': area.id,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.data['data']
+        self.assertEqual(data['contact_number'], '0511111111')
+        self.assertEqual(data['address'], 'Riyadh, King Fahd Road')
+        self.assertEqual(data['working_hours'], working_hours)
+        self.assertEqual(data['service_area']['id'], area.id)
+        self.assertEqual(data['service_area']['name'], 'North Riyadh')
 
     def test_legacy_phone_verify_still_returns_compact_tailor_context(self):
         self.client.post(self.phone_login_url, {'phone': '0500000004'})

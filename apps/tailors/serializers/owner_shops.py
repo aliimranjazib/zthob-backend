@@ -5,6 +5,7 @@ from apps.tailors.models import TailorProfile, ServiceArea
 
 class OwnerShopSerializer(serializers.ModelSerializer):
     shop_image_url = serializers.SerializerMethodField()
+    service_area = serializers.SerializerMethodField()
 
     class Meta:
         model = TailorProfile
@@ -21,6 +22,7 @@ class OwnerShopSerializer(serializers.ModelSerializer):
             'working_hours',
             'establishment_year',
             'tailor_experience',
+            'service_area',
             'created_at',
             'updated_at',
         ]
@@ -38,13 +40,31 @@ class OwnerShopSerializer(serializers.ModelSerializer):
         from apps.core.media_utils import build_public_media_url
         return build_public_media_url(request, obj.shop_image.url)
 
+    def get_service_area(self, obj):
+        review = getattr(obj, 'review', None)
+        if review is None:
+            return None
+        area_ids = review.service_areas or []
+        if not area_ids:
+            return None
+        area_id = area_ids[0]
+        names = self.context.get('service_area_by_id') or {}
+        area = names.get(area_id)
+        if area is None:
+            return {'id': area_id, 'name': None, 'city': None}
+        return {
+            'id': area.id,
+            'name': area.name,
+            'city': area.city,
+        }
+
 
 class OwnerShopCreateSerializer(serializers.ModelSerializer):
     service_areas = serializers.IntegerField(
         required=False,
         allow_null=True,
         write_only=True,
-        help_text='Optional service area ID for the shop review record',
+        help_text='Service area ID for the shop review record',
     )
 
     class Meta:
@@ -67,6 +87,18 @@ class OwnerShopCreateSerializer(serializers.ModelSerializer):
         if not value:
             raise serializers.ValidationError('Shop name is required.')
         return value
+
+    def validate_contact_number(self, value):
+        if value in (None, ''):
+            return value
+        from apps.core.phone_format import is_valid_saudi_phone
+
+        phone = value.strip().replace(' ', '').replace('-', '')
+        if not is_valid_saudi_phone(phone):
+            raise serializers.ValidationError(
+                'Phone number must be in Saudi Arabia format (05xxxxxxxx)'
+            )
+        return phone
 
     def validate_service_areas(self, value):
         if value in (None, ''):
@@ -127,6 +159,18 @@ class OwnerShopUpdateSerializer(serializers.ModelSerializer):
             'is_pinned',
             'service_areas',
         ]
+
+    def validate_contact_number(self, value):
+        if value in (None, ''):
+            return value
+        from apps.core.phone_format import is_valid_saudi_phone
+
+        phone = value.strip().replace(' ', '').replace('-', '')
+        if not is_valid_saudi_phone(phone):
+            raise serializers.ValidationError(
+                'Phone number must be in Saudi Arabia format (05xxxxxxxx)'
+            )
+        return phone
 
     def validate_service_areas(self, value):
         if value in (None, ''):

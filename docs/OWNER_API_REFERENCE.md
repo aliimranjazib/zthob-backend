@@ -355,13 +355,18 @@ All shop APIs require **Bearer token** (logged-in owner).
 ```json
 {
   "shop_name": "Mall Branch",
-  "address": "Jeddah",
+  "address": "Jeddah, Al Rawdah",
   "contact_number": "0511111111",
+  "working_hours": {
+    "monday": {"is_open": true, "start_time": "09:00", "end_time": "18:00"},
+    "tuesday": {"is_open": true, "start_time": "09:00", "end_time": "18:00"}
+  },
+  "service_areas": 1,
   "is_pinned": true
 }
 ```
 
-**Response (201):** Same shop object as in list (single object in `data`).
+**Response fields (read):** `contact_number`, `address`, `working_hours`, `service_area` `{id, name, city}`, `shop_image_url`
 
 **Required:** `shop_name` (non-empty)
 
@@ -676,7 +681,14 @@ Manage employees across all your shops. One person can work at multiple shops wi
 | **Method** | `GET` |
 | **URL** | `/api/tailors/owner/orders/{order_id}/` |
 
-**Response (200):** Full order object (items, pricing, status, measurements, etc.).
+**Response (200):** Full order object (items, pricing, status, measurements, etc.) plus branch metadata:
+
+| Field | Description |
+|-------|-------------|
+| `shop_id` | Branch shop ID |
+| `shop_info` | `{ id, shop_name, contact_number, address, shop_status }` |
+| `tailor_name` | Same as branch shop name when `shop` is set |
+| `tailor_contact` | Branch shop phone when available |
 
 **Response (404):** Order not in any of your shops.
 
@@ -684,7 +696,7 @@ Manage employees across all your shops. One person can work at multiple shops wi
 
 ## Owner reports
 
-**What:** Summary for Reports tab — orders, revenue, walk-in sales per shop.
+**What:** Summary for Reports tab — orders, revenue, and analytics per shop for the selected period.
 
 | | |
 |---|---|
@@ -696,9 +708,20 @@ Manage employees across all your shops. One person can work at multiple shops wi
 | Param | Default | Description |
 |-------|---------|-------------|
 | `shop_id` | all shops | Limit to one shop |
-| `sales_period` | `this_month` | `today`, `yesterday`, `this_week`, `this_month`, `past_6_months` |
+| `period` | `this_month` | `today`, `yesterday`, `this_week`, `this_month`, `past_6_months`, `custom` |
+| `sales_period` | — | Deprecated alias for `period` |
+| `from_date` | — | Required with `period=custom` (YYYY-MM-DD) |
+| `to_date` | — | Required with `period=custom` (YYYY-MM-DD) |
 
-**Example:** `GET /api/tailors/owner/reports/?sales_period=this_month`
+**Example:** `GET /api/tailors/owner/reports/?period=this_week`
+
+**Period applies to:** `summary.orders_*`, `summary.revenue_total`, per-shop branch breakdown, and analytics.
+
+**Analytics sections:**
+- `summary.analytics.walk_in` — completed walk-in orders + revenue
+- `summary.analytics.home_delivery` — completed home delivery orders + revenue
+- `summary.analytics.combined` — both modes together
+- Per-shop `analytics.shop_sales` — walk-in cash collected at shop (POS), separate from wallet
 
 **Response (200):**
 ```json
@@ -709,7 +732,12 @@ Manage employees across all your shops. One person can work at multiple shops wi
     "generated_at": "2026-09-02T08:00:00+00:00",
     "filters": {
       "shop_id": null,
-      "sales_period": "this_month"
+      "period": "this_month"
+    },
+    "period": {
+      "key": "this_month",
+      "from": "2026-09-01",
+      "to": "2026-09-30"
     },
     "summary": {
       "shops_count": 2,
@@ -721,6 +749,20 @@ Manage employees across all your shops. One person can work at multiple shops wi
         "confirmed": 5,
         "collected": 30,
         "cancelled": 2
+      },
+      "analytics": {
+        "walk_in": {
+          "orders_completed": 20,
+          "revenue": "7000.00"
+        },
+        "home_delivery": {
+          "orders_completed": 10,
+          "revenue": "5500.00"
+        },
+        "combined": {
+          "orders_completed": 30,
+          "revenue": "12500.00"
+        }
       }
     },
     "shops": [
@@ -728,6 +770,11 @@ Manage employees across all your shops. One person can work at multiple shops wi
         "shop_id": 12,
         "shop_name": "Main Branch",
         "is_pinned": true,
+        "period": {
+          "key": "this_month",
+          "from": "2026-09-01",
+          "to": "2026-09-30"
+        },
         "orders": {
           "total": 25,
           "completed": 18,
@@ -736,7 +783,20 @@ Manage employees across all your shops. One person can work at multiple shops wi
         "revenue": {
           "total_collected": "8000.00"
         },
-        "shop_sales": {
+        "analytics": {
+          "walk_in": {
+            "orders_completed": 12,
+            "revenue": "4500.00"
+          },
+          "home_delivery": {
+            "orders_completed": 6,
+            "revenue": "3500.00"
+          },
+          "combined": {
+            "orders_completed": 18,
+            "revenue": "8000.00"
+          },
+          "shop_sales": {
           "title": "Shop sales (Walk-in)",
           "disclaimer": "Collected at your shop. Not included in wallet balance.",
           "period": {
@@ -751,6 +811,7 @@ Manage employees across all your shops. One person can work at multiple shops wi
             "stitching_price": "1200.00",
             "express_fee": "300.00"
           }
+        }
         }
       }
     ]

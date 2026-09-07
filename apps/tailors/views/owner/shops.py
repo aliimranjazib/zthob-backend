@@ -3,7 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from drf_spectacular.utils import extend_schema
 
-from apps.tailors.models import TailorProfile
+from apps.tailors.models import ServiceArea, TailorProfile
 from apps.tailors.permissions import IsShopOwner
 from apps.tailors.serializers.owner_shops import (
     OwnerShopCreateSerializer,
@@ -14,6 +14,41 @@ from apps.tailors.serializers.owner_shops import (
 from apps.tailors.shop_access import user_owns_shop
 from apps.tailors.views.base import BaseTailorAPIView
 from zthob.utils import api_response
+
+
+def _owner_shop_queryset(owner):
+    return (
+        TailorProfile.objects.filter(owner=owner)
+        .select_related('review')
+        .order_by('-is_pinned', '-created_at')
+    )
+
+
+def _owner_shop_serializer_context(request, shops):
+    if hasattr(shops, 'all'):
+        shop_list = list(shops)
+    elif isinstance(shops, (list, tuple)):
+        shop_list = list(shops)
+    else:
+        shop_list = [shops]
+
+    area_ids = set()
+    for shop in shop_list:
+        review = getattr(shop, 'review', None)
+        if review and review.service_areas:
+            area_ids.add(review.service_areas[0])
+
+    service_area_by_id = {}
+    if area_ids:
+        service_area_by_id = {
+            area.id: area
+            for area in ServiceArea.objects.filter(id__in=area_ids)
+        }
+
+    return {
+        'request': request,
+        'service_area_by_id': service_area_by_id,
+    }
 
 
 class OwnerShopListCreateView(BaseTailorAPIView):
@@ -28,14 +63,11 @@ class OwnerShopListCreateView(BaseTailorAPIView):
         summary='List shops owned by the authenticated user',
     )
     def get(self, request):
-        shops = (
-            TailorProfile.objects.filter(owner=request.user)
-            .order_by('-is_pinned', '-created_at')
-        )
+        shops = _owner_shop_queryset(request.user)
         serializer = OwnerShopSerializer(
             shops,
             many=True,
-            context={'request': request},
+            context=_owner_shop_serializer_context(request, shops),
         )
         return api_response(
             success=True,
@@ -64,7 +96,11 @@ class OwnerShopListCreateView(BaseTailorAPIView):
             )
 
         shop = serializer.save()
-        response_serializer = OwnerShopSerializer(shop, context={'request': request})
+        shop = TailorProfile.objects.select_related('review').get(id=shop.id)
+        response_serializer = OwnerShopSerializer(
+            shop,
+            context=_owner_shop_serializer_context(request, shop),
+        )
         return api_response(
             success=True,
             message='Shop created successfully',
@@ -81,7 +117,7 @@ class OwnerShopDetailView(BaseTailorAPIView):
 
     def _get_owned_shop(self, request, shop_id):
         try:
-            shop = TailorProfile.objects.get(id=shop_id)
+            shop = TailorProfile.objects.select_related('review').get(id=shop_id)
         except TailorProfile.DoesNotExist:
             return None
         if not user_owns_shop(request.user, shop):
@@ -102,7 +138,10 @@ class OwnerShopDetailView(BaseTailorAPIView):
                 status_code=status.HTTP_404_NOT_FOUND,
             )
 
-        serializer = OwnerShopSerializer(shop, context={'request': request})
+        serializer = OwnerShopSerializer(
+            shop,
+            context=_owner_shop_serializer_context(request, shop),
+        )
         return api_response(
             success=True,
             message='Shop retrieved successfully',
@@ -140,7 +179,11 @@ class OwnerShopDetailView(BaseTailorAPIView):
             )
 
         shop = serializer.save()
-        response_serializer = OwnerShopSerializer(shop, context={'request': request})
+        shop = TailorProfile.objects.select_related('review').get(id=shop.id)
+        response_serializer = OwnerShopSerializer(
+            shop,
+            context=_owner_shop_serializer_context(request, shop),
+        )
         return api_response(
             success=True,
             message='Shop updated successfully',
@@ -187,7 +230,11 @@ class OwnerShopPinView(BaseTailorAPIView):
             )
 
         shop = serializer.save()
-        response_serializer = OwnerShopSerializer(shop, context={'request': request})
+        shop = TailorProfile.objects.select_related('review').get(id=shop.id)
+        response_serializer = OwnerShopSerializer(
+            shop,
+            context=_owner_shop_serializer_context(request, shop),
+        )
         return api_response(
             success=True,
             message='Shop pin status updated successfully',

@@ -20,23 +20,19 @@ TEST_REST_FRAMEWORK = {
 class OwnerAuthenticationTestCase(TestCase):
     def setUp(self):
         from apps.accounts import views as account_views
-        from apps.accounts import views_owner as owner_views
 
         self._saved_throttles = (
             account_views.PhoneLoginView.throttle_classes,
             account_views.PhoneVerifyView.throttle_classes,
             account_views.PhoneResendOTPView.throttle_classes,
-            owner_views.OwnerPhoneVerifyView.throttle_classes,
         )
         account_views.PhoneLoginView.throttle_classes = []
         account_views.PhoneVerifyView.throttle_classes = []
         account_views.PhoneResendOTPView.throttle_classes = []
-        owner_views.OwnerPhoneVerifyView.throttle_classes = []
 
         self.client = APIClient()
         self.phone_login_url = reverse('accounts:phone-login')
         self.phone_verify_url = reverse('accounts:phone-verify')
-        self.owner_verify_url = reverse('accounts:owner-phone-verify')
         self.owner_switch_url = reverse('accounts:owner-switch-shop')
         self.owner_context_url = reverse('accounts:owner-auth-context')
         self.test_phone = '0500000001'
@@ -44,21 +40,21 @@ class OwnerAuthenticationTestCase(TestCase):
 
     def tearDown(self):
         from apps.accounts import views as account_views
-        from apps.accounts import views_owner as owner_views
 
         (
             account_views.PhoneLoginView.throttle_classes,
             account_views.PhoneVerifyView.throttle_classes,
             account_views.PhoneResendOTPView.throttle_classes,
-            owner_views.OwnerPhoneVerifyView.throttle_classes,
         ) = self._saved_throttles
 
-    def _owner_login(self, *, name='Owner User'):
+    def _owner_login(self, *, name='Owner User', app_entry='owner'):
         self.client.post(self.phone_login_url, {'phone': self.test_phone})
-        return self.client.post(self.owner_verify_url, {
+        return self.client.post(self.phone_verify_url, {
             'phone': self.test_phone,
             'otp_code': self.test_otp,
             'name': name,
+            'role': 'TAILOR',
+            'app_entry': app_entry,
         })
 
     def test_legacy_phone_verify_unchanged_without_app_entry(self):
@@ -175,9 +171,11 @@ class OwnerAuthenticationTestCase(TestCase):
         )
 
         self.client.post(self.phone_login_url, {'phone': employee_user.phone})
-        login = self.client.post(self.owner_verify_url, {
+        login = self.client.post(self.phone_verify_url, {
             'phone': employee_user.phone,
             'otp_code': self.test_otp,
+            'role': 'TAILOR',
+            'app_entry': 'staff',
         })
         self.assertIn(login.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED))
 

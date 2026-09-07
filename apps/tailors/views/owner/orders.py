@@ -2,9 +2,12 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
-from apps.orders.serializers import OrderListSerializer
 from apps.orders.shop_scoping import get_owner_orders_queryset, user_owns_shop_id
 from apps.tailors.permissions import IsShopOwner
+from apps.tailors.serializers.owner_orders import (
+    OwnerOrderDetailSerializer,
+    OwnerOrderListSerializer,
+)
 from apps.tailors.services.owner_reports import build_owner_reports
 from apps.tailors.views.base import BaseTailorAPIView
 from zthob.utils import api_response
@@ -23,7 +26,7 @@ class OwnerOrderListView(BaseTailorAPIView):
             OpenApiParameter(name='service_mode', type=str, required=False),
             OpenApiParameter(name='order_type', type=str, required=False),
         ],
-        responses={200: OrderListSerializer(many=True)},
+        responses={200: OwnerOrderListSerializer(many=True)},
         tags=['Owner Orders'],
         summary='List orders across owned shops',
     )
@@ -73,7 +76,7 @@ class OwnerOrderListView(BaseTailorAPIView):
         if order_type:
             orders = orders.filter(order_type=order_type)
 
-        serializer = OrderListSerializer(
+        serializer = OwnerOrderListSerializer(
             orders,
             many=True,
             context={'request': request, 'role': 'TAILOR'},
@@ -90,7 +93,7 @@ class OwnerOrderDetailView(BaseTailorAPIView):
     permission_classes = [IsAuthenticated, IsShopOwner]
 
     @extend_schema(
-        responses={200: OrderListSerializer},
+        responses={200: OwnerOrderDetailSerializer},
         tags=['Owner Orders'],
         summary='Get one order from an owned shop',
     )
@@ -112,8 +115,10 @@ class OwnerOrderDetailView(BaseTailorAPIView):
                 status_code=status.HTTP_404_NOT_FOUND,
             )
 
-        from apps.orders.serializers import OrderSerializer
-        serializer = OrderSerializer(order, context={'request': request, 'role': 'TAILOR'})
+        serializer = OwnerOrderDetailSerializer(
+            order,
+            context={'request': request, 'role': 'TAILOR'},
+        )
         return api_response(
             success=True,
             message='Order retrieved successfully',
@@ -128,7 +133,15 @@ class OwnerReportsView(BaseTailorAPIView):
     @extend_schema(
         parameters=[
             OpenApiParameter(name='shop_id', type=int, required=False),
-            OpenApiParameter(name='sales_period', type=str, required=False),
+            OpenApiParameter(name='period', type=str, required=False),
+            OpenApiParameter(
+                name='sales_period',
+                type=str,
+                required=False,
+                description='Deprecated alias for period',
+            ),
+            OpenApiParameter(name='from_date', type=str, required=False),
+            OpenApiParameter(name='to_date', type=str, required=False),
         ],
         tags=['Owner Reports'],
         summary='Owner dashboard reports across owned shops',
@@ -147,18 +160,26 @@ class OwnerReportsView(BaseTailorAPIView):
         else:
             shop_id = None
 
-        sales_period = request.query_params.get('sales_period', 'this_month')
+        period = request.query_params.get('period') or request.query_params.get(
+            'sales_period',
+            'this_month',
+        )
+        from_date = request.query_params.get('from_date')
+        to_date = request.query_params.get('to_date')
+
         try:
             payload = build_owner_reports(
                 request.user,
                 shop_id=shop_id,
-                sales_period=sales_period,
+                period=period,
+                from_date=from_date,
+                to_date=to_date,
             )
         except ValueError as exc:
             return api_response(
                 success=False,
                 message=str(exc),
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         return api_response(

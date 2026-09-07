@@ -20,15 +20,13 @@ TEST_REST_FRAMEWORK = {
 class OwnerStaffAPITestCase(TestCase):
     def setUp(self):
         from apps.accounts import views as account_views
-        from apps.accounts import views_owner as owner_views
 
         account_views.PhoneLoginView.throttle_classes = []
         account_views.PhoneVerifyView.throttle_classes = []
-        owner_views.OwnerPhoneVerifyView.throttle_classes = []
 
         self.client = APIClient()
         self.phone_login_url = reverse('accounts:phone-login')
-        self.owner_verify_url = reverse('accounts:owner-phone-verify')
+        self.phone_verify_url = reverse('accounts:phone-verify')
         self.owner_switch_url = reverse('accounts:owner-switch-shop')
         self.staff_url = reverse('owner-staff')
         self.shops_url = reverse('owner-shops')
@@ -37,10 +35,12 @@ class OwnerStaffAPITestCase(TestCase):
 
     def _login_owner(self):
         self.client.post(self.phone_login_url, {'phone': self.owner_phone})
-        response = self.client.post(self.owner_verify_url, {
+        response = self.client.post(self.phone_verify_url, {
             'phone': self.owner_phone,
             'otp_code': self.test_otp,
             'name': 'Owner User',
+            'role': 'TAILOR',
+            'app_entry': 'owner',
         })
         token = response.data['data']['tokens']['access_token']
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
@@ -108,9 +108,11 @@ class OwnerStaffAPITestCase(TestCase):
         }, format='json')
 
         self.client.post(self.phone_login_url, {'phone': '0500000008'})
-        staff_login = self.client.post(self.owner_verify_url, {
+        staff_login = self.client.post(self.phone_verify_url, {
             'phone': '0500000008',
             'otp_code': self.test_otp,
+            'role': 'TAILOR',
+            'app_entry': 'staff',
         })
         self.assertEqual(staff_login.status_code, status.HTTP_200_OK)
         assigned = staff_login.data['data']['tailor_context']['assigned_shops']
