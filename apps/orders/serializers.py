@@ -1734,6 +1734,13 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                         f"Stock cannot be negative for {fabric.name}"
                     )
                 fabric.save(update_fields=['stock'])
+                from apps.tailors.services.v2.fabrics import record_sale_from_legacy_fabric
+                record_sale_from_legacy_fabric(
+                    fabric=fabric,
+                    quantity=quantity,
+                    order_id=order.id,
+                    user=self.context.get('request').user,
+                )
 
         if order.payment_status == 'paid':
             order.apply_payment_summary(order.total_amount, payment_plan=order.payment_plan, save=True)

@@ -13,6 +13,14 @@ class TailorProfile(models.Model):
         related_name='owned_shops',
         help_text="Shop owner who manages this tailor shop",
     )
+    business = models.ForeignKey(
+        'tailors.Business',
+        on_delete=models.CASCADE,
+        related_name='shops',
+        null=True,
+        blank=True,
+        help_text='Business this shop belongs to',
+    )
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
