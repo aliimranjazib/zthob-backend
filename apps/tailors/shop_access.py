@@ -24,6 +24,32 @@ def user_owns_shop(user, shop) -> bool:
     return bool(shop.user_id and shop.user_id == user.id)
 
 
+def user_can_manage_shop_catalog(user, shop_id=None) -> bool:
+    """Owner or active staff with can_manage_catalog for the shop session."""
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if user.is_admin:
+        return True
+
+    from apps.tailors.models import TailorProfile
+
+    if shop_id is not None:
+        try:
+            shop = TailorProfile.objects.get(id=shop_id)
+        except TailorProfile.DoesNotExist:
+            return False
+        if user_owns_shop(user, shop):
+            return True
+        staff = get_shop_staff_context(user, shop_id=shop_id)
+        return bool(staff and staff.is_active and staff.can_manage_catalog)
+
+    if TailorProfile.objects.filter(owner=user).exists():
+        return True
+
+    staff = get_shop_staff_context(user)
+    return bool(staff and staff.is_active and staff.can_manage_catalog)
+
+
 def get_shop_staff_context(user, shop_id=None):
     """
     Active staff record for a shop session.

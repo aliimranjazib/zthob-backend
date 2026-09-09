@@ -1734,7 +1734,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                         f"Stock cannot be negative for {fabric.name}"
                     )
                 fabric.save(update_fields=['stock'])
-                from apps.tailors.services.v2.fabrics import record_sale_from_legacy_fabric
+                from apps.fabrics.services.sales import record_sale_from_legacy_fabric
                 record_sale_from_legacy_fabric(
                     fabric=fabric,
                     quantity=quantity,

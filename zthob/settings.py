@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     "apps.core",
     "apps.accounts",
     "apps.tailors",
+    "apps.fabrics",
     "apps.customers",
     "apps.orders",
     "apps.riders",

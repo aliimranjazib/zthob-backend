@@ -17,7 +17,18 @@ from ..serializers import (
     FabricCountrySerializer
 )
 from ..permissions import IsTailor, IsAdmin
+from ..shop_access import get_token_shop_id, user_can_manage_shop_catalog
 from .base import BaseTailorAuthenticatedView
+
+
+def _catalog_write_denied_response(request):
+    if user_can_manage_shop_catalog(request.user, shop_id=get_token_shop_id(request)):
+        return None
+    return api_response(
+        success=False,
+        message='Permission denied. You cannot manage catalog.',
+        status_code=status.HTTP_403_FORBIDDEN,
+    )
 
 # Fabric Type Views
 @extend_schema(
@@ -388,14 +399,9 @@ class TailorFabricView(BaseTailorAuthenticatedView):
         description="Create a new fabric with multiple images and metadata"
     )
     def post(self, request):
-        # Specific check for employees
-        self.required_employee_permission = 'can_manage_catalog'
-        if not self.check_permissions(request): # This might not work as intended in DRF without overriding get_permissions
-             pass # But I'll do a manual check for safety
-        
-        if hasattr(request.user, 'tailor_employee'):
-            if not request.user.tailor_employee.can_manage_catalog:
-                 return api_response(success=False, message="Permission denied. You cannot manage catalog.", status_code=403)
+        denied = _catalog_write_denied_response(request)
+        if denied:
+            return denied
 
         # Process the form data to create the expected structure
 
@@ -512,10 +518,10 @@ class TailorFabricDetailView(BaseTailorAuthenticatedView):
         description="Update fabric completely (all fields required)"
     )
     def put(self, request, pk):
-        """Update fabric (full update)."""
-        if hasattr(request.user, 'tailor_employee') and not request.user.tailor_employee.can_manage_catalog:
-             return api_response(success=False, message="Permission denied", status_code=403)
-             
+        denied = _catalog_write_denied_response(request)
+        if denied:
+            return denied
+
         fabric = self.get_object(pk, request.user)
 
         if not fabric:
@@ -549,9 +555,9 @@ class TailorFabricDetailView(BaseTailorAuthenticatedView):
         description="Update fabric partially (only provided fields)"
     )
     def patch(self, request, pk):
-        """Update fabric (partial update)."""
-        if hasattr(request.user, 'tailor_employee') and not request.user.tailor_employee.can_manage_catalog:
-             return api_response(success=False, message="Permission denied", status_code=403)
+        denied = _catalog_write_denied_response(request)
+        if denied:
+            return denied
 
         fabric = self.get_object(pk, request.user)
 
@@ -585,9 +591,9 @@ class TailorFabricDetailView(BaseTailorAuthenticatedView):
         description="Delete fabric permanently"
     )
     def delete(self, request, pk):
-        """Delete fabric."""
-        if hasattr(request.user, 'tailor_employee') and not request.user.tailor_employee.can_manage_catalog:
-             return api_response(success=False, message="Permission denied", status_code=403)
+        denied = _catalog_write_denied_response(request)
+        if denied:
+            return denied
 
         fabric = self.get_object(pk, request.user)
 
