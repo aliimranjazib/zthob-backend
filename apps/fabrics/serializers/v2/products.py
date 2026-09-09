@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
+from apps.fabrics.models import FabricProduct, FabricStockMovement, ShopFabric
 from apps.tailors.models import FabricCategory, FabricCountry, FabricTag, FabricType
-from apps.tailors.models.v2_fabrics import FabricProduct, FabricStockMovement, ShopFabric
 
 
 class V2FabricProductImageSerializer(serializers.Serializer):
@@ -69,6 +69,11 @@ class V2FabricProductSerializer(serializers.ModelSerializer):
             'seasons',
             'approval_status',
             'is_active',
+            'is_on_sale',
+            'discount_price',
+            'sale_start',
+            'sale_end',
+            'is_featured',
             'assigned_shop_count',
             'gallery',
             'created_at',
@@ -79,7 +84,7 @@ class V2FabricProductSerializer(serializers.ModelSerializer):
     def get_assigned_shop_count(self, obj):
         assignments = getattr(obj, '_prefetched_objects_cache', {}).get('shop_assignments')
         if assignments is not None:
-            return len([a for a in assignments if a.is_active])
+            return len([assignment for assignment in assignments if assignment.is_active])
         return obj.shop_assignments.filter(is_active=True).count()
 
 
@@ -122,7 +127,30 @@ class V2FabricProductWriteSerializer(serializers.ModelSerializer):
             'stitching_price',
             'seasons',
             'is_active',
+            'is_on_sale',
+            'discount_price',
+            'sale_start',
+            'sale_end',
+            'is_featured',
         ]
+
+    def validate(self, data):
+        price = data.get('price', getattr(self.instance, 'price', None))
+        is_on_sale = data.get('is_on_sale', getattr(self.instance, 'is_on_sale', False))
+        discount_price = data.get('discount_price', getattr(self.instance, 'discount_price', None))
+        sale_start = data.get('sale_start', getattr(self.instance, 'sale_start', None))
+        sale_end = data.get('sale_end', getattr(self.instance, 'sale_end', None))
+
+        if is_on_sale:
+            if not discount_price:
+                raise serializers.ValidationError({'discount_price': 'Discount price is required for flash sales.'})
+            if price and discount_price >= price:
+                raise serializers.ValidationError({'discount_price': 'Discount price must be less than the regular price.'})
+            if not sale_start or not sale_end:
+                raise serializers.ValidationError({'sale_start': 'Start and end dates are required for flash sales.'})
+            if sale_end <= sale_start:
+                raise serializers.ValidationError({'sale_end': 'Sale end date must be after the start date.'})
+        return data
 
 
 class V2FabricAssignSerializer(serializers.Serializer):

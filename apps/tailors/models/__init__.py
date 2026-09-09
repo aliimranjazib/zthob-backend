@@ -14,7 +14,7 @@ from .service_areas import ServiceArea
 from .rating import TailorRating
 from .employee import TailorEmployee
 from .staff import TailorStaffMember, ShopStaffAssignment, STAFF_PERMISSION_KEYS
-from .v2_fabrics import (
+from apps.fabrics.models import (
     FabricProduct,
     FabricProductImage,
     ShopFabric,

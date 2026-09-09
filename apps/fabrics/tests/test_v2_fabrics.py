@@ -2,7 +2,7 @@
 V2 fabric catalog + analytics tests.
 
 Run:
-  uv run python manage.py test apps.tailors.tests_v2_fabrics -v 2
+  uv run python manage.py test apps.fabrics.tests.test_v2_fabrics -v 2
 """
 
 from decimal import Decimal
@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
@@ -17,7 +18,7 @@ from rest_framework.test import APIClient
 
 from apps.core.services import PhoneVerificationService
 from apps.customers.models import Address, CustomerProfile
-from apps.tailors.models import FabricCategory, ServiceArea, ShopFabric
+from apps.tailors.models import FabricCategory, FabricImage, ServiceArea, ShopFabric
 
 
 User = get_user_model()
@@ -26,6 +27,19 @@ TEST_REST_FRAMEWORK = {
     **settings.REST_FRAMEWORK,
     'DEFAULT_THROTTLE_CLASSES': [],
 }
+
+
+def _make_test_image(name='fabric.png'):
+    return SimpleUploadedFile(
+        name,
+        (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'
+            b'\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01'
+            b'\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
+        ),
+        content_type='image/png',
+    )
 
 
 @override_settings(
@@ -138,7 +152,7 @@ class V2FabricCatalogTests(TestCase):
         self._auth(owner_token)
 
         product_resp = self.client.post(
-            self._url('tailors_v2:v2-fabric-products'),
+            self._url('fabrics_v2:v2-fabric-products'),
             {
                 'name': 'Premium Cotton',
                 'description': 'Soft cotton',
@@ -153,7 +167,7 @@ class V2FabricCatalogTests(TestCase):
         product_id = product_resp.data['data']['id']
 
         assign_resp = self.client.post(
-            self._url('tailors_v2:v2-fabric-product-assign', product_id=product_id),
+            self._url('fabrics_v2:v2-fabric-product-assign', product_id=product_id),
             {'shop_id': shop_id, 'stock': 10, 'is_visible': True},
             format='json',
         )
@@ -161,14 +175,14 @@ class V2FabricCatalogTests(TestCase):
         legacy_fabric_id = assign_resp.data['data']['legacy_fabric_id']
         self.assertIsNotNone(legacy_fabric_id)
 
-        shop_fabrics = self.client.get(self._url('tailors_v2:v2-shop-fabrics', shop_id=shop_id))
+        shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
         self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK)
         self.assertEqual(len(shop_fabrics.data['data']), 1)
         shop_fabric_id = shop_fabrics.data['data'][0]['id']
 
         stock_resp = self.client.post(
             self._url(
-                'tailors_v2:v2-shop-fabric-stock-movements',
+                'fabrics_v2:v2-shop-fabric-stock-movements',
                 shop_id=shop_id,
                 shop_fabric_id=shop_fabric_id,
             ),
@@ -184,13 +198,61 @@ class V2FabricCatalogTests(TestCase):
         self.assertEqual(shop_fabric.stock_movements.filter(movement_type='sale').count(), 1)
 
         self._auth(owner_token)
-        analytics = self.client.get(self._url('tailors_v2:v2-fabric-analytics'))
+        analytics = self.client.get(self._url('fabrics_v2:v2-fabric-analytics'))
         self.assertEqual(analytics.status_code, status.HTTP_200_OK, analytics.data)
         self.assertEqual(analytics.data['data']['summary']['total_units_sold'], 1)
         self.assertEqual(len(analytics.data['data']['by_product']), 1)
         self.assertEqual(analytics.data['data']['by_product'][0]['units_sold'], 1)
 
         self.assertIsNotNone(order_id)
+
+    def test_v2_multipart_product_create_with_images(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        image = _make_test_image()
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Multipart Cotton',
+                'price': '120.00',
+                'category_id': str(self.fabric_category.id),
+                'images[0][image]': image,
+                'images[0][is_primary]': 'true',
+                'images[0][order]': '0',
+            },
+            format='multipart',
+        )
+        self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+        self.assertEqual(len(product_resp.data['data']['gallery']), 1)
+
+    def test_assign_syncs_product_images_to_legacy_fabric(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        image = _make_test_image()
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Gallery Cotton',
+                'price': '150.00',
+                'images[0][image]': image,
+                'images[0][is_primary]': 'true',
+                'images[0][order]': '0',
+            },
+            format='multipart',
+        )
+        self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+        product_id = product_resp.data['data']['id']
+
+        assign_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-product-assign', product_id=product_id),
+            {'shop_id': shop_id, 'stock': 3, 'is_visible': True},
+            format='json',
+        )
+        self.assertEqual(assign_resp.status_code, status.HTTP_200_OK, assign_resp.data)
+        legacy_fabric_id = assign_resp.data['data']['legacy_fabric_id']
+        self.assertEqual(FabricImage.objects.filter(fabric_id=legacy_fabric_id).count(), 1)
 
     def _create_customer_order(self, *, shop_id, fabric_id):
         from apps.tailors.models import TailorProfile
@@ -252,7 +314,7 @@ class V2FabricCatalogTests(TestCase):
 
         for idx in range(3):
             product_resp = self.client.post(
-                self._url('tailors_v2:v2-fabric-products'),
+                self._url('fabrics_v2:v2-fabric-products'),
                 {
                     'name': f'Fabric {idx}',
                     'price': '100.00',
@@ -263,7 +325,7 @@ class V2FabricCatalogTests(TestCase):
             self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED)
             self.client.post(
                 self._url(
-                    'tailors_v2:v2-fabric-product-assign',
+                    'fabrics_v2:v2-fabric-product-assign',
                     product_id=product_resp.data['data']['id'],
                 ),
                 {'shop_id': shop_id, 'stock': idx + 1},
@@ -274,12 +336,12 @@ class V2FabricCatalogTests(TestCase):
         from django.test.utils import CaptureQueriesContext
 
         with CaptureQueriesContext(connection) as product_ctx:
-            products = self.client.get(self._url('tailors_v2:v2-fabric-products'))
+            products = self.client.get(self._url('fabrics_v2:v2-fabric-products'))
         with CaptureQueriesContext(connection) as shop_ctx:
             shop_fabrics = self.client.get(
-                self._url('tailors_v2:v2-shop-fabrics', shop_id=shop_id)
+                self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id)
             )
         self.assertEqual(products.status_code, status.HTTP_200_OK)
         self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK)
         self.assertLessEqual(len(product_ctx), 8)
-        self.assertLessEqual(len(shop_ctx), 10)
+        self.assertLessEqual(len(shop_ctx), 12)

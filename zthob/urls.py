@@ -246,6 +246,7 @@ api_patterns = [
 api_v2_patterns = [
     path('', include('apps.accounts.urls_v2')),
     path('', include('apps.tailors.urls_v2')),
+    path('', include('apps.fabrics.urls_v2')),
     path('customization/', include('apps.customization.urls_v2')),
 ]
 

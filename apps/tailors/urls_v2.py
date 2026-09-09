@@ -1,15 +1,6 @@
 from django.urls import path
 
 from apps.tailors.views.v2.business import V2BusinessView
-from apps.tailors.views.v2.fabrics import (
-    V2FabricAnalyticsView,
-    V2FabricProductAssignView,
-    V2FabricProductDetailView,
-    V2FabricProductListCreateView,
-    V2ShopFabricDetailView,
-    V2ShopFabricListView,
-    V2ShopFabricStockMovementView,
-)
 from apps.tailors.views.v2.shops import V2ShopDetailView, V2ShopListCreateView, V2ShopPinView
 from apps.tailors.views.v2.staff import (
     V2StaffAssignmentListCreateView,
@@ -31,31 +22,4 @@ urlpatterns = [
         V2StaffAssignmentListCreateView.as_view(),
         name='v2-staff-assignments',
     ),
-    path('fabrics/products/', V2FabricProductListCreateView.as_view(), name='v2-fabric-products'),
-    path(
-        'fabrics/products/<int:product_id>/',
-        V2FabricProductDetailView.as_view(),
-        name='v2-fabric-product-detail',
-    ),
-    path(
-        'fabrics/products/<int:product_id>/assign/',
-        V2FabricProductAssignView.as_view(),
-        name='v2-fabric-product-assign',
-    ),
-    path(
-        'shops/<int:shop_id>/fabrics/',
-        V2ShopFabricListView.as_view(),
-        name='v2-shop-fabrics',
-    ),
-    path(
-        'shops/<int:shop_id>/fabrics/<int:shop_fabric_id>/',
-        V2ShopFabricDetailView.as_view(),
-        name='v2-shop-fabric-detail',
-    ),
-    path(
-        'shops/<int:shop_id>/fabrics/<int:shop_fabric_id>/stock-movements/',
-        V2ShopFabricStockMovementView.as_view(),
-        name='v2-shop-fabric-stock-movements',
-    ),
-    path('analytics/fabrics/', V2FabricAnalyticsView.as_view(), name='v2-fabric-analytics'),
 ]

@@ -218,41 +218,10 @@ class FabricCreateSerializer(serializers.ModelSerializer):
         return tags
 
     def create(self, validated_data):
-        request = self.context.get("request")
-        from ..shop_access import get_tailor_profile
+        from apps.fabrics.services.legacy_bridge import create_from_v1_multipart
 
-        tailor_profile = get_tailor_profile(request.user)
-        if not tailor_profile:
-            raise serializers.ValidationError("Tailor shop profile not found.")
-
-        # Extract images and tags data
-        images_data = validated_data.pop('images', [])
-        tags_data = validated_data.pop('tags', [])
-        
-        # Create the fabric without the legacy fabric_image field
-        fabric = Fabric.objects.create(
-            tailor=tailor_profile,
-            created_by=request.user,
-            approval_status='approved',
-            **validated_data,
-        )
-        
-        # Add tags to the fabric
-        if tags_data:
-            from ..models import FabricTag
-            tags = FabricTag.objects.filter(id__in=tags_data, is_active=True)
-            fabric.tags.set(tags)
-        
-        # Create gallery images from all images
-        for img_data in sorted(images_data, key=lambda x: x.get('order', 0)):
-            FabricImage.objects.create(
-                fabric=fabric,
-                image=img_data['image'],
-                is_primary=img_data.get('is_primary', False),
-                order=img_data.get('order', 0),
-            )
-
-        return fabric
+        request = self.context.get('request')
+        return create_from_v1_multipart(request=request, validated_data=validated_data)
 
 class FabricUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating existing fabrics."""
@@ -337,20 +306,6 @@ class FabricUpdateSerializer(serializers.ModelSerializer):
         return data
 
     def update(self, instance, validated_data):
-        """Update fabric instance with validated data."""
-        # Extract tags data
-        tags_data = validated_data.pop('tags', None)
-        
-        # Update other fields
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.approval_status = 'approved'
-        instance.save()
-        
-        # Update tags if provided
-        if tags_data is not None:
-            from ..models import FabricTag
-            tags = FabricTag.objects.filter(id__in=tags_data, is_active=True)
-            instance.tags.set(tags)
-        
-        return instance
+        from apps.fabrics.services.legacy_bridge import update_from_v1
+
+        return update_from_v1(fabric=instance, validated_data=validated_data)
