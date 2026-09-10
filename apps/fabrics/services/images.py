@@ -105,6 +105,16 @@ def delete_product_image(*, product: FabricProduct, image: FabricProductImage) -
             replacement.save()
 
 
+def append_product_gallery_from_request(*, product: FabricProduct, request) -> list[dict]:
+    """Parse multipart images from a request and append them to the product gallery."""
+    images = parse_multipart_images(request)
+    if not images:
+        return []
+    validate_gallery_images(images, required=False)
+    add_product_gallery_images(product=product, images=images)
+    return images
+
+
 def update_product_image(
     *,
     image: FabricProductImage,

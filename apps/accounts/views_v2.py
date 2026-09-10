@@ -14,15 +14,25 @@ from apps.accounts.services.v2_auth import (
     build_v2_me_payload,
     build_v2_profile_payload,
     build_v2_verify_payload,
+    resolve_membership_type,
+    resolve_v2_account_status,
+    resolve_v2_app_entry,
     switch_shop_session,
-    validate_app_entry_for_user,
 )
 from apps.accounts.views import PhoneLoginView, PhoneVerifyView
 from zthob.utils import api_response
 
 
 class V2PhoneLoginView(PhoneLoginView):
-    """Send OTP — reuses v1 phone-login implementation."""
+    """Send OTP — reuses v1 phone-login implementation with account_status."""
+
+    @extend_schema(tags=['V2 Auth'], summary='Send OTP (v2 with account_status)')
+    def post(self, request):
+        response = super().post(request)
+        if response.status_code == 200 and response.data.get('success'):
+            phone = request.data.get('phone', '')
+            response.data['data']['account_status'] = resolve_v2_account_status(phone)
+        return response
 
 
 class V2PhoneVerifyView(PhoneVerifyView):
@@ -44,6 +54,10 @@ class V2PhoneVerifyView(PhoneVerifyView):
                 request=request,
             )
 
+        membership_before = self._resolve_membership_before_verify(
+            serializer.validated_data,
+        )
+
         user, is_new_user, error_response = self._verify_and_prepare_user(
             request,
             serializer.validated_data,
@@ -52,19 +66,35 @@ class V2PhoneVerifyView(PhoneVerifyView):
             return error_response
 
         role = serializer.validated_data.get('role', 'USER')
-        app_entry = serializer.validated_data.get('app_entry')
+        requested_app_entry = serializer.validated_data.get('app_entry')
 
         from apps.accounts.services import IdentityService
         IdentityService.ensure_profile(user, role)
 
         try:
-            validate_app_entry_for_user(user, app_entry)
+            app_entry, app_entry_source = resolve_v2_app_entry(
+                user,
+                requested_app_entry=requested_app_entry,
+                membership_before=membership_before,
+            )
         except Exception as exc:
+            from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
             from rest_framework.exceptions import PermissionDenied
-            if isinstance(exc, PermissionDenied):
+            from rest_framework.exceptions import ValidationError
+
+            if isinstance(exc, ValidationError):
                 return api_response(
                     success=False,
-                    message=str(exc.detail if hasattr(exc, 'detail') else exc),
+                    message='OTP verification failed',
+                    errors=exc.detail,
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    request=request,
+                )
+            if isinstance(exc, (PermissionDenied, DjangoPermissionDenied)):
+                detail = getattr(exc, 'detail', str(exc))
+                return api_response(
+                    success=False,
+                    message=str(detail),
                     status_code=status.HTTP_403_FORBIDDEN,
                     request=request,
                 )
@@ -74,6 +104,7 @@ class V2PhoneVerifyView(PhoneVerifyView):
             user,
             app_entry=app_entry,
             is_new_user=is_new_user,
+            app_entry_source=app_entry_source,
         )
         status_code = status.HTTP_201_CREATED if is_new_user else status.HTTP_200_OK
         message = (
@@ -88,6 +119,40 @@ class V2PhoneVerifyView(PhoneVerifyView):
             status_code=status_code,
             request=request,
         )
+
+    @staticmethod
+    def _lookup_user_for_membership(validated_data):
+        from django.contrib.auth import get_user_model
+
+        from apps.core.services import PhoneVerificationService
+
+        User = get_user_model()
+        phone = validated_data.get('phone') or ''
+        verification_id = validated_data.get('verification_id')
+
+        pending_session = PhoneVerificationService._get_verification_session(
+            verification_id=verification_id,
+            phone_number=phone or None,
+        )
+        local_phone = (
+            PhoneVerificationService.normalize_phone_to_local(phone)
+            if phone
+            else (
+                PhoneVerificationService.normalize_phone_to_local(pending_session.phone_number)
+                if pending_session
+                else None
+            )
+        )
+        if local_phone:
+            return User.objects.filter(phone=local_phone).first()
+        return pending_session.user if pending_session else None
+
+    @classmethod
+    def _resolve_membership_before_verify(cls, validated_data) -> str:
+        user = cls._lookup_user_for_membership(validated_data)
+        if user is None:
+            return 'none'
+        return resolve_membership_type(user)
 
 
 class V2MeView(APIView):

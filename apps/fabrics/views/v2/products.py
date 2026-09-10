@@ -9,18 +9,23 @@ from apps.fabrics.models import FabricProduct, FabricProductImage
 from apps.fabrics.permissions import staff_has_fabric_permission
 from apps.fabrics.serializers.v2.products import (
     V2FabricAssignSerializer,
+    V2FabricProductCreateSerializer,
     V2FabricProductSerializer,
     V2FabricProductWriteSerializer,
     V2ShopFabricSerializer,
 )
 from apps.fabrics.services.catalog import (
+    assign_created_product_to_shop,
     create_fabric_product,
     fabric_products_queryset,
     get_product_for_business,
+    pop_product_assign_fields,
+    sync_product_assignments_to_legacy,
     update_fabric_product,
 )
 from apps.fabrics.services.images import (
     add_product_gallery_images,
+    append_product_gallery_from_request,
     delete_product_image,
     parse_multipart_images,
     save_product_gallery,
@@ -28,12 +33,22 @@ from apps.fabrics.services.images import (
     validate_gallery_images,
 )
 from apps.fabrics.services.listings import assign_product_to_shop, get_shop_fabric
-from apps.fabrics.services.legacy_bridge import sync_legacy_fabric_from_shop_fabric
 from apps.tailors.permissions import IsShopOwner
 from apps.tailors.services.v2.business import get_owner_business
 from apps.tailors.services.v2.shops import get_shop_for_owner
 from apps.tailors.views.base import BaseTailorAPIView
 from zthob.utils import api_response
+
+
+def _validation_error_response(request, exc, *, message='Validation failed'):
+    errors = exc.detail if isinstance(getattr(exc, 'detail', None), (dict, list)) else {'detail': str(exc)}
+    return api_response(
+        success=False,
+        message=message,
+        errors=errors,
+        status_code=status.HTTP_400_BAD_REQUEST,
+        request=request,
+    )
 
 
 def _normalize_request_data(request):
@@ -45,8 +60,10 @@ def _normalize_request_data(request):
             value = request.POST.get(key)
             if value in (None, ''):
                 continue
-            if key in ('is_active', 'is_on_sale', 'is_featured'):
+            if key in ('is_active', 'is_on_sale', 'is_featured', 'is_visible'):
                 normalized[key] = str(value).lower() == 'true'
+            elif key in ('shop_id', 'stock'):
+                normalized[key] = int(value)
             else:
                 normalized[key] = value
         return normalized
@@ -82,7 +99,7 @@ class V2FabricProductListCreateView(BaseTailorAPIView):
         )
 
     @extend_schema(
-        request=V2FabricProductWriteSerializer,
+        request=V2FabricProductCreateSerializer,
         responses={201: V2FabricProductSerializer},
         tags=['V2 Fabrics'],
     )
@@ -102,16 +119,9 @@ class V2FabricProductListCreateView(BaseTailorAPIView):
             try:
                 validate_gallery_images(images, required=False)
             except serializers.ValidationError as exc:
-                errors = exc.detail if isinstance(exc.detail, dict) else {'images': exc.detail}
-                return api_response(
-                    success=False,
-                    message='Validation failed',
-                    errors=errors,
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    request=request,
-                )
+                return _validation_error_response(request, exc)
 
-        serializer = V2FabricProductWriteSerializer(data=payload)
+        serializer = V2FabricProductCreateSerializer(data=payload)
         if not serializer.is_valid():
             return api_response(
                 success=False,
@@ -121,13 +131,28 @@ class V2FabricProductListCreateView(BaseTailorAPIView):
                 request=request,
             )
 
-        product = create_fabric_product(
-            business=business,
-            validated_data=serializer.validated_data,
-            created_by=request.user,
-        )
-        if images:
-            save_product_gallery(product=product, images=images)
+        product_data, assign_data = pop_product_assign_fields(serializer.validated_data)
+
+        from django.db import transaction
+
+        try:
+            with transaction.atomic():
+                product = create_fabric_product(
+                    business=business,
+                    validated_data=product_data,
+                    created_by=request.user,
+                )
+                if images:
+                    save_product_gallery(product=product, images=images)
+                if assign_data is not None:
+                    assign_created_product_to_shop(
+                        product=product,
+                        owner_id=request.user.id,
+                        assign_data=assign_data,
+                        created_by=request.user,
+                    )
+        except serializers.ValidationError as exc:
+            return _validation_error_response(request, exc)
 
         product = get_product_for_business(business_id=business.id, product_id=product.id)
         response = V2FabricProductSerializer(product, context={'request': request})
@@ -197,7 +222,18 @@ class V2FabricProductDetailView(BaseTailorAPIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 request=request,
             )
-        product = update_fabric_product(product=product, validated_data=serializer.validated_data)
+
+        from django.db import transaction
+
+        try:
+            with transaction.atomic():
+                product = update_fabric_product(product=product, validated_data=serializer.validated_data)
+                gallery_added = append_product_gallery_from_request(product=product, request=request)
+                if gallery_added:
+                    sync_product_assignments_to_legacy(product=product)
+        except serializers.ValidationError as exc:
+            return _validation_error_response(request, exc)
+
         product = get_product_for_business(
             business_id=product.business_id,
             product_id=product.id,
@@ -312,8 +348,7 @@ class V2FabricProductImageAddView(BaseTailorAPIView):
                 request=request,
             )
 
-        for shop_fabric in product.shop_assignments.filter(is_active=True).select_related('shop'):
-            sync_legacy_fabric_from_shop_fabric(shop_fabric=shop_fabric)
+        sync_product_assignments_to_legacy(product=product)
 
         product = get_product_for_business(business_id=business.id, product_id=product.id)
         response = V2FabricProductSerializer(product, context={'request': request})
@@ -361,8 +396,7 @@ class V2FabricProductImagePrimaryView(BaseTailorAPIView):
         image.is_primary = True
         image.save()
 
-        for shop_fabric in product.shop_assignments.filter(is_active=True).select_related('shop'):
-            sync_legacy_fabric_from_shop_fabric(shop_fabric=shop_fabric)
+        sync_product_assignments_to_legacy(product=product)
 
         product = get_product_for_business(business_id=business.id, product_id=product.id)
         response = V2FabricProductSerializer(product, context={'request': request})
@@ -428,8 +462,7 @@ class V2FabricProductImageUpdateView(BaseTailorAPIView):
                 request=request,
             )
 
-        for shop_fabric in product.shop_assignments.filter(is_active=True).select_related('shop'):
-            sync_legacy_fabric_from_shop_fabric(shop_fabric=shop_fabric)
+        sync_product_assignments_to_legacy(product=product)
 
         product = get_product_for_business(business_id=business.id, product_id=product.id)
         response = V2FabricProductSerializer(product, context={'request': request})
@@ -486,8 +519,7 @@ class V2FabricProductImageDeleteView(BaseTailorAPIView):
                 request=request,
             )
 
-        for shop_fabric in product.shop_assignments.filter(is_active=True).select_related('shop'):
-            sync_legacy_fabric_from_shop_fabric(shop_fabric=shop_fabric)
+        sync_product_assignments_to_legacy(product=product)
 
         product = get_product_for_business(business_id=business.id, product_id=product.id)
         response = V2FabricProductSerializer(product, context={'request': request})
