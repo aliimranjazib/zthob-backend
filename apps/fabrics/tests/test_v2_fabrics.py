@@ -226,6 +226,109 @@ class V2FabricCatalogTests(TestCase):
         self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
         self.assertEqual(len(product_resp.data['data']['gallery']), 1)
 
+    def test_create_product_with_stock_and_shop_id_in_single_request(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Stocked Cotton',
+                'price': '200.00',
+                'category_id': self.fabric_category.id,
+                'shop_id': shop_id,
+                'stock': 25,
+                'is_visible': True,
+            },
+            format='json',
+        )
+        self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+
+        shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(shop_fabrics.data['data']), 1)
+        self.assertEqual(shop_fabrics.data['data'][0]['stock'], 25)
+        self.assertEqual(shop_fabrics.data['data'][0]['product']['name'], 'Stocked Cotton')
+
+    def test_create_product_with_stock_auto_assigns_single_shop(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Auto Assigned Cotton',
+                'price': '210.00',
+                'stock': 12,
+            },
+            format='json',
+        )
+        self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+
+        shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        self.assertEqual(shop_fabrics.data['data'][0]['stock'], 12)
+
+    def test_patch_product_appends_images(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Patch Gallery Cotton',
+                'price': '130.00',
+                'shop_id': shop_id,
+                'stock': 4,
+            },
+            format='json',
+        )
+        self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+        product_id = product_resp.data['data']['id']
+
+        patch_resp = self.client.patch(
+            self._url('fabrics_v2:v2-fabric-product-detail', product_id=product_id),
+            {
+                'description': 'Updated description',
+                'images[0][image]': _make_test_image('patch.png'),
+                'images[0][is_primary]': 'true',
+                'images[0][order]': '0',
+            },
+            format='multipart',
+        )
+        self.assertEqual(patch_resp.status_code, status.HTTP_200_OK, patch_resp.data)
+        self.assertEqual(patch_resp.data['data']['description'], 'Updated description')
+        self.assertEqual(len(patch_resp.data['data']['gallery']), 1)
+
+    def test_patch_product_appends_images_syncs_legacy_fabric(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Legacy Sync Cotton',
+                'price': '140.00',
+                'shop_id': shop_id,
+                'stock': 2,
+            },
+            format='json',
+        )
+        product_id = product_resp.data['data']['id']
+
+        self.client.patch(
+            self._url('fabrics_v2:v2-fabric-product-detail', product_id=product_id),
+            {
+                'images[0][image]': _make_test_image('legacy-sync.png'),
+                'images[0][is_primary]': 'true',
+                'images[0][order]': '0',
+            },
+            format='multipart',
+        )
+
+        shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        legacy_fabric_id = shop_fabrics.data['data'][0]['legacy_fabric_id']
+        self.assertEqual(FabricImage.objects.filter(fabric_id=legacy_fabric_id).count(), 1)
+
     def test_assign_syncs_product_images_to_legacy_fabric(self):
         shop_id, owner_token, _work_token = self._setup_owner_shop()
         self._auth(owner_token)

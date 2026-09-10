@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.core.exceptions import PermissionDenied
+from rest_framework import serializers
 
 from apps.accounts.services.tailor_auth import (
     APP_ENTRY_OWNER,
@@ -64,6 +65,83 @@ def resolve_membership_type(user) -> str:
     if getattr(user, 'tailor_profile', None) is not None:
         return 'tailor'
     return 'none'
+
+
+ACCOUNT_STATUS_NEW = 'new'
+ACCOUNT_STATUS_EXISTING = 'existing'
+
+
+def _user_has_platform_identity(user) -> bool:
+    if Business.objects.filter(owner_id=user.id, is_active=True).exists():
+        return True
+    if _active_shops_queryset(user.id).exists():
+        return True
+    if ShopStaffAssignment.objects.filter(
+        staff_member__user_id=user.id,
+        staff_member__is_active=True,
+        is_active=True,
+    ).exists():
+        return True
+    if getattr(user, 'tailor_profile', None) is not None:
+        return True
+    return False
+
+
+def resolve_v2_account_status(phone: str) -> str:
+    """Return new vs existing before OTP based on platform identity for the phone."""
+    from django.contrib.auth import get_user_model
+
+    from apps.core.services import PhoneVerificationService
+
+    User = get_user_model()
+    if not phone:
+        return ACCOUNT_STATUS_NEW
+
+    local_phone = PhoneVerificationService.normalize_phone_to_local(phone)
+    user = User.objects.filter(phone=local_phone).first()
+    if user is None:
+        return ACCOUNT_STATUS_NEW
+    if _user_has_platform_identity(user):
+        return ACCOUNT_STATUS_EXISTING
+    return ACCOUNT_STATUS_NEW
+
+
+def infer_app_entry_for_user(user) -> str:
+    membership_type = resolve_membership_type(user)
+    if membership_type == 'owner':
+        return APP_ENTRY_OWNER
+    if membership_type == 'staff':
+        return APP_ENTRY_STAFF
+    if membership_type == 'tailor':
+        return APP_ENTRY_TAILOR
+    raise serializers.ValidationError(
+        {'app_entry': 'app_entry is required for new registration.'}
+    )
+
+
+def resolve_v2_app_entry(
+    user,
+    *,
+    requested_app_entry: str | None,
+    membership_before: str,
+) -> tuple[str, str]:
+    """
+    Resolve session app_entry from explicit request or platform identity.
+
+    Returns (app_entry, app_entry_source) where source is 'request' or 'inferred'.
+    """
+    if requested_app_entry not in (None, ''):
+        app_entry = validate_app_entry_for_user(user, requested_app_entry)
+        return app_entry, 'request'
+
+    if membership_before != 'none':
+        app_entry = infer_app_entry_for_user(user)
+        app_entry = validate_app_entry_for_user(user, app_entry)
+        return app_entry, 'inferred'
+
+    raise serializers.ValidationError(
+        {'app_entry': 'app_entry is required for new registration.'}
+    )
 
 
 def validate_app_entry_for_user(user, app_entry: str | None) -> str | None:
@@ -272,10 +350,10 @@ def build_v2_verify_payload(
     *,
     app_entry: str | None,
     is_new_user: bool,
+    app_entry_source: str = 'request',
 ) -> dict[str, Any]:
     from apps.core.phone_utils import format_phone_for_display
 
-    app_entry = validate_app_entry_for_user(user, app_entry)
     session = None
     if app_entry:
         session = TailorSession(
@@ -298,6 +376,7 @@ def build_v2_verify_payload(
             'language': getattr(user, 'language', None) or 'ar',
         },
         'app_entry': app_entry,
+        'app_entry_source': app_entry_source,
         'is_new_user': is_new_user,
     }
 
