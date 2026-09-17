@@ -1,19 +1,21 @@
-from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Max
 
-from apps.tailors.permissions import IsTailor
 from apps.tailors.serializers.tailor_pos import (
     TailorCustomerSerializer,
     CreateCustomerSerializer,
 )
-from apps.core.phone_format import normalize_phone_to_local, phone_lookup_variations
-from apps.customers.models import CustomerProfile
+from apps.customers.models import CustomerProfile, TailorPOSCustomerLink
 from apps.orders.models import Order
 from apps.orders.serializers import OrderListSerializer, OrderSerializer
+from apps.tailors.services.pos_customer_access import (
+    ensure_pos_customer_link,
+    pos_owned_by_tailor,
+    tailor_has_pos_access_to_customer,
+)
 from apps.tailors.services.pos_customer_styles import get_customer_order_styles, get_customer_style_presets
 from zthob.utils import api_response
 
@@ -23,27 +25,41 @@ User = get_user_model()
 from apps.tailors.permissions import IsShopStaff
 from .base import BaseTailorAPIView
 
+
+def _pos_list_measurements(owner_user, customer_profile):
+    if pos_owned_by_tailor(tailor_owner_user=owner_user, profile=customer_profile):
+        return customer_profile.measurements
+    return None
+
+
+def _pos_list_presets(owner_user, customer_profile, presets):
+    if pos_owned_by_tailor(tailor_owner_user=owner_user, profile=customer_profile):
+        return presets
+    return []
+
+
 class TailorCustomerListView(BaseTailorAPIView):
     """
     GET /api/tailors/pos/customers/
     Returns all unique customers who have:
       1. Previously ordered from this tailor shop, OR
-      2. Were created via this tailor shop's POS.
+      2. Were created via this tailor shop's POS, OR
+      3. Were added to this shop via POS (reused existing account).
     """
     permission_classes = [IsAuthenticated, IsShopStaff]
     required_employee_permission = 'can_manage_pos'
 
 
     def get(self, request):
-        profile = self.get_tailor_profile(request.user)
-        if not profile:
+        shop_profile = self.get_tailor_profile(request.user)
+        if not shop_profile:
              return api_response(success=False, message="Shop profile not found", status_code=404)
         
-        owner_user = profile.shop_owner_user
+        owner_user = shop_profile.shop_owner_user
         
         # --- Source 1: Customers who placed orders with this shop ---
         order_customer_data = (
-            Order.objects.filter(tailor=owner_user, shop=profile)
+            Order.objects.filter(tailor=owner_user, shop=shop_profile)
 
             .values('customer')
             .annotate(
@@ -60,22 +76,20 @@ class TailorCustomerListView(BaseTailorAPIView):
             for entry in order_customer_data
         }
 
-        # --- Source 2: Customers created via this tailor's POS with no orders yet ---
-        # Note: We filter by owner_user for consistency
-        pos_profiles = CustomerProfile.objects.filter(
-            pos_created_by=owner_user
-        ).exclude(
-            user_id__in=order_map.keys()  # skip those already in order_map
-        ).select_related('user')
+        created_user_ids = set(
+            CustomerProfile.objects.filter(
+                pos_created_by=owner_user,
+            ).values_list('user_id', flat=True)
+        )
+        linked_user_ids = set(
+            TailorPOSCustomerLink.objects.filter(
+                tailor=owner_user,
+            ).values_list('customer_id', flat=True)
+        )
 
+        all_user_ids = set(order_map.keys()) | created_user_ids | linked_user_ids
 
-        # Collect all user IDs to fetch
-        all_user_ids = set(order_map.keys()) | {p.user_id for p in pos_profiles}
-
-        # Fetch all users in a single query
         users = User.objects.filter(id__in=all_user_ids).in_bulk()
-
-        # Fetch all customer profiles in a single query
         profiles = {
             cp.user_id: cp
             for cp in CustomerProfile.objects.filter(user_id__in=all_user_ids)
@@ -86,39 +100,26 @@ class TailorCustomerListView(BaseTailorAPIView):
 
         results = []
 
-        # Add order-based customers
-        for user_id, stats in order_map.items():
+        for user_id in all_user_ids:
             user = users.get(user_id)
             if not user:
                 continue
-            profile = profiles.get(user_id)
+            customer_profile = profiles.get(user_id)
+            stats = order_map.get(user_id)
             results.append({
                 'id': user.id,
                 'name': user.get_full_name() or user.username,
                 'phone': user.phone or '',
                 'email': user.email,
-                'total_orders': stats['total_orders'],
-                'last_order_date': stats['last_order_date'],
-                'measurements': profile.measurements if profile else None,
+                'total_orders': stats['total_orders'] if stats else 0,
+                'last_order_date': stats['last_order_date'] if stats else None,
+                'measurements': _pos_list_measurements(owner_user, customer_profile),
                 'order_styles': styles_map.get(user_id, []),
-                'style_presets': presets_map.get(user_id, []),
-            })
-
-        # Add POS-created, zero-order customers
-        for profile in pos_profiles:
-            user = profile.user
-            if not user:
-                continue
-            results.append({
-                'id': user.id,
-                'name': user.get_full_name() or user.username,
-                'phone': user.phone or '',
-                'email': user.email,
-                'total_orders': 0,
-                'last_order_date': None,
-                'measurements': profile.measurements,
-                'order_styles': styles_map.get(user.id, []),
-                'style_presets': presets_map.get(user.id, []),
+                'style_presets': _pos_list_presets(
+                    owner_user,
+                    customer_profile,
+                    presets_map.get(user_id, []),
+                ),
             })
 
         # Sort: customers with orders first (by last_order_date), then zero-order at the end
@@ -140,21 +141,23 @@ class TailorCreateCustomerView(BaseTailorAPIView):
     """
     POST /api/tailors/pos/customers/create/
     Creates a new customer account (User + CustomerProfile) and tags it with this tailor shop.
+    If the phone already belongs to a customer, reuses that account and links this shop.
     """
     permission_classes = [IsAuthenticated, IsShopStaff]
     required_employee_permission = 'can_manage_pos'
 
 
     def post(self, request):
-        profile = self.get_tailor_profile(request.user)
-        if not profile:
+        shop_profile = self.get_tailor_profile(request.user)
+        if not shop_profile:
              return api_response(success=False, message="Shop profile not found", status_code=404)
-        owner_user = profile.shop_owner_user
+        owner_user = shop_profile.shop_owner_user
 
         serializer = CreateCustomerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         from apps.customers.services.customer_provisioning import (
+            NonCustomerPhoneError,
             lookup_or_create_customer,
             normalize_customer_phone,
         )
@@ -162,28 +165,70 @@ class TailorCreateCustomerView(BaseTailorAPIView):
         phone = normalize_customer_phone(serializer.validated_data['phone'])
         name = serializer.validated_data['name']
 
-        result = lookup_or_create_customer(
-            phone=phone,
-            name=name,
-            pos_created_by=owner_user,
+        try:
+            result = lookup_or_create_customer(
+                phone=phone,
+                name=name,
+                pos_created_by=owner_user,
+                update_name=False,
+                claim_pos_created_by_if_empty=False,
+                require_customer_role=True,
+            )
+        except NonCustomerPhoneError as exc:
+            return api_response(
+                success=False,
+                message=str(exc),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        already_in_shop = tailor_has_pos_access_to_customer(
+            tailor_owner_user=owner_user,
+            customer_user=result.user,
+        )
+        ensure_pos_customer_link(
+            tailor_owner_user=owner_user,
+            customer_user=result.user,
         )
 
-        if result.is_existing:
-            total_orders = Order.objects.filter(
-                customer=result.user, tailor=owner_user, shop=profile
-            ).count()
+        customer_name = result.user.get_full_name() or result.user.username
+        shop_order_count = Order.objects.filter(
+            customer=result.user, tailor=owner_user, shop=shop_profile
+        ).count()
+        owned_measurements = (
+            result.profile.measurements
+            if pos_owned_by_tailor(tailor_owner_user=owner_user, profile=result.profile)
+            else None
+        )
 
+        if result.created:
+            return api_response(
+                success=True,
+                message="Customer created successfully",
+                data={
+                    'id': result.user.id,
+                    'name': customer_name,
+                    'phone': result.user.phone,
+                    'email': result.user.email,
+                    'total_orders': 0,
+                    'last_order_date': None,
+                    'measurements': None,
+                    'is_existing': False,
+                },
+                status_code=status.HTTP_201_CREATED,
+            )
+
+        if already_in_shop:
             return api_response(
                 success=True,
                 message="Customer already exists",
                 data={
                     'id': result.user.id,
-                    'name': result.user.get_full_name() or result.user.username,
+                    'name': customer_name,
                     'phone': result.user.phone,
                     'email': result.user.email,
-                    'total_orders': total_orders,
+                    'total_orders': shop_order_count,
                     'last_order_date': None,
-                    'measurements': result.profile.measurements,
+                    'measurements': owned_measurements,
                     'is_existing': True,
                 },
                 status_code=status.HTTP_200_OK,
@@ -194,7 +239,7 @@ class TailorCreateCustomerView(BaseTailorAPIView):
             message="Customer created successfully",
             data={
                 'id': result.user.id,
-                'name': result.user.get_full_name(),
+                'name': customer_name,
                 'phone': result.user.phone,
                 'email': result.user.email,
                 'total_orders': 0,

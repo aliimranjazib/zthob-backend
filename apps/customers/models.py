@@ -85,7 +85,44 @@ class CustomerProfile(models.Model):
 
     def __str__(self):
         return f"Customer Profile for {self.user.username}"
-    
+
+
+class TailorPOSCustomerLink(models.Model):
+    """
+    Shop-owner link created when a tailor adds a customer in POS.
+
+    ``pos_created_by`` stays the original creator. Additional shops get a
+    link so they can serve the same phone without stealing that customer.
+    """
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='pos_tailor_links',
+        help_text='Customer account added via POS',
+    )
+    tailor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='pos_customer_links',
+        help_text='Shop owner who added this customer via POS',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['customer', 'tailor'],
+                name='uniq_pos_customer_tailor_link',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['tailor', 'customer']),
+        ]
+
+    def __str__(self):
+        return f"POS link customer={self.customer_id} tailor={self.tailor_id}"
+
+
 class FamilyMember(models.Model):
     CREATED_SOURCE_CHOICES = (
         ('customer_app', 'Customer App'),
