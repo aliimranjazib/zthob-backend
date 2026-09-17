@@ -10,6 +10,14 @@ from apps.customers.services.welcome_sms import queue_customer_welcome_sms
 
 User = get_user_model()
 
+NON_CUSTOMER_PHONE_MESSAGE = (
+    'This phone number is already registered as a non-customer account.'
+)
+
+
+class NonCustomerPhoneError(Exception):
+    """Raised when POS tries to add a phone belonging to tailor/rider/admin."""
+
 
 @dataclass
 class CustomerProvisioningResult:
@@ -48,6 +56,9 @@ def lookup_or_create_customer(
     name: str,
     pos_created_by=None,
     send_welcome_sms: bool = True,
+    update_name: bool = True,
+    claim_pos_created_by_if_empty: bool = True,
+    require_customer_role: bool = False,
 ) -> CustomerProvisioningResult:
     """
     Find a customer by phone or create User + CustomerProfile.
@@ -57,18 +68,26 @@ def lookup_or_create_customer(
     existing_user = User.objects.filter(phone__in=phone_lookup_variations(phone)).first()
 
     if existing_user:
+        if require_customer_role and existing_user.role != 'USER':
+            raise NonCustomerPhoneError(NON_CUSTOMER_PHONE_MESSAGE)
+
         if existing_user.phone != phone:
             existing_user.phone = phone
             existing_user.save(update_fields=['phone'])
-        _apply_name_to_user(existing_user, name)
+        if update_name:
+            _apply_name_to_user(existing_user, name)
 
         profile_defaults = {}
-        if pos_created_by is not None:
+        if pos_created_by is not None and claim_pos_created_by_if_empty:
             profile_defaults['pos_created_by'] = pos_created_by
 
         try:
             profile = existing_user.customer_profile
-            if pos_created_by is not None and not profile.pos_created_by_id:
+            if (
+                claim_pos_created_by_if_empty
+                and pos_created_by is not None
+                and not profile.pos_created_by_id
+            ):
                 profile.pos_created_by = pos_created_by
                 profile.save(update_fields=['pos_created_by'])
         except CustomerProfile.DoesNotExist:

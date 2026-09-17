@@ -32,7 +32,7 @@ class TailorPOSFamilyMemberListCreateView(BaseTailorAPIView):
             return api_response(success=False, message='Shop profile not found', status_code=404)
 
         customer = get_customer_for_pos_or_none(
-            tailor_owner_user=profile.user,
+            tailor_owner_user=profile.shop_owner_user,
             customer_id=customer_id,
         )
         if not customer:
@@ -57,7 +57,7 @@ class TailorPOSFamilyMemberListCreateView(BaseTailorAPIView):
             return api_response(success=False, message='Shop profile not found', status_code=404)
 
         customer = get_customer_for_pos_or_none(
-            tailor_owner_user=profile.user,
+            tailor_owner_user=profile.shop_owner_user,
             customer_id=customer_id,
         )
         if not customer:
@@ -112,7 +112,7 @@ class TailorPOSFamilyMemberDetailView(BaseTailorAPIView):
             return None, None, api_response(success=False, message='Shop profile not found', status_code=404)
 
         customer = get_customer_for_pos_or_none(
-            tailor_owner_user=profile.user,
+            tailor_owner_user=profile.shop_owner_user,
             customer_id=customer_id,
         )
         if not customer:

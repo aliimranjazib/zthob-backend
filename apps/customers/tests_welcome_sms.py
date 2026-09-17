@@ -219,6 +219,6 @@ class CustomerWelcomeSmsPosTest(TestCase):
             format='json',
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(response.data['data']['is_existing'])
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(response.data['data']['is_existing'])
         mock_queue.assert_not_called()
