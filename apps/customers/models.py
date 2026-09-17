@@ -116,7 +116,7 @@ class TailorPOSCustomerLink(models.Model):
             ),
         ]
         indexes = [
-            models.Index(fields=['tailor', 'customer']),
+            models.Index(fields=['tailor', 'customer'], name='customers_t_tailor__320f30_idx'),
         ]
 
     def __str__(self):
