@@ -8,7 +8,7 @@ from rest_framework import serializers
 from apps.fabrics.models import FabricProduct, ShopFabric
 from apps.fabrics.services.legacy_bridge import sync_legacy_fabric_from_shop_fabric
 from apps.fabrics.services.listings import assign_product_to_shop
-from apps.tailors.services.v2.shops import active_shops_queryset, get_shop_for_owner
+from apps.tailors.services.v2.shops import get_shop_for_owner
 
 
 def sync_product_assignments_to_legacy(*, product: FabricProduct) -> None:
@@ -66,31 +66,13 @@ def pop_product_assign_fields(validated_data: dict) -> tuple[dict, dict | None]:
         if field in product_data:
             assign_data[field] = product_data.pop(field)
 
-    if 'shop_id' not in assign_data and 'stock' not in assign_data:
+    if 'shop_id' not in assign_data:
         return product_data, None
 
     if assign_data.get('stock') is None:
         assign_data['stock'] = 0
 
     return product_data, assign_data
-
-
-def resolve_shop_for_product_assignment(
-    *,
-    owner_id: int,
-    business_id: int,
-    shop_id: int | None,
-):
-    if shop_id is not None:
-        shop = get_shop_for_owner(owner_id=owner_id, shop_id=shop_id)
-        if shop is None or shop.business_id != business_id:
-            return None
-        return shop
-
-    shops = list(active_shops_queryset(owner_id=owner_id, business_id=business_id)[:2])
-    if len(shops) == 1:
-        return shops[0]
-    return None
 
 
 @transaction.atomic
@@ -101,17 +83,10 @@ def assign_created_product_to_shop(
     assign_data: dict,
     created_by,
 ):
-    shop = resolve_shop_for_product_assignment(
-        owner_id=owner_id,
-        business_id=product.business_id,
-        shop_id=assign_data.get('shop_id'),
-    )
-    if shop is None:
-        if assign_data.get('shop_id') is not None:
-            raise serializers.ValidationError({'shop_id': 'Shop not found for this business.'})
-        raise serializers.ValidationError(
-            {'shop_id': 'shop_id is required when stock is provided and the business has multiple shops.'}
-        )
+    shop_id = assign_data.get('shop_id')
+    shop = get_shop_for_owner(owner_id=owner_id, shop_id=shop_id)
+    if shop is None or shop.business_id != product.business_id:
+        raise serializers.ValidationError({'shop_id': 'Shop not found for this business.'})
 
     return assign_product_to_shop(
         product=product,
