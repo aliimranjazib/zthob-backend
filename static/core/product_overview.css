@@ -1,0 +1,710 @@
+:root {
+    --primary: #8B1538;
+    --primary-dark: #6d102c;
+    --ios-bg: #ffffff;
+    --ios-grouped: #f2f2f7;
+    --ios-separator: rgba(60, 60, 67, 0.12);
+    --ios-label: #1d1d1f;
+    --ios-secondary: #3c3c43;
+    --ios-tertiary: #8e8e93;
+    --ios-fill: rgba(120, 120, 128, 0.12);
+    --sidebar-width: 320px;
+    --nav-height: 52px;
+    --read-max: 1120px;
+    --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+    scroll-behavior: smooth;
+    scroll-padding-top: calc(var(--nav-height) + 16px);
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    font-family: var(--font);
+    background: var(--ios-bg);
+    color: var(--ios-label);
+    line-height: 1.47;
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+body.toc-open { overflow: hidden; }
+
+/* ── Progress ── */
+.read-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 600;
+    height: 2px;
+    width: 0%;
+    background: var(--primary);
+    transition: width 0.06s linear;
+    pointer-events: none;
+}
+
+/* ── Nav bar (iOS style) ── */
+.site-header {
+    position: sticky;
+    top: 0;
+    z-index: 400;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: var(--nav-height);
+    padding: 0 max(16px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
+    padding-top: env(safe-area-inset-top);
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 0.5px solid var(--ios-separator);
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+}
+
+.menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--primary);
+    font-family: var(--font);
+    font-size: 17px;
+    font-weight: 400;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.menu-btn:active {
+    opacity: 0.45;
+}
+
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: inherit;
+    min-width: 0;
+}
+
+.brand-mark {
+    display: none;
+}
+
+.brand-text {
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--ios-label);
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.header-center {
+    display: none;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s;
+}
+
+.btn:active { opacity: 0.65; }
+
+.btn-primary {
+    background: var(--primary);
+    color: #fff;
+}
+
+/* ── Overlay & sidebar sheet ── */
+.sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 450;
+    background: rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.32s ease, visibility 0.32s ease;
+    pointer-events: none;
+}
+
+.sidebar-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.sidebar-overlay[hidden] {
+    display: block !important;
+}
+
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 500;
+    width: min(var(--sidebar-width), 88vw);
+    height: 100vh;
+    height: 100dvh;
+    background: var(--ios-grouped);
+    display: flex;
+    flex-direction: column;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    transform: translateX(-105%);
+    transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+}
+
+.sidebar.open {
+    transform: translateX(0);
+}
+
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px 8px;
+    flex-shrink: 0;
+}
+
+.sidebar-title {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: var(--ios-label);
+    line-height: 1.1;
+}
+
+.sidebar-subtitle {
+    font-size: 15px;
+    color: var(--ios-tertiary);
+    margin-top: 4px;
+    font-weight: 400;
+}
+
+.sidebar-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 50%;
+    background: var(--ios-fill);
+    color: var(--ios-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sidebar-close:active { opacity: 0.55; }
+
+.sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 16px 24px;
+}
+
+.toc-list { list-style: none; }
+
+.toc-chapter {
+    margin-bottom: 2px;
+    background: var(--ios-bg);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.toc-chapter > a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    text-decoration: none;
+    color: var(--ios-label);
+    min-height: 52px;
+    transition: background 0.12s;
+}
+
+.toc-chapter > a:active {
+    background: var(--ios-fill);
+}
+
+.toc-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: var(--ios-grouped);
+    color: var(--ios-tertiary);
+    font-size: 13px;
+    font-weight: 600;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.toc-label {
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 1.35;
+    letter-spacing: -0.02em;
+}
+
+.toc-chapter > a.active .toc-num {
+    background: var(--primary);
+    color: #fff;
+}
+
+.toc-chapter > a.active .toc-label {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.toc-sub {
+    list-style: none;
+    margin: 0;
+    padding: 0 16px 10px 56px;
+    border-top: 0.5px solid var(--ios-separator);
+}
+
+.toc-sub a {
+    display: block;
+    padding: 10px 0;
+    font-size: 15px;
+    color: var(--ios-tertiary);
+    text-decoration: none;
+    line-height: 1.35;
+}
+
+.toc-sub a:active {
+    color: var(--primary);
+}
+
+/* ── Reading area — full width ── */
+.page-shell {
+    margin-left: 0;
+    min-height: calc(100vh - var(--nav-height));
+}
+
+.main-content {
+    width: 100%;
+    max-width: var(--read-max);
+    margin: 0 auto;
+    padding: 8px max(20px, env(safe-area-inset-right)) 72px max(20px, env(safe-area-inset-left));
+    padding-bottom: max(72px, env(safe-area-inset-bottom));
+}
+
+/* ── Hero (iOS large title) ── */
+.doc-hero {
+    padding: 8px 0 40px;
+    margin-bottom: 8px;
+    border-bottom: 0.5px solid var(--ios-separator);
+}
+
+.doc-hero-badge {
+    display: none;
+}
+
+.doc-hero h1 {
+    font-size: clamp(34px, 7vw, 48px);
+    font-weight: 700;
+    color: var(--ios-label);
+    letter-spacing: -0.04em;
+    line-height: 1.08;
+    margin-bottom: 12px;
+}
+
+.doc-hero .subtitle {
+    font-size: clamp(17px, 3.5vw, 21px);
+    font-weight: 400;
+    color: var(--ios-secondary);
+    line-height: 1.45;
+    letter-spacing: -0.01em;
+    max-width: none;
+}
+
+.doc-meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+}
+
+.doc-meta span {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--ios-tertiary);
+    background: none;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+}
+
+.doc-meta span + span::before {
+    content: '·';
+    margin-right: 16px;
+    color: var(--ios-tertiary);
+}
+
+/* ── Chapters — continuous scroll, no cards ── */
+.chapter {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 0;
+    box-shadow: none;
+}
+
+.chapter::before {
+    display: none;
+}
+
+.chapter + .chapter {
+    margin-top: 56px;
+    padding-top: 56px;
+    border-top: 0.5px solid var(--ios-separator);
+}
+
+.chapter-content {
+    overflow-wrap: anywhere;
+    font-family: var(--font);
+    font-size: 19px;
+    line-height: 1.55;
+    color: var(--ios-label);
+    letter-spacing: -0.01em;
+}
+
+.chapter-content h1 {
+    font-size: clamp(28px, 5vw, 34px);
+    font-weight: 700;
+    color: var(--ios-label);
+    margin-bottom: 20px;
+    padding-bottom: 0;
+    border-bottom: none;
+    line-height: 1.15;
+    letter-spacing: -0.035em;
+}
+
+.chapter-content h1 + p {
+    font-size: 19px;
+    line-height: 1.55;
+    color: var(--ios-secondary);
+    margin-bottom: 28px;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.chapter-content h2 {
+    font-size: clamp(22px, 4vw, 26px);
+    font-weight: 700;
+    margin: 40px 0 14px;
+    color: var(--ios-label);
+    line-height: 1.2;
+    letter-spacing: -0.03em;
+    padding-left: 0;
+}
+
+.chapter-content h2::before {
+    display: none;
+}
+
+.chapter-content h3 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 28px 0 10px;
+    color: var(--ios-label);
+    letter-spacing: -0.02em;
+}
+
+.chapter-content p {
+    margin-bottom: 1.1em;
+    color: var(--ios-label);
+}
+
+.chapter-content strong {
+    font-weight: 600;
+    color: var(--ios-label);
+}
+
+.chapter-content a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.chapter-content a:active {
+    opacity: 0.6;
+}
+
+.chapter-content ul,
+.chapter-content ol {
+    margin: 0.75em 0 1.25em;
+    padding-left: 1.25em;
+}
+
+.chapter-content li {
+    margin-bottom: 0.5em;
+    padding-left: 0.25em;
+}
+
+.chapter-content ul li::before,
+.chapter-content ol li::before {
+    display: none;
+}
+
+.chapter-content ul { list-style: disc; }
+.chapter-content ol { list-style: decimal; }
+
+.chapter-content em {
+    font-style: italic;
+    color: var(--ios-secondary);
+}
+
+.chapter-content hr {
+    border: none;
+    height: 0.5px;
+    background: var(--ios-separator);
+    margin: 48px 0;
+}
+
+/* iOS grouped table */
+.table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 1.25em 0;
+    border-radius: 12px;
+    background: var(--ios-grouped);
+    padding: 2px;
+}
+
+.chapter-content table {
+    width: 100%;
+    min-width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.4;
+    background: var(--ios-bg);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.chapter-content th,
+.chapter-content td {
+    border-bottom: 0.5px solid var(--ios-separator);
+    padding: 14px 16px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.chapter-content tr:last-child td,
+.chapter-content tr:last-child th {
+    border-bottom: none;
+}
+
+.chapter-content th {
+    background: var(--ios-grouped);
+    font-weight: 600;
+    color: var(--ios-secondary);
+    font-size: 13px;
+    text-transform: none;
+    letter-spacing: -0.01em;
+}
+
+.chapter-content tr:nth-child(even) td {
+    background: transparent;
+}
+
+.chapter-content td strong {
+    color: var(--ios-label);
+    font-weight: 600;
+}
+
+.mermaid {
+    margin: 1.5em 0;
+    padding: 20px 12px;
+    background: var(--ios-grouped);
+    border-radius: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.mermaid svg {
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+    display: block;
+}
+
+/* ── Footer ── */
+.site-footer {
+    margin-left: 0;
+    text-align: center;
+    padding: 32px 20px;
+    padding-bottom: max(32px, env(safe-area-inset-bottom));
+    border-top: 0.5px solid var(--ios-separator);
+}
+
+.site-footer p {
+    font-size: 13px;
+    color: var(--ios-tertiary);
+    font-weight: 400;
+}
+
+.footer-note {
+    margin-top: 4px;
+    font-size: 12px !important;
+}
+
+/* ── Back to top ── */
+.back-to-top {
+    position: fixed;
+    bottom: max(24px, env(safe-area-inset-bottom));
+    right: max(20px, env(safe-area-inset-right));
+    z-index: 350;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--primary);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(0.9);
+    transition: opacity 0.25s, visibility 0.25s, transform 0.25s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.back-to-top.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(1);
+}
+
+.back-to-top:active {
+    transform: scale(0.92);
+}
+
+/* ── Wider on large screens ── */
+@media (min-width: 900px) {
+    :root {
+        --read-max: 1200px;
+    }
+
+    .main-content {
+        padding-left: max(40px, env(safe-area-inset-left));
+        padding-right: max(40px, env(safe-area-inset-right));
+    }
+
+    .chapter-content {
+        font-size: 20px;
+        line-height: 1.58;
+    }
+}
+
+@media (min-width: 1400px) {
+    :root {
+        --read-max: 1320px;
+    }
+}
+
+@media (max-width: 600px) {
+    .menu-btn span { display: none; }
+
+    .menu-btn {
+        min-width: 44px;
+        padding: 0;
+    }
+
+    .btn-label { display: none; }
+
+    .btn {
+        min-width: 44px;
+        padding: 0 12px;
+    }
+
+    .main-content {
+        padding-left: max(16px, env(safe-area-inset-left));
+        padding-right: max(16px, env(safe-area-inset-right));
+    }
+
+    .chapter-content {
+        font-size: 17px;
+        line-height: 1.47;
+    }
+
+    .chapter-content h1 + p,
+    .chapter-content p {
+        font-size: 17px;
+    }
+
+    .chapter + .chapter {
+        margin-top: 44px;
+        padding-top: 44px;
+    }
+}
+
+@media print {
+    .site-header,
+    .sidebar,
+    .sidebar-overlay,
+    .read-progress,
+    .back-to-top {
+        display: none !important;
+    }
+
+    .chapter + .chapter {
+        break-before: page;
+    }
+}

@@ -36,6 +36,7 @@ from apps.fabrics.services.listings import assign_product_to_shop, get_shop_fabr
 from apps.tailors.permissions import IsShopOwner
 from apps.tailors.services.v2.business import get_owner_business
 from apps.tailors.services.v2.shops import get_shop_for_owner
+from apps.tailors.shop_access import get_token_shop_id
 from apps.tailors.views.base import BaseTailorAPIView
 from zthob.utils import api_response
 
@@ -150,6 +151,7 @@ class V2FabricProductListCreateView(BaseTailorAPIView):
                         owner_id=request.user.id,
                         assign_data=assign_data,
                         created_by=request.user,
+                        token_shop_id=get_token_shop_id(request),
                     )
         except serializers.ValidationError as exc:
             return _validation_error_response(request, exc)

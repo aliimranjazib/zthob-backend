@@ -266,7 +266,59 @@ class V2FabricCatalogTests(TestCase):
         self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
 
         shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(shop_fabrics.data['data']), 1)
         self.assertEqual(shop_fabrics.data['data'][0]['stock'], 12)
+
+    def test_create_product_with_stock_uses_jwt_shop(self):
+        shop_id, _owner_token, work_token = self._setup_owner_shop()
+        self._auth(work_token)
+
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'JWT Shop Cotton',
+                'price': '215.00',
+                'stock': 18,
+            },
+            format='json',
+        )
+        self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+
+        shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(shop_fabrics.data['data']), 1)
+        self.assertEqual(shop_fabrics.data['data'][0]['stock'], 18)
+
+    def test_create_product_with_stock_multiple_shops_without_shop_or_jwt_returns_400(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        second_shop_resp = self.client.post(
+            self._url('tailors_v2:v2-shops'),
+            {
+                'name': 'Second Fabric Shop',
+                'address': 'Jeddah',
+                'service_area_id': self.service_area.id,
+            },
+            format='json',
+        )
+        self.assertEqual(second_shop_resp.status_code, status.HTTP_201_CREATED, second_shop_resp.data)
+
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Ambiguous Stock Cotton',
+                'price': '225.00',
+                'stock': 5,
+            },
+            format='json',
+        )
+        self.assertEqual(product_resp.status_code, status.HTTP_400_BAD_REQUEST, product_resp.data)
+        self.assertIn('shop_id', product_resp.data['errors'])
+
+        shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        self.assertEqual(shop_fabrics.data['data'], [])
 
     def test_patch_product_appends_images(self):
         shop_id, owner_token, _work_token = self._setup_owner_shop()

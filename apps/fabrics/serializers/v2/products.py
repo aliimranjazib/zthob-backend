@@ -179,7 +179,7 @@ class V2FabricProductCreateSerializer(V2FabricProductWriteSerializer):
         initial = getattr(self, 'initial_data', {}) or {}
         shop_id = data.get('shop_id')
         stock = data.get('stock')
-        assign_requested = 'shop_id' in initial
+        assign_requested = 'shop_id' in initial or 'stock' in initial
 
         if not assign_requested:
             for field in ('shop_id', 'stock', 'price_override', 'is_visible'):
