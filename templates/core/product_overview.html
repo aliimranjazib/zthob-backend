@@ -1,0 +1,118 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="{{ meta_description }}">
+    <meta name="theme-color" content="#8B1538">
+    <title>{{ page_title }}</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet" href="{% static 'core/product_overview.css' %}?v=5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+</head>
+<body>
+    <div class="read-progress" id="read-progress" aria-hidden="true"></div>
+    <header class="site-header">
+        <div class="header-left">
+            <button type="button" class="menu-btn" id="mobile-menu-btn" aria-label="Open table of contents" aria-expanded="false" aria-controls="sidebar">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+                <span>Contents</span>
+            </button>
+            <a href="{% url 'product-overview' %}" class="brand">
+                <span class="brand-text">Mgask Overview</span>
+            </a>
+        </div>
+        <div class="header-center">
+            <span class="header-badge">Product Overview</span>
+            <span class="header-version">v{{ document.version }}</span>
+        </div>
+        <div class="header-actions">
+            <a href="{% url 'product-overview-pdf' %}" class="btn btn-primary" target="_blank" rel="noopener">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span class="btn-label">Download PDF</span>
+            </a>
+        </div>
+    </header>
+
+    <div class="sidebar-overlay" id="sidebar-overlay" hidden></div>
+
+    <aside class="sidebar" id="sidebar" aria-label="Document chapters">
+        <div class="sidebar-header">
+            <div>
+                <div class="sidebar-title">Contents</div>
+                <div class="sidebar-subtitle">{{ document.chapters|length }} chapters</div>
+            </div>
+            <button type="button" class="sidebar-close" id="sidebar-close-btn" aria-label="Close menu">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <nav class="sidebar-nav" aria-label="Table of contents">
+            <ul class="toc-list">
+                {% for item in document.toc %}
+                <li class="toc-chapter">
+                    <a href="#{{ item.anchor }}">
+                        <span class="toc-num">{{ item.number }}</span>
+                        <span class="toc-label">{{ item.title }}</span>
+                    </a>
+                    {% if item.headings %}
+                    <ul class="toc-sub">
+                        {% for heading in item.headings %}
+                        {% if heading.level == 2 %}
+                        <li>
+                            <a href="#{{ heading.anchor }}">{{ heading.title }}</a>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </nav>
+    </aside>
+
+    <div class="page-shell">
+        <main class="main-content" id="main-content">
+            <section class="doc-hero">
+                <h1>{{ document.title }}</h1>
+                <p class="subtitle">{{ document.description }}</p>
+                <div class="doc-meta">
+                    <span>Version {{ document.version }}</span>
+                    <span>Updated {{ document.last_updated|date:"F j, Y" }}</span>
+                    <span>{{ document.chapters|length }} chapters</span>
+                </div>
+            </section>
+
+            {% for chapter in document.chapters %}
+            <article class="chapter" id="{{ chapter.anchor }}">
+                <div class="chapter-content">
+                    {{ chapter.html_content|safe }}
+                </div>
+            </article>
+            {% endfor %}
+        </main>
+    </div>
+
+    <footer class="site-footer">
+        <p>&copy; {{ document.last_updated|date:"Y" }} Mgask. All rights reserved.</p>
+        <p class="footer-note">Product Overview v{{ document.version }}</p>
+    </footer>
+
+    <button type="button" class="back-to-top" id="back-to-top" aria-label="Back to top" hidden>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="18 15 12 9 6 15"/>
+        </svg>
+    </button>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js" defer></script>
+    <script src="{% static 'core/product_overview.js' %}?v=5" defer></script>
+</body>
+</html>
