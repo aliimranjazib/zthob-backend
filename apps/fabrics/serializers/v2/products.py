@@ -154,45 +154,7 @@ class V2FabricProductWriteSerializer(serializers.ModelSerializer):
 
 
 class V2FabricProductCreateSerializer(V2FabricProductWriteSerializer):
-    """Create-only fields for optional shop assignment with initial stock."""
-
-    shop_id = serializers.IntegerField(required=False, allow_null=True)
-    stock = serializers.IntegerField(min_value=0, required=False, allow_null=True)
-    price_override = serializers.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        required=False,
-        allow_null=True,
-    )
-    is_visible = serializers.BooleanField(required=False)
-
-    class Meta(V2FabricProductWriteSerializer.Meta):
-        fields = V2FabricProductWriteSerializer.Meta.fields + [
-            'shop_id',
-            'stock',
-            'price_override',
-            'is_visible',
-        ]
-
-    def validate(self, data):
-        data = super().validate(data)
-        initial = getattr(self, 'initial_data', {}) or {}
-        shop_id = data.get('shop_id')
-        stock = data.get('stock')
-        assign_requested = 'shop_id' in initial or 'stock' in initial
-
-        if not assign_requested:
-            for field in ('shop_id', 'stock', 'price_override', 'is_visible'):
-                data.pop(field, None)
-            return data
-
-        if stock is None:
-            data['stock'] = 0
-
-        if 'is_visible' not in data:
-            data['is_visible'] = True
-
-        return data
+    """Create business catalog product only. Use /assign/ for shop listing."""
 
 
 class V2FabricAssignSerializer(serializers.Serializer):

@@ -226,7 +226,7 @@ class V2FabricCatalogTests(TestCase):
         self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
         self.assertEqual(len(product_resp.data['data']['gallery']), 1)
 
-    def test_create_product_with_stock_and_shop_id_in_single_request(self):
+    def test_create_product_ignores_shop_fields_until_assign(self):
         shop_id, owner_token, _work_token = self._setup_owner_shop()
         self._auth(owner_token)
 
@@ -243,34 +243,46 @@ class V2FabricCatalogTests(TestCase):
             format='json',
         )
         self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+        self.assertEqual(product_resp.data['data']['assigned_shop_count'], 0)
 
         shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
         self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK)
+        self.assertEqual(shop_fabrics.data['data'], [])
+
+        product_id = product_resp.data['data']['id']
+        assign_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-product-assign', product_id=product_id),
+            {'shop_id': shop_id, 'stock': 25, 'is_visible': True},
+            format='json',
+        )
+        self.assertEqual(assign_resp.status_code, status.HTTP_200_OK, assign_resp.data)
+
+        shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
         self.assertEqual(len(shop_fabrics.data['data']), 1)
         self.assertEqual(shop_fabrics.data['data'][0]['stock'], 25)
         self.assertEqual(shop_fabrics.data['data'][0]['product']['name'], 'Stocked Cotton')
 
-    def test_create_product_with_stock_auto_assigns_single_shop(self):
+    def test_create_product_with_stock_does_not_auto_assign_single_shop(self):
         shop_id, owner_token, _work_token = self._setup_owner_shop()
         self._auth(owner_token)
 
         product_resp = self.client.post(
             self._url('fabrics_v2:v2-fabric-products'),
             {
-                'name': 'Auto Assigned Cotton',
+                'name': 'Catalog Only Cotton',
                 'price': '210.00',
                 'stock': 12,
             },
             format='json',
         )
         self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+        self.assertEqual(product_resp.data['data']['assigned_shop_count'], 0)
 
         shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
         self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(shop_fabrics.data['data']), 1)
-        self.assertEqual(shop_fabrics.data['data'][0]['stock'], 12)
+        self.assertEqual(shop_fabrics.data['data'], [])
 
-    def test_create_product_with_stock_uses_jwt_shop(self):
+    def test_create_product_with_stock_does_not_use_jwt_shop(self):
         shop_id, _owner_token, work_token = self._setup_owner_shop()
         self._auth(work_token)
 
@@ -284,13 +296,13 @@ class V2FabricCatalogTests(TestCase):
             format='json',
         )
         self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+        self.assertEqual(product_resp.data['data']['assigned_shop_count'], 0)
 
         shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
         self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(shop_fabrics.data['data']), 1)
-        self.assertEqual(shop_fabrics.data['data'][0]['stock'], 18)
+        self.assertEqual(shop_fabrics.data['data'], [])
 
-    def test_create_product_with_stock_multiple_shops_without_shop_or_jwt_returns_400(self):
+    def test_create_product_with_stock_multiple_shops_creates_catalog_only(self):
         shop_id, owner_token, _work_token = self._setup_owner_shop()
         self._auth(owner_token)
 
@@ -314,8 +326,8 @@ class V2FabricCatalogTests(TestCase):
             },
             format='json',
         )
-        self.assertEqual(product_resp.status_code, status.HTTP_400_BAD_REQUEST, product_resp.data)
-        self.assertIn('shop_id', product_resp.data['errors'])
+        self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+        self.assertEqual(product_resp.data['data']['assigned_shop_count'], 0)
 
         shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
         self.assertEqual(shop_fabrics.data['data'], [])
@@ -329,13 +341,18 @@ class V2FabricCatalogTests(TestCase):
             {
                 'name': 'Patch Gallery Cotton',
                 'price': '130.00',
-                'shop_id': shop_id,
-                'stock': 4,
             },
             format='json',
         )
         self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
         product_id = product_resp.data['data']['id']
+
+        assign_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-product-assign', product_id=product_id),
+            {'shop_id': shop_id, 'stock': 4, 'is_visible': True},
+            format='json',
+        )
+        self.assertEqual(assign_resp.status_code, status.HTTP_200_OK, assign_resp.data)
 
         patch_resp = self.client.patch(
             self._url('fabrics_v2:v2-fabric-product-detail', product_id=product_id),
@@ -360,12 +377,17 @@ class V2FabricCatalogTests(TestCase):
             {
                 'name': 'Legacy Sync Cotton',
                 'price': '140.00',
-                'shop_id': shop_id,
-                'stock': 2,
             },
             format='json',
         )
         product_id = product_resp.data['data']['id']
+
+        assign_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-product-assign', product_id=product_id),
+            {'shop_id': shop_id, 'stock': 2, 'is_visible': True},
+            format='json',
+        )
+        self.assertEqual(assign_resp.status_code, status.HTTP_200_OK, assign_resp.data)
 
         self.client.patch(
             self._url('fabrics_v2:v2-fabric-product-detail', product_id=product_id),

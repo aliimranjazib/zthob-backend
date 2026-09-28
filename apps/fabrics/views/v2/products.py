@@ -15,11 +15,9 @@ from apps.fabrics.serializers.v2.products import (
     V2ShopFabricSerializer,
 )
 from apps.fabrics.services.catalog import (
-    assign_created_product_to_shop,
     create_fabric_product,
     fabric_products_queryset,
     get_product_for_business,
-    pop_product_assign_fields,
     sync_product_assignments_to_legacy,
     update_fabric_product,
 )
@@ -36,7 +34,6 @@ from apps.fabrics.services.listings import assign_product_to_shop, get_shop_fabr
 from apps.tailors.permissions import IsShopOwner
 from apps.tailors.services.v2.business import get_owner_business
 from apps.tailors.services.v2.shops import get_shop_for_owner
-from apps.tailors.shop_access import get_token_shop_id
 from apps.tailors.views.base import BaseTailorAPIView
 from zthob.utils import api_response
 
@@ -61,10 +58,8 @@ def _normalize_request_data(request):
             value = request.POST.get(key)
             if value in (None, ''):
                 continue
-            if key in ('is_active', 'is_on_sale', 'is_featured', 'is_visible'):
+            if key in ('is_active', 'is_on_sale', 'is_featured'):
                 normalized[key] = str(value).lower() == 'true'
-            elif key in ('shop_id', 'stock'):
-                normalized[key] = int(value)
             else:
                 normalized[key] = value
         return normalized
@@ -132,29 +127,16 @@ class V2FabricProductListCreateView(BaseTailorAPIView):
                 request=request,
             )
 
-        product_data, assign_data = pop_product_assign_fields(serializer.validated_data)
-
         from django.db import transaction
 
-        try:
-            with transaction.atomic():
-                product = create_fabric_product(
-                    business=business,
-                    validated_data=product_data,
-                    created_by=request.user,
-                )
-                if images:
-                    save_product_gallery(product=product, images=images)
-                if assign_data is not None:
-                    assign_created_product_to_shop(
-                        product=product,
-                        owner_id=request.user.id,
-                        assign_data=assign_data,
-                        created_by=request.user,
-                        token_shop_id=get_token_shop_id(request),
-                    )
-        except serializers.ValidationError as exc:
-            return _validation_error_response(request, exc)
+        with transaction.atomic():
+            product = create_fabric_product(
+                business=business,
+                validated_data=serializer.validated_data,
+                created_by=request.user,
+            )
+            if images:
+                save_product_gallery(product=product, images=images)
 
         product = get_product_for_business(business_id=business.id, product_id=product.id)
         response = V2FabricProductSerializer(product, context={'request': request})
