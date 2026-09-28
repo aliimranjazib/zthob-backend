@@ -4,6 +4,12 @@ from apps.fabrics.models import FabricProduct, FabricStockMovement, ShopFabric
 from apps.tailors.models import FabricCategory, FabricCountry, FabricTag, FabricType
 
 
+def map_stock_to_default_stock(data: dict) -> dict:
+    if 'stock' in data:
+        data['default_stock'] = data.pop('stock')
+    return data
+
+
 class V2FabricProductImageSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     image_url = serializers.SerializerMethodField()
@@ -48,6 +54,7 @@ class V2FabricProductSerializer(serializers.ModelSerializer):
     country_name = serializers.CharField(source='country.name', read_only=True)
     gallery = V2FabricProductImageSerializer(many=True, read_only=True)
     assigned_shop_count = serializers.SerializerMethodField()
+    stock = serializers.IntegerField(source='default_stock', read_only=True, allow_null=True)
 
     class Meta:
         model = FabricProduct
@@ -57,6 +64,7 @@ class V2FabricProductSerializer(serializers.ModelSerializer):
             'name',
             'description',
             'sku',
+            'stock',
             'fabric_type_id',
             'fabric_type_name',
             'category_id',
@@ -113,12 +121,14 @@ class V2FabricProductWriteSerializer(serializers.ModelSerializer):
         queryset=FabricTag.objects.filter(is_active=True),
         required=False,
     )
+    stock = serializers.IntegerField(min_value=0, required=False, allow_null=True)
 
     class Meta:
         model = FabricProduct
         fields = [
             'name',
             'description',
+            'stock',
             'fabric_type_id',
             'category_id',
             'country_id',
@@ -150,7 +160,7 @@ class V2FabricProductWriteSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'sale_start': 'Start and end dates are required for flash sales.'})
             if sale_end <= sale_start:
                 raise serializers.ValidationError({'sale_end': 'Sale end date must be after the start date.'})
-        return data
+        return map_stock_to_default_stock(data)
 
 
 class V2FabricProductCreateSerializer(V2FabricProductWriteSerializer):
@@ -159,7 +169,7 @@ class V2FabricProductCreateSerializer(V2FabricProductWriteSerializer):
 
 class V2FabricAssignSerializer(serializers.Serializer):
     shop_id = serializers.IntegerField()
-    stock = serializers.IntegerField(min_value=0, default=0)
+    stock = serializers.IntegerField(min_value=0, required=False, allow_null=True)
     price_override = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,

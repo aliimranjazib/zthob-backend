@@ -21,6 +21,7 @@ class FabricProductAdmin(admin.ModelAdmin):
         'sku',
         'business',
         'price',
+        'default_stock',
         'is_active',
         'approval_status',
         'is_on_sale',

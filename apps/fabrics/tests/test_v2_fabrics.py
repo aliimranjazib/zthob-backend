@@ -244,6 +244,7 @@ class V2FabricCatalogTests(TestCase):
         )
         self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
         self.assertEqual(product_resp.data['data']['assigned_shop_count'], 0)
+        self.assertEqual(product_resp.data['data']['stock'], 25)
 
         shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
         self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK)
@@ -277,10 +278,86 @@ class V2FabricCatalogTests(TestCase):
         )
         self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
         self.assertEqual(product_resp.data['data']['assigned_shop_count'], 0)
+        self.assertEqual(product_resp.data['data']['stock'], 12)
 
         shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
         self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK)
         self.assertEqual(shop_fabrics.data['data'], [])
+
+    def test_create_fabric_without_stock_returns_null_stock(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'No Stock Cotton',
+                'price': '190.00',
+                'category_id': self.fabric_category.id,
+            },
+            format='json',
+        )
+        self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+        self.assertIsNone(product_resp.data['data']['stock'])
+        self.assertEqual(product_resp.data['data']['assigned_shop_count'], 0)
+
+        shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        self.assertEqual(shop_fabrics.data['data'], [])
+
+    def test_assign_without_stock_uses_catalog_default_stock(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Default Stock Cotton',
+                'price': '205.00',
+                'stock': 50,
+            },
+            format='json',
+        )
+        self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+        product_id = product_resp.data['data']['id']
+
+        assign_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-product-assign', product_id=product_id),
+            {'shop_id': shop_id, 'is_visible': True},
+            format='json',
+        )
+        self.assertEqual(assign_resp.status_code, status.HTTP_200_OK, assign_resp.data)
+        self.assertEqual(assign_resp.data['data']['stock'], 50)
+
+        shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        self.assertEqual(len(shop_fabrics.data['data']), 1)
+        self.assertEqual(shop_fabrics.data['data'][0]['stock'], 50)
+
+    def test_assign_with_explicit_stock_overrides_catalog_default(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Override Stock Cotton',
+                'price': '220.00',
+                'stock': 50,
+            },
+            format='json',
+        )
+        self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+        product_id = product_resp.data['data']['id']
+
+        assign_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-product-assign', product_id=product_id),
+            {'shop_id': shop_id, 'stock': 8, 'is_visible': True},
+            format='json',
+        )
+        self.assertEqual(assign_resp.status_code, status.HTTP_200_OK, assign_resp.data)
+        self.assertEqual(assign_resp.data['data']['stock'], 8)
+
+        shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        self.assertEqual(shop_fabrics.data['data'][0]['stock'], 8)
 
     def test_create_product_with_stock_does_not_use_jwt_shop(self):
         shop_id, _owner_token, work_token = self._setup_owner_shop()

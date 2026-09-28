@@ -60,6 +60,8 @@ def _normalize_request_data(request):
                 continue
             if key in ('is_active', 'is_on_sale', 'is_featured'):
                 normalized[key] = str(value).lower() == 'true'
+            elif key == 'stock':
+                normalized[key] = int(value)
             else:
                 normalized[key] = value
         return normalized
@@ -276,10 +278,14 @@ class V2FabricProductAssignView(BaseTailorAPIView):
                 request=request,
             )
 
+        stock = serializer.validated_data.get('stock')
+        if stock is None:
+            stock = product.default_stock if product.default_stock is not None else 0
+
         shop_fabric = assign_product_to_shop(
             product=product,
             shop=shop,
-            stock=serializer.validated_data['stock'],
+            stock=stock,
             price_override=serializer.validated_data.get('price_override'),
             is_visible=serializer.validated_data.get('is_visible', True),
             created_by=request.user,

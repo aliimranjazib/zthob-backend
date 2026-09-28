@@ -344,13 +344,10 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    'DEFAULT_THROTTLE_CLASSES': (
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
-    ),
+    # Throttling is opt-in per view; only auth endpoints declare throttle_classes.
+    'DEFAULT_THROTTLE_CLASSES': [],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/day',
-        'user': '1000/day',
+        'auth_login': '20/minute',
         'otp': '5/minute',
     },
     'DEFAULT_VERSIONING_CLASS': 'rest_framework.versioning.URLPathVersioning',

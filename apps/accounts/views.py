@@ -18,8 +18,7 @@ from .serializers import (
     PhoneLoginSerializer,
     PhoneVerifySerializer,
     )
-from .throttles import OTPRateThrottle
-from rest_framework.throttling import AnonRateThrottle
+from .throttles import AuthLoginRateThrottle, OTPRateThrottle
 from apps.core.services import PhoneVerificationService
 from apps.core.otp_session import (
     OtpRateLimitError,
@@ -67,7 +66,7 @@ class UserRegistrationView(APIView):
 class UserLoginView(APIView):
     serializer_class = UserLoginSerializer
     permission_classes=[AllowAny]
-    throttle_classes = [AnonRateThrottle]
+    throttle_classes = [AuthLoginRateThrottle]
 
     def post(self,request):
         serializer=UserLoginSerializer(data=request.data)
