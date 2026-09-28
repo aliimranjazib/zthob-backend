@@ -79,6 +79,7 @@ class FabricProduct(BaseModel):
     sale_end = models.DateTimeField(null=True, blank=True)
     is_featured = models.BooleanField(default=False)
     default_stock = models.PositiveIntegerField(null=True, blank=True)
+    show_in_owner_catalog = models.BooleanField(default=True, db_index=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

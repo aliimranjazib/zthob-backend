@@ -22,8 +22,16 @@ def fabric_products_queryset(*, business_id: int):
     )
 
 
+def owner_catalog_products_queryset(*, business_id: int):
+    return fabric_products_queryset(business_id=business_id).filter(show_in_owner_catalog=True)
+
+
 def get_product_for_business(*, business_id: int, product_id: int) -> FabricProduct | None:
     return fabric_products_queryset(business_id=business_id).filter(id=product_id).first()
+
+
+def get_owner_catalog_product_for_business(*, business_id: int, product_id: int) -> FabricProduct | None:
+    return owner_catalog_products_queryset(business_id=business_id).filter(id=product_id).first()
 
 
 @transaction.atomic

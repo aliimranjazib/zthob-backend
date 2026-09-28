@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from unittest.mock import patch
 from rest_framework.test import APITestCase
 from rest_framework import status
-from .models import Fabric, TailorProfile, ServiceArea, TailorEmployee
+from .models import Business, Fabric, TailorProfile, ServiceArea, TailorEmployee
 from .serializers.catalog import FabricCreateSerializer
 from rest_framework.test import APIRequestFactory
 from apps.customers.models import Address
@@ -350,6 +350,13 @@ class TailorEmployeeFabricCatalogTest(APITestCase):
             user=self.owner,
             defaults={'shop_name': 'Catalog Owner Shop'},
         )
+        self.business = Business.objects.create(
+            owner=self.owner,
+            name='Catalog Owner Business',
+            status=Business.STATUS_ACTIVE,
+        )
+        self.owner_profile.business = self.business
+        self.owner_profile.save(update_fields=['business'])
         self.employee_user = User.objects.create_user(
             username='catalog_employee',
             password='testpass123',
@@ -397,6 +404,9 @@ class TailorEmployeeFabricCatalogTest(APITestCase):
         fabric = serializer.save()
         self.assertEqual(fabric.tailor_id, self.owner_profile.id)
         self.assertEqual(fabric.price, Decimal('100.00'))
+
+        self.assertTrue(hasattr(fabric, 'v2_shop_fabric'))
+        self.assertFalse(fabric.v2_shop_fabric.product.show_in_owner_catalog)
 
         list_response = self.client.get('/api/tailors/fabrics/')
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)

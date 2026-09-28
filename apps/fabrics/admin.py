@@ -22,13 +22,21 @@ class FabricProductAdmin(admin.ModelAdmin):
         'business',
         'price',
         'default_stock',
+        'show_in_owner_catalog',
         'is_active',
         'approval_status',
         'is_on_sale',
         'is_featured',
         'created_at',
     )
-    list_filter = ('is_active', 'approval_status', 'is_on_sale', 'is_featured', 'seasons')
+    list_filter = (
+        'is_active',
+        'show_in_owner_catalog',
+        'approval_status',
+        'is_on_sale',
+        'is_featured',
+        'seasons',
+    )
     search_fields = ('name', 'sku', 'business__name')
     readonly_fields = ('sku', 'created_at', 'updated_at')
     inlines = [FabricProductImageInline]

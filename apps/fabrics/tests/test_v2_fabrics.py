@@ -175,6 +175,11 @@ class V2FabricCatalogTests(TestCase):
         legacy_fabric_id = assign_resp.data['data']['legacy_fabric_id']
         self.assertIsNotNone(legacy_fabric_id)
 
+        catalog_resp = self.client.get(self._url('fabrics_v2:v2-fabric-products'))
+        self.assertEqual(catalog_resp.status_code, status.HTTP_200_OK, catalog_resp.data)
+        catalog_names = [item['name'] for item in catalog_resp.data['data']]
+        self.assertIn('Premium Cotton', catalog_names)
+
         shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
         self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK)
         self.assertEqual(len(shop_fabrics.data['data']), 1)
@@ -599,3 +604,59 @@ class V2FabricCatalogTests(TestCase):
         self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK)
         self.assertLessEqual(len(product_ctx), 8)
         self.assertLessEqual(len(shop_ctx), 12)
+
+    def test_shop_scoped_create_hidden_from_owner_catalog(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        shop_resp = self.client.post(
+            self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id),
+            {
+                'name': 'Shop Only Cotton',
+                'price': '150.00',
+                'stock': 8,
+                'category_id': self.fabric_category.id,
+            },
+            format='json',
+        )
+        self.assertEqual(shop_resp.status_code, status.HTTP_201_CREATED, shop_resp.data)
+        self.assertFalse(shop_resp.data['data']['product']['show_in_owner_catalog'])
+
+        catalog_resp = self.client.get(self._url('fabrics_v2:v2-fabric-products'))
+        self.assertEqual(catalog_resp.status_code, status.HTTP_200_OK, catalog_resp.data)
+        catalog_names = [item['name'] for item in catalog_resp.data['data']]
+        self.assertNotIn('Shop Only Cotton', catalog_names)
+
+        shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK, shop_fabrics.data)
+        shop_names = [item['product']['name'] for item in shop_fabrics.data['data']]
+        self.assertIn('Shop Only Cotton', shop_names)
+
+    def test_v1_linked_shop_fabric_hidden_from_owner_catalog(self):
+        from apps.fabrics.services.legacy_bridge import link_legacy_fabric_to_business_catalog
+        from apps.tailors.models import Fabric, TailorProfile
+
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        shop = TailorProfile.objects.get(id=shop_id)
+        fabric = Fabric.objects.create(
+            tailor=shop,
+            name='V1 Shop Cotton',
+            price=Decimal('120.00'),
+            stock=3,
+            seasons='all_season',
+            approval_status='approved',
+        )
+        shop_fabric = link_legacy_fabric_to_business_catalog(fabric=fabric)
+        self.assertIsNotNone(shop_fabric)
+        self.assertFalse(shop_fabric.product.show_in_owner_catalog)
+
+        self._auth(owner_token)
+        catalog_resp = self.client.get(self._url('fabrics_v2:v2-fabric-products'))
+        self.assertEqual(catalog_resp.status_code, status.HTTP_200_OK, catalog_resp.data)
+        catalog_names = [item['name'] for item in catalog_resp.data['data']]
+        self.assertNotIn('V1 Shop Cotton', catalog_names)
+
+        shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK, shop_fabrics.data)
+        shop_names = [item['product']['name'] for item in shop_fabrics.data['data']]
+        self.assertIn('V1 Shop Cotton', shop_names)

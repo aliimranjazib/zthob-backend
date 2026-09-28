@@ -7,7 +7,7 @@ from rest_framework import serializers
 
 from apps.fabrics.models import FabricProduct, FabricProductImage, ShopFabric
 from apps.tailors.models import Fabric, FabricImage, FabricTag
-from apps.tailors.shop_access import get_tailor_profile
+from apps.tailors.shop_access import get_tailor_profile, get_token_shop_id
 
 
 def _legacy_is_active(*, shop_fabric: ShopFabric) -> bool:
@@ -75,7 +75,8 @@ def sync_legacy_fabric_from_shop_fabric(*, shop_fabric: ShopFabric) -> Fabric:
 @transaction.atomic
 def create_from_v1_multipart(*, request, validated_data) -> Fabric:
     """Create a legacy fabric from v1 multipart payload and optionally link V2 catalog."""
-    tailor_profile = get_tailor_profile(request.user)
+    shop_id = get_token_shop_id(request)
+    tailor_profile = get_tailor_profile(request.user, shop_id=shop_id)
     if not tailor_profile:
         raise serializers.ValidationError('Tailor shop profile not found.')
 
@@ -193,6 +194,7 @@ def link_legacy_fabric_to_business_catalog(*, fabric: Fabric) -> ShopFabric | No
         category=fabric.category,
         country=fabric.country,
         created_by=fabric.created_by,
+        show_in_owner_catalog=False,
     )
     if fabric.tags.exists():
         product.tags.set(fabric.tags.all())

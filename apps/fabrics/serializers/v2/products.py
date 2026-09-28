@@ -82,12 +82,21 @@ class V2FabricProductSerializer(serializers.ModelSerializer):
             'sale_start',
             'sale_end',
             'is_featured',
+            'show_in_owner_catalog',
             'assigned_shop_count',
             'gallery',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'business_id', 'sku', 'approval_status', 'created_at', 'updated_at']
+        read_only_fields = [
+            'id',
+            'business_id',
+            'sku',
+            'approval_status',
+            'show_in_owner_catalog',
+            'created_at',
+            'updated_at',
+        ]
 
     def get_assigned_shop_count(self, obj):
         assignments = getattr(obj, '_prefetched_objects_cache', {}).get('shop_assignments')

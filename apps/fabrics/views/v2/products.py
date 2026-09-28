@@ -16,8 +16,9 @@ from apps.fabrics.serializers.v2.products import (
 )
 from apps.fabrics.services.catalog import (
     create_fabric_product,
-    fabric_products_queryset,
+    get_owner_catalog_product_for_business,
     get_product_for_business,
+    owner_catalog_products_queryset,
     sync_product_assignments_to_legacy,
     update_fabric_product,
 )
@@ -82,7 +83,7 @@ class V2FabricProductListCreateView(BaseTailorAPIView):
                 status_code=status.HTTP_404_NOT_FOUND,
                 request=request,
             )
-        products = fabric_products_queryset(business_id=business.id)
+        products = owner_catalog_products_queryset(business_id=business.id)
         serializer = V2FabricProductSerializer(
             products,
             many=True,
@@ -176,9 +177,25 @@ class V2FabricProductDetailView(BaseTailorAPIView):
 
     @extend_schema(responses={200: V2FabricProductSerializer}, tags=['V2 Fabrics'])
     def get(self, request, product_id):
-        product, error = self._get_product(request, product_id)
-        if error:
-            return error
+        business = get_owner_business(request.user)
+        if business is None:
+            return api_response(
+                success=False,
+                message='Business not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request,
+            )
+        product = get_owner_catalog_product_for_business(
+            business_id=business.id,
+            product_id=product_id,
+        )
+        if product is None:
+            return api_response(
+                success=False,
+                message='Fabric product not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request,
+            )
         serializer = V2FabricProductSerializer(product, context={'request': request})
         return api_response(
             success=True,
