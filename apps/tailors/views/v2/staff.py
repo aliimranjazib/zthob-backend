@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema
 
-from apps.tailors.models import TailorProfile, TailorStaffMember
+from apps.tailors.models import ShopStaffAssignment, TailorProfile, TailorStaffMember
 from apps.tailors.permissions import IsShopOwner
 from apps.tailors.serializers.v2.staff import (
     OwnerStaffAssignmentCreateSerializer,
@@ -19,7 +19,15 @@ from apps.tailors.services.owner_staff import (
     create_or_update_shop_assignment,
     find_or_create_staff_user,
 )
-from apps.tailors.services.v2.staff import get_staff_member, staff_roster_queryset
+from apps.tailors.services.staff_sync import (
+    deactivate_legacy_employee_for_assignment,
+    sync_legacy_employee_from_assignment,
+)
+from apps.tailors.services.v2.staff import (
+    get_shop_assignment,
+    get_staff_member,
+    staff_roster_queryset,
+)
 from apps.tailors.views.base import BaseTailorAPIView
 from zthob.utils import api_response
 
@@ -165,9 +173,60 @@ class V2StaffDetailView(BaseTailorAPIView):
             request=request,
         )
 
+    @extend_schema(tags=['V2 Staff'])
+    def delete(self, request, staff_id):
+        staff_member = get_staff_member(owner_id=request.user.id, staff_id=staff_id)
+        if staff_member is None:
+            return api_response(
+                success=False,
+                message='Staff member not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request,
+            )
+
+        with transaction.atomic():
+            for assignment in staff_member.shop_assignments.all():
+                deactivate_legacy_employee_for_assignment(assignment)
+            staff_member.delete()
+
+        return api_response(
+            success=True,
+            message='Staff member removed',
+            status_code=status.HTTP_200_OK,
+            request=request,
+        )
+
 
 class V2StaffAssignmentListCreateView(BaseTailorAPIView):
     permission_classes = [IsAuthenticated, IsShopOwner]
+
+    @extend_schema(
+        responses={200: OwnerStaffAssignmentSerializer(many=True)},
+        tags=['V2 Staff'],
+    )
+    def get(self, request, staff_id):
+        staff_member = get_staff_member(owner_id=request.user.id, staff_id=staff_id)
+        if staff_member is None:
+            return api_response(
+                success=False,
+                message='Staff member not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request,
+            )
+
+        assignments = (
+            ShopStaffAssignment.objects.filter(staff_member=staff_member)
+            .select_related('shop')
+            .order_by('-assigned_at')
+        )
+        serializer = OwnerStaffAssignmentSerializer(assignments, many=True)
+        return api_response(
+            success=True,
+            message='Staff assignments fetched',
+            data=serializer.data,
+            status_code=status.HTTP_200_OK,
+            request=request,
+        )
 
     @extend_schema(tags=['V2 Staff'])
     def post(self, request, staff_id):
@@ -198,12 +257,95 @@ class V2StaffAssignmentListCreateView(BaseTailorAPIView):
             shop=shop,
             roles=data.get('roles') or [],
             permissions=data.get('permissions') or [],
-            is_active=True,
+            is_active=data.get('is_active', True),
         )
         return api_response(
             success=True,
             message='Staff assigned to shop',
             data=OwnerStaffAssignmentSerializer(assignment).data,
             status_code=status.HTTP_201_CREATED,
+            request=request,
+        )
+
+
+class V2StaffAssignmentDetailView(BaseTailorAPIView):
+    permission_classes = [IsAuthenticated, IsShopOwner]
+
+    @extend_schema(
+        request=OwnerStaffAssignmentUpdateSerializer,
+        responses={200: OwnerStaffAssignmentSerializer},
+        tags=['V2 Staff'],
+    )
+    def patch(self, request, staff_id, assignment_id):
+        assignment = get_shop_assignment(
+            owner_id=request.user.id,
+            staff_id=staff_id,
+            assignment_id=assignment_id,
+        )
+        if assignment is None:
+            return api_response(
+                success=False,
+                message='Assignment not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request,
+            )
+
+        serializer = OwnerStaffAssignmentUpdateSerializer(data=request.data, partial=True)
+        if not serializer.is_valid():
+            return api_response(
+                success=False,
+                message='Validation failed',
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request,
+            )
+
+        data = serializer.validated_data
+        roles = data.get('roles', assignment.roles)
+        permissions = data.get('permissions')
+        if permissions is None:
+            permissions = [
+                key for key, enabled in assignment.permissions_dict.items() if enabled
+            ]
+
+        assignment.apply_roles_and_permissions(roles, permissions)
+        if 'is_active' in data:
+            assignment.is_active = data['is_active']
+        assignment.save()
+
+        if assignment.is_active and assignment.staff_member.is_active:
+            sync_legacy_employee_from_assignment(assignment)
+        else:
+            deactivate_legacy_employee_for_assignment(assignment)
+
+        return api_response(
+            success=True,
+            message='Staff assignment updated',
+            data=OwnerStaffAssignmentSerializer(assignment).data,
+            status_code=status.HTTP_200_OK,
+            request=request,
+        )
+
+    @extend_schema(tags=['V2 Staff'])
+    def delete(self, request, staff_id, assignment_id):
+        assignment = get_shop_assignment(
+            owner_id=request.user.id,
+            staff_id=staff_id,
+            assignment_id=assignment_id,
+        )
+        if assignment is None:
+            return api_response(
+                success=False,
+                message='Assignment not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request,
+            )
+
+        deactivate_legacy_employee_for_assignment(assignment)
+        assignment.delete()
+        return api_response(
+            success=True,
+            message='Staff assignment removed',
+            status_code=status.HTTP_200_OK,
             request=request,
         )

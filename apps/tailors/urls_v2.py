@@ -3,6 +3,7 @@ from django.urls import path
 from apps.tailors.views.v2.business import V2BusinessView
 from apps.tailors.views.v2.shops import V2ShopDetailView, V2ShopListCreateView, V2ShopPinView
 from apps.tailors.views.v2.staff import (
+    V2StaffAssignmentDetailView,
     V2StaffAssignmentListCreateView,
     V2StaffDetailView,
     V2StaffListCreateView,
@@ -21,5 +22,10 @@ urlpatterns = [
         'staff/<int:staff_id>/assignments/',
         V2StaffAssignmentListCreateView.as_view(),
         name='v2-staff-assignments',
+    ),
+    path(
+        'staff/<int:staff_id>/assignments/<int:assignment_id>/',
+        V2StaffAssignmentDetailView.as_view(),
+        name='v2-staff-assignment-detail',
     ),
 ]
