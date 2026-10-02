@@ -432,10 +432,10 @@
                         <div class="form-group">
                             <label for="otp_code" data-en="Verification Code" data-ar="رمز التحقق">رمز التحقق</label>
                             <input type="text" id="otp_code" name="otp_code" 
-                                   placeholder="أدخل الرمز المكون من 6 أرقام" 
-                                   data-placeholder-en="Enter 6-digit code"
-                                   data-placeholder-ar="أدخل الرمز المكون من 6 أرقام"
-                                   maxlength="6" pattern="[0-9]{6}" required>
+                                   placeholder="أدخل الرمز المكون من 4 أرقام" 
+                                   data-placeholder-en="Enter 4-digit code"
+                                   data-placeholder-ar="أدخل الرمز المكون من 4 أرقام"
+                                   maxlength="4" pattern="[0-9]{4}" inputmode="numeric" autocomplete="one-time-code" required>
                             <small data-en="Enter the code sent to {{ phone }}" data-ar="أدخل الرمز المرسل إلى {{ phone }}">أدخل الرمز المرسل إلى {{ phone }}</small>
                         </div>
                         

@@ -3155,7 +3155,7 @@ components:
       properties:
         otp_code:
           type: string
-          maxLength: 6
+          maxLength: 4
       required:
       - otp_code
     Order:
