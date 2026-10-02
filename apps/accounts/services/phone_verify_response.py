@@ -24,16 +24,17 @@ def resolve_phone_verify_app_entry(
     """
     Use explicit app_entry when provided; for returning users infer from platform identity.
     """
-    if app_entry:
-        return app_entry, 'request'
-    if is_new_user:
-        return None, None
-
     from apps.accounts.services.v2_auth import (
         infer_app_entry_for_user,
         resolve_membership_type,
         validate_app_entry_for_user,
     )
+
+    if app_entry:
+        validated = validate_app_entry_for_user(user, app_entry)
+        return validated, 'request'
+    if is_new_user:
+        return None, None
 
     if resolve_membership_type(user) == 'none':
         return None, None

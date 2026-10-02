@@ -223,6 +223,25 @@ class V2AuthEntryFlowTest(TestCase):
         tailor_context = verify.data['data'].get('tailor_context') or {}
         self.assertGreaterEqual(len(tailor_context.get('assigned_shops') or []), 1)
 
+    def test_preinvited_staff_verify_with_owner_app_entry_coerces_to_staff(self):
+        owner = self._create_owner_with_business(self.OWNER_PHONE)
+        shop = self._create_owner_shop(owner, self.OWNER_PHONE)
+        self._create_preinvited_staff(
+            owner=owner,
+            shop=shop,
+            staff_phone=self.STAFF_PHONE,
+        )
+
+        self._send_otp(self.STAFF_PHONE)
+        verify = self._verify(
+            self.STAFF_PHONE,
+            app_entry='owner',
+            name='Staff Member',
+        )
+        self.assertEqual(verify.status_code, status.HTTP_200_OK)
+        self.assertEqual(verify.data['data']['app_entry'], 'staff')
+        self.assertEqual(verify.data['data']['app_entry_source'], 'request')
+
     def test_v2_me_includes_tailor_context_for_staff(self):
         owner = self._create_owner_with_business(self.OWNER_PHONE)
         shop = self._create_owner_shop(owner, self.OWNER_PHONE)

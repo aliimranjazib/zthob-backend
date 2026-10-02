@@ -153,7 +153,7 @@ def validate_app_entry_for_user(user, app_entry: str | None) -> str | None:
     membership_type = resolve_membership_type(user)
     if app_entry == APP_ENTRY_OWNER:
         if membership_type == 'staff' and not _active_shops_queryset(user.id).exists():
-            raise PermissionDenied('This account is staff-only. Use app_entry=staff.')
+            return APP_ENTRY_STAFF
         return app_entry
     if app_entry == APP_ENTRY_STAFF:
         if membership_type == 'owner':
