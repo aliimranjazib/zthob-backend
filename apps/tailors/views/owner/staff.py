@@ -64,46 +64,56 @@ class OwnerStaffListCreateView(BaseTailorAPIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+
         data = serializer.validated_data
         owner = request.user
 
-        with transaction.atomic():
-            user, _created = find_or_create_staff_user(
-                phone=data['phone'],
-                name=data['name'],
-            )
-            if user.id == owner.id:
-                return api_response(
-                    success=False,
-                    message='Shop owner cannot be added as staff',
-                    status_code=status.HTTP_400_BAD_REQUEST,
+        try:
+            with transaction.atomic():
+                user, _created = find_or_create_staff_user(
+                    phone=data['phone'],
+                    name=data['name'],
                 )
+                if user.id == owner.id:
+                    return api_response(
+                        success=False,
+                        message='Shop owner cannot be added as staff',
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
 
-            staff_member, member_created = TailorStaffMember.objects.get_or_create(
-                owner=owner,
-                user=user,
-                defaults={'is_active': data.get('is_active', True)},
-            )
-            if not member_created and 'is_active' in data:
-                staff_member.is_active = data['is_active']
-                staff_member.save(update_fields=['is_active'])
-
-            if data.get('name'):
-                name_parts = data['name'].strip().split(' ', 1)
-                user.first_name = name_parts[0]
-                user.last_name = name_parts[1] if len(name_parts) > 1 else ''
-                user.save(update_fields=['first_name', 'last_name'])
-
-            shop_id = data.get('shop_id')
-            if shop_id:
-                shop = TailorProfile.objects.get(id=shop_id, owner=owner)
-                create_or_update_shop_assignment(
-                    staff_member=staff_member,
-                    shop=shop,
-                    roles=data.get('roles') or [],
-                    permissions=data.get('permissions') or [],
-                    is_active=True,
+                staff_member, member_created = TailorStaffMember.objects.get_or_create(
+                    owner=owner,
+                    user=user,
+                    defaults={'is_active': data.get('is_active', True)},
                 )
+                if not member_created and 'is_active' in data:
+                    staff_member.is_active = data['is_active']
+                    staff_member.save(update_fields=['is_active'])
+
+                if data.get('name'):
+                    name_parts = data['name'].strip().split(' ', 1)
+                    user.first_name = name_parts[0]
+                    user.last_name = name_parts[1] if len(name_parts) > 1 else ''
+                    user.save(update_fields=['first_name', 'last_name'])
+
+                shop_id = data.get('shop_id')
+                if shop_id:
+                    shop = TailorProfile.objects.get(id=shop_id, owner=owner)
+                    create_or_update_shop_assignment(
+                        staff_member=staff_member,
+                        shop=shop,
+                        roles=data.get('roles') or [],
+                        permissions=data.get('permissions') or [],
+                        is_active=True,
+                    )
+        except DRFValidationError as exc:
+            return api_response(
+                success=False,
+                message='Validation failed',
+                errors=exc.detail,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         staff_member = (
             TailorStaffMember.objects.filter(pk=staff_member.pk)
@@ -296,15 +306,25 @@ class OwnerStaffAssignmentListCreateView(BaseTailorAPIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+
         data = serializer.validated_data
         shop = TailorProfile.objects.get(id=data['shop_id'], owner=request.user)
-        assignment, _created = create_or_update_shop_assignment(
-            staff_member=staff_member,
-            shop=shop,
-            roles=data['roles'],
-            permissions=data.get('permissions') or [],
-            is_active=data.get('is_active', True),
-        )
+        try:
+            assignment, _created = create_or_update_shop_assignment(
+                staff_member=staff_member,
+                shop=shop,
+                roles=data['roles'],
+                permissions=data.get('permissions') or [],
+                is_active=data.get('is_active', True),
+            )
+        except DRFValidationError as exc:
+            return api_response(
+                success=False,
+                message='Validation failed',
+                errors=exc.detail,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
         response_serializer = OwnerStaffAssignmentSerializer(assignment)
         return api_response(
             success=True,
@@ -354,6 +374,8 @@ class OwnerStaffAssignmentDetailView(BaseTailorAPIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+
         data = serializer.validated_data
         roles = data.get('roles', assignment.roles)
         permissions = data.get('permissions')
@@ -361,17 +383,23 @@ class OwnerStaffAssignmentDetailView(BaseTailorAPIView):
             permissions = [
                 key for key, enabled in assignment.permissions_dict.items() if enabled
             ]
+        is_active = data.get('is_active', assignment.is_active)
 
-        assignment.apply_roles_and_permissions(roles, permissions)
-        if 'is_active' in data:
-            assignment.is_active = data['is_active']
-        assignment.save()
-
-        from apps.tailors.services.staff_sync import sync_legacy_employee_from_assignment
-        if assignment.is_active and assignment.staff_member.is_active:
-            sync_legacy_employee_from_assignment(assignment)
-        else:
-            deactivate_legacy_employee_for_assignment(assignment)
+        try:
+            assignment, _created = create_or_update_shop_assignment(
+                staff_member=assignment.staff_member,
+                shop=assignment.shop,
+                roles=roles,
+                permissions=permissions,
+                is_active=is_active,
+            )
+        except DRFValidationError as exc:
+            return api_response(
+                success=False,
+                message='Validation failed',
+                errors=exc.detail,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         response_serializer = OwnerStaffAssignmentSerializer(assignment)
         return api_response(

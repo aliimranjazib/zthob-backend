@@ -191,3 +191,52 @@ class V2StaffAPITestCase(TestCase):
         response = self.client.get(list_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['data']), 1)
+
+    def test_v2_second_manager_on_same_shop_rejected(self):
+        self._login_owner()
+        shop = self._create_shop('V2 Manager Shop')
+        first = self.client.post(
+            self._url('tailors_v2:v2-staff'),
+            {
+                'name': 'First Manager',
+                'phone': '0522222230',
+                'roles': ['manager'],
+                'shop_id': shop['id'],
+            },
+            format='json',
+        )
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
+
+        second = self.client.post(
+            self._url('tailors_v2:v2-staff'),
+            {
+                'name': 'Second Manager',
+                'phone': '0522222231',
+                'roles': ['manager'],
+                'shop_id': shop['id'],
+            },
+            format='json',
+        )
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_v2_manager_assignment_applies_default_permissions(self):
+        self._login_owner()
+        shop = self._create_shop('V2 Manager Perms Shop')
+        response = self.client.post(
+            self._url('tailors_v2:v2-staff'),
+            {
+                'name': 'Shop Manager',
+                'phone': '0522222232',
+                'roles': ['manager'],
+                'shop_id': shop['id'],
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        assignment = ShopStaffAssignment.objects.get(
+            staff_member_id=response.data['data']['id'],
+        )
+        self.assertTrue(assignment.can_manage_orders)
+        self.assertTrue(assignment.can_manage_catalog)
+        shop_profile = TailorProfile.objects.get(id=shop['id'])
+        self.assertEqual(shop_profile.contact_number, '0522222232')

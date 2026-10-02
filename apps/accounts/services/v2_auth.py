@@ -13,6 +13,7 @@ from apps.accounts.services.tailor_auth import (
     ACCESS_MODE_EMPLOYEE,
     ACCESS_MODE_OWNER,
     TailorSession,
+    build_owner_auth_context,
     issue_tailor_tokens,
     resolve_shop_session,
     tokens_payload,
@@ -336,13 +337,19 @@ def build_session_payload(user, *, app_entry: str | None) -> dict[str, Any]:
 
 def build_v2_me_payload(user, *, app_entry: str | None) -> dict[str, Any]:
     app_entry = normalize_v2_app_entry(app_entry)
-    return {
+    payload = {
         'app_entry': app_entry,
         'membership': build_membership_payload(user, app_entry=app_entry),
         'permissions': build_permissions_payload(user, app_entry=app_entry),
         'session': build_session_payload(user, app_entry=app_entry),
         'onboarding': build_onboarding_flags(user, app_entry=app_entry),
     }
+    if app_entry in (APP_ENTRY_OWNER, APP_ENTRY_STAFF):
+        payload['tailor_context'] = build_owner_auth_context(
+            user,
+            app_entry=app_entry,
+        )
+    return payload
 
 
 def build_v2_verify_payload(
@@ -355,9 +362,17 @@ def build_v2_verify_payload(
     from apps.core.phone_utils import format_phone_for_display
 
     session = None
+    tailor_context = None
     if app_entry:
+        session_info = build_session_payload(user, app_entry=app_entry)
+        active_shop_id = session_info.get('active_shop_id')
+        shop_id = (
+            active_shop_id
+            if app_entry == APP_ENTRY_STAFF and active_shop_id
+            else None
+        )
         session = TailorSession(
-            shop_id=None,
+            shop_id=shop_id,
             access_mode=(
                 ACCESS_MODE_EMPLOYEE
                 if app_entry == APP_ENTRY_STAFF
@@ -365,8 +380,16 @@ def build_v2_verify_payload(
             ),
             app_entry=app_entry,
         )
+        if app_entry in (APP_ENTRY_OWNER, APP_ENTRY_STAFF):
+            tailor_context = build_owner_auth_context(user, app_entry=app_entry)
+            if shop_id:
+                tailor_context = {
+                    **tailor_context,
+                    'active_shop_id': shop_id,
+                    'shop_id': shop_id,
+                }
     refresh = issue_tailor_tokens(user, session=session)
-    return {
+    payload = {
         'tokens': tokens_payload(refresh),
         'user': {
             'id': user.id,
@@ -379,6 +402,9 @@ def build_v2_verify_payload(
         'app_entry_source': app_entry_source,
         'is_new_user': is_new_user,
     }
+    if tailor_context is not None:
+        payload['tailor_context'] = tailor_context
+    return payload
 
 
 def build_v2_profile_payload(user) -> dict[str, Any]:
@@ -394,13 +420,26 @@ def build_v2_profile_payload(user) -> dict[str, Any]:
 
 
 def switch_shop_session(user, shop_id: int, *, app_entry: str | None):
-    session = resolve_shop_session(user, shop_id)
+    resolved = resolve_shop_session(user, shop_id)
+    effective_entry = (
+        normalize_v2_app_entry(app_entry)
+        if app_entry
+        else (
+            APP_ENTRY_STAFF
+            if resolved.access_mode == ACCESS_MODE_EMPLOYEE
+            else APP_ENTRY_OWNER
+        )
+    )
     session = TailorSession(
-        shop_id=session.shop_id,
-        access_mode=session.access_mode,
-        app_entry=normalize_v2_app_entry(app_entry) if app_entry else session.app_entry,
+        shop_id=resolved.shop_id,
+        access_mode=resolved.access_mode,
+        app_entry=effective_entry,
     )
     refresh = issue_tailor_tokens(user, session=session)
+    tailor_context = build_owner_auth_context(user, app_entry=effective_entry)
+    tailor_context['active_shop_id'] = shop_id
+    tailor_context['shop_id'] = shop_id
+    tailor_context['access_mode'] = session.access_mode
     return {
         'tokens': {'access_token': str(refresh.access_token)},
         'session': {
@@ -408,4 +447,5 @@ def switch_shop_session(user, shop_id: int, *, app_entry: str | None):
             'access_mode': session.access_mode,
             'app_entry': session.app_entry,
         },
+        'tailor_context': tailor_context,
     }

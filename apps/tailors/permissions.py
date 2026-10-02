@@ -9,6 +9,17 @@ from apps.tailors.shop_access import (
 )
 
 
+def _user_is_named_shop_owner(user) -> bool:
+    from apps.tailors.models import TailorProfile
+
+    if TailorProfile.objects.filter(owner=user).exclude(
+        shop_name__isnull=True,
+    ).exclude(shop_name='').exists():
+        return True
+    profile = getattr(user, 'tailor_profile', None)
+    return bool(profile and (profile.shop_name or '').strip())
+
+
 def _get_required_permissions(view, request=None):
     if request is not None and hasattr(view, 'get_required_employee_permissions'):
         perms = view.get_required_employee_permissions(request)
@@ -88,11 +99,7 @@ class IsShopStaff(permissions.BasePermission):
                 return False
             return _employee_has_view_permission(staff, view, request)
 
-        if hasattr(request.user, 'tailor_profile'):
-            return True
-
-        from apps.tailors.models import TailorProfile
-        if TailorProfile.objects.filter(owner=request.user).exists():
+        if _user_is_named_shop_owner(request.user):
             return True
 
         return False

@@ -21,19 +21,22 @@ def sync_legacy_employee_from_assignment(assignment: ShopStaffAssignment):
     user = staff_member.user
     shop = assignment.shop
 
+    if not assignment.is_active or not staff_member.is_active:
+        deactivate_legacy_employee_for_assignment(assignment)
+        return None
+
     existing = getattr(user, 'tailor_employee', None)
     if existing and existing.tailor_id != shop.id:
-        return existing
+        existing.tailor = shop
 
     employee, _created = TailorEmployee.objects.get_or_create(
-        tailor=shop,
         user=user,
-        defaults={'roles': assignment.roles or []},
+        defaults={'tailor': shop, 'roles': assignment.roles or []},
     )
+    if employee.tailor_id != shop.id:
+        employee.tailor = shop
     employee.roles = assignment.roles or []
-    employee.is_active = bool(
-        assignment.is_active and staff_member.is_active
-    )
+    employee.is_active = True
     apply_permissions(employee, [
         key for key in STAFF_PERMISSION_KEYS if getattr(assignment, key, False)
     ])

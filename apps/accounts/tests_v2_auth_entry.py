@@ -220,6 +220,33 @@ class V2AuthEntryFlowTest(TestCase):
         self.assertEqual(verify.status_code, status.HTTP_200_OK)
         self.assertEqual(verify.data['data']['app_entry'], 'staff')
         self.assertEqual(verify.data['data']['app_entry_source'], 'inferred')
+        tailor_context = verify.data['data'].get('tailor_context') or {}
+        self.assertGreaterEqual(len(tailor_context.get('assigned_shops') or []), 1)
+
+    def test_v2_me_includes_tailor_context_for_staff(self):
+        owner = self._create_owner_with_business(self.OWNER_PHONE)
+        shop = self._create_owner_shop(owner, self.OWNER_PHONE)
+        self._create_preinvited_staff(
+            owner=owner,
+            shop=shop,
+            staff_phone=self.STAFF_PHONE,
+        )
+        self._send_otp(self.STAFF_PHONE)
+        verify = self._verify(self.STAFF_PHONE, name='Staff Member')
+        token = verify.data['data']['tokens']['access_token']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        me = self.client.get(
+            reverse('v2:accounts_v2:v2-me'),
+            {'app_entry': 'staff'},
+        )
+        self.assertEqual(me.status_code, status.HTTP_200_OK)
+        data = me.data['data']
+        self.assertIn('tailor_context', data)
+        self.assertGreaterEqual(
+            len(data['tailor_context'].get('assigned_shops') or []),
+            1,
+        )
+        self.assertEqual(data['membership']['type'], 'staff')
 
     def test_solo_tailor_returning_login_and_infer_app_entry(self):
         first_verify = self._create_solo_tailor(self.TAILOR_PHONE)
