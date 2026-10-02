@@ -49,6 +49,17 @@ def build_legacy_tailor_context(user) -> dict[str, Any]:
         context['permissions'] = employee.permissions_dict
         return context
 
+    from apps.tailors.shop_access import get_user_shop_assignments
+
+    shop_assignments = list(get_user_shop_assignments(user))
+    if shop_assignments:
+        assignment = shop_assignments[0]
+        context['is_employee'] = True
+        context['shop_id'] = assignment.shop_id
+        context['roles'] = assignment.roles or []
+        context['permissions'] = assignment.permissions_dict
+        return context
+
     profile = getattr(user, 'tailor_profile', None)
     if profile and profile.shop_name:
         context['is_owner'] = True

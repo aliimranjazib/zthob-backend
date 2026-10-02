@@ -409,7 +409,38 @@ class PhoneVerifyView(APIView):
                 from apps.customers.services.welcome_sms import queue_customer_welcome_sms
                 queue_customer_welcome_sms(user.id)
 
-            from apps.accounts.services.phone_verify_response import build_phone_auth_api_response
+            from apps.accounts.services.phone_verify_response import (
+                build_phone_auth_api_response,
+                resolve_phone_verify_app_entry,
+            )
+            try:
+                resolve_phone_verify_app_entry(
+                    user,
+                    app_entry,
+                    is_new_user=is_new_user,
+                )
+            except Exception as exc:
+                from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
+                from rest_framework.exceptions import PermissionDenied, ValidationError
+
+                if isinstance(exc, ValidationError):
+                    return api_response(
+                        success=False,
+                        message='OTP verification failed',
+                        errors=exc.detail,
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        request=request,
+                    )
+                if isinstance(exc, (PermissionDenied, DjangoPermissionDenied)):
+                    detail = getattr(exc, 'detail', str(exc))
+                    return api_response(
+                        success=False,
+                        message=str(detail),
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        request=request,
+                    )
+                raise
+
             return build_phone_auth_api_response(
                 request,
                 user,

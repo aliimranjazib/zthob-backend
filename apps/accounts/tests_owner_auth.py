@@ -7,8 +7,13 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.accounts.models import CustomUser
+from apps.accounts.services.tailor_auth import build_legacy_tailor_context
 from apps.core.services import PhoneVerificationService
-from apps.tailors.models import TailorEmployee, TailorProfile
+from apps.tailors.models import Business, TailorEmployee, TailorProfile, TailorStaffMember
+from apps.tailors.services.owner_staff import (
+    create_or_update_shop_assignment,
+    find_or_create_staff_user,
+)
 
 TEST_REST_FRAMEWORK = {
     **settings.REST_FRAMEWORK,
@@ -239,6 +244,99 @@ class OwnerAuthenticationTestCase(TestCase):
         self.assertEqual(updated['first_name'], 'Ahmed')
         self.assertEqual(updated['last_name'], 'Ali')
         self.assertEqual(updated['language'], 'ar')
+
+    def test_legacy_tailor_context_v2_staff_assignment(self):
+        owner = CustomUser.objects.create_user(
+            username='owner_ctx',
+            phone='0500000006',
+            role='TAILOR',
+        )
+        shop, _ = TailorProfile.objects.get_or_create(
+            owner=owner,
+            user=owner,
+            defaults={},
+        )
+        shop.shop_name = 'Staff Shop'
+        shop.contact_number = '0500000006'
+        shop.save(update_fields=['shop_name', 'contact_number'])
+        staff_user, _ = find_or_create_staff_user(
+            phone='0500000007',
+            name='Assigned Staff',
+        )
+        staff_member, _ = TailorStaffMember.objects.get_or_create(
+            owner=owner,
+            user=staff_user,
+            defaults={'is_active': True},
+        )
+        create_or_update_shop_assignment(
+            staff_member=staff_member,
+            shop=shop,
+            roles=['manager'],
+            permissions=['can_manage_orders'],
+            is_active=True,
+        )
+
+        context = build_legacy_tailor_context(staff_user)
+        self.assertTrue(context['is_employee'])
+        self.assertFalse(context['is_owner'])
+        self.assertEqual(context['shop_id'], shop.id)
+        self.assertIn('can_manage_orders', context['permissions'])
+
+    def test_v1_staff_phone_verify_without_app_entry_infers_staff(self):
+        owner = CustomUser.objects.create_user(
+            username='owner_verify',
+            phone='0500000008',
+            role='TAILOR',
+        )
+        Business.objects.create(
+            owner=owner,
+            name='Owner Biz',
+            contact_phone='0500000008',
+            city='Riyadh',
+            is_active=True,
+        )
+        shop, _ = TailorProfile.objects.get_or_create(
+            owner=owner,
+            user=owner,
+            defaults={},
+        )
+        shop.shop_name = 'Verify Staff Shop'
+        shop.contact_number = '0500000008'
+        shop.save(update_fields=['shop_name', 'contact_number'])
+        staff_phone = '0500000009'
+        staff_user, _ = find_or_create_staff_user(
+            phone=staff_phone,
+            name='Verify Staff',
+        )
+        staff_member, _ = TailorStaffMember.objects.get_or_create(
+            owner=owner,
+            user=staff_user,
+            defaults={'is_active': True},
+        )
+        create_or_update_shop_assignment(
+            staff_member=staff_member,
+            shop=shop,
+            roles=['manager'],
+            permissions=['can_manage_orders'],
+            is_active=True,
+        )
+
+        self.client.post(self.phone_login_url, {'phone': staff_phone})
+        response = self.client.post(self.phone_verify_url, {
+            'phone': staff_phone,
+            'otp_code': self.test_otp,
+            'name': 'Verify Staff',
+            'role': 'TAILOR',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data['data']
+        self.assertEqual(data['app_entry'], 'staff')
+        self.assertEqual(data['app_entry_source'], 'inferred')
+        context = data['tailor_context']
+        self.assertTrue(context['is_employee'])
+        self.assertFalse(context.get('is_owner'))
+        self.assertEqual(context['app_entry'], 'staff')
 
     def test_customer_cannot_access_owner_profile(self):
         customer_phone = '0500000005'
