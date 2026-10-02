@@ -279,6 +279,7 @@ class AddressDetailView(APIView):
                 address_text = address_data.pop('address')
                 is_default = address_data.pop('is_default', address.is_default)
                 
+                address.address = address_text
                 address.street = address_text
                 address.latitude = address_data.get('latitude', address.latitude)
                 address.longitude = address_data.get('longitude', address.longitude)

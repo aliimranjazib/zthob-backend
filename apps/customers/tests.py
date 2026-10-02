@@ -867,6 +867,36 @@ class CustomerAddressAPITest(TestCase):
         response = self.client.get(url)
         
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_update_address_success(self):
+        """PUT must update the address field (not only street)."""
+        from apps.customers.models import Address
+
+        address = Address.objects.create(
+            user=self.customer,
+            address='Original Address',
+            street='Original Address',
+            city='Riyadh',
+            country='Saudi Arabia',
+            address_tag='home',
+        )
+
+        self.client.force_authenticate(user=self.customer)
+        url = f'/api/customers/addresses/{address.id}/'
+        response = self.client.put(
+            url,
+            {'address': 'Updated Address', 'address_tag': 'office'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        self.assertEqual(response.data['data']['address'], 'Updated Address')
+        self.assertEqual(response.data['data']['address_tag'], 'office')
+
+        address.refresh_from_db()
+        self.assertEqual(address.address, 'Updated Address')
+        self.assertEqual(address.street, 'Updated Address')
     
     # ========== ADDRESS RESPONSE STRUCTURE TESTS ==========
     
