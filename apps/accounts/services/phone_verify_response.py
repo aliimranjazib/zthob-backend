@@ -7,6 +7,9 @@ from rest_framework import status
 from apps.accounts.serializers import UserProfileSerializer
 from apps.accounts.services.tailor_auth import (
     APP_ENTRY_OWNER,
+    APP_ENTRY_STAFF,
+    ACCESS_MODE_EMPLOYEE,
+    TailorSession,
     build_owner_auth_context,
     build_tailor_auth_context,
     issue_tailor_tokens,
@@ -61,14 +64,29 @@ def build_phone_auth_api_response(
     if resolved_app_entry:
         serializer_context['app_entry'] = resolved_app_entry
 
+    staff_session = None
+    if resolved_app_entry == APP_ENTRY_STAFF:
+        owner_ctx = build_owner_auth_context(user, app_entry=APP_ENTRY_STAFF)
+        active_shop_id = owner_ctx.get('active_shop_id')
+        if active_shop_id:
+            staff_session = TailorSession(
+                shop_id=active_shop_id,
+                access_mode=ACCESS_MODE_EMPLOYEE,
+                app_entry=APP_ENTRY_STAFF,
+            )
+
     if resolved_app_entry == APP_ENTRY_OWNER:
         refresh = issue_tailor_tokens(user)
         user_data = UserProfileSerializer(user, context=serializer_context).data
         tailor_context = build_owner_auth_context(user, app_entry=APP_ENTRY_OWNER)
     else:
-        refresh = issue_tailor_tokens(user)
+        refresh = issue_tailor_tokens(user, session=staff_session)
         user_data = UserProfileSerializer(user, context=serializer_context).data
-        tailor_context = build_tailor_auth_context(user, app_entry=resolved_app_entry)
+        tailor_context = build_tailor_auth_context(
+            user,
+            app_entry=resolved_app_entry,
+            active_shop_id=staff_session.shop_id if staff_session else None,
+        )
         if resolved_app_entry is None:
             tailor_context = user_data.get('tailor_context', tailor_context)
 

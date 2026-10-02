@@ -660,3 +660,92 @@ class V2FabricCatalogTests(TestCase):
         self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK, shop_fabrics.data)
         shop_names = [item['product']['name'] for item in shop_fabrics.data['data']]
         self.assertIn('V1 Shop Cotton', shop_names)
+
+
+@override_settings(
+    REST_FRAMEWORK=TEST_REST_FRAMEWORK,
+    SECURE_SSL_REDIRECT=False,
+    CACHES={
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    },
+)
+class V2StaffShopFabricAccessTests(V2FabricCatalogTests):
+    STAFF_PHONE = '0500000010'
+
+    def test_assigned_staff_with_catalog_permission_can_list_shop_fabrics(self):
+        shop_id, _owner_token, work_token = self._setup_owner_shop()
+
+        staff_resp = self.client.post(
+            self._url('tailors_v2:v2-staff'),
+            {
+                'name': 'Catalog Staff',
+                'phone': self.STAFF_PHONE,
+                'roles': ['manager'],
+                'permissions': ['can_manage_catalog'],
+                'shop_id': shop_id,
+            },
+            format='json',
+        )
+        self.assertEqual(staff_resp.status_code, status.HTTP_201_CREATED, staff_resp.data)
+
+        staff_verify = self._v2_login(
+            self.STAFF_PHONE,
+            app_entry='staff',
+            name='Catalog Staff',
+        )
+        self.assertIn(staff_verify.status_code, [status.HTTP_200_OK, status.HTTP_201_CREATED])
+        staff_token = staff_verify.data['data']['tokens']['access_token']
+        self._auth(staff_token)
+
+        switch = self.client.post(
+            self._url('accounts_v2:v2-switch-shop'),
+            {'shop_id': shop_id, 'app_entry': 'staff'},
+            format='json',
+        )
+        self.assertEqual(switch.status_code, status.HTTP_200_OK, switch.data)
+        staff_work_token = switch.data['data']['tokens']['access_token']
+        self._auth(staff_work_token)
+
+        list_resp = self.client.get(
+            self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id),
+        )
+        self.assertEqual(list_resp.status_code, status.HTTP_200_OK, list_resp.data)
+
+    def test_assigned_staff_without_catalog_permission_denied(self):
+        shop_id, _owner_token, _work_token = self._setup_owner_shop()
+
+        staff_resp = self.client.post(
+            self._url('tailors_v2:v2-staff'),
+            {
+                'name': 'No Catalog Staff',
+                'phone': self.STAFF_PHONE,
+                'roles': ['stitcher'],
+                'permissions': ['can_stitch_orders'],
+                'shop_id': shop_id,
+            },
+            format='json',
+        )
+        self.assertEqual(staff_resp.status_code, status.HTTP_201_CREATED, staff_resp.data)
+
+        staff_verify = self._v2_login(
+            self.STAFF_PHONE,
+            app_entry='staff',
+            name='No Catalog Staff',
+        )
+        staff_token = staff_verify.data['data']['tokens']['access_token']
+        self._auth(staff_token)
+
+        switch = self.client.post(
+            self._url('accounts_v2:v2-switch-shop'),
+            {'shop_id': shop_id, 'app_entry': 'staff'},
+            format='json',
+        )
+        self.assertEqual(switch.status_code, status.HTTP_200_OK)
+        self._auth(switch.data['data']['tokens']['access_token'])
+
+        list_resp = self.client.get(
+            self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id),
+        )
+        self.assertEqual(list_resp.status_code, status.HTTP_403_FORBIDDEN, list_resp.data)

@@ -7,7 +7,10 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.accounts.models import CustomUser
-from apps.accounts.services.tailor_auth import build_legacy_tailor_context
+from apps.accounts.services.tailor_auth import (
+    apply_active_shop_to_tailor_context,
+    build_legacy_tailor_context,
+)
 from apps.core.services import PhoneVerificationService
 from apps.tailors.models import Business, TailorEmployee, TailorProfile, TailorStaffMember
 from apps.tailors.services.owner_staff import (
@@ -280,7 +283,93 @@ class OwnerAuthenticationTestCase(TestCase):
         self.assertTrue(context['is_employee'])
         self.assertFalse(context['is_owner'])
         self.assertEqual(context['shop_id'], shop.id)
-        self.assertIn('can_manage_orders', context['permissions'])
+        self.assertTrue(context['permissions'].get('can_manage_orders'))
+
+    def test_legacy_tailor_context_prefers_assignment_over_stale_employee(self):
+        owner = CustomUser.objects.create_user(
+            username='owner_stale',
+            phone='0500000011',
+            role='TAILOR',
+        )
+        shop, _ = TailorProfile.objects.get_or_create(
+            owner=owner,
+            user=owner,
+            defaults={},
+        )
+        shop.shop_name = 'Stale Employee Shop'
+        shop.save(update_fields=['shop_name'])
+        staff_user, _ = find_or_create_staff_user(
+            phone='0500000012',
+            name='Stale Staff',
+        )
+        staff_member, _ = TailorStaffMember.objects.get_or_create(
+            owner=owner,
+            user=staff_user,
+            defaults={'is_active': True},
+        )
+        create_or_update_shop_assignment(
+            staff_member=staff_member,
+            shop=shop,
+            roles=['manager'],
+            permissions=['can_manage_catalog'],
+            is_active=True,
+        )
+        employee = TailorEmployee.objects.get(user=staff_user)
+        employee.can_manage_catalog = False
+        employee.can_manage_orders = True
+        employee.save(update_fields=['can_manage_catalog', 'can_manage_orders'])
+
+        context = build_legacy_tailor_context(staff_user)
+        self.assertTrue(context['permissions'].get('can_manage_catalog'))
+        self.assertFalse(context['permissions'].get('can_manage_orders'))
+
+    def test_active_shop_switch_updates_permissions_in_context(self):
+        owner = CustomUser.objects.create_user(
+            username='owner_multi',
+            phone='0500000013',
+            role='TAILOR',
+        )
+        shop_a, _ = TailorProfile.objects.get_or_create(
+            owner=owner,
+            user=owner,
+            defaults={'shop_name': 'Perm Shop A'},
+        )
+        shop_b = TailorProfile.objects.create(
+            owner=owner,
+            shop_name='Perm Shop B',
+        )
+        staff_user, _ = find_or_create_staff_user(
+            phone='0500000014',
+            name='Multi Perm Staff',
+        )
+        staff_member, _ = TailorStaffMember.objects.get_or_create(
+            owner=owner,
+            user=staff_user,
+            defaults={'is_active': True},
+        )
+        create_or_update_shop_assignment(
+            staff_member=staff_member,
+            shop=shop_a,
+            roles=['stitcher'],
+            permissions=['can_stitch_orders'],
+            is_active=True,
+        )
+        create_or_update_shop_assignment(
+            staff_member=staff_member,
+            shop=shop_b,
+            roles=['manager'],
+            permissions=['can_manage_catalog', 'can_manage_orders'],
+            is_active=True,
+        )
+
+        base = build_legacy_tailor_context(staff_user)
+        ctx_a = apply_active_shop_to_tailor_context(base, staff_user, shop_a.id)
+        ctx_b = apply_active_shop_to_tailor_context(base, staff_user, shop_b.id)
+
+        self.assertTrue(ctx_a['permissions'].get('can_stitch_orders'))
+        self.assertFalse(ctx_a['permissions'].get('can_manage_catalog'))
+        self.assertTrue(ctx_b['permissions'].get('can_manage_catalog'))
+        self.assertTrue(ctx_b['permissions'].get('can_manage_orders'))
 
     def test_v1_staff_phone_verify_without_app_entry_infers_staff(self):
         owner = CustomUser.objects.create_user(

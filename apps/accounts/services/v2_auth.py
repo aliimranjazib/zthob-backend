@@ -381,13 +381,11 @@ def build_v2_verify_payload(
             app_entry=app_entry,
         )
         if app_entry in (APP_ENTRY_OWNER, APP_ENTRY_STAFF):
-            tailor_context = build_owner_auth_context(user, app_entry=app_entry)
-            if shop_id:
-                tailor_context = {
-                    **tailor_context,
-                    'active_shop_id': shop_id,
-                    'shop_id': shop_id,
-                }
+            tailor_context = build_owner_auth_context(
+                user,
+                app_entry=app_entry,
+                active_shop_id=shop_id,
+            )
     refresh = issue_tailor_tokens(user, session=session)
     payload = {
         'tokens': tokens_payload(refresh),
@@ -436,9 +434,11 @@ def switch_shop_session(user, shop_id: int, *, app_entry: str | None):
         app_entry=effective_entry,
     )
     refresh = issue_tailor_tokens(user, session=session)
-    tailor_context = build_owner_auth_context(user, app_entry=effective_entry)
-    tailor_context['active_shop_id'] = shop_id
-    tailor_context['shop_id'] = shop_id
+    tailor_context = build_owner_auth_context(
+        user,
+        app_entry=effective_entry,
+        active_shop_id=shop_id,
+    )
     tailor_context['access_mode'] = session.access_mode
     return {
         'tokens': {'access_token': str(refresh.access_token)},

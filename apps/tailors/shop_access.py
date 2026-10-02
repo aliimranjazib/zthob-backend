@@ -16,6 +16,30 @@ def get_token_shop_id(request):
         return None
 
 
+def resolve_active_shop_id(request, *, explicit_shop_id=None):
+    """JWT shop session first, then an explicit shop id from the caller."""
+    token_shop_id = get_token_shop_id(request)
+    if token_shop_id is not None:
+        return token_shop_id
+    if explicit_shop_id is not None:
+        try:
+            return int(explicit_shop_id)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def get_shop_staff_context_for_request(request, shop_id=None):
+    """Active staff record for the request user and resolved shop session."""
+    if request is None:
+        return None
+    user = getattr(request, 'user', None)
+    if not user or not getattr(user, 'is_authenticated', False):
+        return None
+    resolved_shop_id = resolve_active_shop_id(request, explicit_shop_id=shop_id)
+    return get_shop_staff_context(user, shop_id=resolved_shop_id)
+
+
 def user_owns_shop(user, shop) -> bool:
     if not user or not shop:
         return False
@@ -324,7 +348,7 @@ def user_can_perform_order_stitching(user, order):
     return user_can_see_stitch_order(user, order)
 
 
-def filter_orders_for_shop_staff(queryset, user):
+def filter_orders_for_shop_staff(queryset, user, shop_id=None):
     """
     Narrow shop order lists for the current staff user.
 
@@ -336,10 +360,10 @@ def filter_orders_for_shop_staff(queryset, user):
     if not user:
         return queryset.none()
 
-    if getattr(user, 'tailor_profile', None) and not get_shop_staff_context(user):
+    if getattr(user, 'tailor_profile', None) and not get_shop_staff_context(user, shop_id=shop_id):
         return queryset
 
-    staff = get_shop_staff_context(user)
+    staff = get_shop_staff_context(user, shop_id=shop_id)
     if not staff or not staff.is_active:
         return queryset
 

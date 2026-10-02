@@ -73,9 +73,11 @@ class OwnerSwitchShopView(APIView):
             app_entry=APP_ENTRY_OWNER,
         )
         refresh = issue_tailor_tokens(request.user, session=session)
-        tailor_context = build_owner_auth_context(request.user, app_entry=APP_ENTRY_OWNER)
-        tailor_context['active_shop_id'] = session.shop_id
-        tailor_context['shop_id'] = session.shop_id
+        tailor_context = build_owner_auth_context(
+            request.user,
+            app_entry=APP_ENTRY_OWNER,
+            active_shop_id=session.shop_id,
+        )
         tailor_context['access_mode'] = session.access_mode
         tailor_context['routing'] = {'initial_screen': 'shop_work'}
 
@@ -169,7 +171,13 @@ class OwnerAuthContextView(APIView):
             request.user,
             context={'request': request, 'app_entry': APP_ENTRY_OWNER},
         ).data
-        tailor_context = build_owner_auth_context(request.user, app_entry=APP_ENTRY_OWNER)
+        from apps.tailors.shop_access import get_token_shop_id
+
+        tailor_context = build_owner_auth_context(
+            request.user,
+            app_entry=APP_ENTRY_OWNER,
+            active_shop_id=get_token_shop_id(request),
+        )
 
         return api_response(
             success=True,

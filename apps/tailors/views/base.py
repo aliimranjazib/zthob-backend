@@ -23,6 +23,11 @@ class BaseTailorAPIView(APIView):
 
     def employee_has_permission(self, user, permission_key):
         """Return True when the active employee has the requested permission."""
+        from ..shop_access import get_shop_staff_context_for_request
+
+        staff = get_shop_staff_context_for_request(getattr(self, 'request', None))
+        if staff and staff.is_active:
+            return bool(getattr(staff, permission_key, False))
         if hasattr(user, 'tailor_employee') and user.tailor_employee.is_active:
             return getattr(user.tailor_employee, permission_key, False)
         return False

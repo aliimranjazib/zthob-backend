@@ -27,7 +27,32 @@ class TailorSession:
     app_entry: str | None = None
 
 
-def build_legacy_tailor_context(user) -> dict[str, Any]:
+def apply_active_shop_to_tailor_context(
+    context: dict[str, Any],
+    user,
+    shop_id: int | None,
+) -> dict[str, Any]:
+    """Align employee roles/permissions with the active shop assignment."""
+    if not shop_id or not isinstance(context, dict):
+        return context
+
+    from apps.tailors.shop_access import get_shop_staff_context
+
+    staff = get_shop_staff_context(user, shop_id=shop_id)
+    if staff and staff.is_active:
+        return {
+            **context,
+            'is_owner': False,
+            'is_employee': True,
+            'shop_id': shop_id,
+            'active_shop_id': shop_id,
+            'roles': staff.roles or [],
+            'permissions': staff.permissions_dict,
+        }
+    return context
+
+
+def build_legacy_tailor_context(user, shop_id: int | None = None) -> dict[str, Any]:
     """
     Original tailor_context used by the tailor app before owner multi-shop work.
 
@@ -41,15 +66,16 @@ def build_legacy_tailor_context(user) -> dict[str, Any]:
         'permissions': {},
     }
 
-    employee = getattr(user, 'tailor_employee', None)
-    if employee and employee.is_active:
-        context['is_employee'] = True
-        context['shop_id'] = employee.tailor_id
-        context['roles'] = employee.roles or []
-        context['permissions'] = employee.permissions_dict
-        return context
+    from apps.tailors.shop_access import get_shop_staff_context, get_user_shop_assignments
 
-    from apps.tailors.shop_access import get_user_shop_assignments
+    if shop_id is not None:
+        staff = get_shop_staff_context(user, shop_id=shop_id)
+        if staff and staff.is_active:
+            context['is_employee'] = True
+            context['shop_id'] = shop_id
+            context['roles'] = staff.roles or []
+            context['permissions'] = staff.permissions_dict
+            return context
 
     shop_assignments = list(get_user_shop_assignments(user))
     if shop_assignments:
@@ -58,6 +84,14 @@ def build_legacy_tailor_context(user) -> dict[str, Any]:
         context['shop_id'] = assignment.shop_id
         context['roles'] = assignment.roles or []
         context['permissions'] = assignment.permissions_dict
+        return context
+
+    employee = getattr(user, 'tailor_employee', None)
+    if employee and employee.is_active:
+        context['is_employee'] = True
+        context['shop_id'] = employee.tailor_id
+        context['roles'] = employee.roles or []
+        context['permissions'] = employee.permissions_dict
         return context
 
     profile = getattr(user, 'tailor_profile', None)
@@ -159,13 +193,19 @@ def _assigned_shop_entries(user) -> list[dict[str, Any]]:
     }]
 
 
-def build_owner_auth_context(user, *, app_entry: str = APP_ENTRY_OWNER) -> dict[str, Any]:
+def build_owner_auth_context(
+    user,
+    *,
+    app_entry: str = APP_ENTRY_OWNER,
+    active_shop_id: int | None = None,
+) -> dict[str, Any]:
     """
     Extended owner/staff auth payload for the owner Flutter shell.
 
     Always includes legacy keys so older parsers continue to work.
     """
-    legacy = build_legacy_tailor_context(user)
+    session_shop_id = active_shop_id
+    legacy = build_legacy_tailor_context(user, shop_id=session_shop_id)
     owned_profiles = list(_owned_shop_queryset(user))
     service_area_by_id = _service_area_lookup(owned_profiles)
     owned_shops = [
@@ -182,21 +222,23 @@ def build_owner_auth_context(user, *, app_entry: str = APP_ENTRY_OWNER) -> dict[
                 'is_owner': True,
                 'shop_id': owned_shops[0]['id'],
             }
-        active_shop_id = legacy.get('shop_id')
+        active_shop_id = session_shop_id or legacy.get('shop_id')
         can_enter_shop_work = bool(owned_shops)
         initial_screen = 'owner_dashboard'
     elif app_entry == APP_ENTRY_STAFF:
         access_mode = ACCESS_MODE_EMPLOYEE if assigned_shops else ACCESS_MODE_NONE
-        active_shop_id = assigned_shops[0]['id'] if len(assigned_shops) == 1 else None
+        active_shop_id = session_shop_id or (
+            assigned_shops[0]['id'] if len(assigned_shops) == 1 else None
+        )
         can_enter_shop_work = bool(assigned_shops)
         initial_screen = 'shop_work' if assigned_shops else 'staff_not_assigned'
     else:
         access_mode = ACCESS_MODE_NONE
-        active_shop_id = legacy.get('shop_id')
+        active_shop_id = session_shop_id or legacy.get('shop_id')
         can_enter_shop_work = bool(legacy.get('shop_id'))
         initial_screen = 'owner_dashboard'
 
-    return {
+    result = {
         **legacy,
         'app_entry': app_entry,
         'mode': app_entry,
@@ -209,12 +251,27 @@ def build_owner_auth_context(user, *, app_entry: str = APP_ENTRY_OWNER) -> dict[
             'initial_screen': initial_screen,
         },
     }
+    if active_shop_id is not None:
+        result = apply_active_shop_to_tailor_context(result, user, active_shop_id)
+    return result
 
 
-def build_tailor_auth_context(user, *, app_entry: str | None = None) -> dict[str, Any]:
+def build_tailor_auth_context(
+    user,
+    *,
+    app_entry: str | None = None,
+    active_shop_id: int | None = None,
+) -> dict[str, Any]:
     if app_entry in (APP_ENTRY_OWNER, APP_ENTRY_STAFF):
-        return build_owner_auth_context(user, app_entry=app_entry)
-    return build_legacy_tailor_context(user)
+        return build_owner_auth_context(
+            user,
+            app_entry=app_entry,
+            active_shop_id=active_shop_id,
+        )
+    context = build_legacy_tailor_context(user, shop_id=active_shop_id)
+    if active_shop_id is not None:
+        context = apply_active_shop_to_tailor_context(context, user, active_shop_id)
+    return context
 
 
 def resolve_shop_session(user, shop_id: int) -> TailorSession:

@@ -161,23 +161,36 @@ class UserProfileSerializer(serializers.ModelSerializer):
         from apps.accounts.services.tailor_auth import (
             APP_ENTRY_OWNER,
             APP_ENTRY_STAFF,
+            apply_active_shop_to_tailor_context,
             build_owner_auth_context,
             build_legacy_tailor_context,
         )
         from apps.tailors.shop_access import get_token_shop_id
 
-        app_entry = self._resolve_app_entry()
-        if app_entry == APP_ENTRY_OWNER:
-            context = build_owner_auth_context(user, app_entry=APP_ENTRY_OWNER)
-        elif app_entry == APP_ENTRY_STAFF:
-            context = build_owner_auth_context(user, app_entry=APP_ENTRY_STAFF)
-        else:
-            context = build_legacy_tailor_context(user)
-
         request = self.context.get('request')
         token_shop_id = get_token_shop_id(request) if request is not None else None
-        if token_shop_id is not None and isinstance(context, dict):
-            context = {**context, 'shop_id': token_shop_id, 'active_shop_id': token_shop_id}
+
+        app_entry = self._resolve_app_entry()
+        if app_entry == APP_ENTRY_OWNER:
+            context = build_owner_auth_context(
+                user,
+                app_entry=APP_ENTRY_OWNER,
+                active_shop_id=token_shop_id,
+            )
+        elif app_entry == APP_ENTRY_STAFF:
+            context = build_owner_auth_context(
+                user,
+                app_entry=APP_ENTRY_STAFF,
+                active_shop_id=token_shop_id,
+            )
+        else:
+            context = build_legacy_tailor_context(user, shop_id=token_shop_id)
+            if token_shop_id is not None:
+                context = apply_active_shop_to_tailor_context(
+                    context,
+                    user,
+                    token_shop_id,
+                )
         return context
 
 

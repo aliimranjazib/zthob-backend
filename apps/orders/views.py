@@ -47,6 +47,7 @@ from apps.tailors.models import TailorProfile
 from apps.tailors.permissions import IsShopStaff
 from apps.tailors.shop_access import (
     filter_orders_for_shop_staff,
+    get_token_shop_id,
     user_can_manage_shop_order,
     user_can_perform_order_stitching,
     user_can_see_stitch_order,
@@ -1456,7 +1457,11 @@ class TailorAvailableOrdersView(APIView):
         ).prefetch_related('order_items__fabric', 'order_items__customer_fabric_images').order_by('-created_at')
 
         orders = apply_shop_session_filter(orders, request)
-        orders = filter_orders_for_shop_staff(orders, request.user)
+        orders = filter_orders_for_shop_staff(
+            orders,
+            request.user,
+            shop_id=get_token_shop_id(request),
+        )
         
         # Filter by payment status
         payment_status = request.query_params.get('payment_status')
@@ -1519,7 +1524,11 @@ class TailorOrderListView(APIView):
         # Filter by payment status
 
         orders = apply_shop_session_filter(orders, request)
-        orders = filter_orders_for_shop_staff(orders, request.user)
+        orders = filter_orders_for_shop_staff(
+            orders,
+            request.user,
+            shop_id=get_token_shop_id(request),
+        )
         
         # Filters
         status_filter = request.query_params.get('status')
@@ -1738,7 +1747,11 @@ class TailorPaidOrdersView(APIView):
         ).prefetch_related('order_items', 'order_items__customer_fabric_images').order_by('-created_at')
 
         orders = apply_shop_session_filter(orders, request)
-        orders = filter_orders_for_shop_staff(orders, request.user)
+        orders = filter_orders_for_shop_staff(
+            orders,
+            request.user,
+            shop_id=get_token_shop_id(request),
+        )
         
         # Filter by status if provided
         status_filter = request.query_params.get('status')
