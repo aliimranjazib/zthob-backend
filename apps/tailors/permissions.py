@@ -17,7 +17,12 @@ def _user_is_named_shop_owner(user) -> bool:
     ).exclude(shop_name='').exists():
         return True
     profile = getattr(user, 'tailor_profile', None)
-    return bool(profile and (profile.shop_name or '').strip())
+    if not profile:
+        return False
+    if (profile.shop_name or '').strip():
+        return True
+    # Signal-created solo tailor / owner stub (shop name not set yet).
+    return profile.owner_id == user.id
 
 
 def _get_required_permissions(view, request=None):
