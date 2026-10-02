@@ -190,6 +190,32 @@ class OwnerAuthenticationTestCase(TestCase):
             'employee',
         )
 
+    def test_user_profile_owner_app_entry_and_jwt_shop_id(self):
+        response = self._owner_login()
+        user = CustomUser.objects.get(phone=self.test_phone)
+        profile = user.tailor_profile
+        profile.shop_name = 'Owner Shop'
+        profile.save(update_fields=['shop_name'])
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {response.data['data']['tokens']['access_token']}"
+        )
+        switch_response = self.client.post(self.owner_switch_url, {'shop_id': profile.id})
+        token = switch_response.data['data']['tokens']['access_token']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+
+        account_profile_url = reverse('accounts:user-profile')
+        profile_response = self.client.get(
+            account_profile_url,
+            HTTP_X_APP_ENTRY='owner',
+        )
+        self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
+        context = profile_response.data['data']['tailor_context']
+        self.assertTrue(context['is_owner'])
+        self.assertEqual(context['shop_id'], profile.id)
+        self.assertEqual(context['active_shop_id'], profile.id)
+        self.assertEqual(context['app_entry'], 'owner')
+
     def test_owner_profile_get_and_patch(self):
         response = self._owner_login(name='Owner Profile User')
         token = response.data['data']['tokens']['access_token']

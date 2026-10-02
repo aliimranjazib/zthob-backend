@@ -138,6 +138,21 @@ class UserProfileSerializer(serializers.ModelSerializer):
             )
         return value
 
+    def _resolve_app_entry(self):
+        app_entry = self.context.get('app_entry')
+        if app_entry:
+            return app_entry
+        request = self.context.get('request')
+        if request is None:
+            return None
+        header = request.headers.get('X-App-Entry') or request.META.get('HTTP_X_APP_ENTRY')
+        if header:
+            return str(header).strip().lower()
+        query = request.query_params.get('app_entry')
+        if query:
+            return str(query).strip().lower()
+        return None
+
     def get_tailor_context(self, user):
         """
         Returns shop context if user is an owner or employee.
@@ -145,15 +160,25 @@ class UserProfileSerializer(serializers.ModelSerializer):
         """
         from apps.accounts.services.tailor_auth import (
             APP_ENTRY_OWNER,
+            APP_ENTRY_STAFF,
             build_owner_auth_context,
             build_legacy_tailor_context,
         )
+        from apps.tailors.shop_access import get_token_shop_id
 
-        app_entry = self.context.get('app_entry')
+        app_entry = self._resolve_app_entry()
         if app_entry == APP_ENTRY_OWNER:
-            return build_owner_auth_context(user, app_entry=APP_ENTRY_OWNER)
+            context = build_owner_auth_context(user, app_entry=APP_ENTRY_OWNER)
+        elif app_entry == APP_ENTRY_STAFF:
+            context = build_owner_auth_context(user, app_entry=APP_ENTRY_STAFF)
+        else:
+            context = build_legacy_tailor_context(user)
 
-        return build_legacy_tailor_context(user)
+        request = self.context.get('request')
+        token_shop_id = get_token_shop_id(request) if request is not None else None
+        if token_shop_id is not None and isinstance(context, dict):
+            context = {**context, 'shop_id': token_shop_id, 'active_shop_id': token_shop_id}
+        return context
 
 
 

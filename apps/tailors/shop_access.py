@@ -145,11 +145,21 @@ def get_tailor_profile(user, shop_id=None):
     if staff:
         return staff.tailor
 
+    owned = TailorProfile.objects.filter(owner=user).order_by(
+        '-is_pinned',
+        '-created_at',
+    )
+    if owned.exists():
+        named = owned.exclude(shop_name__isnull=True).exclude(shop_name='')
+        if named.exists():
+            return named.first()
+        return owned.first()
+
     profile = getattr(user, 'tailor_profile', None)
     if profile:
         return profile
 
-    return TailorProfile.objects.filter(owner=user).order_by('created_at').first()
+    return None
 
 
 def get_shop_owner_user(user, shop_id=None):

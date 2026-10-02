@@ -142,6 +142,47 @@ class OwnerShopAPITestCase(TestCase):
         self.assertEqual(data['working_hours'], working_hours)
         self.assertEqual(data['service_area']['id'], area.id)
 
+    def test_tailor_profile_prefers_named_owned_shop_over_empty_stub(self):
+        self._login_owner()
+        owner = CustomUser.objects.get(phone=self.test_phone)
+        stub = owner.tailor_profile
+        stub.shop_name = ''
+        stub.save(update_fields=['shop_name'])
+
+        TailorProfile.objects.create(
+            owner=owner,
+            user=None,
+            shop_name='Named Branch',
+            shop_status=True,
+        )
+
+        response = self.client.get('/api/tailors/profile/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['data']['shop_name'], 'Named Branch')
+
+    def test_tailor_profile_respects_jwt_shop_id(self):
+        self._login_owner()
+        owner = CustomUser.objects.get(phone=self.test_phone)
+        owner.tailor_profile.shop_name = 'Stub Shop'
+        owner.tailor_profile.save(update_fields=['shop_name'])
+
+        branch = TailorProfile.objects.create(
+            owner=owner,
+            user=None,
+            shop_name='Other Branch',
+            shop_status=True,
+        )
+
+        switch_url = reverse('accounts:owner-switch-shop')
+        switch_response = self.client.post(switch_url, {'shop_id': branch.id})
+        self.assertEqual(switch_response.status_code, status.HTTP_200_OK)
+        token = switch_response.data['data']['tokens']['access_token']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+
+        response = self.client.get('/api/tailors/profile/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['data']['shop_name'], 'Other Branch')
+
     def test_legacy_phone_verify_still_returns_compact_tailor_context(self):
         self.client.post(self.phone_login_url, {'phone': '0500000004'})
         response = self.client.post(reverse('accounts:phone-verify'), {
