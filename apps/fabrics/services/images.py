@@ -32,6 +32,17 @@ def parse_multipart_images(request) -> list[dict]:
             index += 1
         else:
             break
+
+    if not images_data and getattr(request, 'FILES', None):
+        single = request.FILES.get('image')
+        if single is not None:
+            images_data.append(
+                {
+                    'image': single,
+                    'is_primary': request.POST.get('is_primary', 'false').lower() == 'true',
+                    'order': int(request.POST.get('order', '0')),
+                }
+            )
     return images_data
 
 

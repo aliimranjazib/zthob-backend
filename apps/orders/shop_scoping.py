@@ -84,6 +84,30 @@ def _tailor_user_from_queryset(queryset, request):
     return get_shop_owner_user(request.user, shop_id=shop_id_from_request(request))
 
 
+def fabric_belongs_to_tailor_order(fabric, tailor_user, *, shop_id=None) -> bool:
+    """
+    True when a legacy fabric row belongs to the order tailor (owner user).
+
+    Uses TailorProfile.shop_owner_user, not profile.user, for business/multi-shop rows.
+    When shop_id is set (JWT session), fabric must be listed on that shop profile.
+    """
+    if not fabric or not tailor_user:
+        return False
+
+    shop_profile = getattr(fabric, 'tailor', None)
+    if shop_profile is None:
+        return False
+
+    owner_id = shop_profile.shop_owner_user_id
+    if owner_id is None or owner_id != tailor_user.id:
+        return False
+
+    if shop_id is not None and shop_profile.id != shop_id:
+        return False
+
+    return True
+
+
 def attach_shop_to_order_data(validated_data, *, tailor_user, shop_id=None):
     """Set ``shop`` on validated order data when a tailor is assigned."""
     if not tailor_user:

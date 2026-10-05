@@ -211,6 +211,48 @@ class V2FabricCatalogTests(TestCase):
 
         self.assertIsNotNone(order_id)
 
+    def test_legacy_fabric_image_add_updates_v2_product_gallery(self):
+        shop_id, _owner_token, work_token = self._setup_owner_shop()
+        self._auth(work_token)
+
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Gallery Sync Cotton',
+                'price': '99.00',
+                'category_id': self.fabric_category.id,
+            },
+            format='json',
+        )
+        self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+        product_id = product_resp.data['data']['id']
+
+        assign_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-product-assign', product_id=product_id),
+            {'shop_id': shop_id, 'stock': 5, 'is_visible': True},
+            format='json',
+        )
+        self.assertEqual(assign_resp.status_code, status.HTTP_200_OK, assign_resp.data)
+        legacy_fabric_id = assign_resp.data['data']['legacy_fabric_id']
+
+        add_resp = self.client.post(
+            reverse('fabric-image-add', kwargs={'fabric_id': legacy_fabric_id}),
+            {
+                'images[0][image]': _make_test_image('extra.png'),
+                'images[0][is_primary]': 'false',
+                'images[0][order]': '1',
+            },
+            format='multipart',
+        )
+        self.assertEqual(add_resp.status_code, status.HTTP_200_OK, add_resp.data)
+
+        shop_fabrics = self.client.get(
+            self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id),
+        )
+        self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK, shop_fabrics.data)
+        gallery = shop_fabrics.data['data'][0]['product']['gallery']
+        self.assertEqual(len(gallery), 1)
+
     def test_v2_multipart_product_create_with_images(self):
         shop_id, owner_token, _work_token = self._setup_owner_shop()
         self._auth(owner_token)

@@ -275,6 +275,120 @@ class OrderCreateSerializerTest(TestCase):
             serializer.validate_tailor(self.tailor_user)
         self.assertIn('not accepting orders', str(context.exception))
 
+    def test_validate_fabric_owner_shop_with_null_profile_user(self):
+        """Business shop: fabric owner is profile.owner, profile.user may be null."""
+        owner = User.objects.create_user(
+            username=f'owner_fabric_{id(self)}',
+            password='testpass123',
+            role='TAILOR',
+        )
+        shop = TailorProfile.objects.create(
+            owner=owner,
+            shop_name='Branch Shop',
+            shop_status=True,
+        )
+        fabric = Fabric.objects.create(
+            tailor=shop,
+            name='Owner Branch Fabric',
+            price=Decimal('100.00'),
+            stock=5,
+            is_active=True,
+            category=self.fabric_category,
+        )
+        data = {
+            'customer': self.customer.id,
+            'tailor': owner.id,
+            'order_type': 'fabric_only',
+            'service_mode': 'home_delivery',
+            'payment_method': 'cod',
+            'delivery_address': self.address.id,
+            'items': [{'fabric': fabric, 'quantity': 1}],
+        }
+        mock_request = type('obj', (object,), {'user': self.customer, 'META': {}})()
+        serializer = OrderCreateSerializer(
+            data={
+                **data,
+                'items': [{'fabric': fabric.id, 'quantity': 1}],
+            },
+            context={'request': mock_request},
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_validate_fabric_rejects_wrong_owner(self):
+        other_owner = User.objects.create_user(
+            username=f'other_owner_{id(self)}',
+            password='testpass123',
+            role='TAILOR',
+        )
+        shop = TailorProfile.objects.create(
+            owner=other_owner,
+            shop_name='Other Shop',
+            shop_status=True,
+        )
+        fabric = Fabric.objects.create(
+            tailor=shop,
+            name='Other Shop Fabric',
+            price=Decimal('100.00'),
+            stock=5,
+            is_active=True,
+            category=self.fabric_category,
+        )
+        mock_request = type('obj', (object,), {'user': self.customer, 'META': {}})()
+        serializer = OrderCreateSerializer(
+            data={
+                'customer': self.customer.id,
+                'tailor': self.tailor_user.id,
+                'order_type': 'fabric_only',
+                'service_mode': 'home_delivery',
+                'payment_method': 'cod',
+                'delivery_address': self.address.id,
+                'items': [{'fabric': fabric.id, 'quantity': 1}],
+            },
+            context={'request': mock_request},
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('items', serializer.errors)
+
+    def test_validate_fabric_requires_jwt_shop_when_set(self):
+        owner = User.objects.create_user(
+            username=f'multi_shop_owner_{id(self)}',
+            password='testpass123',
+            role='TAILOR',
+        )
+        shop_a = TailorProfile.objects.create(
+            owner=owner,
+            shop_name='Shop A',
+            shop_status=True,
+        )
+        shop_b = TailorProfile.objects.create(
+            owner=owner,
+            shop_name='Shop B',
+            shop_status=True,
+        )
+        fabric_on_b = Fabric.objects.create(
+            tailor=shop_b,
+            name='Shop B Fabric',
+            price=Decimal('100.00'),
+            stock=5,
+            is_active=True,
+            category=self.fabric_category,
+        )
+        mock_request = type('obj', (object,), {'user': self.customer, 'META': {}})()
+        serializer = OrderCreateSerializer(
+            data={
+                'customer': self.customer.id,
+                'tailor': owner.id,
+                'order_type': 'fabric_only',
+                'service_mode': 'home_delivery',
+                'payment_method': 'cod',
+                'delivery_address': self.address.id,
+                'items': [{'fabric': fabric_on_b.id, 'quantity': 1}],
+            },
+            context={'request': mock_request, 'shop_id': shop_a.id},
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('items', serializer.errors)
+
 
 class OrderCreateIntegrationTest(TestCase):
     """Integration tests for order creation"""

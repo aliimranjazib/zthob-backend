@@ -34,6 +34,60 @@ def sync_legacy_fabric_images(*, product: FabricProduct, fabric: Fabric) -> None
 
 
 @transaction.atomic
+def append_images_to_legacy_fabric(*, fabric: Fabric, images: list[dict]) -> int:
+    """
+    Append gallery images for a legacy fabric id.
+
+    When the fabric is linked to a V2 shop listing, images are stored on the
+    business product gallery and mirrored to legacy (what GET /v2/shops/.../fabrics/ shows).
+    """
+    from apps.fabrics.services.images import (
+        MAX_IMAGES,
+        add_product_gallery_images,
+        validate_gallery_images,
+    )
+
+    validate_gallery_images(images, required=True)
+
+    shop_fabric = (
+        ShopFabric.objects.filter(legacy_fabric_id=fabric.id, is_active=True)
+        .select_related('product', 'shop')
+        .first()
+    )
+    if shop_fabric is not None:
+        add_product_gallery_images(product=shop_fabric.product, images=images)
+        sync_legacy_fabric_from_shop_fabric(shop_fabric=shop_fabric)
+        return len(images)
+
+    current_count = fabric.gallery.count()
+    if current_count + len(images) > MAX_IMAGES:
+        raise serializers.ValidationError(
+            {
+                'images': (
+                    f'Maximum {MAX_IMAGES} images allowed per fabric. '
+                    f'Currently have {current_count}, trying to add {len(images)}'
+                )
+            }
+        )
+
+    if any(img.get('is_primary') for img in images):
+        fabric.gallery.filter(is_primary=True).update(is_primary=False)
+
+    for index, img_data in enumerate(images):
+        FabricImage.objects.create(
+            fabric=fabric,
+            image=img_data['image'],
+            is_primary=img_data.get('is_primary', False),
+            order=img_data.get('order', current_count + index),
+        )
+
+    if hasattr(fabric, 'v2_shop_fabric'):
+        sync_v2_from_legacy_fabric(fabric=fabric)
+
+    return len(images)
+
+
+@transaction.atomic
 def sync_legacy_fabric_from_shop_fabric(*, shop_fabric: ShopFabric) -> Fabric:
     product = shop_fabric.product
     shop = shop_fabric.shop

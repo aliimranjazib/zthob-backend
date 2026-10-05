@@ -757,6 +757,10 @@ class FabricImageAddView(BaseTailorAuthenticatedView):
         }
     )
     def post(self, request, fabric_id):
+        from apps.fabrics.services.images import parse_multipart_images
+        from apps.fabrics.services.legacy_bridge import append_images_to_legacy_fabric
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+
         # Get the fabric
         try:
             fabric = Fabric.objects.select_related('tailor').get(pk=fabric_id)
@@ -774,95 +778,31 @@ class FabricImageAddView(BaseTailorAuthenticatedView):
                 message="You don't have permission to modify this fabric",
                 status_code=status.HTTP_403_FORBIDDEN
             )
-        
-        # Check current image count
-        current_image_count = fabric.gallery.count()
-        
-        # Extract images from request
-        images_data = []
-        i = 0
-        while True:
-            image_key = f'images[{i}][image]'
-            is_primary_key = f'images[{i}][is_primary]'
-            order_key = f'images[{i}][order]'
-            
-            if image_key in request.FILES:
-                image_data = {
-                    'image': request.FILES[image_key],
-                    'is_primary': request.POST.get(is_primary_key, 'false').lower() == 'true',
-                    'order': int(request.POST.get(order_key, str(current_image_count + i)))
-                }
-                images_data.append(image_data)
-                i += 1
-            else:
-                break
-        
+
+        images_data = parse_multipart_images(request)
         if not images_data:
             return api_response(
                 success=False,
-                message="No images provided",
+                message="No images provided. Use images[0][image] or a single image field.",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Check total image count limit (max 4 images)
-        total_images_after_add = current_image_count + len(images_data)
-        if total_images_after_add > 4:
+
+        try:
+            added_count = append_images_to_legacy_fabric(fabric=fabric, images=images_data)
+        except DRFValidationError as exc:
+            errors = exc.detail if hasattr(exc, 'detail') else {'images': str(exc)}
             return api_response(
                 success=False,
-                message=f"Maximum 4 images allowed per fabric. Currently have {current_image_count}, trying to add {len(images_data)}",
+                message="Validation failed",
+                errors=errors,
                 status_code=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Validate images
-        for img_data in images_data:
-            image = img_data['image']
-            # Check file size (5MB limit)
-            if image.size > 5 * 1024 * 1024:
-                return api_response(
-                    success=False,
-                    message=f"Image size exceeds 5MB limit: {image.name}",
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
-            # Check file format
-            allowed_extensions = ['jpg', 'jpeg', 'png']
-            file_extension = image.name.split('.')[-1].lower()
-            if file_extension not in allowed_extensions:
-                return api_response(
-                    success=False,
-                    message=f"Invalid file format for {image.name}. Only JPG, JPEG, and PNG files are allowed.",
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
-        
-        # Check if any image is marked as primary
-        primary_images = [img for img in images_data if img.get('is_primary', False)]
-        if len(primary_images) > 1:
-            return api_response(
-                success=False,
-                message="Only one image can be marked as primary",
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # If marking one as primary, unset existing primary
-        if primary_images:
-            fabric.gallery.filter(is_primary=True).update(is_primary=False)
-        
-        # Create new images
-        for img_data in images_data:
-            FabricImage.objects.create(
-                fabric=fabric,
-                image=img_data['image'],
-                is_primary=img_data.get('is_primary', False),
-                order=img_data.get('order', current_image_count),
-            )
-        
-        # Refresh fabric to get updated gallery
+
         fabric.refresh_from_db()
-        
-        # Return the updated fabric
         fabric_serializer = FabricSerializer(fabric, context={'request': request})
         return api_response(
             success=True,
-            message=f"Successfully added {len(images_data)} image(s) to fabric",
+            message=f"Successfully added {added_count} image(s) to fabric",
             data=fabric_serializer.data,
             status_code=status.HTTP_200_OK
         )

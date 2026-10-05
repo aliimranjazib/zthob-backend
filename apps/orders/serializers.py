@@ -1343,9 +1343,16 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         items = data.get('items', [])
         
         if tailor:
+            from apps.orders.shop_scoping import fabric_belongs_to_tailor_order
+
+            session_shop_id = self.context.get('shop_id')
             for item in items:
                 fabric = item.get('fabric')
-                if fabric and fabric.tailor.user != tailor:
+                if fabric and not fabric_belongs_to_tailor_order(
+                    fabric,
+                    tailor,
+                    shop_id=session_shop_id,
+                ):
                     raise serializers.ValidationError({
                         'items': f"Fabric {fabric.name} does not belong to the selected tailor."
                     })
@@ -1360,12 +1367,13 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             and customer
         ):
             from apps.tailors.services.pos_customer_access import tailor_has_pos_access_to_customer
+            from apps.tailors.shop_access import get_shop_owner_user
 
-            tailor_user = data.get('tailor') or request.user
-            if hasattr(request.user, 'tailor_employee') and request.user.tailor_employee.is_active:
-                tailor_user = request.user.tailor_employee.tailor.user
-            elif hasattr(request.user, 'tailor_profile'):
-                tailor_user = request.user
+            session_shop_id = self.context.get('shop_id')
+            tailor_user = data.get('tailor') or get_shop_owner_user(
+                request.user,
+                shop_id=session_shop_id,
+            ) or request.user
 
             if not tailor_has_pos_access_to_customer(
                 tailor_owner_user=tailor_user,
