@@ -448,6 +448,14 @@ class TailorInvitationCode(BaseModel):
         limit_choices_to={'role': 'TAILOR'},
         help_text="Tailor who created this invitation code"
     )
+    shop = models.ForeignKey(
+        'tailors.TailorProfile',
+        on_delete=models.CASCADE,
+        related_name='rider_invitation_codes',
+        null=True,
+        blank=True,
+        help_text="Shop this invitation code belongs to",
+    )
     
     code = models.CharField(
         max_length=20,
@@ -511,18 +519,17 @@ class TailorInvitationCode(BaseModel):
         return True, "Valid"
     
     @staticmethod
-    def generate_unique_code(tailor_id):
+    def generate_unique_code(shop_id):
         """
-        Generate a unique invitation code for a tailor.
-        Format: TAL-{TAILOR_ID}-{RANDOM}
+        Generate a unique invitation code for a shop.
+        Format: TAL-{SHOP_ID}-{RANDOM}
         Example: TAL-42-X7K9P
         """
         import random
         import string
-        
-        # Generate random 5-character string
+
         random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-        code = f"TAL-{tailor_id}-{random_part}"
+        code = f"TAL-{shop_id}-{random_part}"
         
         # Ensure uniqueness (very unlikely to collide, but check anyway)
         while TailorInvitationCode.objects.filter(code=code).exists():
@@ -544,7 +551,15 @@ class TailorRiderAssociation(BaseModel):
         limit_choices_to={'role': 'TAILOR'},
         help_text="Tailor in this association"
     )
-    
+    shop = models.ForeignKey(
+        'tailors.TailorProfile',
+        on_delete=models.CASCADE,
+        related_name='rider_associations',
+        null=True,
+        blank=True,
+        help_text="Shop this rider is associated with",
+    )
+
     rider = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -592,9 +607,10 @@ class TailorRiderAssociation(BaseModel):
         verbose_name = "Tailor-Rider Association"
         verbose_name_plural = "Tailor-Rider Associations"
         ordering = ['-priority', '-created_at']
-        unique_together = [['tailor', 'rider']]
+        unique_together = [['shop', 'rider']]
         indexes = [
             models.Index(fields=['tailor', 'is_active']),
+            models.Index(fields=['shop', 'is_active']),
             models.Index(fields=['rider', 'is_active']),
         ]
     

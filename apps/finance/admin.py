@@ -8,15 +8,18 @@ from .services import WalletService
 
 @admin.register(TailorWallet)
 class TailorWalletAdmin(admin.ModelAdmin):
-    list_display = ('tailor_shop_name', 'available_balance', 'pending_balance', 'total_earned', 'total_withdrawn')
-    search_fields = ('tailor__username', 'tailor__tailor_profile__shop_name')
+    list_display = ('tailor_shop_name', 'shop', 'available_balance', 'pending_balance', 'total_earned', 'total_withdrawn')
+    search_fields = ('tailor__username', 'shop__shop_name', 'tailor__tailor_profile__shop_name')
+    list_filter = ('shop',)
     readonly_fields = ('available_balance', 'pending_balance', 'total_earned', 'total_withdrawn')
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('tailor', 'tailor__tailor_profile')
+        return super().get_queryset(request).select_related('tailor', 'shop', 'tailor__tailor_profile')
 
     @admin.display(description='Tailor / Shop Name')
     def tailor_shop_name(self, obj):
+        if obj.shop_id and obj.shop.shop_name:
+            return f"{obj.tailor.username} | {obj.shop.shop_name}"
         if hasattr(obj.tailor, 'tailor_profile') and obj.tailor.tailor_profile.shop_name:
             return f"{obj.tailor.username} | {obj.tailor.tailor_profile.shop_name}"
         return obj.tailor.username

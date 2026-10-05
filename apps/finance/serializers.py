@@ -29,10 +29,12 @@ def _money(value):
     return f"{(value or Decimal('0.00')).quantize(Decimal('0.01')):.2f}"
 
 
-def _reserved_payout_amount(user):
+def _reserved_payout_amount(user, shop_id=None):
     finance_role = get_finance_role(user)
     if finance_role == 'tailor':
         queryset = PayoutRequest.objects.filter(tailor=user, status__in=PAYOUT_RESERVED_STATUSES)
+        if shop_id is not None:
+            queryset = queryset.filter(shop_id=shop_id)
     elif finance_role == 'rider':
         queryset = RiderPayoutRequest.objects.filter(rider=user, status__in=PAYOUT_RESERVED_STATUSES)
     else:
@@ -55,8 +57,10 @@ def _walk_in_order_credit_total(wallet):
     )
 
 
-def _spendable_balance(wallet, user):
-    reserved_amount = _reserved_payout_amount(user)
+def _spendable_balance(wallet, user, shop_id=None):
+    if shop_id is None and isinstance(wallet, TailorWallet):
+        shop_id = wallet.shop_id
+    reserved_amount = _reserved_payout_amount(user, shop_id=shop_id)
     spendable = wallet.available_balance - reserved_amount - _walk_in_order_credit_total(wallet)
     return max(spendable, Decimal('0.00'))
 
@@ -103,16 +107,17 @@ class TailorWalletSerializer(serializers.ModelSerializer):
     class Meta:
         model = TailorWallet
         fields = [
+            'shop_id',
             'available_balance', 'pending_balance',
             'pending_payout_amount', 'ledger_balance',
             'total_earned', 'total_withdrawn'
         ]
 
     def get_available_balance(self, obj):
-        return _money(_spendable_balance(obj, obj.tailor))
+        return _money(_spendable_balance(obj, obj.tailor, shop_id=obj.shop_id))
 
     def get_pending_payout_amount(self, obj):
-        return _money(_reserved_payout_amount(obj.tailor))
+        return _money(_reserved_payout_amount(obj.tailor, shop_id=obj.shop_id))
 
     def get_ledger_balance(self, obj):
         return _money(max(obj.available_balance - _walk_in_order_credit_total(obj), Decimal('0.00')))
@@ -148,23 +153,27 @@ class PayoutRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = PayoutRequest
         fields = [
-            'id', 'amount', 'status', 'status_display', 
+            'id', 'shop_id', 'amount', 'status', 'status_display',
             'bank_name', 'account_number', 'iban', 'account_holder_name',
             'payment_reference', 'admin_notes', 'created_at', 'processed_at'
         ]
-        read_only_fields = ['status', 'payment_reference', 'admin_notes', 'processed_at']
+        read_only_fields = [
+            'shop_id', 'status', 'payment_reference', 'admin_notes', 'processed_at',
+        ]
 
     def validate_amount(self, value):
         """Ensure the authenticated tailor/rider has enough balance for the payout."""
         user = self.context['request'].user
         finance_role = get_finance_role(user)
+        session_wallet = self.context.get('tailor_wallet')
         if finance_role == 'tailor':
-            wallet = TailorWallet.objects.filter(tailor=user).first()
+            wallet = session_wallet or TailorWallet.objects.filter(tailor=user).first()
         elif finance_role == 'rider':
             wallet = RiderWallet.objects.filter(rider=user).first()
         else:
             wallet = None
-        if not wallet or _spendable_balance(wallet, user) < value:
+        shop_id = getattr(wallet, 'shop_id', None) if wallet else self.context.get('shop_id')
+        if not wallet or _spendable_balance(wallet, user, shop_id=shop_id) < value:
             raise serializers.ValidationError("Insufficient balance for this payout request.")
         return value
 

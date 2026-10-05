@@ -48,10 +48,10 @@ class TailorRiderRoleAssignmentTest(TestCase):
             password='testpass123',
             role='TAILOR',
         )
-        tailor_profile, _ = TailorProfile.objects.get_or_create(user=self.tailor)
-        tailor_profile.shop_name = 'Role Tailor'
-        tailor_profile.shop_status = True
-        tailor_profile.save(update_fields=['shop_name', 'shop_status'])
+        self.tailor_profile, _ = TailorProfile.objects.get_or_create(user=self.tailor)
+        self.tailor_profile.shop_name = 'Role Tailor'
+        self.tailor_profile.shop_status = True
+        self.tailor_profile.save(update_fields=['shop_name', 'shop_status'])
         self.measurement_rider = self._create_approved_rider('measurement_rider')
         self.delivery_rider = self._create_approved_rider('delivery_rider')
 
@@ -187,6 +187,7 @@ class TailorRiderRoleAssignmentTest(TestCase):
         multirole_rider = self._create_approved_multirole_rider('multirole_measurement_rider')
         TailorRiderAssociation.objects.create(
             tailor=self.tailor,
+            shop=self.tailor_profile,
             rider=multirole_rider,
             can_take_measurements=True,
             can_do_delivery=False,

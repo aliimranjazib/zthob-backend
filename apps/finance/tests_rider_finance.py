@@ -13,6 +13,7 @@ from apps.finance.models import (
 )
 from apps.finance.services import WalletService
 from apps.orders.models import Order
+from apps.tailors.models import TailorProfile
 
 
 User = get_user_model()
@@ -195,8 +196,13 @@ class RiderFinanceAPITest(TestCase):
         self.assertFalse(RiderPayoutRequest.objects.filter(rider=self.rider).exists())
 
     def test_tailor_finance_endpoint_still_uses_tailor_wallet(self):
+        profile, _ = TailorProfile.objects.get_or_create(
+            user=self.tailor,
+            defaults={'shop_name': 'Finance Shop', 'shop_status': True},
+        )
         TailorWallet.objects.create(
             tailor=self.tailor,
+            shop=profile,
             available_balance=Decimal('75.00'),
             total_earned=Decimal('75.00'),
         )

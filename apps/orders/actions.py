@@ -20,21 +20,10 @@ from apps.tailors.shop_access import (
 from zthob.translations import get_language_from_request, translate_message
 
 
-def _validate_tailor_rider_capability(tailor, rider, assignment_type):
-    from apps.riders.models import TailorRiderAssociation
+def _validate_tailor_rider_capability(order, rider, assignment_type):
+    from apps.riders.services.shop_riders import validate_rider_for_shop
 
-    association = TailorRiderAssociation.objects.filter(
-        tailor=tailor,
-        rider=rider,
-        is_active=True,
-    ).first()
-    if not association:
-        return
-
-    if assignment_type == 'measurement' and not association.can_take_measurements:
-        raise ValidationError("This rider is not enabled for measurement assignments.")
-    if assignment_type == 'delivery' and not association.can_do_delivery:
-        raise ValidationError("This rider is not enabled for delivery assignments.")
+    validate_rider_for_shop(order, rider, assignment_type)
 
 
 def _get_assignable_rider(rider_id):
@@ -372,7 +361,7 @@ class AcceptOrderAction(BaseOrderAction):
                     raise ValidationError("Measurements already exist for this order. Assign a delivery rider when marking ready for delivery.")
                 assigned_rider = _get_assignable_rider(assigned_rider_id)
                 _validate_tailor_rider_capability(
-                    get_shop_owner_user(self.user) or self.user,
+                    self.order,
                     assigned_rider,
                     'measurement',
                 )
@@ -605,7 +594,7 @@ class MarkReadyAction(BaseOrderAction):
             if assigned_rider_id:
                 assigned_rider = _get_assignable_rider(assigned_rider_id)
                 _validate_tailor_rider_capability(
-                    get_shop_owner_user(self.user) or self.user,
+                    self.order,
                     assigned_rider,
                     'delivery',
                 )

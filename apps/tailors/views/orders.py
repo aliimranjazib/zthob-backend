@@ -25,21 +25,17 @@ def _get_rider_or_404(rider_id):
     return rider
 
 
-def _validate_tailor_rider_capability(tailor, rider, assignment_type):
-    from apps.riders.models import TailorRiderAssociation
+def _validate_tailor_rider_capability(order, rider, assignment_type):
+    from apps.riders.services.shop_riders import validate_rider_for_shop
+    from rest_framework.exceptions import ValidationError
 
-    association = TailorRiderAssociation.objects.filter(
-        tailor=tailor,
-        rider=rider,
-        is_active=True,
-    ).first()
-    if not association:
-        return
-
-    if assignment_type == 'measurement' and not association.can_take_measurements:
-        raise ValueError("This rider is not enabled for measurement assignments.")
-    if assignment_type == 'delivery' and not association.can_do_delivery:
-        raise ValueError("This rider is not enabled for delivery assignments.")
+    try:
+        validate_rider_for_shop(order, rider, assignment_type)
+    except ValidationError as exc:
+        detail = exc.detail
+        if isinstance(detail, list):
+            raise ValueError(str(detail[0]))
+        raise ValueError(str(detail))
 
 
 def _assign_measurement_rider(order, rider):
@@ -143,7 +139,7 @@ class TailorAcceptOrderView(APIView):
                 )
             try:
                 _validate_tailor_rider_capability(
-                    get_shop_owner_user(request.user),
+                    order,
                     assigned_rider,
                     'measurement',
                 )
@@ -247,7 +243,7 @@ class TailorUpdateOrderStatusView(APIView):
                     )
                 try:
                     _validate_tailor_rider_capability(
-                        get_shop_owner_user(request.user),
+                        order,
                         assigned_rider,
                         rider_assignment_type,
                     )

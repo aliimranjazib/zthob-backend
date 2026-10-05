@@ -44,14 +44,15 @@ class TailorRiderCapabilityTest(TestCase):
             password='testpass123',
             role='TAILOR',
         )
-        tailor_profile, _ = TailorProfile.objects.get_or_create(user=self.tailor)
-        tailor_profile.shop_name = 'Capability Tailor'
-        tailor_profile.shop_status = True
-        tailor_profile.save(update_fields=['shop_name', 'shop_status'])
+        self.tailor_profile, _ = TailorProfile.objects.get_or_create(user=self.tailor)
+        self.tailor_profile.shop_name = 'Capability Tailor'
+        self.tailor_profile.shop_status = True
+        self.tailor_profile.save(update_fields=['shop_name', 'shop_status'])
 
         self.rider = self._create_approved_rider('cap_rider')
         self.association = TailorRiderAssociation.objects.create(
             tailor=self.tailor,
+            shop=self.tailor_profile,
             rider=self.rider,
             is_active=True,
         )
@@ -238,6 +239,7 @@ class TailorEmployeeRiderTeamAccessTest(TestCase):
         review.save(update_fields=['review_status'])
         self.association = TailorRiderAssociation.objects.create(
             tailor=self.owner,
+            shop=self.owner_profile,
             rider=self.rider,
             is_active=True,
             can_take_measurements=True,
@@ -325,6 +327,7 @@ class RiderMyTailorsPhoneDisplayTest(TestCase):
 
         TailorRiderAssociation.objects.create(
             tailor=self.tailor,
+            shop=self.tailor_profile,
             rider=self.rider,
             is_active=True,
         )

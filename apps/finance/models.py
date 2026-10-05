@@ -7,15 +7,22 @@ from apps.core.models import BaseModel
 
 class TailorWallet(BaseModel):
     """
-    Tracks the financial balance of a tailor.
-    Linked to TailorProfile through the tailor user.
+    Tracks the financial balance of a tailor shop (multi-shop owners have one wallet per shop).
     """
-    tailor = models.OneToOneField(
+    tailor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='wallet',
+        related_name='tailor_wallets',
         limit_choices_to={'role': 'TAILOR'},
-        help_text=_("The tailor who owns this wallet")
+        help_text=_("The tailor owner user for this wallet")
+    )
+    shop = models.ForeignKey(
+        'tailors.TailorProfile',
+        on_delete=models.CASCADE,
+        related_name='wallets',
+        null=True,
+        blank=True,
+        help_text=_("Shop this wallet belongs to"),
     )
     available_balance = models.DecimalField(
         max_digits=12,
@@ -45,9 +52,16 @@ class TailorWallet(BaseModel):
     class Meta:
         verbose_name = _("Tailor Wallet")
         verbose_name_plural = _("Tailor Wallets")
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tailor', 'shop'],
+                name='uniq_tailor_shop_wallet',
+            ),
+        ]
 
     def __str__(self):
-        return f"Wallet: {self.tailor.username} - Balance: {self.available_balance}"
+        shop_label = getattr(self.shop, 'shop_name', None) or self.shop_id or 'legacy'
+        return f"Wallet: {self.tailor.username} ({shop_label}) - Balance: {self.available_balance}"
 
 
 class RiderWallet(BaseModel):
@@ -262,6 +276,14 @@ class PayoutRequest(BaseModel):
         on_delete=models.CASCADE,
         related_name='payout_requests',
         limit_choices_to={'role': 'TAILOR'}
+    )
+    shop = models.ForeignKey(
+        'tailors.TailorProfile',
+        on_delete=models.CASCADE,
+        related_name='payout_requests',
+        null=True,
+        blank=True,
+        help_text=_("Shop wallet this payout withdraws from"),
     )
     amount = models.DecimalField(
         max_digits=12,

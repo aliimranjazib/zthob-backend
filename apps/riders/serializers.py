@@ -1096,20 +1096,23 @@ class CreateInvitationCodeSerializer(serializers.Serializer):
         from django.utils import timezone
         from datetime import timedelta
         
-        from apps.tailors.shop_access import get_shop_owner_user
-
         request = self.context['request']
-        tailor = get_shop_owner_user(request.user)
+        shop = self.context.get('shop')
+        if not shop:
+            from apps.riders.services.shop_riders import require_rider_session_shop
+            shop, _shop_id = require_rider_session_shop(request)
+        tailor = shop.shop_owner_user
         if not tailor:
             raise serializers.ValidationError("Tailor shop not found.")
-        code = models.TailorInvitationCode.generate_unique_code(tailor.id)
-        
+        code = models.TailorInvitationCode.generate_unique_code(shop.id)
+
         expires_at = None
         if 'expires_in_days' in validated_data:
             expires_at = timezone.now() + timedelta(days=validated_data['expires_in_days'])
-        
+
         invitation_code = models.TailorInvitationCode.objects.create(
             tailor=tailor,
+            shop=shop,
             code=code,
             max_uses=validated_data.get('max_uses', 0),
             expires_at=expires_at
@@ -1252,16 +1255,22 @@ class JoinTailorTeamSerializer(serializers.Serializer):
         
         code_obj = models.TailorInvitationCode.objects.get(code=code)
         tailor = code_obj.tailor
-        
-        # Check if association already exists
+        shop = code_obj.shop
+        if not shop:
+            raise serializers.ValidationError('This invitation code is not linked to a shop.')
+
         association, created = models.TailorRiderAssociation.objects.get_or_create(
-            tailor=tailor,
+            shop=shop,
             rider=rider,
             defaults={
+                'tailor': tailor,
                 'joined_via_code': code_obj,
-                'is_active': True
-            }
+                'is_active': True,
+            },
         )
+        if not created and association.tailor_id != tailor.id:
+            association.tailor = tailor
+            association.save(update_fields=['tailor', 'updated_at'])
         
         if not created and not association.is_active:
             # Reactivate if it was previously deactivated

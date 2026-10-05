@@ -2,6 +2,8 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from apps.orders.shop_scoping import resolve_shop_for_tailor_user
+
 from .models import (
     TailorWallet, WalletTransaction, PayoutRequest,
     RiderWallet, RiderWalletTransaction, RiderPayoutRequest,
@@ -14,10 +16,34 @@ class WalletService:
     """
 
     @staticmethod
-    def get_or_create_wallet(tailor):
-        """Ensures a tailor has a wallet initialized."""
-        wallet, created = TailorWallet.objects.get_or_create(tailor=tailor)
+    def get_or_create_wallet(tailor, shop=None):
+        """Ensures a tailor has a wallet initialized (legacy: shop may be omitted)."""
+        if shop is not None:
+            wallet, _ = TailorWallet.objects.get_or_create(
+                tailor=tailor,
+                shop=shop,
+            )
+            return wallet
+        wallet = TailorWallet.objects.filter(tailor=tailor, shop__isnull=True).first()
+        if wallet:
+            return wallet
+        wallet, _ = TailorWallet.objects.get_or_create(tailor=tailor, shop=None)
         return wallet
+
+    @classmethod
+    def get_or_create_shop_wallet(cls, tailor, shop):
+        """Wallet for a specific shop (required for multi-shop owners)."""
+        if shop is None:
+            return cls.get_or_create_wallet(tailor)
+        return cls.get_or_create_wallet(tailor, shop=shop)
+
+    @staticmethod
+    def _wallet_for_order(order):
+        shop = getattr(order, 'shop', None) or resolve_shop_for_tailor_user(
+            order.tailor,
+            shop_id=getattr(order, 'shop_id', None),
+        )
+        return WalletService.get_or_create_shop_wallet(order.tailor, shop)
 
     @staticmethod
     def get_or_create_rider_wallet(rider):
@@ -52,7 +78,7 @@ class WalletService:
 
         net_earning = (fabric_price + stitching_price + express_fee) - system_fee
 
-        wallet = cls.get_or_create_wallet(order.tailor)
+        wallet = cls._wallet_for_order(order)
 
         # Create Transaction Entry (The Ledger)
         transaction_entry = WalletTransaction.objects.create(
@@ -173,7 +199,13 @@ class WalletService:
         if payout_request.status == 'paid':
             return None
 
-        wallet = cls.get_or_create_wallet(payout_request.tailor)
+        if payout_request.shop_id:
+            wallet = cls.get_or_create_shop_wallet(
+                payout_request.tailor,
+                payout_request.shop,
+            )
+        else:
+            wallet = cls.get_or_create_wallet(payout_request.tailor)
 
         # Create Debit Transaction
         transaction_entry = WalletTransaction.objects.create(
