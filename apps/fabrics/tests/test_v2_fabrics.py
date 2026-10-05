@@ -253,6 +253,50 @@ class V2FabricCatalogTests(TestCase):
         gallery = shop_fabrics.data['data'][0]['product']['gallery']
         self.assertEqual(len(gallery), 1)
 
+    def test_legacy_image_update_accepts_v2_gallery_image_id(self):
+        shop_id, _owner_token, work_token = self._setup_owner_shop()
+        self._auth(work_token)
+
+        image = _make_test_image('primary.png')
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Update By V2 Id',
+                'price': '50.00',
+                'category_id': str(self.fabric_category.id),
+                'images[0][image]': image,
+                'images[0][is_primary]': 'true',
+                'images[0][order]': '0',
+            },
+            format='multipart',
+        )
+        self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+        product_id = product_resp.data['data']['id']
+
+        assign_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-product-assign', product_id=product_id),
+            {'shop_id': shop_id, 'stock': 3, 'is_visible': True},
+            format='json',
+        )
+        self.assertEqual(assign_resp.status_code, status.HTTP_200_OK, assign_resp.data)
+
+        shop_fabrics = self.client.get(
+            self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id),
+        )
+        v2_image_id = shop_fabrics.data['data'][0]['product']['gallery'][0]['id']
+
+        update_resp = self.client.patch(
+            reverse('fabric-image-update', kwargs={'image_id': v2_image_id}),
+            {'image': _make_test_image('replaced.png')},
+            format='multipart',
+        )
+        self.assertEqual(update_resp.status_code, status.HTTP_200_OK, update_resp.data)
+
+        shop_fabrics = self.client.get(
+            self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id),
+        )
+        self.assertEqual(len(shop_fabrics.data['data'][0]['product']['gallery']), 1)
+
     def test_v2_multipart_product_create_with_images(self):
         shop_id, owner_token, _work_token = self._setup_owner_shop()
         self._auth(owner_token)

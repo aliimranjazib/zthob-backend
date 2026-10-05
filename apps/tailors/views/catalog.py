@@ -632,35 +632,50 @@ class FabricImagePrimaryView(BaseTailorAuthenticatedView):
         }
     )
     def post(self, request, image_id):
-        # Find the image
-        try:
-            image = FabricImage.objects.select_related('fabric', 'fabric__tailor').get(pk=image_id)
-        except FabricImage.DoesNotExist:
-            return api_response(
-                success=False, 
-                message="Image not found", 
-                status_code=status.HTTP_404_NOT_FOUND
-            )
-        
+        from apps.fabrics.services.images import (
+            resolve_manageable_gallery_image,
+            sync_galleries_after_legacy_image_change,
+            sync_galleries_after_product_image_change,
+        )
+
         profile = self.get_tailor_profile(request.user)
-        if not profile or image.fabric.tailor_id != profile.id:
+        if not profile:
             return api_response(
-                success=False, 
+                success=False,
                 message="You don't have permission to modify this image",
-                status_code=status.HTTP_403_FORBIDDEN
+                status_code=status.HTTP_403_FORBIDDEN,
             )
-        
-        # Set this image as primary (this will automatically unset others due to the save method)
-        image.is_primary = True
-        image.save()
-        
-        # Return the updated fabric
-        fabric_serializer = FabricSerializer(image.fabric, context={'request': request})
+
+        resolved = resolve_manageable_gallery_image(
+            image_id=image_id,
+            shop_profile_id=profile.id,
+        )
+        if resolved is None:
+            return api_response(
+                success=False,
+                message="Image not found",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        if resolved.kind == 'v2':
+            resolved.product_image.is_primary = True
+            resolved.product_image.save()
+            sync_galleries_after_product_image_change(product=resolved.product_image.product)
+            fabric = resolved.fabric
+            fabric.refresh_from_db()
+        else:
+            image = resolved.legacy_image
+            image.is_primary = True
+            image.save()
+            sync_galleries_after_legacy_image_change(fabric=image.fabric)
+            fabric = image.fabric
+
+        fabric_serializer = FabricSerializer(fabric, context={'request': request})
         return api_response(
-            success=True, 
-            message="Primary image updated successfully", 
+            success=True,
+            message="Primary image updated successfully",
             data=fabric_serializer.data,
-            status_code=status.HTTP_200_OK
+            status_code=status.HTTP_200_OK,
         )
 
 @extend_schema(
@@ -683,57 +698,74 @@ class FabricImageDeleteView(BaseTailorAuthenticatedView):
         }
     )
     def delete(self, request, image_id):
-        # Find the image
-        try:
-            image = FabricImage.objects.select_related('fabric', 'fabric__tailor').get(pk=image_id)
-        except FabricImage.DoesNotExist:
-            return api_response(
-                success=False, 
-                message="Image not found", 
-                status_code=status.HTTP_404_NOT_FOUND
-            )
-        
+        from apps.fabrics.services.images import (
+            delete_product_image,
+            resolve_manageable_gallery_image,
+            sync_galleries_after_legacy_image_change,
+            sync_galleries_after_product_image_change,
+        )
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+
         profile = self.get_tailor_profile(request.user)
-        if not profile or image.fabric.tailor_id != profile.id:
+        if not profile:
             return api_response(
-                success=False, 
+                success=False,
                 message="You don't have permission to delete this image",
-                status_code=status.HTTP_403_FORBIDDEN
+                status_code=status.HTTP_403_FORBIDDEN,
             )
-        
-        # Check if this is the last image
-        total_images = image.fabric.gallery.count()
-        if total_images <= 1:
+
+        resolved = resolve_manageable_gallery_image(
+            image_id=image_id,
+            shop_profile_id=profile.id,
+        )
+        if resolved is None:
             return api_response(
-                success=False, 
-                message="Cannot delete the last image of a fabric",
-                status_code=status.HTTP_400_BAD_REQUEST
+                success=False,
+                message="Image not found",
+                status_code=status.HTTP_404_NOT_FOUND,
             )
-        
-        # Store fabric reference before deletion
-        fabric = image.fabric
-        
-        # If this is the primary image, set another image as primary
-        if image.is_primary:
-            remaining_images = fabric.gallery.exclude(pk=image_id)
-            if remaining_images.exists():
-                new_primary = remaining_images.first()
-                new_primary.is_primary = True
-                new_primary.save()
-        
-        # Delete the image
-        image.delete()
-        
-        # Refresh fabric from database to get updated gallery
+
+        fabric = resolved.fabric
+
+        if resolved.kind == 'v2':
+            try:
+                delete_product_image(
+                    product=resolved.product_image.product,
+                    image=resolved.product_image,
+                )
+            except DRFValidationError as exc:
+                errors = exc.detail if hasattr(exc, 'detail') else {'images': str(exc)}
+                return api_response(
+                    success=False,
+                    message="Validation failed",
+                    errors=errors,
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            sync_galleries_after_product_image_change(product=resolved.product_image.product)
+        else:
+            image = resolved.legacy_image
+            if image.fabric.gallery.count() <= 1:
+                return api_response(
+                    success=False,
+                    message="Cannot delete the last image of a fabric",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            if image.is_primary:
+                remaining_images = fabric.gallery.exclude(pk=image_id)
+                if remaining_images.exists():
+                    new_primary = remaining_images.first()
+                    new_primary.is_primary = True
+                    new_primary.save()
+            image.delete()
+            sync_galleries_after_legacy_image_change(fabric=fabric)
+
         fabric.refresh_from_db()
-        
-        # Return the updated fabric
         fabric_serializer = FabricSerializer(fabric, context={'request': request})
         return api_response(
-            success=True, 
-            message="Image deleted successfully", 
+            success=True,
+            message="Image deleted successfully",
             data=fabric_serializer.data,
-            status_code=status.HTTP_200_OK
+            status_code=status.HTTP_200_OK,
         )
 
 @extend_schema(
@@ -828,83 +860,119 @@ class FabricImageUpdateView(BaseTailorAuthenticatedView):
         }
     )
     def patch(self, request, image_id):
-        # Find the image
-        try:
-            image = FabricImage.objects.select_related('fabric', 'fabric__tailor').get(pk=image_id)
-        except FabricImage.DoesNotExist:
-            return api_response(
-                success=False,
-                message="Image not found",
-                status_code=status.HTTP_404_NOT_FOUND
-            )
-        
+        from apps.fabrics.services.images import (
+            resolve_manageable_gallery_image,
+            sync_galleries_after_legacy_image_change,
+            sync_galleries_after_product_image_change,
+            update_product_image,
+        )
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+
         profile = self.get_tailor_profile(request.user)
-        if not profile or image.fabric.tailor_id != profile.id:
+        if not profile:
             return api_response(
                 success=False,
                 message="You don't have permission to modify this image",
-                status_code=status.HTTP_403_FORBIDDEN
+                status_code=status.HTTP_403_FORBIDDEN,
             )
-        
-        # Update image file if provided
-        if 'image' in request.FILES:
-            new_image = request.FILES['image']
-            
-            # Validate file size (5MB limit)
-            if new_image.size > 5 * 1024 * 1024:
-                return api_response(
-                    success=False,
-                    message=f"Image size exceeds 5MB limit: {new_image.name}",
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Validate file format
-            allowed_extensions = ['jpg', 'jpeg', 'png']
-            file_extension = new_image.name.split('.')[-1].lower()
-            if file_extension not in allowed_extensions:
-                return api_response(
-                    success=False,
-                    message=f"Invalid file format for {new_image.name}. Only JPG, JPEG, and PNG files are allowed.",
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Delete old image file
-            if image.image:
-                image.image.delete(save=False)
-            
-            # Set new image
-            image.image = new_image
-        
-        # Update is_primary if provided
-        if 'is_primary' in request.POST:
-            is_primary = request.POST.get('is_primary', 'false').lower() == 'true'
-            if is_primary:
-                # Unset other primary images
-                image.fabric.gallery.filter(is_primary=True).exclude(pk=image_id).update(is_primary=False)
-            image.is_primary = is_primary
-        
-        # Update order if provided
-        if 'order' in request.POST:
+
+        resolved = resolve_manageable_gallery_image(
+            image_id=image_id,
+            shop_profile_id=profile.id,
+        )
+        if resolved is None:
+            return api_response(
+                success=False,
+                message="Image not found",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        if resolved.kind == 'v2':
+            product_image = resolved.product_image
+            is_primary = None
+            order = None
+            if 'is_primary' in request.POST:
+                is_primary = request.POST.get('is_primary', 'false').lower() == 'true'
+            if 'order' in request.POST:
+                try:
+                    order = int(request.POST.get('order'))
+                except ValueError:
+                    return api_response(
+                        success=False,
+                        message="Invalid order value",
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
             try:
-                image.order = int(request.POST.get('order'))
-            except ValueError:
+                update_product_image(
+                    image=product_image,
+                    image_file=request.FILES.get('image'),
+                    is_primary=is_primary,
+                    order=order,
+                )
+            except DRFValidationError as exc:
+                errors = exc.detail if hasattr(exc, 'detail') else {'image': str(exc)}
                 return api_response(
                     success=False,
-                    message="Invalid order value",
-                    status_code=status.HTTP_400_BAD_REQUEST
+                    message="Validation failed",
+                    errors=errors,
+                    status_code=status.HTTP_400_BAD_REQUEST,
                 )
-        
-        # Save the image
-        image.save()
-        
-        # Refresh fabric to get updated gallery
-        image.fabric.refresh_from_db()
-        
-        # Return the updated fabric
-        fabric_serializer = FabricSerializer(image.fabric, context={'request': request})
+            sync_galleries_after_product_image_change(product=product_image.product)
+            fabric = resolved.fabric
+            fabric.refresh_from_db()
+        else:
+            image = resolved.legacy_image
+
+            if 'image' in request.FILES:
+                new_image = request.FILES['image']
+                if new_image.size > 5 * 1024 * 1024:
+                    return api_response(
+                        success=False,
+                        message=f"Image size exceeds 5MB limit: {new_image.name}",
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
+                allowed_extensions = ['jpg', 'jpeg', 'png']
+                file_extension = new_image.name.split('.')[-1].lower()
+                if file_extension not in allowed_extensions:
+                    return api_response(
+                        success=False,
+                        message=(
+                            f"Invalid file format for {new_image.name}. "
+                            "Only JPG, JPEG, and PNG files are allowed."
+                        ),
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
+                if image.image:
+                    image.image.delete(save=False)
+                image.image = new_image
+
+            if 'is_primary' in request.POST:
+                is_primary = request.POST.get('is_primary', 'false').lower() == 'true'
+                if is_primary:
+                    image.fabric.gallery.filter(is_primary=True).exclude(pk=image_id).update(
+                        is_primary=False,
+                    )
+                image.is_primary = is_primary
+
+            if 'order' in request.POST:
+                try:
+                    image.order = int(request.POST.get('order'))
+                except ValueError:
+                    return api_response(
+                        success=False,
+                        message="Invalid order value",
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            image.save()
+            sync_galleries_after_legacy_image_change(fabric=image.fabric)
+            fabric = image.fabric
+            fabric.refresh_from_db()
+
+        fabric_serializer = FabricSerializer(fabric, context={'request': request})
         return api_response(
             success=True,
             message="Image updated successfully",
             data=fabric_serializer.data,
-            status_code=status.HTTP_200_OK
+            status_code=status.HTTP_200_OK,
         )

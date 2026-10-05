@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from rest_framework import serializers
 
 from apps.fabrics.models import FabricProduct, FabricProductImage
@@ -149,3 +151,84 @@ def update_product_image(
         image.order = order
     image.save()
     return image
+
+
+@dataclass(frozen=True)
+class ResolvedGalleryImage:
+    """Gallery row the tailor app may address by id (legacy or V2 product image)."""
+
+    kind: str
+    fabric: object
+    legacy_image: object | None = None
+    product_image: FabricProductImage | None = None
+
+
+def resolve_manageable_gallery_image(*, image_id: int, shop_profile_id: int) -> ResolvedGalleryImage | None:
+    """
+    Resolve an image id for v1 tailor gallery routes.
+
+    Flutter often sends FabricProductImage ids from GET /v2/shops/.../fabrics/ while
+    calling PATCH /tailors/images/<id>/update/ (legacy route).
+    """
+    from apps.fabrics.models import ShopFabric
+    from apps.tailors.models import FabricImage
+
+    legacy_image = (
+        FabricImage.objects.filter(pk=image_id)
+        .select_related('fabric', 'fabric__tailor')
+        .first()
+    )
+    if legacy_image and legacy_image.fabric.tailor_id == shop_profile_id:
+        return ResolvedGalleryImage(
+            kind='legacy',
+            fabric=legacy_image.fabric,
+            legacy_image=legacy_image,
+            product_image=None,
+        )
+
+    product_image = (
+        FabricProductImage.objects.filter(pk=image_id)
+        .select_related('product')
+        .first()
+    )
+    if product_image is None:
+        return None
+
+    shop_fabric = (
+        ShopFabric.objects.filter(
+            product_id=product_image.product_id,
+            shop_id=shop_profile_id,
+            is_active=True,
+        )
+        .select_related('legacy_fabric', 'shop')
+        .first()
+    )
+    if shop_fabric is None:
+        return None
+
+    fabric = shop_fabric.legacy_fabric
+    if fabric is None:
+        from apps.fabrics.services.legacy_bridge import sync_legacy_fabric_from_shop_fabric
+
+        fabric = sync_legacy_fabric_from_shop_fabric(shop_fabric=shop_fabric)
+
+    return ResolvedGalleryImage(
+        kind='v2',
+        fabric=fabric,
+        legacy_image=None,
+        product_image=product_image,
+    )
+
+
+def sync_galleries_after_product_image_change(*, product: FabricProduct) -> None:
+    from apps.fabrics.services.catalog import sync_product_assignments_to_legacy
+
+    sync_product_assignments_to_legacy(product=product)
+
+
+def sync_galleries_after_legacy_image_change(*, fabric) -> None:
+    from apps.fabrics.models import ShopFabric
+    from apps.fabrics.services.legacy_bridge import sync_v2_from_legacy_fabric
+
+    if ShopFabric.objects.filter(legacy_fabric_id=fabric.id, is_active=True).exists():
+        sync_v2_from_legacy_fabric(fabric=fabric)
