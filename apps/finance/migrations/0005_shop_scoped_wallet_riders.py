@@ -104,6 +104,9 @@ def backfill_tailor_wallets(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    # Data backfill deletes/updates wallet rows; PostgreSQL cannot ALTER/add
+    # constraints on the same table until those trigger events are committed.
+    atomic = False
 
     dependencies = [
         ('tailors', '0022_move_v2_fabrics_to_fabrics_app'),
@@ -147,12 +150,9 @@ class Migration(migrations.Migration):
                 to=settings.AUTH_USER_MODEL,
             ),
         ),
-        migrations.RunPython(backfill_tailor_wallets, migrations.RunPython.noop),
-        migrations.AddConstraint(
-            model_name='tailorwallet',
-            constraint=models.UniqueConstraint(
-                fields=('tailor', 'shop'),
-                name='uniq_tailor_shop_wallet',
-            ),
+        migrations.RunPython(
+            backfill_tailor_wallets,
+            migrations.RunPython.noop,
+            atomic=False,
         ),
     ]

@@ -52,6 +52,7 @@ def backfill_rider_shop_links(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    atomic = False
 
     dependencies = [
         ('tailors', '0022_move_v2_fabrics_to_fabrics_app'),
@@ -83,7 +84,11 @@ class Migration(migrations.Migration):
                 to='tailors.tailorprofile',
             ),
         ),
-        migrations.RunPython(backfill_rider_shop_links, migrations.RunPython.noop),
+        migrations.RunPython(
+            backfill_rider_shop_links,
+            migrations.RunPython.noop,
+            atomic=False,
+        ),
         migrations.AlterUniqueTogether(
             name='tailorriderassociation',
             unique_together={('shop', 'rider')},
