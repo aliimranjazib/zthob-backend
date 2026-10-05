@@ -610,7 +610,10 @@ class TailorRiderAssociation(BaseModel):
         unique_together = [['shop', 'rider']]
         indexes = [
             models.Index(fields=['tailor', 'is_active']),
-            models.Index(fields=['shop', 'is_active']),
+            models.Index(
+                fields=['shop', 'is_active'],
+                name='riders_tail_shop_id_8b2c1a_idx',
+            ),
             models.Index(fields=['rider', 'is_active']),
         ]
     
