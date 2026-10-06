@@ -10,6 +10,10 @@ from apps.accounts.serializers_v2 import (
     V2ProfileSerializer,
     V2SwitchShopSerializer,
 )
+from apps.accounts.services.session_app_entry import (
+    get_request_app_entry,
+    get_token_app_entry,
+)
 from apps.accounts.services.v2_auth import (
     build_v2_me_payload,
     build_v2_profile_payload,
@@ -160,9 +164,13 @@ class V2MeView(APIView):
 
     @extend_schema(tags=['V2 Auth'], summary='Load account context for current session')
     def get(self, request):
-        app_entry = request.query_params.get('app_entry') or request.headers.get('X-App-Entry')
+        app_entry = get_request_app_entry(request) or get_token_app_entry(request)
         try:
-            data = build_v2_me_payload(request.user, app_entry=app_entry)
+            data = build_v2_me_payload(
+                request.user,
+                app_entry=app_entry,
+                token_app_entry=get_token_app_entry(request),
+            )
         except Exception as exc:
             from rest_framework.exceptions import PermissionDenied
             if isinstance(exc, PermissionDenied):

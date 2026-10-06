@@ -107,6 +107,23 @@ def build_legacy_tailor_context(user, shop_id: int | None = None) -> dict[str, A
     return context
 
 
+def enrich_tailor_context_platform(
+    context: dict[str, Any],
+    *,
+    platform_entry: str | None,
+    token_app_entry: str | None = None,
+) -> dict[str, Any]:
+    """Add explicit platform fields without changing legacy is_owner semantics."""
+    merged = dict(context)
+    owns_shop = bool(merged.get('is_owner')) or merged.get('shop_id') is not None
+    pe = (platform_entry or '').strip().lower() or None
+    te = (token_app_entry or '').strip().lower() or None
+    merged['owns_shop'] = owns_shop
+    merged['platform_entry'] = pe
+    merged['show_owner_console'] = pe == APP_ENTRY_OWNER and te == APP_ENTRY_OWNER
+    return merged
+
+
 def _serialize_owned_shop(profile, *, service_area_by_id=None) -> dict[str, Any]:
     service_area = None
     review = getattr(profile, 'review', None)

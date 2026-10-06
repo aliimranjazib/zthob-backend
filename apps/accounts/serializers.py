@@ -158,12 +158,17 @@ class UserProfileSerializer(serializers.ModelSerializer):
         Returns shop context if user is an owner or employee.
         Prioritizes employee context over owner context to avoid confusion for hired staff.
         """
+        from apps.accounts.services.session_app_entry import (
+            get_request_app_entry,
+            get_token_app_entry,
+        )
         from apps.accounts.services.tailor_auth import (
             APP_ENTRY_OWNER,
             APP_ENTRY_STAFF,
             apply_active_shop_to_tailor_context,
             build_owner_auth_context,
             build_legacy_tailor_context,
+            enrich_tailor_context_platform,
         )
         from apps.tailors.shop_access import get_token_shop_id
 
@@ -191,7 +196,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
                     user,
                     token_shop_id,
                 )
-        return context
+        request = self.context.get('request')
+        return enrich_tailor_context_platform(
+            context,
+            platform_entry=app_entry or get_request_app_entry(request),
+            token_app_entry=get_token_app_entry(request),
+        )
 
 
 

@@ -56,15 +56,23 @@ class OwnerAuthenticationTestCase(TestCase):
             account_views.PhoneResendOTPView.throttle_classes,
         ) = self._saved_throttles
 
-    def _owner_login(self, *, name='Owner User', app_entry='owner'):
-        self.client.post(self.phone_login_url, {'phone': self.test_phone})
-        return self.client.post(self.phone_verify_url, {
-            'phone': self.test_phone,
+    def _phone_verify(self, phone, **extra):
+        login = self.client.post(self.phone_login_url, {'phone': phone})
+        verification_id = login.data['data']['verification_id']
+        payload = {
+            'verification_id': verification_id,
             'otp_code': self.test_otp,
-            'name': name,
-            'role': 'TAILOR',
-            'app_entry': app_entry,
-        })
+            **extra,
+        }
+        return self.client.post(self.phone_verify_url, payload)
+
+    def _owner_login(self, *, name='Owner User', app_entry='owner'):
+        return self._phone_verify(
+            self.test_phone,
+            name=name,
+            role='TAILOR',
+            app_entry=app_entry,
+        )
 
     def test_legacy_phone_verify_unchanged_without_app_entry(self):
         self.client.post(self.phone_login_url, {'phone': self.test_phone})
@@ -77,9 +85,10 @@ class OwnerAuthenticationTestCase(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         tailor_context = response.data['data']['tailor_context']
-        self.assertEqual(
-            set(tailor_context.keys()),
-            {'is_owner', 'is_employee', 'shop_id', 'roles', 'permissions'},
+        self.assertTrue(
+            {'is_owner', 'is_employee', 'shop_id', 'roles', 'permissions'}.issubset(
+                set(tailor_context.keys()),
+            ),
         )
         access_token = response.data['data']['tokens']['access_token']
         self.assertNotIn('shop_id', self._decode_jwt_payload(access_token))
@@ -179,13 +188,11 @@ class OwnerAuthenticationTestCase(TestCase):
             can_stitch_orders=True,
         )
 
-        self.client.post(self.phone_login_url, {'phone': employee_user.phone})
-        login = self.client.post(self.phone_verify_url, {
-            'phone': employee_user.phone,
-            'otp_code': self.test_otp,
-            'role': 'TAILOR',
-            'app_entry': 'staff',
-        })
+        login = self._phone_verify(
+            employee_user.phone,
+            role='TAILOR',
+            app_entry='staff',
+        )
         self.assertIn(login.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED))
 
         self.client.credentials(

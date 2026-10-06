@@ -3,6 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from apps.orders.shop_scoping import get_owner_orders_queryset, user_owns_shop_id
+from apps.accounts.permissions import RequiresOwnerPlatformSession
 from apps.tailors.permissions import IsShopOwner
 from apps.tailors.serializers.owner_orders import (
     OwnerOrderDetailSerializer,
@@ -16,7 +17,7 @@ from zthob.utils import api_response
 class OwnerOrderListView(BaseTailorAPIView):
     """Cross-shop order list for the authenticated owner."""
 
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
 
     @extend_schema(
         parameters=[
@@ -90,7 +91,7 @@ class OwnerOrderListView(BaseTailorAPIView):
 
 
 class OwnerOrderDetailView(BaseTailorAPIView):
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
 
     @extend_schema(
         responses={200: OwnerOrderDetailSerializer},
@@ -128,7 +129,7 @@ class OwnerOrderDetailView(BaseTailorAPIView):
 
 
 class OwnerReportsView(BaseTailorAPIView):
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
 
     @extend_schema(
         parameters=[

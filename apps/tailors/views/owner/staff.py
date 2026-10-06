@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema
 
 from apps.tailors.models import TailorProfile, TailorStaffMember, ShopStaffAssignment
+from apps.accounts.permissions import RequiresOwnerPlatformSession
 from apps.tailors.permissions import IsShopOwner
 from apps.tailors.serializers.owner_staff import (
     OwnerStaffAssignmentCreateSerializer,
@@ -23,7 +24,7 @@ from zthob.utils import api_response
 
 
 class OwnerStaffListCreateView(BaseTailorAPIView):
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
 
     @extend_schema(
         responses={200: OwnerStaffMemberSerializer(many=True)},
@@ -131,7 +132,7 @@ class OwnerStaffListCreateView(BaseTailorAPIView):
 
 
 class OwnerStaffDetailView(BaseTailorAPIView):
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
 
     def _get_staff_member(self, request, staff_id):
         try:
@@ -244,7 +245,7 @@ class OwnerStaffDetailView(BaseTailorAPIView):
 
 
 class OwnerStaffAssignmentListCreateView(BaseTailorAPIView):
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
 
     def _get_staff_member(self, request, staff_id):
         try:
@@ -335,7 +336,7 @@ class OwnerStaffAssignmentListCreateView(BaseTailorAPIView):
 
 
 class OwnerStaffAssignmentDetailView(BaseTailorAPIView):
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
 
     def _get_assignment(self, request, staff_id, assignment_id):
         try:

@@ -30,3 +30,24 @@ class IsOwnerAppUser(permissions.BasePermission):
             staff_member__is_active=True,
             is_active=True,
         ).exists()
+
+
+class RequiresOwnerPlatformSession(permissions.BasePermission):
+    """
+    Owner console APIs require JWT app_entry=owner (re-auth with owner verify).
+
+    Header-only app_entry is not sufficient — prevents solo tailor sessions
+    from using owner/shops, staff, orders, and reports routes.
+    """
+
+    message = 'Owner console requires an owner app session. Sign in with app_entry=owner.'
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_admin:
+            return True
+        from apps.accounts.services.session_app_entry import has_owner_platform_jwt
+
+        return has_owner_platform_jwt(request)
