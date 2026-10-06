@@ -96,7 +96,10 @@ class OwnerShopAPITestCase(TestCase):
         detail_url = reverse('owner-shop-detail', kwargs={'shop_id': shop['id']})
         self.client.force_authenticate(user=other)
         response = self.client.get(detail_url)
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn(
+            response.status_code,
+            (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND),
+        )
 
     def test_owner_shop_create_returns_profile_fields(self):
         self._login_owner()
@@ -192,7 +195,12 @@ class OwnerShopAPITestCase(TestCase):
             'role': 'TAILOR',
         })
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(
-            set(response.data['data']['tailor_context'].keys()),
-            {'is_owner', 'is_employee', 'shop_id', 'roles', 'permissions'},
+        ctx = response.data['data']['tailor_context']
+        self.assertTrue(
+            {'is_owner', 'is_employee', 'shop_id', 'roles', 'permissions'}.issubset(
+                set(ctx.keys()),
+            ),
         )
+        self.assertIn('platform_entry', ctx)
+        self.assertIn('owns_shop', ctx)
+        self.assertIn('show_owner_console', ctx)

@@ -9,6 +9,7 @@ from apps.accounts.services.tailor_auth import (
     APP_ENTRY_OWNER,
     APP_ENTRY_STAFF,
     ACCESS_MODE_EMPLOYEE,
+    ACCESS_MODE_OWNER,
     TailorSession,
     build_owner_auth_context,
     build_tailor_auth_context,
@@ -76,7 +77,12 @@ def build_phone_auth_api_response(
             )
 
     if resolved_app_entry == APP_ENTRY_OWNER:
-        refresh = issue_tailor_tokens(user)
+        owner_session = TailorSession(
+            shop_id=None,
+            access_mode=ACCESS_MODE_OWNER,
+            app_entry=APP_ENTRY_OWNER,
+        )
+        refresh = issue_tailor_tokens(user, session=owner_session)
         user_data = UserProfileSerializer(user, context=serializer_context).data
         tailor_context = build_owner_auth_context(user, app_entry=APP_ENTRY_OWNER)
     else:

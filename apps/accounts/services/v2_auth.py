@@ -33,6 +33,15 @@ OWNER_PERMISSIONS = {
     'can_manage_orders': True,
 }
 
+TAILOR_SOLO_PERMISSIONS = {
+    'can_manage_business': False,
+    'can_manage_shops': True,
+    'can_manage_staff': False,
+    'can_manage_catalog': True,
+    'can_view_reports': False,
+    'can_manage_orders': True,
+}
+
 
 def normalize_v2_app_entry(app_entry: str | None) -> str | None:
     if app_entry in (None, ''):
@@ -49,6 +58,17 @@ def _active_shops_queryset(owner_id: int):
         .exclude(shop_name__isnull=True)
         .exclude(shop_name='')
     )
+
+
+def _user_has_staff_platform_access(user) -> bool:
+    if ShopStaffAssignment.objects.filter(
+        staff_member__user_id=user.id,
+        staff_member__is_active=True,
+        is_active=True,
+    ).exists():
+        return True
+    employee = getattr(user, 'tailor_employee', None)
+    return bool(employee and employee.is_active)
 
 
 def resolve_membership_type(user) -> str:
@@ -158,9 +178,9 @@ def validate_app_entry_for_user(user, app_entry: str | None) -> str | None:
     if app_entry == APP_ENTRY_STAFF:
         if membership_type == 'owner':
             return app_entry
-        if membership_type != 'staff':
-            raise PermissionDenied('This account is not assigned as staff.')
-        return app_entry
+        if membership_type == 'staff' or _user_has_staff_platform_access(user):
+            return app_entry
+        raise PermissionDenied('This account is not assigned as staff.')
     if app_entry == APP_ENTRY_TAILOR:
         return app_entry
     return app_entry
@@ -206,6 +226,46 @@ def count_assigned_shops(user_id: int) -> int:
     )
 
 
+def resolve_membership_type_for_app_entry(user, app_entry: str | None) -> str:
+    """
+    Membership type for the current session (request app_entry), not platform identity alone.
+    """
+    app_entry = normalize_v2_app_entry(app_entry)
+    if app_entry == APP_ENTRY_TAILOR:
+        return 'tailor'
+    if app_entry == APP_ENTRY_STAFF:
+        if resolve_membership_type(user) == 'staff':
+            return 'staff'
+        return 'staff'
+    if app_entry == APP_ENTRY_OWNER:
+        identity = resolve_membership_type(user)
+        if identity == 'owner':
+            return 'owner'
+        if identity == 'staff':
+            return 'staff'
+        return 'owner'
+    return resolve_membership_type(user)
+
+
+def user_owns_active_shop(user) -> bool:
+    return _active_shops_queryset(user.id).exists()
+
+
+def build_platform_payload(
+    user,
+    *,
+    app_entry: str | None,
+    token_app_entry: str | None = None,
+) -> dict[str, Any]:
+    app_entry = normalize_v2_app_entry(app_entry)
+    token_entry = (token_app_entry or '').strip().lower() or None
+    return {
+        'entry': app_entry,
+        'owns_shop': user_owns_active_shop(user),
+        'owner_console_enabled': token_entry == APP_ENTRY_OWNER,
+    }
+
+
 def build_onboarding_flags(user, *, app_entry: str | None) -> dict[str, bool]:
     business = get_business_for_owner(user)
     shops_count = count_active_shops(user.id)
@@ -223,13 +283,7 @@ def build_onboarding_flags(user, *, app_entry: str | None) -> dict[str, bool]:
 
 
 def build_membership_payload(user, *, app_entry: str | None) -> dict[str, Any]:
-    membership_type = resolve_membership_type(user)
-    if app_entry == APP_ENTRY_STAFF:
-        membership_type = 'staff'
-    elif app_entry == APP_ENTRY_TAILOR and membership_type == 'none':
-        membership_type = 'tailor'
-    elif app_entry == APP_ENTRY_OWNER:
-        membership_type = 'owner'
+    membership_type = resolve_membership_type_for_app_entry(user, app_entry)
 
     business = get_business_for_owner(user)
     return {
@@ -262,10 +316,14 @@ def serialize_business(business: Business | None) -> dict[str, Any] | None:
 
 
 def build_permissions_payload(user, *, app_entry: str | None) -> dict[str, bool]:
-    if app_entry == APP_ENTRY_OWNER or resolve_membership_type(user) == 'owner':
-        return dict(OWNER_PERMISSIONS)
+    app_entry = normalize_v2_app_entry(app_entry)
 
-    if app_entry == APP_ENTRY_STAFF or resolve_membership_type(user) == 'staff':
+    if app_entry == APP_ENTRY_OWNER:
+        if resolve_membership_type_for_app_entry(user, app_entry) == 'owner':
+            return dict(OWNER_PERMISSIONS)
+        return dict(TAILOR_SOLO_PERMISSIONS)
+
+    if app_entry == APP_ENTRY_STAFF:
         assignment = (
             ShopStaffAssignment.objects.filter(
                 staff_member__user_id=user.id,
@@ -288,14 +346,7 @@ def build_permissions_payload(user, *, app_entry: str | None) -> dict[str, bool]
             **{key: bool(perms.get(key, False)) for key in STAFF_PERMISSION_KEYS},
         }
 
-    return {
-        'can_manage_business': False,
-        'can_manage_shops': True,
-        'can_manage_staff': False,
-        'can_manage_catalog': True,
-        'can_view_reports': False,
-        'can_manage_orders': True,
-    }
+    return dict(TAILOR_SOLO_PERMISSIONS)
 
 
 def build_session_payload(user, *, app_entry: str | None) -> dict[str, Any]:
@@ -335,7 +386,12 @@ def build_session_payload(user, *, app_entry: str | None) -> dict[str, Any]:
     }
 
 
-def build_v2_me_payload(user, *, app_entry: str | None) -> dict[str, Any]:
+def build_v2_me_payload(
+    user,
+    *,
+    app_entry: str | None,
+    token_app_entry: str | None = None,
+) -> dict[str, Any]:
     app_entry = normalize_v2_app_entry(app_entry)
     payload = {
         'app_entry': app_entry,
@@ -343,6 +399,11 @@ def build_v2_me_payload(user, *, app_entry: str | None) -> dict[str, Any]:
         'permissions': build_permissions_payload(user, app_entry=app_entry),
         'session': build_session_payload(user, app_entry=app_entry),
         'onboarding': build_onboarding_flags(user, app_entry=app_entry),
+        'platform': build_platform_payload(
+            user,
+            app_entry=app_entry,
+            token_app_entry=token_app_entry,
+        ),
     }
     if app_entry in (APP_ENTRY_OWNER, APP_ENTRY_STAFF):
         payload['tailor_context'] = build_owner_auth_context(

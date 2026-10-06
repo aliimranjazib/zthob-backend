@@ -4,6 +4,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from drf_spectacular.utils import extend_schema
 
 from apps.tailors.models import ServiceArea, TailorProfile
+from apps.accounts.permissions import RequiresOwnerPlatformSession
 from apps.tailors.permissions import IsShopOwner
 from apps.tailors.serializers.owner_shops import (
     OwnerShopCreateSerializer,
@@ -54,7 +55,7 @@ def _owner_shop_serializer_context(request, shops):
 class OwnerShopListCreateView(BaseTailorAPIView):
     """List or create shops owned by the authenticated user."""
 
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     @extend_schema(
@@ -112,7 +113,7 @@ class OwnerShopListCreateView(BaseTailorAPIView):
 class OwnerShopDetailView(BaseTailorAPIView):
     """Retrieve or update one owned shop."""
 
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def _get_owned_shop(self, request, shop_id):
@@ -195,7 +196,7 @@ class OwnerShopDetailView(BaseTailorAPIView):
 class OwnerShopPinView(BaseTailorAPIView):
     """Toggle whether a shop appears in the owner quick-access list."""
 
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
 
     @extend_schema(
         request=OwnerShopPinSerializer,

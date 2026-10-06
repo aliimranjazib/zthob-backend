@@ -26,6 +26,7 @@ from apps.core.services import PhoneVerificationService
 from apps.customers.models import Address, CustomerProfile
 from apps.orders.models import Order
 from apps.riders.models import RiderProfile, RiderProfileReview
+from apps.riders.models import TailorRiderAssociation
 from apps.tailors.models import Fabric, FabricCategory, ServiceArea, TailorProfile
 
 
@@ -134,6 +135,26 @@ class V2PlatformEndToEndFlowTest(TestCase):
     def _auth(self, token):
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
 
+    def _link_riders_to_shop(self, shop_id):
+        shop = TailorProfile.objects.get(id=shop_id)
+        owner_user = shop.shop_owner_user
+        TailorRiderAssociation.objects.create(
+            tailor=owner_user,
+            shop=shop,
+            rider=self.measurement_rider,
+            can_take_measurements=True,
+            can_do_delivery=False,
+            is_active=True,
+        )
+        TailorRiderAssociation.objects.create(
+            tailor=owner_user,
+            shop=shop,
+            rider=self.delivery_rider,
+            can_take_measurements=False,
+            can_do_delivery=True,
+            is_active=True,
+        )
+
     def _create_approved_rider(self, username, phone):
         user = User.objects.create_user(
             username=username,
@@ -203,6 +224,7 @@ class V2PlatformEndToEndFlowTest(TestCase):
         self.assertEqual(shop_resp.status_code, status.HTTP_201_CREATED)
         shop_id = shop_resp.data['data']['id']
         self.assertEqual(shop_resp.data['data']['business_id'], business_id)
+        self._link_riders_to_shop(shop_id)
 
         staff_ids = []
         for role, phone in zip(STAFF_ROLES, STAFF_PHONES, strict=True):
