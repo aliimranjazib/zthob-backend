@@ -13,6 +13,8 @@ class V2ShopSerializer(serializers.ModelSerializer):
     service_area = serializers.SerializerMethodField()
     shop_image_url = serializers.SerializerMethodField()
     experience_years = serializers.IntegerField(source='tailor_experience', allow_null=True)
+    review_status = serializers.SerializerMethodField()
+    submitted_at = serializers.SerializerMethodField()
 
     class Meta:
         model = TailorProfile
@@ -30,9 +32,23 @@ class V2ShopSerializer(serializers.ModelSerializer):
             'shop_image_url',
             'establishment_year',
             'experience_years',
+            'review_status',
+            'submitted_at',
             'created_at',
             'updated_at',
         ]
+
+    def get_review_status(self, obj):
+        review = getattr(obj, 'review', None)
+        if review is None:
+            return 'draft'
+        return review.review_status
+
+    def get_submitted_at(self, obj):
+        review = getattr(obj, 'review', None)
+        if review is None or review.submitted_at is None:
+            return None
+        return review.submitted_at.isoformat()
 
     def get_service_area(self, obj):
         review = getattr(obj, 'review', None)
@@ -92,15 +108,11 @@ class V2ShopCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         from apps.tailors.models import TailorProfileReview
         from apps.tailors.serializers.owner_shops import _find_empty_owner_stub
-        from apps.tailors.services.v2.business import (
-            ensure_business_for_shop_create,
-            mark_business_shop_progress,
-        )
+        from apps.tailors.services.v2.business import mark_business_shop_progress
 
         service_areas_id = validated_data.pop('service_areas', None)
         owner = self.context['owner']
         app_entry = self.context.get('app_entry')
-        shop_name = validated_data.get('shop_name', '')
 
         if app_entry == APP_ENTRY_OWNER:
             business = self.context.get('business')
@@ -109,7 +121,7 @@ class V2ShopCreateSerializer(serializers.ModelSerializer):
                     {'business': 'Create your business profile before adding shops.'}
                 )
         else:
-            business = ensure_business_for_shop_create(owner=owner, shop_name=shop_name)
+            business = None
 
         stub = _find_empty_owner_stub(owner)
         if stub is not None:
@@ -137,7 +149,8 @@ class V2ShopCreateSerializer(serializers.ModelSerializer):
             review.service_areas = [service_areas_id]
             review.save(update_fields=['service_areas'])
 
-        mark_business_shop_progress(business)
+        if business is not None:
+            mark_business_shop_progress(business)
         return shop
 
 

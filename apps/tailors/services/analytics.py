@@ -41,7 +41,7 @@ class TailorAnalyticsService:
         return queryset.select_related('customer', 'delivery_address')
 
     @staticmethod
-    def calculate_total_revenue(tailor_user):
+    def calculate_total_revenue(tailor_user, shop_id=None):
         """
         Calculate total revenue from all delivered orders.
 
@@ -53,7 +53,8 @@ class TailorAnalyticsService:
         """
         delivered_orders = TailorAnalyticsService.get_tailor_orders(
             tailor_user,
-            status_filter='delivered'
+            status_filter='delivered',
+            shop_id=shop_id,
         )
 
         total_revenue = delivered_orders.aggregate(
@@ -63,7 +64,7 @@ class TailorAnalyticsService:
         return total_revenue
 
     @staticmethod
-    def calculate_daily_earnings(tailor_user, days=30):
+    def calculate_daily_earnings(tailor_user, days=30, shop_id=None):
         """
         Calculate daily earnings breakdown for the last N days.
 
@@ -79,7 +80,8 @@ class TailorAnalyticsService:
 
         delivered_orders = TailorAnalyticsService.get_tailor_orders(
             tailor_user,
-            status_filter='delivered'
+            status_filter='delivered',
+            shop_id=shop_id,
         ).filter(
             actual_delivery_date__gte=start_date,
             actual_delivery_date__lte=end_date
@@ -108,7 +110,7 @@ class TailorAnalyticsService:
         return result
 
     @staticmethod
-    def get_completed_orders_count(tailor_user):
+    def get_completed_orders_count(tailor_user, shop_id=None):
         """
         Get total count of completed (delivered) orders.
 
@@ -120,11 +122,12 @@ class TailorAnalyticsService:
         """
         return TailorAnalyticsService.get_tailor_orders(
             tailor_user,
-            status_filter='delivered'
+            status_filter='delivered',
+            shop_id=shop_id,
         ).count()
 
     @staticmethod
-    def get_total_orders_count(tailor_user):
+    def get_total_orders_count(tailor_user, shop_id=None):
         """
         Get total count of all orders (excluding cancelled).
 
@@ -135,11 +138,12 @@ class TailorAnalyticsService:
             int: Count of all non-cancelled orders
         """
         return TailorAnalyticsService.get_tailor_orders(
-            tailor_user
+            tailor_user,
+            shop_id=shop_id,
         ).exclude(status='cancelled').count()
 
     @staticmethod
-    def calculate_completion_percentage(tailor_user):
+    def calculate_completion_percentage(tailor_user, shop_id=None):
         """
         Calculate completion percentage (delivered / total orders).
 
@@ -149,8 +153,14 @@ class TailorAnalyticsService:
         Returns:
             dict: Completion percentage and counts
         """
-        total_orders = TailorAnalyticsService.get_total_orders_count(tailor_user)
-        completed_orders = TailorAnalyticsService.get_completed_orders_count(tailor_user)
+        total_orders = TailorAnalyticsService.get_total_orders_count(
+            tailor_user,
+            shop_id=shop_id,
+        )
+        completed_orders = TailorAnalyticsService.get_completed_orders_count(
+            tailor_user,
+            shop_id=shop_id,
+        )
 
         if total_orders == 0:
             percentage = Decimal('0.00')
@@ -165,7 +175,7 @@ class TailorAnalyticsService:
         }
 
     @staticmethod
-    def get_weekly_order_trends(tailor_user, weeks=12):
+    def get_weekly_order_trends(tailor_user, weeks=12, shop_id=None):
         """
         Get weekly order trends for the last N weeks.
 
@@ -179,7 +189,10 @@ class TailorAnalyticsService:
         end_date = timezone.now()
         start_date = end_date - timedelta(weeks=weeks)
 
-        orders = TailorAnalyticsService.get_tailor_orders(tailor_user).filter(
+        orders = TailorAnalyticsService.get_tailor_orders(
+            tailor_user,
+            shop_id=shop_id,
+        ).filter(
             created_at__gte=start_date,
             created_at__lte=end_date
         ).exclude(status='cancelled')
@@ -236,7 +249,7 @@ class TailorAnalyticsService:
         return result
 
     @staticmethod
-    def get_comprehensive_analytics(tailor_user, days=30, weeks=12):
+    def get_comprehensive_analytics(tailor_user, days=30, weeks=12, shop_id=None):
         """
         Get comprehensive analytics for a tailor.
 
@@ -244,14 +257,29 @@ class TailorAnalyticsService:
             tailor_user: User instance with TAILOR role
             days: Number of days for daily earnings (default: 30)
             weeks: Number of weeks for trends (default: 12)
+            shop_id: Optional TailorProfile id to scope metrics to one shop
 
         Returns:
             dict: Complete analytics data
         """
-        total_revenue = TailorAnalyticsService.calculate_total_revenue(tailor_user)
-        daily_earnings = TailorAnalyticsService.calculate_daily_earnings(tailor_user, days)
-        completion_stats = TailorAnalyticsService.calculate_completion_percentage(tailor_user)
-        weekly_trends = TailorAnalyticsService.get_weekly_order_trends(tailor_user, weeks)
+        total_revenue = TailorAnalyticsService.calculate_total_revenue(
+            tailor_user,
+            shop_id=shop_id,
+        )
+        daily_earnings = TailorAnalyticsService.calculate_daily_earnings(
+            tailor_user,
+            days,
+            shop_id=shop_id,
+        )
+        completion_stats = TailorAnalyticsService.calculate_completion_percentage(
+            tailor_user,
+            shop_id=shop_id,
+        )
+        weekly_trends = TailorAnalyticsService.get_weekly_order_trends(
+            tailor_user,
+            weeks,
+            shop_id=shop_id,
+        )
 
         return {
             'total_revenue': str(total_revenue),
@@ -265,6 +293,7 @@ class TailorAnalyticsService:
             'analytics_period': {
                 'daily_earnings_days': days,
                 'weekly_trends_weeks': weeks,
+                'shop_id': shop_id,
                 'generated_at': timezone.now().isoformat()
             }
         }

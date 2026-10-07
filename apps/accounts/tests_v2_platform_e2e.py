@@ -283,18 +283,16 @@ class V2PlatformEndToEndFlowTest(TestCase):
             {'app_entry': 'tailor'},
         )
         self.assertTrue(tailor_me.data['data']['onboarding']['needs_shop'])
-        tailor_shop = self.client.post(
-            self._url('tailors_v2:v2-shops'),
+        tailor_shop = self.client.patch(
+            reverse('v1:tailor-profile'),
             {
-                'name': 'V2 Tailor Solo Shop',
+                'shop_name': 'V2 Tailor Solo Shop',
                 'contact_number': self.TAILOR_PHONE,
                 'address': 'Olaya Street, Riyadh',
-                'service_area_id': self.service_area.id,
             },
             format='json',
-            HTTP_X_APP_ENTRY='tailor',
         )
-        self.assertEqual(tailor_shop.status_code, status.HTTP_201_CREATED, tailor_shop.data)
+        self.assertEqual(tailor_shop.status_code, status.HTTP_200_OK, tailor_shop.data)
 
         manager_phone = STAFF_PHONES[0]
         staff_verify = self._v2_login(

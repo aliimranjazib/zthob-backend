@@ -390,6 +390,7 @@ class OwnerAuthenticationTestCase(TestCase):
             contact_phone='0500000008',
             city='Riyadh',
             is_active=True,
+            console_enabled=True,
         )
         shop, _ = TailorProfile.objects.get_or_create(
             owner=owner,

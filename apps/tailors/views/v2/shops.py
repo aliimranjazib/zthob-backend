@@ -5,6 +5,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema
 
+from apps.accounts.permissions import RequiresOwnerPlatformSession
 from apps.accounts.services.v2_auth import APP_ENTRY_OWNER, normalize_v2_app_entry
 from apps.tailors.permissions import IsShopOwner
 from apps.tailors.serializers.v2.shops import (
@@ -14,6 +15,12 @@ from apps.tailors.serializers.v2.shops import (
     V2ShopUpdateSerializer,
 )
 from apps.tailors.services.v2.business import get_owner_business
+from apps.tailors.services.v2.shop_publish import (
+    PublishBlockedError,
+    PublishStateError,
+    evaluate_publish_readiness,
+    publish_shop,
+)
 from apps.tailors.services.v2.shops import (
     active_shops_queryset,
     build_service_area_lookup,
@@ -40,7 +47,7 @@ def _resolve_app_entry(request) -> str:
 
 
 class V2ShopListCreateView(BaseTailorAPIView):
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     @extend_schema(responses={200: V2ShopSerializer(many=True)}, tags=['V2 Shops'])
@@ -101,7 +108,7 @@ class V2ShopListCreateView(BaseTailorAPIView):
 
 
 class V2ShopDetailView(BaseTailorAPIView):
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def _get_shop(self, request, shop_id):
@@ -169,8 +176,79 @@ class V2ShopDetailView(BaseTailorAPIView):
         )
 
 
+class V2ShopPublishReadinessView(BaseTailorAPIView):
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
+
+    @extend_schema(tags=['V2 Shops'])
+    def get(self, request, shop_id):
+        shop = get_shop_for_owner(owner_id=request.user.id, shop_id=shop_id)
+        if shop is None:
+            return api_response(
+                success=False,
+                message='Shop not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request,
+            )
+        payload = evaluate_publish_readiness(shop)
+        return api_response(
+            success=True,
+            message='Publish readiness',
+            data=payload,
+            status_code=status.HTTP_200_OK,
+            request=request,
+        )
+
+
+class V2ShopPublishView(BaseTailorAPIView):
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
+
+    @extend_schema(responses={200: V2ShopSerializer}, tags=['V2 Shops'])
+    def post(self, request, shop_id):
+        shop = get_shop_for_owner(owner_id=request.user.id, shop_id=shop_id)
+        if shop is None:
+            return api_response(
+                success=False,
+                message='Shop not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request,
+            )
+        try:
+            publish_shop(shop)
+        except PublishStateError as exc:
+            return api_response(
+                success=False,
+                message=exc.message,
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request,
+            )
+        except PublishBlockedError as exc:
+            return api_response(
+                success=False,
+                message='Shop is not ready to publish',
+                data=exc.payload,
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                request=request,
+            )
+
+        shop = get_shop_for_owner(owner_id=request.user.id, shop_id=shop_id)
+        response = V2ShopSerializer(
+            shop,
+            context={
+                'request': request,
+                'service_area_by_id': build_service_area_lookup([shop]),
+            },
+        )
+        return api_response(
+            success=True,
+            message='Shop submitted for review',
+            data=response.data,
+            status_code=status.HTTP_200_OK,
+            request=request,
+        )
+
+
 class V2ShopPinView(BaseTailorAPIView):
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
 
     @extend_schema(request=V2ShopPinSerializer, tags=['V2 Shops'])
     def patch(self, request, shop_id):

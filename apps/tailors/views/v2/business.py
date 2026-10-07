@@ -5,10 +5,12 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema
 
+from apps.accounts.permissions import RequiresOwnerPlatformSession
 from apps.accounts.serializers_v2 import V2BusinessSerializer, V2BusinessWriteSerializer
 from apps.tailors.permissions import IsShopOwner
 from apps.tailors.services.v2.business import (
     create_business,
+    get_business_record,
     get_owner_business,
     update_business,
 )
@@ -17,7 +19,7 @@ from zthob.utils import api_response
 
 
 class V2BusinessView(BaseTailorAPIView):
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     @extend_schema(responses={200: V2BusinessSerializer}, tags=['V2 Business'])
@@ -41,13 +43,6 @@ class V2BusinessView(BaseTailorAPIView):
 
     @extend_schema(request=V2BusinessWriteSerializer, responses={201: V2BusinessSerializer}, tags=['V2 Business'])
     def post(self, request):
-        if get_owner_business(request.user) is not None:
-            return api_response(
-                success=False,
-                message='Business already exists',
-                status_code=status.HTTP_400_BAD_REQUEST,
-                request=request,
-            )
         serializer = V2BusinessWriteSerializer(data=request.data)
         if not serializer.is_valid():
             return api_response(
@@ -57,7 +52,27 @@ class V2BusinessView(BaseTailorAPIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 request=request,
             )
-        business = create_business(owner=request.user, validated_data=serializer.validated_data)
+        existing_console = get_owner_business(request.user)
+        if existing_console is not None and (existing_console.name or '').strip():
+            return api_response(
+                success=False,
+                message='Business already exists',
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request,
+            )
+        existing = get_business_record(request.user) or existing_console
+        if existing is not None:
+            existing.console_enabled = True
+            existing.save(update_fields=['console_enabled', 'updated_at'])
+            business = update_business(
+                business=existing,
+                validated_data=serializer.validated_data,
+            )
+        else:
+            business = create_business(
+                owner=request.user,
+                validated_data=serializer.validated_data,
+            )
         response = V2BusinessSerializer(business, context={'request': request})
         return api_response(
             success=True,

@@ -103,6 +103,7 @@ class V2AuthEntryFlowTest(TestCase):
             contact_phone=phone,
             city='Riyadh',
             is_active=True,
+            console_enabled=True,
         )
         return user
 
@@ -277,6 +278,61 @@ class V2AuthEntryFlowTest(TestCase):
         verify = self._verify(self.TAILOR_PHONE, name='Solo Tailor')
         self.assertEqual(verify.status_code, status.HTTP_200_OK)
         self.assertEqual(verify.data['data']['app_entry'], 'tailor')
+        self.assertEqual(verify.data['data']['app_entry_source'], 'inferred')
+
+    def test_solo_tailor_with_named_shop_returning_login_infers_tailor(self):
+        first_verify = self._create_solo_tailor(self.TAILOR_PHONE)
+        self.assertEqual(first_verify.status_code, status.HTTP_201_CREATED)
+        local_phone = PhoneVerificationService.normalize_phone_to_local(self.TAILOR_PHONE)
+        user = User.objects.get(phone=local_phone)
+        profile, _ = TailorProfile.objects.get_or_create(
+            owner=user,
+            user=user,
+            defaults={},
+        )
+        profile.shop_name = 'Solo Named Shop'
+        profile.contact_number = self.TAILOR_PHONE
+        profile.save(update_fields=['shop_name', 'contact_number'])
+        Business.objects.create(
+            owner=user,
+            name='Auto Backfill Biz',
+            contact_phone=local_phone,
+            is_active=True,
+            console_enabled=False,
+        )
+
+        self._send_otp(self.TAILOR_PHONE)
+        verify = self._verify(self.TAILOR_PHONE, name='Solo Tailor')
+        self.assertEqual(verify.status_code, status.HTTP_200_OK)
+        self.assertEqual(verify.data['data']['app_entry'], 'tailor')
+        self.assertEqual(verify.data['data']['app_entry_source'], 'inferred')
+
+    def test_legacy_employee_login_infers_staff_without_app_entry(self):
+        owner_phone = self.OWNER_PHONE
+        owner = self._create_owner_with_business(owner_phone)
+        shop = self._create_owner_shop(owner, owner_phone)
+        staff_phone = '0522222230'
+        from apps.tailors.models.employee import TailorEmployee
+
+        staff_user = User.objects.create_user(
+            username=f'legacy_staff_{staff_phone}',
+            phone=PhoneVerificationService.normalize_phone_to_local(staff_phone),
+            role='TAILOR',
+            first_name='Legacy',
+            last_name='Staff',
+        )
+        TailorEmployee.objects.create(
+            tailor=shop,
+            user=staff_user,
+            roles=['manager'],
+            is_active=True,
+            can_manage_orders=True,
+        )
+
+        self._send_otp(staff_phone)
+        verify = self._verify(staff_phone, name='Legacy Staff')
+        self.assertEqual(verify.status_code, status.HTTP_200_OK)
+        self.assertEqual(verify.data['data']['app_entry'], 'staff')
         self.assertEqual(verify.data['data']['app_entry_source'], 'inferred')
 
     def test_v1_phone_login_has_no_account_status(self):
