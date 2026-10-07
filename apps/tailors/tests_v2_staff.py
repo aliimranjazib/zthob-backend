@@ -167,7 +167,10 @@ class V2StaffAPITestCase(TestCase):
         )
         self.client.force_authenticate(user=other)
         response = self.client.delete(detail_url)
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND],
+        )
         self.assertTrue(TailorStaffMember.objects.filter(id=staff['id']).exists())
 
     def test_v2_assignment_not_found_returns_404(self):

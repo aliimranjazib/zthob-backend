@@ -8,8 +8,10 @@ from apps.fabrics.permissions import staff_has_fabric_permission
 from apps.fabrics.serializers.v2.products import V2FabricAnalyticsQuerySerializer
 from apps.fabrics.services.analytics import get_fabric_analytics
 from apps.tailors.permissions import IsShopOwner
-from apps.tailors.services.v2.business import get_owner_business
+from apps.tailors.models import TailorProfile
+from apps.tailors.services.v2.business import get_business_record, get_owner_business
 from apps.tailors.services.v2.shops import get_shop_for_owner
+from apps.tailors.shop_access import user_owns_shop
 from apps.tailors.views.base import BaseTailorAPIView
 from zthob.utils import api_response
 
@@ -27,15 +29,6 @@ class V2FabricAnalyticsView(BaseTailorAPIView):
                 request=request,
             )
 
-        business = get_owner_business(request.user)
-        if business is None:
-            return api_response(
-                success=False,
-                message='Business not found',
-                status_code=status.HTTP_404_NOT_FOUND,
-                request=request,
-            )
-
         query = V2FabricAnalyticsQuerySerializer(data=request.query_params)
         if not query.is_valid():
             return api_response(
@@ -47,15 +40,34 @@ class V2FabricAnalyticsView(BaseTailorAPIView):
             )
 
         shop_id = query.validated_data.get('shop_id')
+        business = get_owner_business(request.user) or get_business_record(request.user)
         if shop_id is not None:
-            shop = get_shop_for_owner(owner_id=request.user.id, shop_id=shop_id)
-            if shop is None or shop.business_id != business.id:
+            shop = TailorProfile.objects.filter(id=shop_id).first()
+            if shop is None or not user_owns_shop(request.user, shop):
+                shop = get_shop_for_owner(owner_id=request.user.id, shop_id=shop_id)
+            if shop is None:
                 return api_response(
                     success=False,
                     message='Shop not found',
                     status_code=status.HTTP_404_NOT_FOUND,
                     request=request,
                 )
+            if business is None and shop.business_id:
+                business = get_business_record(request.user)
+            if business and shop.business_id and shop.business_id != business.id:
+                return api_response(
+                    success=False,
+                    message='Shop not found',
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    request=request,
+                )
+        if business is None:
+            return api_response(
+                success=False,
+                message='Business not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request,
+            )
 
         data = get_fabric_analytics(
             business_id=business.id,

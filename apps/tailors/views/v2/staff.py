@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema
 
+from apps.accounts.permissions import RequiresOwnerPlatformSession
 from apps.tailors.models import ShopStaffAssignment, TailorProfile, TailorStaffMember
 from apps.tailors.permissions import IsShopOwner
 from apps.tailors.serializers.v2.staff import (
@@ -33,7 +34,7 @@ from zthob.utils import api_response
 
 
 class V2StaffListCreateView(BaseTailorAPIView):
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
 
     @extend_schema(responses={200: OwnerStaffMemberSerializer(many=True)}, tags=['V2 Staff'])
     def get(self, request):
@@ -126,7 +127,7 @@ class V2StaffListCreateView(BaseTailorAPIView):
 
 
 class V2StaffDetailView(BaseTailorAPIView):
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
 
     @extend_schema(responses={200: OwnerStaffMemberSerializer}, tags=['V2 Staff'])
     def get(self, request, staff_id):
@@ -209,7 +210,7 @@ class V2StaffDetailView(BaseTailorAPIView):
 
 
 class V2StaffAssignmentListCreateView(BaseTailorAPIView):
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
 
     @extend_schema(
         responses={200: OwnerStaffAssignmentSerializer(many=True)},
@@ -291,7 +292,7 @@ class V2StaffAssignmentListCreateView(BaseTailorAPIView):
 
 
 class V2StaffAssignmentDetailView(BaseTailorAPIView):
-    permission_classes = [IsAuthenticated, IsShopOwner]
+    permission_classes = [IsAuthenticated, IsShopOwner, RequiresOwnerPlatformSession]
 
     @extend_schema(
         request=OwnerStaffAssignmentUpdateSerializer,

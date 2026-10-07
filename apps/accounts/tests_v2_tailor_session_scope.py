@@ -120,11 +120,19 @@ class V2TailorSessionScopeTest(TestCase):
         self.assertEqual(me.status_code, status.HTTP_200_OK)
         data = me.data['data']
         self.assertEqual(data['membership']['type'], 'tailor')
+        self.assertIsNone(data['membership']['business']['id'])
         self.assertFalse(data['permissions']['can_manage_staff'])
         self.assertFalse(data['permissions']['can_manage_business'])
         self.assertIn('platform', data)
         self.assertTrue(data['platform']['owns_shop'])
         self.assertFalse(data['platform']['owner_console_enabled'])
+
+    def test_tailor_jwt_cannot_access_v2_business(self):
+        token, _user = self._create_solo_tailor_with_shop()
+        self._auth(token)
+        business_url = reverse('v2:tailors_v2:v2-business')
+        response = self.client.get(business_url, HTTP_X_APP_ENTRY='tailor')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_tailor_jwt_cannot_list_owner_shops(self):
         token, _user = self._create_solo_tailor_with_shop()

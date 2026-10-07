@@ -104,6 +104,12 @@ class V2PhoneVerifyView(PhoneVerifyView):
                 )
             raise
 
+        from apps.accounts.services.tailor_auth import APP_ENTRY_OWNER
+        from apps.tailors.services.v2.business import enable_business_console
+
+        if app_entry_source == 'request' and app_entry == APP_ENTRY_OWNER:
+            enable_business_console(user)
+
         payload = build_v2_verify_payload(
             user,
             app_entry=app_entry,

@@ -4,8 +4,49 @@ from apps.core.services import PhoneVerificationService
 from apps.tailors.models import Business, TailorProfile
 
 
-def get_owner_business(user) -> Business | None:
+def get_business_record(user) -> Business | None:
+    """Any active Business row for the user (data linking), regardless of console."""
     return Business.objects.filter(owner_id=user.id, is_active=True).first()
+
+
+def get_owner_business(user) -> Business | None:
+    """Active Business with business console enabled (platform owner session)."""
+    return (
+        Business.objects.filter(
+            owner_id=user.id,
+            is_active=True,
+            console_enabled=True,
+        )
+        .first()
+    )
+
+
+def user_has_business_console(user) -> bool:
+    return Business.objects.filter(
+        owner_id=user.id,
+        is_active=True,
+        console_enabled=True,
+    ).exists()
+
+
+def enable_business_console(user) -> Business | None:
+    """Opt user into owner console; creates a draft Business if none exists."""
+    business = get_business_record(user)
+    if business is None:
+        phone = PhoneVerificationService.normalize_phone_to_local(user.phone or '')
+        business = Business.objects.create(
+            owner=user,
+            name='',
+            contact_phone=phone,
+            status=Business.STATUS_DRAFT,
+            setup_step=Business.SETUP_BUSINESS_CREATED,
+            console_enabled=True,
+        )
+        return business
+    if not business.console_enabled:
+        business.console_enabled = True
+        business.save(update_fields=['console_enabled', 'updated_at'])
+    return business
 
 
 def create_business(*, owner, validated_data) -> Business:
@@ -24,6 +65,7 @@ def create_business(*, owner, validated_data) -> Business:
         currency=validated_data.get('currency', 'SAR'),
         status=Business.STATUS_ACTIVE,
         setup_step=Business.SETUP_BUSINESS_CREATED,
+        console_enabled=True,
     )
     if validated_data.get('logo'):
         business.logo = validated_data['logo']
@@ -39,7 +81,7 @@ def update_business(*, business: Business, validated_data) -> Business:
 
 
 def ensure_business_for_shop_create(*, owner, shop_name: str) -> Business:
-    business = get_owner_business(owner)
+    business = get_business_record(owner)
     if business is not None:
         return business
 
@@ -50,6 +92,7 @@ def ensure_business_for_shop_create(*, owner, shop_name: str) -> Business:
         contact_phone=phone,
         status=Business.STATUS_ACTIVE,
         setup_step=Business.SETUP_BUSINESS_CREATED,
+        console_enabled=False,
     )
 
 

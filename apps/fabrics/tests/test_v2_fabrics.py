@@ -758,7 +758,8 @@ class V2FabricCatalogTests(TestCase):
     },
 )
 class V2StaffShopFabricAccessTests(V2FabricCatalogTests):
-    STAFF_PHONE = '0500000010'
+    STAFF_PHONE_CATALOG = '0522222227'
+    STAFF_PHONE_NO_CATALOG = '0522222228'
 
     def test_assigned_staff_with_catalog_permission_can_list_shop_fabrics(self):
         shop_id, _owner_token, work_token = self._setup_owner_shop()
@@ -767,7 +768,7 @@ class V2StaffShopFabricAccessTests(V2FabricCatalogTests):
             self._url('tailors_v2:v2-staff'),
             {
                 'name': 'Catalog Staff',
-                'phone': self.STAFF_PHONE,
+                'phone': self.STAFF_PHONE_CATALOG,
                 'roles': ['manager'],
                 'permissions': ['can_manage_catalog'],
                 'shop_id': shop_id,
@@ -777,7 +778,7 @@ class V2StaffShopFabricAccessTests(V2FabricCatalogTests):
         self.assertEqual(staff_resp.status_code, status.HTTP_201_CREATED, staff_resp.data)
 
         staff_verify = self._v2_login(
-            self.STAFF_PHONE,
+            self.STAFF_PHONE_CATALOG,
             app_entry='staff',
             name='Catalog Staff',
         )
@@ -806,7 +807,7 @@ class V2StaffShopFabricAccessTests(V2FabricCatalogTests):
             self._url('tailors_v2:v2-staff'),
             {
                 'name': 'No Catalog Staff',
-                'phone': self.STAFF_PHONE,
+                'phone': self.STAFF_PHONE_NO_CATALOG,
                 'roles': ['stitcher'],
                 'permissions': ['can_stitch_orders'],
                 'shop_id': shop_id,
@@ -816,7 +817,7 @@ class V2StaffShopFabricAccessTests(V2FabricCatalogTests):
         self.assertEqual(staff_resp.status_code, status.HTTP_201_CREATED, staff_resp.data)
 
         staff_verify = self._v2_login(
-            self.STAFF_PHONE,
+            self.STAFF_PHONE_NO_CATALOG,
             app_entry='staff',
             name='No Catalog Staff',
         )

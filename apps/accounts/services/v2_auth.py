@@ -20,6 +20,7 @@ from apps.accounts.services.tailor_auth import (
 )
 from apps.tailors.models import Business, ShopStaffAssignment, TailorProfile
 from apps.tailors.models.staff import STAFF_PERMISSION_KEYS
+from apps.tailors.services.v2.business import user_has_business_console
 
 APP_ENTRY_TAILOR = 'tailor'
 V2_APP_ENTRIES = {APP_ENTRY_OWNER, APP_ENTRY_STAFF, APP_ENTRY_TAILOR}
@@ -71,19 +72,18 @@ def _user_has_staff_platform_access(user) -> bool:
     return bool(employee and employee.is_active)
 
 
-def resolve_membership_type(user) -> str:
-    if Business.objects.filter(owner_id=user.id, is_active=True).exists():
-        return 'owner'
+def _user_is_tailor_operator(user) -> bool:
     if _active_shops_queryset(user.id).exists():
+        return True
+    return getattr(user, 'tailor_profile', None) is not None
+
+
+def resolve_membership_type(user) -> str:
+    if user_has_business_console(user):
         return 'owner'
-    assignment_exists = ShopStaffAssignment.objects.filter(
-        staff_member__user_id=user.id,
-        staff_member__is_active=True,
-        is_active=True,
-    ).exists()
-    if assignment_exists:
+    if _user_has_staff_platform_access(user):
         return 'staff'
-    if getattr(user, 'tailor_profile', None) is not None:
+    if _user_is_tailor_operator(user):
         return 'tailor'
     return 'none'
 
@@ -93,17 +93,11 @@ ACCOUNT_STATUS_EXISTING = 'existing'
 
 
 def _user_has_platform_identity(user) -> bool:
-    if Business.objects.filter(owner_id=user.id, is_active=True).exists():
+    if user_has_business_console(user):
         return True
-    if _active_shops_queryset(user.id).exists():
+    if _user_has_staff_platform_access(user):
         return True
-    if ShopStaffAssignment.objects.filter(
-        staff_member__user_id=user.id,
-        staff_member__is_active=True,
-        is_active=True,
-    ).exists():
-        return True
-    if getattr(user, 'tailor_profile', None) is not None:
+    if _user_is_tailor_operator(user):
         return True
     return False
 
@@ -188,7 +182,11 @@ def validate_app_entry_for_user(user, app_entry: str | None) -> str | None:
 
 def get_business_for_owner(user) -> Business | None:
     return (
-        Business.objects.filter(owner_id=user.id, is_active=True)
+        Business.objects.filter(
+            owner_id=user.id,
+            is_active=True,
+            console_enabled=True,
+        )
         .only(
             'id',
             'name',
@@ -202,6 +200,7 @@ def get_business_for_owner(user) -> Business | None:
             'status',
             'setup_step',
             'is_active',
+            'console_enabled',
             'created_at',
             'updated_at',
         )
@@ -271,7 +270,13 @@ def build_onboarding_flags(user, *, app_entry: str | None) -> dict[str, bool]:
     shops_count = count_active_shops(user.id)
     profile_complete = bool((user.first_name or '').strip() or (user.last_name or '').strip())
 
-    needs_business = app_entry == APP_ENTRY_OWNER and business is None
+    needs_business = (
+        app_entry == APP_ENTRY_OWNER
+        and (
+            business is None
+            or not (business.name or '').strip()
+        )
+    )
     needs_shop = shops_count == 0 and app_entry in {APP_ENTRY_OWNER, APP_ENTRY_TAILOR}
     needs_profile_completion = not profile_complete and app_entry in V2_APP_ENTRIES
 
@@ -285,7 +290,11 @@ def build_onboarding_flags(user, *, app_entry: str | None) -> dict[str, bool]:
 def build_membership_payload(user, *, app_entry: str | None) -> dict[str, Any]:
     membership_type = resolve_membership_type_for_app_entry(user, app_entry)
 
-    business = get_business_for_owner(user)
+    app_entry = normalize_v2_app_entry(app_entry)
+    if app_entry == APP_ENTRY_TAILOR:
+        business = None
+    else:
+        business = get_business_for_owner(user)
     return {
         'type': membership_type,
         'business': serialize_business(business),
@@ -334,6 +343,18 @@ def build_permissions_payload(user, *, app_entry: str | None) -> dict[str, bool]
             .first()
         )
         if assignment is None:
+            employee = getattr(user, 'tailor_employee', None)
+            if employee and employee.is_active:
+                perms = employee.permissions_dict
+                return {
+                    'can_manage_business': False,
+                    'can_manage_shops': perms.get('can_manage_shop_profile', False),
+                    'can_manage_staff': perms.get('can_manage_employees', False),
+                    'can_manage_catalog': perms.get('can_manage_catalog', False),
+                    'can_view_reports': perms.get('can_view_analytics', False),
+                    'can_manage_orders': perms.get('can_manage_orders', False),
+                    **{key: bool(perms.get(key, False)) for key in STAFF_PERMISSION_KEYS},
+                }
             return {key: False for key in STAFF_PERMISSION_KEYS}
         perms = assignment.permissions_dict
         return {
@@ -365,6 +386,10 @@ def build_session_payload(user, *, app_entry: str | None) -> dict[str, Any]:
         assignments_count = count_assigned_shops(user.id)
         if assignment and assignments_count == 1:
             active_shop_id = assignment.shop_id
+        elif assignment is None:
+            employee = getattr(user, 'tailor_employee', None)
+            if employee and employee.is_active:
+                active_shop_id = employee.tailor_id
         return {
             'active_shop_id': active_shop_id,
             'shops_count': count_active_shops(user.id),

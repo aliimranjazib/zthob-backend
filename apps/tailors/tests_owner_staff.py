@@ -146,7 +146,10 @@ class OwnerStaffAPITestCase(TestCase):
         detail_url = reverse('owner-staff-detail', kwargs={'staff_id': staff['id']})
         self.client.force_authenticate(user=other)
         response = self.client.get(detail_url)
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND],
+        )
 
     def test_delete_staff_removes_roster_member(self):
         self._login_owner()

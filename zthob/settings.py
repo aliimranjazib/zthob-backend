@@ -58,6 +58,9 @@ env_hosts = os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',')
 env_hosts = [h.strip() for h in env_hosts if h.strip()]
 # Merge environment hosts with defaults, ensuring no duplicates
 ALLOWED_HOSTS = list(set(env_hosts + default_hosts)) if env_hosts else default_hosts
+# Physical device / emulator hitting runserver via LAN IP (Host header = e.g. 192.168.x.x)
+if DEBUG and os.getenv('DJANGO_ALLOW_LAN_HOSTS', 'true').lower() in ('1', 'true', 'yes'):
+    ALLOWED_HOSTS = list(set(ALLOWED_HOSTS + ['*']))
 # Application definition
 
 INSTALLED_APPS = [

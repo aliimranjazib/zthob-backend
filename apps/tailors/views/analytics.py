@@ -101,7 +101,8 @@ class TailorAnalyticsView(APIView):
             analytics_data = TailorAnalyticsService.get_comprehensive_analytics(
                 tailor_user=target_owner,
                 days=days,
-                weeks=weeks
+                weeks=weeks,
+                shop_id=get_token_shop_id(request),
             )
 
             

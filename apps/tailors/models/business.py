@@ -54,6 +54,11 @@ class Business(models.Model):
         db_index=True,
     )
     is_active = models.BooleanField(default=True, db_index=True)
+    console_enabled = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='When True, owner may use the multi-shop business console session.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
