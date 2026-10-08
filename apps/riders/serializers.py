@@ -516,18 +516,17 @@ class RiderOrderListSerializer(serializers.ModelSerializer):
         return format_phone_for_display(obj.customer.phone)
     
     def get_tailor_name(self, obj):
-        try:
-            if hasattr(obj.tailor, 'tailor_profile') and obj.tailor.tailor_profile:
-                return obj.tailor.tailor_profile.shop_name or obj.tailor.username
-        except:
-            pass
-        return obj.tailor.username if obj.tailor else 'Unknown'
-    
+        from apps.riders.services.shop_riders import order_shop_display_name
+
+        return order_shop_display_name(obj)
+
     def get_tailor_phone(self, obj):
-        """Get tailor phone (verified phone from user account)"""
+        from apps.riders.services.shop_riders import _phone_for_shop, order_shop_profile
+
         if not obj.tailor:
             return None
-        return format_phone_for_display(obj.tailor.phone)
+        phone = _phone_for_shop(order_shop_profile(obj), obj.tailor)
+        return phone or format_phone_for_display(obj.tailor.phone)
     
     def get_delivery_address(self, obj):
         """Return delivery address matching customer address structure."""
@@ -835,44 +834,30 @@ class RiderOrderDetailSerializer(serializers.ModelSerializer):
 
     def get_tailor_info(self, obj):
         """Return tailor info with structured address from Address model."""
-        if obj.tailor:
-            try:
-                tailor_profile = obj.tailor.tailor_profile
-                
-                # Get structured address from Address model (same format as delivery_address)
-                from apps.customers.models import Address
-                tailor_address = None
-                # Get address from user's addresses (will use prefetched data if available)
-                # First try to get the default address
-                address = next((addr for addr in obj.tailor.addresses.all() if addr.is_default), None)
-                # If no default address, get the first address
-                if not address:
-                    address = next(iter(obj.tailor.addresses.all()), None)
-                
-                if address:
-                    tailor_address = {
-                        'id': address.id,
-                        'latitude': address.latitude,
-                        'longitude': address.longitude,
-                        'address': address.address or '',
-                        'extra_info': address.extra_info or '',
-                        'is_default': address.is_default,
-                        'address_tag': address.address_tag,
-                    }
-                
-                return {
-                    'id': obj.tailor.id,
-                    'username': obj.tailor.username,
-                    'shop_name': tailor_profile.shop_name if tailor_profile else None,
-                    'contact_number': format_phone_for_display(obj.tailor.phone),
-                    'address': tailor_address,  # Structured address matching delivery_address format
-                }
-            except:
-                return {
-                    'id': obj.tailor.id,
-                    'username': obj.tailor.username,
-                }
-        return None
+        if not obj.tailor:
+            return None
+        from apps.riders.services.shop_riders import (
+            _phone_for_shop,
+            order_shop_profile,
+            rider_order_tailor_address,
+        )
+
+        try:
+            shop_profile = order_shop_profile(obj)
+            tailor_address = rider_order_tailor_address(obj.tailor, shop_profile)
+            contact = _phone_for_shop(shop_profile, obj.tailor)
+            return {
+                'id': obj.tailor.id,
+                'username': obj.tailor.username,
+                'shop_name': shop_profile.shop_name if shop_profile else None,
+                'contact_number': contact or format_phone_for_display(obj.tailor.phone),
+                'address': tailor_address,
+            }
+        except Exception:
+            return {
+                'id': obj.tailor.id,
+                'username': obj.tailor.username,
+            }
     
     def get_delivery_address(self, obj):
         """Return delivery address matching customer address structure."""

@@ -10,6 +10,65 @@ from apps.riders.models import TailorRiderAssociation
 from apps.tailors.shop_access import get_shop_owner_user
 
 
+def order_shop_profile(order):
+    """Shop row for this order (multi-shop), else legacy primary tailor_profile."""
+    shop = getattr(order, 'shop', None)
+    if shop is not None:
+        return shop
+    tailor = getattr(order, 'tailor', None)
+    if tailor is None:
+        return None
+    return getattr(tailor, 'tailor_profile', None)
+
+
+def order_shop_display_name(order):
+    profile = order_shop_profile(order)
+    if profile and (profile.shop_name or '').strip():
+        return profile.shop_name
+    tailor = getattr(order, 'tailor', None)
+    if tailor:
+        return tailor.username
+    return 'Unknown'
+
+
+def rider_order_tailor_address(tailor_user, shop_profile):
+    """Structured pickup address for rider order APIs (same shape as before)."""
+    address = None
+    if tailor_user is not None:
+        addresses = tailor_user.addresses.all()
+        address = next((addr for addr in addresses if addr.is_default), None)
+        if not address:
+            address = next(iter(addresses), None)
+
+    if address:
+        payload = {
+            'id': address.id,
+            'latitude': address.latitude,
+            'longitude': address.longitude,
+            'address': address.address or '',
+            'extra_info': address.extra_info or '',
+            'is_default': address.is_default,
+            'address_tag': address.address_tag,
+        }
+    elif shop_profile and (shop_profile.address or '').strip():
+        payload = {
+            'id': None,
+            'latitude': None,
+            'longitude': None,
+            'address': shop_profile.address.strip(),
+            'extra_info': '',
+            'is_default': False,
+            'address_tag': 'shop',
+        }
+    else:
+        return None
+
+    if shop_profile and (shop_profile.address or '').strip():
+        payload['address'] = shop_profile.address.strip()
+
+    return payload
+
+
 def _phone_for_shop(shop, tailor):
     raw_phone = ''
     if shop and shop.contact_number:
