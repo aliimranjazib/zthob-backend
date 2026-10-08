@@ -65,3 +65,63 @@ def get_average_stitching_time_stats(tailor_user):
         'average_stitching_time_days': average_days,
         'completed_stitching_orders_count': completed_count,
     }
+
+
+def get_average_stitching_time_stats_for_shop(shop):
+    """
+    Stitching stats scoped to a shop profile (multi-shop).
+
+    Falls back to owner-wide stats for the legacy primary profile when the shop
+    has no shop_orders rows yet.
+    """
+    if shop is None:
+        return {
+            'average_stitching_time_days': None,
+            'completed_stitching_orders_count': 0,
+        }
+
+    ready_history = OrderStatusHistory.objects.filter(
+        status__in=READY_STATUSES
+    ).order_by('created_at')
+
+    orders = (
+        Order.objects.filter(
+            shop_id=shop.id,
+            order_type__in=STITCHING_ORDER_TYPES,
+            status__in=COMPLETED_STATUSES,
+        )
+        .prefetch_related(
+            Prefetch(
+                'status_history',
+                queryset=ready_history,
+                to_attr='ready_status_history',
+            )
+        )
+    )
+
+    total_seconds = 0
+    completed_count = 0
+
+    for order in orders:
+        ready_entry = order.ready_status_history[0] if order.ready_status_history else None
+        finished_at = ready_entry.created_at if ready_entry else order.updated_at
+        duration_seconds = (finished_at - order.created_at).total_seconds()
+
+        if duration_seconds < 0:
+            continue
+
+        total_seconds += duration_seconds
+        completed_count += 1
+
+    if completed_count == 0 and shop.user_id is not None:
+        return get_average_stitching_time_stats(shop.shop_owner_user)
+
+    if completed_count == 0:
+        average_days = None
+    else:
+        average_days = round(total_seconds / completed_count / SECONDS_PER_DAY, 1)
+
+    return {
+        'average_stitching_time_days': average_days,
+        'completed_stitching_orders_count': completed_count,
+    }

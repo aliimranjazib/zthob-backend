@@ -5,7 +5,8 @@ from rest_framework import status
 from drf_spectacular.utils import extend_schema
 
 from apps.orders.models import Order
-from apps.tailors.models import TailorProfile, TailorRating
+from apps.customers.services.customer_shops import resolve_customer_shop
+from apps.tailors.models import TailorRating
 from apps.tailors.serializers.rating import TailorRatingCreateSerializer, TailorRatingSerializer
 from zthob.utils import api_response, StandardResultsSetPagination
 
@@ -71,15 +72,16 @@ class SubmitTailorRatingView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
-        # 5. Get tailor profile
-        try:
-            tailor_profile = order.tailor.tailor_profile
-        except Exception:
-            return api_response(
-                success=False,
-                message="Tailor profile not found",
-                status_code=status.HTTP_404_NOT_FOUND
-            )
+        tailor_profile = order.shop
+        if tailor_profile is None:
+            try:
+                tailor_profile = order.tailor.tailor_profile
+            except Exception:
+                return api_response(
+                    success=False,
+                    message="Tailor profile not found",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
 
         # 6. Validate and save
         serializer = TailorRatingCreateSerializer(data=request.data)
@@ -120,13 +122,12 @@ class TailorRatingListView(APIView):
         responses={200: TailorRatingSerializer(many=True), 404: {}}
     )
     def get(self, request, tailor_id):
-        try:
-            tailor_profile = TailorProfile.objects.get(user__id=tailor_id)
-        except TailorProfile.DoesNotExist:
+        tailor_profile = resolve_customer_shop(tailor_id)
+        if tailor_profile is None:
             return api_response(
                 success=False,
                 message="Tailor not found",
-                status_code=status.HTTP_404_NOT_FOUND
+                status_code=status.HTTP_404_NOT_FOUND,
             )
 
         ratings = TailorRating.objects.filter(

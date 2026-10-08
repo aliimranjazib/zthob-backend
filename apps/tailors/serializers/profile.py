@@ -5,10 +5,11 @@ from rest_framework import serializers
 from apps.accounts.serializers import UserProfileSerializer
 from apps.customers.models import Address
 from ..models import TailorProfile
-from ..services.stitching_time import get_average_stitching_time_stats
+from ..services.stitching_time import get_average_stitching_time_stats_for_shop
 from apps.core.media_utils import build_public_media_url
 
 class TailorProfileSerializer(serializers.ModelSerializer):
+    tailor_user_id = serializers.SerializerMethodField()
     user = serializers.SerializerMethodField()
     shop_image_url = serializers.SerializerMethodField()
     average_stitching_time_days = serializers.SerializerMethodField()
@@ -30,7 +31,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = TailorProfile
         fields = [
-            'user', 'shop_name', 'establishment_year', 
+            'id', 'tailor_user_id', 'user', 'shop_name', 'establishment_year', 
             'tailor_experience', 'working_hours', 
             'address', 'shop_status',
             'shop_image', 'shop_image_url',
@@ -45,6 +46,9 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             'is_measurement_fee_enabled', 'measurement_fee', 'standard_stitching_days',
         ]
 
+    def get_tailor_user_id(self, obj):
+        return obj.shop_owner_user_id
+
     def get_user(self, obj):
         account_user = obj.user or obj.shop_owner_user
         if account_user is None:
@@ -53,17 +57,10 @@ class TailorProfileSerializer(serializers.ModelSerializer):
 
     def _get_stitching_time_stats(self, obj):
         cache = self.context.setdefault('tailor_stitching_time_stats', {})
-        account_user = obj.user or obj.shop_owner_user
-        user_id = account_user.id if account_user else None
-        if user_id not in cache:
-            if account_user is None:
-                cache[user_id] = {
-                    'average_stitching_time_days': None,
-                    'completed_stitching_orders_count': 0,
-                }
-            else:
-                cache[user_id] = get_average_stitching_time_stats(account_user)
-        return cache[user_id]
+        shop_id = obj.id
+        if shop_id not in cache:
+            cache[shop_id] = get_average_stitching_time_stats_for_shop(obj)
+        return cache[shop_id]
 
     def get_average_stitching_time_days(self, obj):
         return self._get_stitching_time_stats(obj)['average_stitching_time_days']

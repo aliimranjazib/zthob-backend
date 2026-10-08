@@ -13,6 +13,11 @@ from apps.customers.serializers import (
     FamilyMemberMeasurementsDetailSerializer, CustomerHomeSerializer
 )
 from apps.orders.models import Order
+from apps.customers.services.customer_shops import (
+    apply_customer_shop_geo_filter,
+    get_customer_visible_shops_queryset,
+    resolve_customer_shop,
+)
 from apps.customers.services.home_tailor_sections import (
     allowed_tailor_sections_display,
     apply_free_measurement_filter,
@@ -34,7 +39,7 @@ from apps.tailors.models import TailorProfile, ServiceArea
 from apps.tailors.serializers import TailorProfileSerializer
 from apps.core.models import Slider
 from apps.core.serializers import SliderSerializer
-from django.db.models import Count, Exists, OuterRef, Prefetch, Avg
+from django.db.models import Count, Exists, OuterRef, Prefetch, Avg, Q
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from zthob.utils import api_response, StandardResultsSetPagination
@@ -68,28 +73,30 @@ class FabricCatalogAPIView(APIView):
             approval_status='approved',
             tailor__review__review_status='approved',
             tailor__shop_status=True,
-            tailor__user__is_active=True
+            tailor__owner__is_active=True,
         ).select_related(
-            'category', 'fabric_type', 'country', 'tailor', 'tailor__user'
+            'category', 'fabric_type', 'country', 'tailor', 'tailor__user', 'tailor__owner'
         ).prefetch_related(
-            'tags', 'gallery', 
+            'tags', 'gallery',
+            Prefetch('tailor__owner__addresses', queryset=Address.objects.filter(is_default=True)),
             Prefetch('tailor__user__addresses', queryset=Address.objects.filter(is_default=True)),
-            'tailor__review'
+            'tailor__review',
         ).annotate(
             favorite_count=Count('favorites', distinct=True)
         ).order_by('-created_at')
-        
+
         if request.user.is_authenticated:
             fabrics = fabrics.annotate(
                 is_favorited=Exists(FabricFavorite.objects.filter(user=request.user, fabric=OuterRef('pk')))
             )
 
-        # ── Geo filtering ────────────────────────────────────────────────────
-        # Filter fabrics via tailor's existing Address (no new model fields).
         lat, lng, radius_km = parse_geo_params(request)
         if lat is not None:
             nearby_user_ids = get_nearby_user_ids(lat, lng, radius_km)
-            fabrics = fabrics.filter(tailor__user_id__in=nearby_user_ids)
+            fabrics = fabrics.filter(
+                Q(tailor__owner_id__in=nearby_user_ids)
+                | Q(tailor__user_id__in=nearby_user_ids)
+            )
         # ────────────────────────────────────────────────────────────────────
         
         # Add service area names to context to avoid per-item lookups
@@ -426,22 +433,11 @@ class TailorListAPIView(APIView):
             tailors = apply_tailor_section(tailors, section)
             message = f"{section.replace('_', ' ').title()} tailors fetched successfully"
         else:
-            # Original list behaviour — unchanged when section is omitted.
-            tailors = TailorProfile.objects.filter(
-                review__review_status='approved',
-                shop_status=True,
-                user__is_active=True
-            ).select_related(
-                'user'
-            ).prefetch_related(
-                'review',
-                Prefetch('user__addresses', queryset=Address.objects.filter(is_default=True)),
-            ).all()
-
+            tailors = get_customer_visible_shops_queryset()
             lat, lng, radius_km = parse_geo_params(request)
             if lat is not None:
                 nearby_user_ids = get_home_nearby_user_ids(lat, lng, radius_km)
-                tailors = tailors.filter(user_id__in=nearby_user_ids)
+                tailors = apply_customer_shop_geo_filter(tailors, nearby_user_ids)
             message = "Tailors fetched successfully"
 
         tailors = apply_free_measurement_filter(tailors, request)
@@ -481,29 +477,30 @@ class TailorFabricsAPIView(APIView):
         Fetch all active fabrics of a specific tailor with pagination and optimized queries.
         URL: /api/customers/tailors/{tailor_id}/fabrics/
         """
-        try:
-            # Get the tailor profile
-            tailor = TailorProfile.objects.select_related('user').get(
-                user__id=tailor_id,
-                review__review_status='approved',
-                shop_status=True,
-                user__is_active=True
+        tailor = resolve_customer_shop(tailor_id)
+        if tailor is None:
+            return api_response(
+                success=False,
+                message="Tailor not found",
+                data=None,
+                status_code=status.HTTP_404_NOT_FOUND,
             )
-            
-            # Fetch all active fabrics for this tailor with optimized queries
+
+        try:
             fabrics = Fabric.objects.filter(
                 tailor=tailor,
                 is_active=True,
                 approval_status='approved',
                 tailor__review__review_status='approved',
                 tailor__shop_status=True,
-                tailor__user__is_active=True
+                tailor__owner__is_active=True,
             ).select_related(
-                'category', 'fabric_type', 'country', 'tailor', 'tailor__user'
+                'category', 'fabric_type', 'country', 'tailor', 'tailor__user', 'tailor__owner'
             ).prefetch_related(
                 'tags', 'gallery',
+                Prefetch('tailor__owner__addresses', queryset=Address.objects.filter(is_default=True)),
                 Prefetch('tailor__user__addresses', queryset=Address.objects.filter(is_default=True)),
-                'tailor__review'
+                'tailor__review',
             ).annotate(
                 favorite_count=Count('favorites', distinct=True)
             ).order_by('-created_at')
@@ -512,41 +509,33 @@ class TailorFabricsAPIView(APIView):
                 fabrics = fabrics.annotate(
                     is_favorited=Exists(FabricFavorite.objects.filter(user=request.user, fabric=OuterRef('pk')))
                 )
-            
-            # Add service area names to context
+
             service_area_names = {sa.id: sa.name for sa in ServiceArea.objects.filter(is_active=True)}
-            
+
             paginator = self.pagination_class()
             page = paginator.paginate_queryset(fabrics, request)
-            
-            # Serialize the data
+
             serializer = FabricCatalogSerializer(
-                page, 
-                many=True, 
+                page,
+                many=True,
                 context={
                     'request': request,
-                    'service_area_names': service_area_names
-                }
+                    'service_area_names': service_area_names,
+                },
             )
-            
+
+            owner = tailor.shop_owner_user
+            display_name = tailor.shop_name or (owner.get_full_name() if owner else 'Shop')
             return paginator.get_paginated_response(
-                serializer.data, 
-                message=f"Fabrics for {tailor.shop_name or tailor.user.get_full_name()} fetched successfully"
+                serializer.data,
+                message=f"Fabrics for {display_name} fetched successfully",
             )
-            
-        except TailorProfile.DoesNotExist:
-            return api_response(
-                success=False,
-                message="Tailor not found",
-                data=None,
-                status_code=status.HTTP_404_NOT_FOUND
-            )
-        except Exception as e:
+        except Exception:
             return api_response(
                 success=False,
                 message="Error fetching tailor fabrics",
                 data=None,
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -566,52 +555,38 @@ class TailorDetailAPIView(APIView):
         Get a single tailor's profile details without authentication.
         URL: /api/customers/tailors/{tailor_id}/
         """
-        try:
-            # Get the tailor profile with optimized queries
-            tailor = TailorProfile.objects.select_related(
-                'user'
-            ).prefetch_related(
-                'review',
-                Prefetch('user__addresses', queryset=Address.objects.filter(is_default=True)),
-            ).get(
-                user__id=tailor_id,
-                review__review_status='approved',
-                shop_status=True,
-                user__is_active=True
-            )
-            
-            # Add service area names to context
-            service_area_names = {sa.id: sa.name for sa in ServiceArea.objects.filter(is_active=True)}
-            
-            # Serialize the data
-            serializer = TailorProfileSerializer(
-                tailor, 
-                context={
-                    'request': request,
-                    'service_area_names': service_area_names
-                }
-            )
-            
-            return api_response(
-                success=True, 
-                message="Tailor details fetched successfully",
-                data=serializer.data,
-                status_code=status.HTTP_200_OK
-            )
-            
-        except TailorProfile.DoesNotExist:
+        tailor = resolve_customer_shop(tailor_id)
+        if tailor is None:
             return api_response(
                 success=False,
                 message="Tailor not found",
                 data=None,
-                status_code=status.HTTP_404_NOT_FOUND
+                status_code=status.HTTP_404_NOT_FOUND,
             )
-        except Exception as e:
+
+        try:
+            service_area_names = {sa.id: sa.name for sa in ServiceArea.objects.filter(is_active=True)}
+
+            serializer = TailorProfileSerializer(
+                tailor,
+                context={
+                    'request': request,
+                    'service_area_names': service_area_names,
+                },
+            )
+
+            return api_response(
+                success=True,
+                message="Tailor details fetched successfully",
+                data=serializer.data,
+                status_code=status.HTTP_200_OK,
+            )
+        except Exception:
             return api_response(
                 success=False,
                 message="Error fetching tailor details",
                 data=None,
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -639,17 +614,18 @@ class FabricDetailAPIView(APIView):
                 approval_status='approved',
                 tailor__review__review_status='approved',
                 tailor__shop_status=True,
-                tailor__user__is_active=True
+                tailor__owner__is_active=True,
             ).select_related(
-                'category', 'fabric_type', 'tailor', 'tailor__user'
+                'category', 'fabric_type', 'tailor', 'tailor__user', 'tailor__owner'
             ).prefetch_related(
                 'tags', 'gallery',
+                Prefetch('tailor__owner__addresses', queryset=Address.objects.filter(is_default=True)),
                 Prefetch('tailor__user__addresses', queryset=Address.objects.filter(is_default=True)),
-                'tailor__review'
+                'tailor__review',
             ).annotate(
                 favorite_count=Count('favorites', distinct=True)
             ).first()
-            
+
             if not fabric:
                 return api_response(
                     success=False,
@@ -1077,21 +1053,13 @@ class CustomerPreviousTailorsView(APIView):
         responses={200: TailorProfileSerializer(many=True)}
     )
     def get(self, request):
-        # 1. Get unique tailor ids from user's orders, ignoring null tailors
-        ordered_tailor_ids = Order.objects.filter(
-            customer=request.user,
-            tailor__isnull=False
-        ).values_list('tailor_id', flat=True).distinct()
-
-        # 2. Get tailor profiles for those tailors with optimized queries
-        tailors = TailorProfile.objects.filter(
-            user_id__in=ordered_tailor_ids
-        ).select_related(
-            'user'
-        ).prefetch_related(
-            'review',
-            Prefetch('user__addresses', queryset=Address.objects.filter(is_default=True)),
+        ordered_shop_ids = (
+            Order.objects.filter(customer=request.user, shop__isnull=False)
+            .values_list('shop_id', flat=True)
+            .distinct()
         )
+
+        tailors = get_customer_visible_shops_queryset().filter(id__in=ordered_shop_ids)
 
         # 3. Serialize
         serializer = TailorProfileSerializer(tailors, many=True, context={'request': request})

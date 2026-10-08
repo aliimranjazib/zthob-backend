@@ -61,7 +61,7 @@ class CustomerHomeAPIView(APIView):
         
         # 3. Cache Check: If default view (Riyadh), serve from Redis if available
         if is_default_view:
-            cached_data = cache.get('customer_home_default_riyadh')
+            cached_data = cache.get('customer_home_default_riyadh_v2')
             if cached_data:
                 return api_response(
                     success=True,
@@ -109,15 +109,19 @@ class CustomerHomeAPIView(APIView):
         most_popular_tailors = TailorHomeSerializer(apply_tailor_section(active_tailors, 'most_popular')[:8], many=True, context={'request': request}).data
         
         # 8. Fabrics Filtering (Active & Nearby)
+        from django.db.models import Q
+
         active_fabrics = Fabric.objects.filter(
             is_active=True,
             approval_status='approved',
             tailor__review__review_status='approved',
             tailor__shop_status=True,
-            tailor__user__is_active=True,
-            tailor__user_id__in=nearby_user_ids
+            tailor__owner__is_active=True,
+        ).filter(
+            Q(tailor__owner_id__in=nearby_user_ids)
+            | Q(tailor__user_id__in=nearby_user_ids)
         ).select_related(
-            'category', 'fabric_type', 'tailor', 'tailor__user'
+            'category', 'fabric_type', 'tailor', 'tailor__user', 'tailor__owner'
         ).prefetch_related('gallery', 'tags')
 
         # Build Fabrics Sections using optimized serializers
@@ -142,7 +146,7 @@ class CustomerHomeAPIView(APIView):
 
         # 9. Store in Cache if this was the default view
         if is_default_view:
-            cache.set('customer_home_default_riyadh', data, 60 * 5) # Cache for 5 mins
+            cache.set('customer_home_default_riyadh_v2', data, 60 * 5)  # Cache for 5 mins
 
         return api_response(
             success=True,

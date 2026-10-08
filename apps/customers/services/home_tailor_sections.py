@@ -1,10 +1,13 @@
 """Shared tailor section rules for customer home previews and paginated See All lists."""
 
-from django.db.models import Count, F, FloatField, Prefetch, ExpressionWrapper
+from django.db.models import Count, F, FloatField, ExpressionWrapper
 from django.db.models.functions import ACos, Cos, Radians, Sin
 
 from apps.customers.models import Address
-from apps.tailors.models import TailorProfile
+from apps.customers.services.customer_shops import (
+    apply_customer_shop_geo_filter,
+    get_customer_visible_shops_queryset,
+)
 from zthob.geo_utils import MAX_RADIUS_KM, MIN_RADIUS_KM
 
 TAILOR_SECTIONS = (
@@ -72,17 +75,8 @@ def parse_section_geo_params(request):
 
 def get_active_tailors_queryset(*, nearby_user_ids=None):
     """Base queryset shared by home previews and section list endpoints."""
-    queryset = TailorProfile.objects.filter(
-        review__review_status='approved',
-        shop_status=True,
-        user__is_active=True,
-    ).select_related('user').prefetch_related(
-        'review',
-        Prefetch('user__addresses', queryset=Address.objects.filter(is_default=True)),
-    )
-    if nearby_user_ids is not None:
-        queryset = queryset.filter(user_id__in=nearby_user_ids)
-    return queryset
+    queryset = get_customer_visible_shops_queryset()
+    return apply_customer_shop_geo_filter(queryset, nearby_user_ids)
 
 
 def apply_free_measurement_filter(queryset, request):
@@ -109,5 +103,7 @@ def apply_tailor_section(queryset, section: str):
     if section == 'express_delivery':
         return queryset.filter(is_express_delivery_enabled=True).order_by('-avg_overall_satisfaction')
     if section == 'most_popular':
-        return queryset.annotate(order_count=Count('user__tailor_orders')).order_by('-order_count')
+        return queryset.annotate(order_count=Count('shop_orders', distinct=True)).order_by(
+            '-order_count'
+        )
     return queryset
