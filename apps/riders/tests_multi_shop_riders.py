@@ -8,7 +8,12 @@ from rest_framework.test import APIClient
 
 from apps.accounts.models import CustomUser
 from apps.core.services import PhoneVerificationService
-from apps.riders.models import RiderProfile, RiderProfileReview, TailorRiderAssociation
+from apps.riders.models import (
+    RiderProfile,
+    RiderProfileReview,
+    TailorInvitationCode,
+    TailorRiderAssociation,
+)
 from apps.tailors.models import TailorProfile
 
 TEST_REST_FRAMEWORK = {
@@ -31,6 +36,8 @@ class MultiShopRidersTestCase(TestCase):
         self.owner_switch_url = reverse('accounts:owner-switch-shop')
         self.shops_url = reverse('owner-shops')
         self.my_riders_url = '/api/riders/tailor/my-riders/'
+        self.my_tailors_url = '/api/riders/my-tailors/'
+        self.join_team_url = '/api/riders/join-team/'
         self.test_otp = PhoneVerificationService.TEST_OTP
         self.owner_phone = '0500000201'
 
@@ -99,3 +106,58 @@ class MultiShopRidersTestCase(TestCase):
         response_b = self.client.get(self.my_riders_url)
         self.assertEqual(response_b.status_code, status.HTTP_200_OK)
         self.assertEqual(response_b.data['data']['riders'], [])
+
+    def test_rider_my_tailors_shows_association_shop_not_legacy_profile(self):
+        """Legacy tailor_profile often points at the first shop; display must use association.shop."""
+        self._login_owner()
+        owner = CustomUser.objects.get(phone=self.owner_phone)
+        shop_a = self._create_shop('Display Shop Alpha')
+        shop_b = self._create_shop('Display Shop Beta')
+
+        shop_a_profile = TailorProfile.objects.get(id=shop_a['id'])
+        shop_b_profile = TailorProfile.objects.get(id=shop_b['id'])
+        shop_a_profile.user = owner
+        shop_a_profile.save(update_fields=['user'])
+
+        TailorRiderAssociation.objects.create(
+            tailor=owner,
+            shop=shop_b_profile,
+            rider=self.rider,
+            is_active=True,
+        )
+
+        self.client.force_authenticate(user=self.rider)
+        response = self.client.get(self.my_tailors_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']['tailors']), 1)
+        row = response.data['data']['tailors'][0]
+        self.assertEqual(row['shop_id'], shop_b['id'])
+        self.assertEqual(row['shop_name'], 'Display Shop Beta')
+        self.assertNotEqual(row['shop_name'], 'Display Shop Alpha')
+
+    def test_join_team_response_uses_invitation_shop(self):
+        self._login_owner()
+        owner = CustomUser.objects.get(phone=self.owner_phone)
+        shop_a = self._create_shop('Join Shop Alpha')
+        shop_b = self._create_shop('Join Shop Beta')
+
+        shop_a_profile = TailorProfile.objects.get(id=shop_a['id'])
+        shop_a_profile.user = owner
+        shop_a_profile.save(update_fields=['user'])
+
+        self._switch_shop(shop_b['id'])
+        code = TailorInvitationCode.generate_unique_code(shop_b['id'])
+        TailorInvitationCode.objects.create(
+            tailor=owner,
+            shop=TailorProfile.objects.get(id=shop_b['id']),
+            code=code,
+        )
+
+        self.client.force_authenticate(user=self.rider)
+        response = self.client.post(self.join_team_url, {'code': code}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        tailor = response.data['data']['tailor']
+        self.assertEqual(tailor['shop_id'], shop_b['id'])
+        self.assertEqual(tailor['shop_name'], 'Join Shop Beta')

@@ -5,8 +5,65 @@ from __future__ import annotations
 from rest_framework.exceptions import ValidationError
 
 from apps.finance.shop_session import resolve_finance_shop, finance_shop_required_message
+from apps.core.phone_utils import format_phone_for_display
 from apps.riders.models import TailorRiderAssociation
 from apps.tailors.shop_access import get_shop_owner_user
+
+
+def _phone_for_shop(shop, tailor):
+    raw_phone = ''
+    if shop and shop.contact_number:
+        raw_phone = shop.contact_number
+    else:
+        legacy_profile = getattr(tailor, 'tailor_profile', None)
+        if legacy_profile and legacy_profile.contact_number:
+            raw_phone = legacy_profile.contact_number
+        else:
+            raw_phone = getattr(tailor, 'phone', '') or ''
+    return format_phone_for_display(raw_phone) if raw_phone else ''
+
+
+def build_rider_team_shop_payload(association, *, include_roles=False):
+    """
+    Shop-scoped tailor team row for rider APIs (join + my-tailors).
+
+    Uses association.shop, not tailor.tailor_profile (legacy first shop).
+    """
+    shop = association.shop
+    tailor = association.tailor
+    legacy_profile = getattr(tailor, 'tailor_profile', None)
+
+    if shop and (shop.shop_name or '').strip():
+        shop_name = shop.shop_name
+    elif legacy_profile and (legacy_profile.shop_name or '').strip():
+        shop_name = legacy_profile.shop_name
+    else:
+        shop_name = tailor.username
+
+    payload = {
+        'id': tailor.id,
+        'tailor_id': tailor.id,
+        'shop_id': shop.id if shop else None,
+        'shop_name': shop_name,
+        'phone': _phone_for_shop(shop, tailor),
+    }
+    if include_roles:
+        payload.update(
+            {
+                'joined_at': association.created_at,
+                'can_take_measurements': association.can_take_measurements,
+                'can_do_delivery': association.can_do_delivery,
+                'rider_types': [
+                    role
+                    for role, enabled in (
+                        ('measurement', association.can_take_measurements),
+                        ('delivery', association.can_do_delivery),
+                    )
+                    if enabled
+                ],
+            }
+        )
+    return payload
 
 
 def resolve_rider_session_shop(request):

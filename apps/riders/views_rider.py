@@ -1,27 +1,11 @@
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from apps.core.phone_utils import format_phone_for_display
 from zthob.utils import api_response
 from .permissions import IsRider
 from . import models
-from .serializers import (
-    JoinTailorTeamSerializer,
-    TailorBasicInfoSerializer,
-)
-
-
-def _tailor_phone_for_display(tailor, tailor_profile=None):
-    """Return tailor contact phone in E.164 for API responses."""
-    if tailor_profile is None:
-        tailor_profile = getattr(tailor, 'tailor_profile', None)
-    raw_phone = ''
-    if tailor_profile and tailor_profile.contact_number:
-        raw_phone = tailor_profile.contact_number
-    else:
-        raw_phone = getattr(tailor, 'phone', '') or ''
-    return format_phone_for_display(raw_phone) if raw_phone else ''
+from .serializers import JoinTailorTeamSerializer
+from .services.shop_riders import build_rider_team_shop_payload
 
 
 @api_view(['POST'])
@@ -32,24 +16,21 @@ def join_tailor_team(request):
         data=request.data,
         context={'request': request}
     )
-    
+
     if serializer.is_valid():
         result = serializer.save()
-        
+
         association = result['association']
-        tailor = result['tailor']
         created = result['created']
-        
-        # Get tailor info - use getattr for maximum safety
-        tailor_profile = getattr(tailor, 'tailor_profile', None)
-        tailor_info = {
-            'id': tailor.id,
-            'shop_name': getattr(tailor_profile, 'shop_name', tailor.username),
-            'phone': _tailor_phone_for_display(tailor, tailor_profile),
-        }
-        
-        message = 'Successfully joined tailor\'s team' if created else 'You are already part of this tailor\'s team'
-        
+
+        tailor_info = build_rider_team_shop_payload(association, include_roles=False)
+
+        message = (
+            'Successfully joined tailor\'s team'
+            if created
+            else 'You are already part of this tailor\'s team'
+        )
+
         return api_response(
             success=True,
             message=message,
@@ -57,7 +38,7 @@ def join_tailor_team(request):
             status_code=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
             request=request
         )
-    
+
     return api_response(
         success=False,
         message="Invalid invitation code",
@@ -70,31 +51,21 @@ def join_tailor_team(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsRider])
 def rider_my_tailors(request):
-    """Get list of tailors this rider is associated with"""
-    associations = models.TailorRiderAssociation.objects.filter(
-        rider=request.user,
-        is_active=True
-    ).select_related('tailor', 'tailor__tailor_profile').order_by('-created_at')
-    
-    tailors_data = []
-    for assoc in associations:
-        tailor_profile = getattr(assoc.tailor, 'tailor_profile', None)
-        tailor_data = {
-            'id': assoc.tailor.id,
-            'shop_name': getattr(tailor_profile, 'shop_name', assoc.tailor.username),
-            'phone': _tailor_phone_for_display(assoc.tailor, tailor_profile),
-            'joined_at': assoc.created_at,
-            'can_take_measurements': assoc.can_take_measurements,
-            'can_do_delivery': assoc.can_do_delivery,
-            'rider_types': [
-                role for role, enabled in (
-                    ('measurement', assoc.can_take_measurements),
-                    ('delivery', assoc.can_do_delivery),
-                ) if enabled
-            ],
-        }
-        tailors_data.append(tailor_data)
-    
+    """Get list of tailor shops this rider is associated with"""
+    associations = (
+        models.TailorRiderAssociation.objects.filter(
+            rider=request.user,
+            is_active=True,
+        )
+        .select_related('shop', 'tailor', 'tailor__tailor_profile')
+        .order_by('-created_at')
+    )
+
+    tailors_data = [
+        build_rider_team_shop_payload(assoc, include_roles=True)
+        for assoc in associations
+    ]
+
     return api_response(
         success=True,
         message="Tailors retrieved successfully",
