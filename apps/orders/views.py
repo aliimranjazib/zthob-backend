@@ -62,6 +62,7 @@ from apps.orders.history_utils import (
     DEFAULT_PERIOD,
     get_tailor_completed_orders,
 )
+from apps.orders.checkout_shop_resolve import normalize_order_tailor_shop_payload
 from apps.orders.shop_scoping import apply_shop_session_filter, shop_id_from_request
 from apps.orders.alinma import (
     AlinmaConfigurationError,
@@ -139,9 +140,16 @@ def _create_order_from_checkout(
     order_data = dict(checkout.request_payload)
     order_data['customer'] = customer.id
     order_data['payment_method'] = payment_method
+    order_data, checkout_shop_id = normalize_order_tailor_shop_payload(order_data)
 
     context_request = serializer_request or SimpleNamespace(user=customer)
-    order_serializer = OrderCreateSerializer(data=order_data, context={'request': context_request})
+    order_serializer = OrderCreateSerializer(
+        data=order_data,
+        context={
+            'request': context_request,
+            'shop_id': checkout_shop_id,
+        },
+    )
     if not order_serializer.is_valid():
         raise ValidationError(order_serializer.errors)
 
@@ -453,19 +461,20 @@ class OrderCreateView(APIView):
                     status_code=status.HTTP_200_OK
                 )
 
-        data=request.data.copy()
+        data = request.data.copy()
         if idempotency_key:
             data['idempotency_key'] = idempotency_key
 
         if not (request.user.is_admin or request.user.is_tailor):
             data['customer'] = request.user.id
+        data, payload_shop_id = normalize_order_tailor_shop_payload(data)
         # For TAILOR and ADMIN, we respect the 'customer' ID passed in the request.
         # This ensures that when a tailor/admin creates an order, the correct customer is linked.
         serializer = OrderCreateSerializer(
             data=data,
             context={
                 'request': request,
-                'shop_id': shop_id_from_request(request),
+                'shop_id': payload_shop_id or shop_id_from_request(request),
             },
         )
         if serializer.is_valid():
@@ -539,7 +548,14 @@ class CheckoutCreateView(APIView):
         if not request.user.is_admin:
             data['customer'] = request.user.id
 
-        serializer = OrderCreateSerializer(data=data, context={'request': request})
+        data, checkout_shop_id = normalize_order_tailor_shop_payload(data)
+        serializer = OrderCreateSerializer(
+            data=data,
+            context={
+                'request': request,
+                'shop_id': checkout_shop_id,
+            },
+        )
         if not serializer.is_valid():
             return api_response(
                 success=False,

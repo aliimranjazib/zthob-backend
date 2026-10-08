@@ -1074,6 +1074,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         fields = [
             'customer',
             'tailor',
+            'shop',
             'order_type',
             'service_mode',
             'payment_method',
@@ -1091,7 +1092,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'idempotency_key'
         ]
         extra_kwargs = {
-            'tailor': {'required': False, 'allow_null': True}
+            'tailor': {'required': False, 'allow_null': True},
+            'shop': {'required': False, 'allow_null': True},
         }
 
     def _get_target_customer(self):
@@ -1219,6 +1221,25 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             validated_items.append(item_data)
         return validated_items
 
+    def _order_shop_profile(self, *, tailor_user, shop_profile):
+        if shop_profile is not None:
+            return shop_profile
+        if tailor_user is None:
+            return None
+        return getattr(tailor_user, 'tailor_profile', None) or TailorProfile.objects.filter(
+            owner=tailor_user,
+        ).order_by('created_at').first()
+
+    def validate_shop(self, value):
+        if value is None:
+            return None
+        from apps.customers.services.customer_shops import get_customer_visible_shops_queryset
+
+        if not get_customer_visible_shops_queryset().filter(pk=value.pk).exists():
+            raise serializers.ValidationError('Selected shop is not available for orders')
+        self.context['shop_id'] = value.id
+        return value
+
     def validate_tailor(self,value):
         initial_data = getattr(self, 'initial_data', {})
         order_type = initial_data.get('order_type', 'fabric_only')
@@ -1236,13 +1257,26 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         
         if not value.is_tailor:
             raise serializers.ValidationError('Selected user is not a tailor')
-        try:
-            tailor_profile=value.tailor_profile
-            if not tailor_profile.shop_status:
-                raise serializers.ValidationError('Selected tailor is not accepting orders')
-        except TailorProfile.DoesNotExist:
+
+        shop_profile = None
+        shop_raw = initial_data.get('shop')
+        if shop_raw is not None:
+            try:
+                shop_profile = TailorProfile.objects.filter(pk=int(shop_raw)).first()
+            except (TypeError, ValueError):
+                shop_profile = None
+
+        profile = self._order_shop_profile(tailor_user=value, shop_profile=shop_profile)
+        if profile is None:
             raise serializers.ValidationError('Tailor profile not found')
+        if not profile.shop_status:
+            raise serializers.ValidationError('Selected tailor is not accepting orders')
+        if shop_profile is not None and shop_profile.shop_owner_user_id != value.id:
+            raise serializers.ValidationError('Selected shop does not belong to this tailor')
+
         self.context['tailor'] = value
+        if shop_profile is not None:
+            self.context['shop_id'] = shop_profile.id
         return value
 
     def validate_family_member(self, value):
@@ -1342,10 +1376,18 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         tailor = data.get('tailor')
         items = data.get('items', [])
         
+        shop_profile = data.get('shop')
+        checkout_shop_id = shop_profile.id if shop_profile is not None else self.context.get('shop_id')
+
+        if tailor and shop_profile is not None and shop_profile.shop_owner_user_id != tailor.id:
+            raise serializers.ValidationError({
+                'shop': 'Selected shop does not belong to the selected tailor.',
+            })
+
         if tailor:
             from apps.orders.shop_scoping import fabric_belongs_to_tailor_order
 
-            session_shop_id = self.context.get('shop_id')
+            session_shop_id = checkout_shop_id
             for item in items:
                 fabric = item.get('fabric')
                 if fabric and not fabric_belongs_to_tailor_order(
@@ -1665,10 +1707,13 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             validated_data['status'] = 'confirmed'
 
         from apps.orders.shop_scoping import attach_shop_to_order_data
+        resolved_shop_id = self.context.get('shop_id')
+        if validated_data.get('shop') is not None:
+            resolved_shop_id = validated_data['shop'].id
         attach_shop_to_order_data(
             validated_data,
             tailor_user=tailor,
-            shop_id=self.context.get('shop_id'),
+            shop_id=resolved_shop_id,
         )
 
         order = Order.objects.create(**validated_data)

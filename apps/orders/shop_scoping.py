@@ -110,6 +110,8 @@ def fabric_belongs_to_tailor_order(fabric, tailor_user, *, shop_id=None) -> bool
 
 def attach_shop_to_order_data(validated_data, *, tailor_user, shop_id=None):
     """Set ``shop`` on validated order data when a tailor is assigned."""
+    if validated_data.get('shop'):
+        return validated_data
     if not tailor_user:
         return validated_data
     shop = resolve_shop_for_tailor_user(tailor_user, shop_id=shop_id)
