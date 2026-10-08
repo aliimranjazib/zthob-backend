@@ -381,6 +381,7 @@ class OrderSerializer(serializers.ModelSerializer):
     customer_phone=serializers.SerializerMethodField()
     tailor_name=serializers.SerializerMethodField()
     tailor_contact=serializers.SerializerMethodField()
+    tailor_info=serializers.SerializerMethodField()
     rider_name=serializers.SerializerMethodField()
     rider_phone=serializers.SerializerMethodField()
     measurement_rider_name=serializers.SerializerMethodField()
@@ -419,6 +420,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'tailor',
             'tailor_name',
             'tailor_contact',
+            'tailor_info',
             'rider',
             'rider_name',
             'rider_phone',
@@ -503,18 +505,38 @@ class OrderSerializer(serializers.ModelSerializer):
         return format_phone_for_display(obj.customer.phone)
 
     def get_tailor_name(self, obj):
+        from apps.riders.services.shop_riders import order_shop_display_name
+
         if not obj.tailor:
             return None
-        try:
-            return obj.tailor.tailor_profile.shop_name
-        except TailorProfile.DoesNotExist:
-            return obj.tailor.username
+        return order_shop_display_name(obj)
 
     def get_tailor_contact(self, obj):
-        """Get tailor contact (verified phone from user account)"""
+        from apps.riders.services.shop_riders import _phone_for_shop, order_shop_profile
+
         if not obj.tailor:
             return None
-        return format_phone_for_display(obj.tailor.phone)
+        phone = _phone_for_shop(order_shop_profile(obj), obj.tailor)
+        return phone or format_phone_for_display(obj.tailor.phone)
+
+    def get_tailor_info(self, obj):
+        if not obj.tailor:
+            return None
+        from apps.riders.services.shop_riders import (
+            _phone_for_shop,
+            order_shop_profile,
+            rider_order_tailor_address,
+        )
+
+        shop_profile = order_shop_profile(obj)
+        contact = _phone_for_shop(shop_profile, obj.tailor)
+        return {
+            'id': obj.tailor.id,
+            'username': obj.tailor.username,
+            'shop_name': shop_profile.shop_name if shop_profile else None,
+            'contact_number': contact or format_phone_for_display(obj.tailor.phone),
+            'address': rider_order_tailor_address(obj.tailor, shop_profile),
+        }
 
     def get_rider_name(self, obj):
         if obj.rider:
@@ -2097,12 +2119,11 @@ class OrderListSerializer(serializers.ModelSerializer):
         return translate_message(display_name, language)
 
     def get_tailor_name(self, obj):
+        from apps.riders.services.shop_riders import order_shop_display_name
+
         if not obj.tailor:
             return None
-        try:
-            return obj.tailor.tailor_profile.shop_name
-        except TailorProfile.DoesNotExist:
-            return obj.tailor.username
+        return order_shop_display_name(obj)
 
     def get_assigned_employee_info(self, obj):
         employee = getattr(obj, 'assigned_employee', None)

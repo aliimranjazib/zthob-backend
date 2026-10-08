@@ -1135,6 +1135,7 @@ class OrderDetailView(APIView):
             Order.objects.select_related(
                 'customer',
                 'tailor',
+                'shop',
                 'delivery_address',
                 'rider__rider_profile',
                 'assigned_rider__rider_profile',
@@ -1146,6 +1147,7 @@ class OrderDetailView(APIView):
                 'order_items__fabric',
                 'order_items__family_member',
                 'order_items__customer_fabric_images',
+                'tailor__addresses',
             ),
             id=order_id
         )
@@ -1422,7 +1424,13 @@ class CustomerOrderListView(APIView):
     )
 
     def get(self,request):
-        orders = Order.objects.filter(customer=request.user).select_related('tailor', 'delivery_address').prefetch_related('order_items__fabric', 'order_items__customer_fabric_images').order_by('-created_at')
+        orders = Order.objects.filter(customer=request.user).select_related(
+            'tailor', 'shop', 'delivery_address',
+        ).prefetch_related(
+            'order_items__fabric',
+            'order_items__customer_fabric_images',
+            'tailor__addresses',
+        ).order_by('-created_at')
         status_filter=request.query_params.get('status')
         if status_filter:
             orders=orders.filter(status=status_filter)
