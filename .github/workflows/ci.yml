@@ -114,4 +114,12 @@ jobs:
           REDIS_URL: redis://localhost:6379/1
           CELERY_BROKER_URL: redis://localhost:6379/0
           CELERY_RESULT_BACKEND: redis://localhost:6379/0
-        run: python manage.py test apps.orders.tests_checkout_flow apps.orders.tests_cod_flow apps.notifications.tests apps.core.tests_migration_0012
+        run: |
+          python manage.py test \
+            apps.orders.tests_checkout_flow \
+            apps.orders.tests_checkout_multi_shop \
+            apps.orders.tests_cod_flow \
+            apps.customers.tests_tailor_sections \
+            apps.customers.tests_multi_shop_discovery \
+            apps.notifications.tests \
+            apps.core.tests_migration_0012

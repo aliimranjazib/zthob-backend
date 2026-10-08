@@ -34,6 +34,8 @@ def normalize_order_tailor_shop_payload(data: dict) -> tuple[dict, int | None]:
             shop = visible.filter(pk=int(shop_raw)).first()
         except (TypeError, ValueError):
             shop = None
+        if shop is None:
+            payload.pop('shop', None)
 
     tailor_user = None
     if tailor_raw is not None:
@@ -52,9 +54,9 @@ def normalize_order_tailor_shop_payload(data: dict) -> tuple[dict, int | None]:
                 tailor_user = shop_from_tailor_field.shop_owner_user
 
     if tailor_user is not None and shop is None:
-        shop = visible.filter(owner=tailor_user).order_by('-is_pinned', '-created_at').first()
-        if shop is None:
-            shop = resolve_shop_for_tailor_user(tailor_user)
+        candidate = resolve_shop_for_tailor_user(tailor_user)
+        if candidate is not None and visible.filter(pk=candidate.pk).exists():
+            shop = candidate
 
     if tailor_user is not None:
         payload['tailor'] = tailor_user.id
