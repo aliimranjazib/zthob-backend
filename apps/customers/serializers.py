@@ -9,7 +9,7 @@ from apps.tailors.serializers.catalog import (
     FabricTagBasicSerializer,
     FabricTypeBasicSerializer,
 )
-from apps.tailors.services.stitching_time import get_average_stitching_time_stats
+from apps.tailors.services.stitching_time import get_average_stitching_time_stats_for_shop
 from apps.core.media_utils import build_public_media_url
 from apps.customers.models import Address, CustomerProfile, FamilyMember, FabricFavorite
 
@@ -23,8 +23,8 @@ class SimplifiedAddressSerializer(serializers.ModelSerializer):
         fields = ['id', 'latitude', 'longitude', 'address', 'city']
 
 class TailorHomeSerializer(serializers.ModelSerializer):
-    """Super lightweight serializer for Home Page lists."""
-    id = serializers.ReadOnlyField(source='user.id')
+    """Super lightweight serializer for Home Page lists (one row per shop profile)."""
+    tailor_user_id = serializers.SerializerMethodField()
     shop_image_url = serializers.SerializerMethodField()
     city = serializers.SerializerMethodField()
     address = serializers.SerializerMethodField()
@@ -35,19 +35,22 @@ class TailorHomeSerializer(serializers.ModelSerializer):
     class Meta:
         model = TailorProfile
         fields = [
-            'id', 'shop_name', 'shop_image_url', 
+            'id', 'tailor_user_id', 'shop_name', 'shop_image_url',
             'avg_overall_satisfaction', 'rating_count', 'city', 'address',
             'average_stitching_time_days', 'completed_stitching_orders_count',
             'is_express', 'express_delivery_unit', 'express_delivery_days', 'express_delivery_fee',
             'is_measurement_fee_enabled', 'measurement_fee',
         ]
 
+    def get_tailor_user_id(self, obj):
+        return obj.shop_owner_user_id
+
     def _get_stitching_time_stats(self, obj):
         cache = self.context.setdefault('tailor_stitching_time_stats', {})
-        user_id = obj.user_id
-        if user_id not in cache:
-            cache[user_id] = get_average_stitching_time_stats(obj.user)
-        return cache[user_id]
+        shop_id = obj.id
+        if shop_id not in cache:
+            cache[shop_id] = get_average_stitching_time_stats_for_shop(obj)
+        return cache[shop_id]
 
     def get_average_stitching_time_days(self, obj):
         return self._get_stitching_time_stats(obj)['average_stitching_time_days']
@@ -61,40 +64,54 @@ class TailorHomeSerializer(serializers.ModelSerializer):
             return build_public_media_url(request, obj.shop_image.url)
         return None
 
+    def _service_area_city(self, obj):
+        review = getattr(obj, 'review', None)
+        if review is None or not review.service_areas:
+            return None
+        area_id = review.service_areas[0]
+        names = self.context.get('service_area_names') or {}
+        if area_id in names:
+            area = names[area_id]
+            if isinstance(area, dict):
+                return area.get('city') or area.get('name')
+            return area
+        from apps.tailors.models import ServiceArea
+        area = ServiceArea.objects.filter(id=area_id).first()
+        return area.city if area else None
+
+    def _default_address_for_shop(self, obj):
+        for account in (obj.user, obj.owner):
+            if account is None:
+                continue
+            user_addresses = getattr(account, 'addresses', None)
+            if user_addresses is not None and hasattr(user_addresses, 'all'):
+                addresses = list(user_addresses.all())
+                addr = next((a for a in addresses if a.is_default), None)
+                if not addr and addresses:
+                    addr = addresses[0]
+                if addr:
+                    return addr
+        return None
+
     def get_city(self, obj):
-        """Get city from pre-fetched addresses to avoid N+1."""
-        # Try pre-fetched addresses first (populated via Prefetch in CustomerHomeAPIView)
-        user_addresses = getattr(obj.user, 'addresses', None)
-        if user_addresses is not None and hasattr(user_addresses, 'all'):
-            # Convert to list to use Python iteration on pre-fetched data
-            addresses = list(user_addresses.all())
-            addr = next((a for a in addresses if a.is_default), None)
-            if not addr and addresses:
-                addr = addresses[0]
-            if addr: 
-                return addr.city
-        
-        # Fallback only if pre-fetch failed (prevents N+1 in most cases)
-        return "Riyadh"
+        service_city = self._service_area_city(obj)
+        if service_city:
+            return service_city
+        addr = self._default_address_for_shop(obj)
+        if addr and addr.city:
+            return addr.city
+        return 'Riyadh'
 
     def get_address(self, obj):
-        """Get formatted address from pre-fetched data, resolving 'Instance of Address' issue."""
-        user_addresses = getattr(obj.user, 'addresses', None)
-        if user_addresses is not None and hasattr(user_addresses, 'all'):
-            addresses = list(user_addresses.all())
-            addr = next((a for a in addresses if a.is_default), None)
-            if not addr and addresses:
-                addr = addresses[0]
-            
-            if addr:
-                # Prefer the full address text if available, otherwise format street/city
-                return addr.address or f"{addr.street}, {addr.city}"
-        
-        # Fallback to model field if it's not the corrupted 'Instance of' string
-        if obj.address and "Instance of" not in str(obj.address):
+        if obj.address and 'Instance of' not in str(obj.address):
             return obj.address
-            
-        return ""
+        addr = self._default_address_for_shop(obj)
+        if addr:
+            return addr.address or f'{addr.street}, {addr.city}'
+        service_city = self._service_area_city(obj)
+        if service_city:
+            return service_city
+        return ''
 
 
 class FabricCategoryHomeSerializer(serializers.ModelSerializer):

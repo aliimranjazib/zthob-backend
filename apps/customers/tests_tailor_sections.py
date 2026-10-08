@@ -57,10 +57,12 @@ class CustomerTailorSectionListTest(TestCase):
             shop_status=False,
         )
 
+        popular_profile = self.popular_tailor.tailor_profile
         for _ in range(3):
             Order.objects.create(
                 customer=self.customer,
                 tailor=self.popular_tailor,
+                shop=popular_profile,
                 order_type='fabric_with_stitching',
                 service_mode='home_delivery',
                 status='pending',
@@ -98,8 +100,10 @@ class CustomerTailorSectionListTest(TestCase):
         )
         profile, _ = TailorProfile.objects.get_or_create(
             user=user,
-            defaults={'shop_name': shop_name, 'shop_status': shop_status},
+            defaults={'owner': user, 'shop_name': shop_name, 'shop_status': shop_status},
         )
+        if profile.owner_id is None:
+            profile.owner = user
         profile.shop_name = shop_name
         profile.shop_status = shop_status
         profile.is_featured = is_featured
@@ -137,33 +141,36 @@ class CustomerTailorSectionListTest(TestCase):
         response = self.client.get('/api/customers/tailors/?section=express_delivery')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        ids = {item['user']['id'] for item in response.data['data']['results']}
-        self.assertIn(self.featured_tailor.id, ids)
-        self.assertIn(self.express_tailor.id, ids)
-        self.assertNotIn(self.popular_tailor.id, ids)
-        self.assertNotIn(self.new_tailor.id, ids)
-        self.assertNotIn(self.inactive_tailor.id, ids)
+        ids = {item['id'] for item in response.data['data']['results']}
+        self.assertIn(self.featured_tailor.tailor_profile.id, ids)
+        self.assertIn(self.express_tailor.tailor_profile.id, ids)
+        self.assertNotIn(self.popular_tailor.tailor_profile.id, ids)
+        self.assertNotIn(self.new_tailor.tailor_profile.id, ids)
+        self.assertNotIn(self.inactive_tailor.tailor_profile.id, ids)
 
     def test_featured_section_returns_only_featured_tailors(self):
         response = self.client.get('/api/customers/tailors/?section=featured')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        ids = {item['user']['id'] for item in response.data['data']['results']}
-        self.assertEqual(ids, {self.featured_tailor.id, self.far_tailor.id})
+        ids = {item['id'] for item in response.data['data']['results']}
+        self.assertEqual(
+            ids,
+            {self.featured_tailor.tailor_profile.id, self.far_tailor.tailor_profile.id},
+        )
 
     def test_most_popular_section_orders_by_order_count(self):
         response = self.client.get('/api/customers/tailors/?section=most_popular')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        ids = [item['user']['id'] for item in response.data['data']['results']]
-        self.assertEqual(ids[0], self.popular_tailor.id)
+        ids = [item['id'] for item in response.data['data']['results']]
+        self.assertEqual(ids[0], self.popular_tailor.tailor_profile.id)
 
     def test_section_without_location_returns_national_list(self):
         response = self.client.get('/api/customers/tailors/?section=featured')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        ids = {item['user']['id'] for item in response.data['data']['results']}
-        self.assertIn(self.far_tailor.id, ids)
+        ids = {item['id'] for item in response.data['data']['results']}
+        self.assertIn(self.far_tailor.tailor_profile.id, ids)
 
     def test_section_with_location_filters_like_home(self):
         response = self.client.get(
@@ -172,9 +179,9 @@ class CustomerTailorSectionListTest(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        ids = {item['user']['id'] for item in response.data['data']['results']}
-        self.assertIn(self.featured_tailor.id, ids)
-        self.assertNotIn(self.far_tailor.id, ids)
+        ids = {item['id'] for item in response.data['data']['results']}
+        self.assertIn(self.featured_tailor.tailor_profile.id, ids)
+        self.assertNotIn(self.far_tailor.tailor_profile.id, ids)
 
     def test_section_page_one_matches_home_preview_order(self):
         home_response = self.client.get(
@@ -189,7 +196,7 @@ class CustomerTailorSectionListTest(TestCase):
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
 
         home_ids = [item['id'] for item in home_response.data['data']['most_popular_tailors']]
-        list_ids = [item['user']['id'] for item in list_response.data['data']['results']]
+        list_ids = [item['id'] for item in list_response.data['data']['results']]
         self.assertEqual(home_ids, list_ids[:len(home_ids)])
 
     def test_pagination_shape(self):
@@ -207,12 +214,12 @@ class CustomerTailorSectionListTest(TestCase):
         response = self.client.get('/api/customers/tailors/')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        ids = {item['user']['id'] for item in response.data['data']['results']}
-        self.assertIn(self.featured_tailor.id, ids)
-        self.assertIn(self.express_tailor.id, ids)
-        self.assertIn(self.popular_tailor.id, ids)
-        self.assertIn(self.far_tailor.id, ids)
-        self.assertNotIn(self.inactive_tailor.id, ids)
+        ids = {item['id'] for item in response.data['data']['results']}
+        self.assertIn(self.featured_tailor.tailor_profile.id, ids)
+        self.assertIn(self.express_tailor.tailor_profile.id, ids)
+        self.assertIn(self.popular_tailor.tailor_profile.id, ids)
+        self.assertIn(self.far_tailor.tailor_profile.id, ids)
+        self.assertNotIn(self.inactive_tailor.tailor_profile.id, ids)
 
     def test_tailor_payload_includes_home_card_fields(self):
         response = self.client.get('/api/customers/tailors/?section=featured&page_size=1')
