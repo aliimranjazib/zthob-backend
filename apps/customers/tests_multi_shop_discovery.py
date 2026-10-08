@@ -3,7 +3,7 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -17,6 +17,10 @@ RIYADH_LAT = 24.7136
 RIYADH_LNG = 46.6753
 
 
+@override_settings(
+    SECURE_SSL_REDIRECT=False,
+    CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}},
+)
 class CustomerMultiShopDiscoveryTest(TestCase):
     def setUp(self):
         self.client = APIClient()
