@@ -96,6 +96,24 @@ def ensure_business_for_shop_create(*, owner, shop_name: str) -> Business:
     )
 
 
+def resolve_business_for_shop(shop: TailorProfile) -> Business:
+    """Data-layer Business for V2 catalog writes; does not enable owner console."""
+    if shop.business_id:
+        return shop.business
+
+    owner = shop.owner
+    business = get_business_record(owner)
+    if business is None:
+        business = ensure_business_for_shop_create(
+            owner=owner,
+            shop_name=shop.shop_name or '',
+        )
+    if shop.business_id != business.id:
+        shop.business = business
+        shop.save(update_fields=['business', 'updated_at'])
+    return business
+
+
 def mark_business_shop_progress(business: Business) -> None:
     shop_count = (
         TailorProfile.objects.filter(business_id=business.id)

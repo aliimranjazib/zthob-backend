@@ -53,6 +53,7 @@ def _make_test_image(name='fabric.png'):
 )
 class V2FabricCatalogTests(TestCase):
     OWNER_PHONE = '0500000008'
+    SOLO_TAILOR_PHONE = '0500000020'
     CUSTOMER_PHONE = '0500000009'
     TEST_OTP = PhoneVerificationService.TEST_OTP
 
@@ -717,6 +718,55 @@ class V2FabricCatalogTests(TestCase):
         self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK, shop_fabrics.data)
         shop_names = [item['product']['name'] for item in shop_fabrics.data['data']]
         self.assertIn('Shop Only Cotton', shop_names)
+
+    def test_solo_tailor_shop_scoped_fabric_create_without_business_fk(self):
+        from apps.tailors.models import Business, TailorProfile
+        from apps.tailors.services.v2.business import get_owner_business
+
+        verify = self._v2_login(self.SOLO_TAILOR_PHONE, app_entry='tailor', name='Solo Fabric Tailor')
+        self.assertIn(verify.status_code, [status.HTTP_200_OK, status.HTTP_201_CREATED], verify.data)
+        token = verify.data['data']['tokens']['access_token']
+        self._auth(token)
+
+        user = User.objects.get(
+            phone=PhoneVerificationService.normalize_phone_to_local(self.SOLO_TAILOR_PHONE),
+        )
+        profile = TailorProfile.objects.get(owner=user, user=user)
+        profile.shop_name = 'Solo Fabric Shop'
+        profile.contact_number = self.SOLO_TAILOR_PHONE
+        profile.address = 'Riyadh'
+        profile.business = None
+        profile.save(update_fields=['shop_name', 'contact_number', 'address', 'business'])
+        self.assertIsNone(profile.business_id)
+        self.assertIsNone(get_owner_business(user))
+
+        shop_id = profile.id
+        shop_resp = self.client.post(
+            self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id),
+            {
+                'name': 'Solo Shop Cotton',
+                'price': '120.00',
+                'stock': 5,
+                'category_id': self.fabric_category.id,
+            },
+            format='json',
+        )
+        self.assertEqual(shop_resp.status_code, status.HTTP_201_CREATED, shop_resp.data)
+        self.assertFalse(shop_resp.data['data']['product']['show_in_owner_catalog'])
+
+        profile.refresh_from_db()
+        self.assertIsNotNone(profile.business_id)
+        business = Business.objects.get(id=profile.business_id)
+        self.assertFalse(business.console_enabled)
+        self.assertIsNone(get_owner_business(user))
+
+        catalog_resp = self.client.get(self._url('fabrics_v2:v2-fabric-products'))
+        self.assertEqual(catalog_resp.status_code, status.HTTP_404_NOT_FOUND, catalog_resp.data)
+
+        shop_fabrics = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        self.assertEqual(shop_fabrics.status_code, status.HTTP_200_OK, shop_fabrics.data)
+        shop_names = [item['product']['name'] for item in shop_fabrics.data['data']]
+        self.assertIn('Solo Shop Cotton', shop_names)
 
     def test_v1_linked_shop_fabric_hidden_from_owner_catalog(self):
         from apps.fabrics.services.legacy_bridge import link_legacy_fabric_to_business_catalog

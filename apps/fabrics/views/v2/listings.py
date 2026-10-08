@@ -27,6 +27,7 @@ from apps.fabrics.services.listings import (
 )
 from apps.fabrics.views.v2.products import _normalize_request_data, _validation_error_response
 from apps.tailors.permissions import IsShopStaff
+from apps.tailors.services.v2.business import resolve_business_for_shop
 from apps.tailors.services.v2.shops import get_shop_for_owner
 from apps.tailors.shop_access import get_shop_staff_context
 from apps.tailors.views.base import BaseTailorAPIView
@@ -113,15 +114,6 @@ class V2ShopFabricListView(BaseTailorAPIView):
         if error:
             return error
 
-        business = shop.business
-        if business is None:
-            return api_response(
-                success=False,
-                message='Business not found',
-                status_code=status.HTTP_404_NOT_FOUND,
-                request=request,
-            )
-
         payload = _normalize_request_data(request)
         images = parse_multipart_images(request)
         if images:
@@ -147,6 +139,7 @@ class V2ShopFabricListView(BaseTailorAPIView):
         from django.db import transaction
 
         with transaction.atomic():
+            business = resolve_business_for_shop(shop)
             product = create_fabric_product(
                 business=business,
                 validated_data=validated_data,
