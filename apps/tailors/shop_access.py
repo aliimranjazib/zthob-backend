@@ -238,7 +238,10 @@ def user_can_manage_shop_order(user, order, *, employee_permission='can_manage_o
     if user.id == owner_id:
         return True
 
-    staff = get_shop_staff_context(user, shop_id=shop_id)
+    if shop_id is not None:
+        staff = get_shop_staff_context(user, shop_id=shop_id)
+    else:
+        staff = get_shop_staff_context_for_order(user, order)
     if not staff or not staff.is_active:
         return False
     if staff.tailor.shop_owner_user_id != owner_id:

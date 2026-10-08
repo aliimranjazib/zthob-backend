@@ -768,6 +768,21 @@ class V2FabricCatalogTests(TestCase):
         shop_names = [item['product']['name'] for item in shop_fabrics.data['data']]
         self.assertIn('Solo Shop Cotton', shop_names)
 
+        product_id = shop_resp.data['data']['product']['id']
+        patch_resp = self.client.patch(
+            self._url('fabrics_v2:v2-fabric-product-detail', product_id=product_id),
+            {'name': 'Solo Shop Cotton Updated', 'price': '130.00'},
+            format='json',
+        )
+        self.assertEqual(patch_resp.status_code, status.HTTP_200_OK, patch_resp.data)
+        self.assertEqual(patch_resp.data['data']['name'], 'Solo Shop Cotton Updated')
+
+        get_resp = self.client.get(
+            self._url('fabrics_v2:v2-fabric-product-detail', product_id=product_id),
+        )
+        self.assertEqual(get_resp.status_code, status.HTTP_200_OK, get_resp.data)
+        self.assertEqual(get_resp.data['data']['name'], 'Solo Shop Cotton Updated')
+
     def test_v1_linked_shop_fabric_hidden_from_owner_catalog(self):
         from apps.fabrics.services.legacy_bridge import link_legacy_fabric_to_business_catalog
         from apps.tailors.models import Fabric, TailorProfile

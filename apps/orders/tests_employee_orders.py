@@ -7,7 +7,8 @@ from rest_framework.test import APITestCase, APIClient
 
 from apps.customers.models import Address
 from apps.orders.models import Order, OrderItem
-from apps.tailors.models import TailorEmployee, TailorProfile
+from apps.tailors.models import TailorEmployee, TailorProfile, TailorStaffMember
+from apps.tailors.services.owner_staff import create_or_update_shop_assignment
 
 
 User = get_user_model()
@@ -32,10 +33,14 @@ class TailorEmployeeOrderAccessTest(APITestCase):
         self.owner_profile, _ = TailorProfile.objects.get_or_create(
             user=self.owner,
             defaults={
+                'owner': self.owner,
                 'shop_name': 'Employee Order Shop',
                 'shop_status': True,
             },
         )
+        if self.owner_profile.owner_id != self.owner.id:
+            self.owner_profile.owner = self.owner
+            self.owner_profile.save(update_fields=['owner'])
         self.employee_user = User.objects.create_user(
             username='emp_order_staff',
             password='testpass123',
@@ -77,6 +82,18 @@ class TailorEmployeeOrderAccessTest(APITestCase):
         }
         defaults.update(overrides)
         return Order.objects.create(**defaults)
+
+    def test_employee_sees_accept_in_available_actions_on_available_orders_list(self):
+        self._create_order()
+
+        response = self.employee_client.get('/api/orders/tailor/available-orders/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        order_payload = response.data['data'][0]
+        status_info = order_payload['status_info']
+        available_keys = [action['key'] for action in status_info['available_actions']]
+        self.assertIn('accept_order', available_keys)
+        self.assertIn('reject_order', available_keys)
 
     def test_employee_can_accept_home_delivery_order(self):
         order = self._create_order()
@@ -146,6 +163,86 @@ class TailorEmployeeOrderAccessTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         order.refresh_from_db()
         self.assertEqual(order.tailor_status, 'none')
+
+
+@override_settings(
+    SECURE_SSL_REDIRECT=False,
+    CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}},
+)
+class ShopStaffAssignmentAvailableActionsTest(APITestCase):
+    """V2 roster staff (ShopStaffAssignment) without legacy TailorEmployee row."""
+
+    def setUp(self):
+        self.customer = User.objects.create_user(
+            username='roster_order_customer',
+            password='testpass123',
+            role='USER',
+        )
+        self.owner = User.objects.create_user(
+            username='roster_order_owner',
+            password='testpass123',
+            role='TAILOR',
+        )
+        self.shop = TailorProfile.objects.create(
+            owner=self.owner,
+            user=self.owner,
+            shop_name='Roster Order Shop',
+            shop_status=True,
+        )
+        self.staff_user = User.objects.create_user(
+            username='roster_order_staff',
+            password='testpass123',
+            role='TAILOR',
+        )
+        staff_member = TailorStaffMember.objects.create(
+            owner=self.owner,
+            user=self.staff_user,
+            is_active=True,
+        )
+        create_or_update_shop_assignment(
+            staff_member=staff_member,
+            shop=self.shop,
+            roles=['receptionist'],
+            permissions=['can_manage_orders'],
+            is_active=True,
+        )
+        TailorEmployee.objects.filter(user=self.staff_user).delete()
+
+        self.address = Address.objects.create(
+            user=self.customer,
+            street='456 Roster St',
+            city='Riyadh',
+            country='Saudi Arabia',
+        )
+        self.staff_client = APIClient()
+        self.staff_client.force_authenticate(user=self.staff_user)
+
+    def test_roster_staff_sees_accept_in_available_actions(self):
+        Order.objects.create(
+            customer=self.customer,
+            tailor=self.owner,
+            shop=self.shop,
+            order_type='fabric_with_stitching',
+            service_mode='home_delivery',
+            payment_method='cod',
+            payment_status='pending',
+            status='pending',
+            tailor_status='none',
+            delivery_address=self.address,
+            subtotal=Decimal('100.00'),
+            tax_amount=Decimal('15.00'),
+            delivery_fee=Decimal('20.00'),
+            total_amount=Decimal('135.00'),
+            paid_amount=Decimal('0.00'),
+            remaining_amount=Decimal('135.00'),
+        )
+
+        response = self.staff_client.get('/api/orders/tailor/available-orders/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        status_info = response.data['data'][0]['status_info']
+        available_keys = [action['key'] for action in status_info['available_actions']]
+        self.assertIn('accept_order', available_keys)
 
 
 @override_settings(

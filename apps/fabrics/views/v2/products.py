@@ -33,7 +33,7 @@ from apps.fabrics.services.images import (
 )
 from apps.fabrics.services.listings import assign_product_to_shop, get_shop_fabric
 from apps.tailors.permissions import IsShopOwner
-from apps.tailors.services.v2.business import get_owner_business
+from apps.tailors.services.v2.business import get_business_record, get_owner_business
 from apps.tailors.services.v2.shops import get_shop_for_owner
 from apps.tailors.shop_access import get_shop_owner_user, get_token_shop_id
 from apps.tailors.views.base import BaseTailorAPIView, BaseTailorAuthenticatedView
@@ -41,12 +41,16 @@ from zthob.utils import api_response
 
 
 def _business_for_fabric_actor(request):
+    """Owner console business first, else data-layer business for solo tailor / staff."""
     business = get_owner_business(request.user)
+    if business is not None:
+        return business
+    business = get_business_record(request.user)
     if business is not None:
         return business
     owner = get_shop_owner_user(request.user, shop_id=get_token_shop_id(request))
     if owner is not None:
-        return get_owner_business(owner)
+        return get_business_record(owner)
     return None
 
 
@@ -168,7 +172,7 @@ class V2FabricProductDetailView(BaseTailorAPIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def _get_product(self, request, product_id):
-        business = get_owner_business(request.user)
+        business = _business_for_fabric_actor(request)
         if business is None:
             return None, api_response(
                 success=False,
@@ -188,7 +192,7 @@ class V2FabricProductDetailView(BaseTailorAPIView):
 
     @extend_schema(responses={200: V2FabricProductSerializer}, tags=['V2 Fabrics'])
     def get(self, request, product_id):
-        business = get_owner_business(request.user)
+        business = _business_for_fabric_actor(request)
         if business is None:
             return api_response(
                 success=False,
@@ -196,10 +200,16 @@ class V2FabricProductDetailView(BaseTailorAPIView):
                 status_code=status.HTTP_404_NOT_FOUND,
                 request=request,
             )
-        product = get_owner_catalog_product_for_business(
-            business_id=business.id,
-            product_id=product_id,
-        )
+        if get_owner_business(request.user) is not None:
+            product = get_owner_catalog_product_for_business(
+                business_id=business.id,
+                product_id=product_id,
+            )
+        else:
+            product = get_product_for_business(
+                business_id=business.id,
+                product_id=product_id,
+            )
         if product is None:
             return api_response(
                 success=False,
@@ -267,7 +277,7 @@ class V2FabricProductAssignView(BaseTailorAPIView):
 
     @extend_schema(request=V2FabricAssignSerializer, responses={200: V2ShopFabricSerializer}, tags=['V2 Fabrics'])
     def post(self, request, product_id):
-        business = get_owner_business(request.user)
+        business = _business_for_fabric_actor(request)
         if business is None:
             return api_response(
                 success=False,
