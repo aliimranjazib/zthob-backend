@@ -139,6 +139,8 @@ def _serialize_owned_shop(profile, *, service_area_by_id=None) -> dict[str, Any]
                 'city': area.city,
             }
 
+    from apps.tailors.services.shop_plus import serialize_shop_tailor_plus
+
     return {
         'id': profile.id,
         'shop_name': profile.shop_name or '',
@@ -149,6 +151,7 @@ def _serialize_owned_shop(profile, *, service_area_by_id=None) -> dict[str, Any]
         'is_verified': bool(getattr(profile, 'is_verified', False)),
         'is_pinned': bool(getattr(profile, 'is_pinned', True)),
         'service_area': service_area,
+        'tailor_plus': serialize_shop_tailor_plus(profile),
     }
 
 

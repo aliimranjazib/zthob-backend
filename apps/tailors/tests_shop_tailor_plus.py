@@ -104,3 +104,53 @@ class ShopTailorPlusOwnerReportsTest(TestCase):
             status=ShopTailorPlusSubscription.STATUS_ACTIVE,
         )
         validate_report_period_for_shop(self.shop, period='this_month')
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class ShopTailorPlusMultiShopMeTest(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username='multi_owner',
+            password='pass',
+            role='TAILOR',
+        )
+        self.shop_free = TailorProfile.objects.create(
+            owner=self.owner,
+            user=self.owner,
+            shop_name='Free Branch',
+            shop_status=True,
+        )
+        self.shop_plus = TailorProfile.objects.create(
+            owner=self.owner,
+            shop_name='Plus Branch',
+            shop_status=True,
+        )
+        ShopTailorPlusSubscription.objects.create(
+            shop=self.shop_plus,
+            status=ShopTailorPlusSubscription.STATUS_ACTIVE,
+        )
+
+    def test_v2_me_uses_jwt_shop_id_for_tailor_plus(self):
+        from apps.accounts.services.v2_auth import build_v2_me_payload
+
+        payload = build_v2_me_payload(
+            self.owner,
+            app_entry='owner',
+            token_shop_id=self.shop_plus.id,
+        )
+        self.assertEqual(payload['session']['active_shop_id'], self.shop_plus.id)
+        self.assertTrue(payload['tailor_plus']['is_active'])
+
+        payload_free = build_v2_me_payload(
+            self.owner,
+            app_entry='owner',
+            token_shop_id=self.shop_free.id,
+        )
+        self.assertFalse(payload_free['tailor_plus']['is_active'])
+
+    def test_v2_me_without_jwt_shop_id_multi_shop_unchanged(self):
+        from apps.accounts.services.v2_auth import build_v2_me_payload
+
+        payload = build_v2_me_payload(self.owner, app_entry='owner')
+        self.assertIsNone(payload['session']['active_shop_id'])
+        self.assertNotIn('tailor_plus', payload)

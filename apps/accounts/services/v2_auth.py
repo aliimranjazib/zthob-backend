@@ -416,9 +416,25 @@ def build_v2_me_payload(
     *,
     app_entry: str | None,
     token_app_entry: str | None = None,
+    token_shop_id: int | None = None,
 ) -> dict[str, Any]:
     app_entry = normalize_v2_app_entry(app_entry)
     session_info = build_session_payload(user, app_entry=app_entry)
+    effective_shop_id = session_info.get('active_shop_id')
+
+    if token_shop_id is not None:
+        try:
+            effective_shop_id = resolve_shop_session(user, token_shop_id).shop_id
+        except PermissionDenied:
+            pass
+
+    if (
+        token_shop_id is not None
+        and session_info.get('active_shop_id') is None
+        and effective_shop_id is not None
+    ):
+        session_info = {**session_info, 'active_shop_id': effective_shop_id}
+
     payload = {
         'app_entry': app_entry,
         'membership': build_membership_payload(user, app_entry=app_entry),
@@ -431,11 +447,10 @@ def build_v2_me_payload(
             token_app_entry=token_app_entry,
         ),
     }
-    active_shop_id = session_info.get('active_shop_id')
-    if active_shop_id:
+    if effective_shop_id:
         from apps.tailors.services.shop_plus import serialize_shop_tailor_plus
 
-        payload['tailor_plus'] = serialize_shop_tailor_plus(active_shop_id)
+        payload['tailor_plus'] = serialize_shop_tailor_plus(effective_shop_id)
     if app_entry in (APP_ENTRY_OWNER, APP_ENTRY_STAFF):
         payload['tailor_context'] = build_owner_auth_context(
             user,
@@ -510,6 +525,7 @@ def build_v2_profile_payload(user) -> dict[str, Any]:
 
 
 def switch_shop_session(user, shop_id: int, *, app_entry: str | None):
+    from apps.tailors.services.shop_plus import serialize_shop_tailor_plus
     resolved = resolve_shop_session(user, shop_id)
     effective_entry = (
         normalize_v2_app_entry(app_entry)
@@ -539,5 +555,6 @@ def switch_shop_session(user, shop_id: int, *, app_entry: str | None):
             'access_mode': session.access_mode,
             'app_entry': session.app_entry,
         },
+        'tailor_plus': serialize_shop_tailor_plus(shop_id),
         'tailor_context': tailor_context,
     }
