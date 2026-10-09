@@ -172,10 +172,13 @@ class V2MeView(APIView):
     def get(self, request):
         app_entry = get_request_app_entry(request) or get_token_app_entry(request)
         try:
+            from apps.tailors.shop_access import get_token_shop_id
+
             data = build_v2_me_payload(
                 request.user,
                 app_entry=app_entry,
                 token_app_entry=get_token_app_entry(request),
+                token_shop_id=get_token_shop_id(request),
             )
         except Exception as exc:
             from rest_framework.exceptions import PermissionDenied
