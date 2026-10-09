@@ -542,6 +542,13 @@ TRANSLATIONS_AR = {
     "New orders waiting for your approval": "طلبات جديدة في انتظار موافقتك",
     "Orders currently being worked on": "طلبات قيد العمل حالياً",
     "Orders ready for customer pickup": "طلبات جاهزة لاستلام العملاء",
+    "Tailor Plus is required for this action.": "يتطلب Tailor Plus لهذا الإجراء.",
+    "Free shops can list up to 30 owner-catalog fabrics. Tailor Plus unlocks unlimited fabrics for this shop.": "يمكن للمتجر المجاني إدراج حتى 30 قماشاً من كatalog المالك على هذا الفرع. Tailor Plus يتيح عدداً غير محدوداً.",
+    "Free shops can add up to 30 shop-created fabrics. Tailor Plus unlocks unlimited fabrics for this shop.": "المتاجر المجانية يمكنها إضافة حتى 30 قماشاً من المتجر. Tailor Plus يفتح عدداً غير محدود لهذا المتجر.",
+    "Tailor Plus is required for analytics longer than 7 days.": "يتطلب Tailor Plus للتحليلات لأكثر من 7 أيام.",
+    "Tailor Plus is required for this report period on this shop.": "يتطلب Tailor Plus لفترة التقرير هذه على هذا المتجر.",
+    "Tailor Plus is required for report date ranges longer than 7 days.": "يتطلب Tailor Plus لفترات التقرير أطول من 7 أيام.",
+    "Reusable shop measurements loaded": "تم تحميل مقاسات المتجر القابلة لإعادة الاستخدام",
 }
 
 TRANSLATIONS = TRANSLATIONS_AR

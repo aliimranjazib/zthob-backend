@@ -408,4 +408,11 @@ TRANSLATIONS_UR = {
     'New orders waiting for your approval': 'نئے آرڈرز آپ کی منظوری کا انتظار کر رہے ہیں',
     'Orders currently being worked on': 'آرڈرز پر فی الحال کام جاری ہے',
     'Orders ready for customer pickup': 'گاہک کی وصولی کے لیے تیار آرڈرز',
+    'Tailor Plus is required for this action.': 'اس عمل کے لیے Tailor Plus درکار ہے۔',
+    'Free shops can list up to 30 owner-catalog fabrics. Tailor Plus unlocks unlimited fabrics for this shop.': 'مفت دکانیں مالک کیٹalog سے زیادہ سے زیادہ 30 کپڑے لسٹ کر سکتی ہیں۔ Tailor Plus اس دکان کے لیے لامحدود کپڑے کھولتا ہے۔',
+    'Free shops can add up to 30 shop-created fabrics. Tailor Plus unlocks unlimited fabrics for this shop.': 'مفت دکانیں زیادہ سے زیادہ 30 دکان کے کپڑے شامل کر سکتی ہیں۔ Tailor Plus اس دکان کے لیے لامحدود کپڑے کھولتا ہے۔',
+    'Tailor Plus is required for analytics longer than 7 days.': '7 دن سے زیادہ analytics کے لیے Tailor Plus درکار ہے۔',
+    'Tailor Plus is required for this report period on this shop.': 'اس دکان پر اس رپورٹ کی مدت کے لیے Tailor Plus درکار ہے۔',
+    'Tailor Plus is required for report date ranges longer than 7 days.': '7 دن سے زیادہ رپورٹ کی تاریخ کی حد کے لیے Tailor Plus درکار ہے۔',
+    'Reusable shop measurements loaded': 'دوبارہ استعمال کے قابل دکان کے ناپ لوڈ ہو گئے',
 }

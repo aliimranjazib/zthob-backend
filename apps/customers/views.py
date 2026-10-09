@@ -1070,3 +1070,83 @@ class CustomerPreviousTailorsView(APIView):
             data=serializer.data,
             status_code=status.HTTP_200_OK
         )
+
+
+class ShopReusableMeasurementsView(APIView):
+    """
+    Latest walk-in measurements for reorder at a Tailor Plus shop.
+    Not included in the general /measurements/ library.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary='Reusable walk-in measurements for a shop',
+        description=(
+            'Returns the latest in-store (walk-in) measurements per recipient for Tailor Plus shops. '
+            'Use at checkout to pre-fill sizes without reading the customer measurements library.'
+        ),
+        tags=['Customer Measurements'],
+        parameters=[
+            {
+                'name': 'family_member_id',
+                'in': 'query',
+                'required': False,
+                'schema': {'type': 'integer'},
+            },
+        ],
+    )
+    def get(self, request, tailor_id):
+        if not request.user.is_customer:
+            return api_response(
+                success=False,
+                message='Only customers can access this endpoint',
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        shop = resolve_customer_shop(tailor_id)
+        if shop is None:
+            return api_response(
+                success=False,
+                message='Tailor not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        from apps.customers.services.shop_reusable_measurements import (
+            build_shop_reusable_measurements_payload,
+        )
+
+        payload = build_shop_reusable_measurements_payload(
+            customer=request.user,
+            shop=shop,
+        )
+        family_member_id = request.query_params.get('family_member_id')
+        if family_member_id not in (None, ''):
+            try:
+                family_member_id = int(family_member_id)
+            except (TypeError, ValueError):
+                return api_response(
+                    success=False,
+                    message='Invalid family_member_id',
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            match = next(
+                (
+                    item
+                    for item in payload.get('family_members') or []
+                    if item.get('family_member_id') == family_member_id
+                ),
+                None,
+            )
+            payload = {
+                'shop_id': payload['shop_id'],
+                'is_tailor_plus': payload['is_tailor_plus'],
+                'family_member': match,
+            }
+
+        return api_response(
+            success=True,
+            message='Reusable shop measurements loaded',
+            data=payload,
+            status_code=status.HTTP_200_OK,
+        )

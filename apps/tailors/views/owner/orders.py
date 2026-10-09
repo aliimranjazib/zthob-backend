@@ -168,6 +168,37 @@ class OwnerReportsView(BaseTailorAPIView):
         from_date = request.query_params.get('from_date')
         to_date = request.query_params.get('to_date')
 
+        if shop_id is not None:
+            from apps.tailors.models import TailorProfile
+            from apps.tailors.services.shop_plus import (
+                TailorPlusLimitError,
+                validate_report_period_for_shop,
+            )
+            from apps.tailors.services.plus_api_errors import plus_limit_api_response
+
+            shop = TailorProfile.objects.filter(id=shop_id, owner=request.user).first()
+            if shop is None:
+                return api_response(
+                    success=False,
+                    message='Shop not found',
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
+            try:
+                validate_report_period_for_shop(
+                    shop,
+                    period=period,
+                    from_date=from_date,
+                    to_date=to_date,
+                )
+            except TailorPlusLimitError as exc:
+                return plus_limit_api_response(exc, request=request)
+            except ValueError as exc:
+                return api_response(
+                    success=False,
+                    message=str(exc),
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
         try:
             payload = build_owner_reports(
                 request.user,

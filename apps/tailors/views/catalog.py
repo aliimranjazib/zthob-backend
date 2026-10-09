@@ -452,6 +452,16 @@ class TailorFabricView(BaseTailorAuthenticatedView):
                 tags_data = [int(tag) for tag in tags_data if str(tag).strip()]
             processed_data['tags'] = tags_data
         
+        profile = self.get_tailor_profile(request.user)
+        if profile is not None:
+            from apps.tailors.services.plus_api_errors import plus_limit_api_response
+            from apps.tailors.services.shop_plus import TailorPlusLimitError, assert_can_add_fabric_to_shop
+
+            try:
+                assert_can_add_fabric_to_shop(shop=profile, owner_catalog=False)
+            except TailorPlusLimitError as exc:
+                return plus_limit_api_response(exc, request=request)
+
         serializer = FabricCreateSerializer(data=processed_data, context={"request": request})
         if serializer.is_valid():
             fabric = serializer.save()

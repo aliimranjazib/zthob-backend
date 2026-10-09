@@ -13,7 +13,8 @@ from .models import (
     TailorProfileReview,
     ServiceArea,
     TailorRating,
-    TailorEmployee
+    TailorEmployee,
+    ShopTailorPlusSubscription,
 )
 
 
@@ -43,6 +44,53 @@ class FabricImageInline(admin.TabularInline):
                 return format_html('<em style="color: #999;">Invalid image</em>')
         return format_html('<em style="color: #999;">No image</em>')
     image_preview.short_description = 'Preview'
+
+
+class ShopTailorPlusSubscriptionInline(admin.StackedInline):
+    model = ShopTailorPlusSubscription
+    extra = 0
+    max_num = 1
+    can_delete = True
+    fields = (
+        'status',
+        'current_period_end',
+        'admin_notes',
+        'granted_by',
+        'created_at',
+        'updated_at',
+    )
+    readonly_fields = ('created_at', 'updated_at')
+
+
+class TailorPlusActiveFilter(admin.SimpleListFilter):
+    title = 'Tailor Plus'
+    parameter_name = 'tailor_plus'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('active', 'Active Plus'),
+            ('inactive', 'No Plus / inactive'),
+        )
+
+    def queryset(self, request, queryset):
+        from django.db.models import Q
+        from django.utils import timezone
+
+        now = timezone.now()
+        active_q = Q(
+            tailor_plus_subscription__status__in=(
+                ShopTailorPlusSubscription.STATUS_TRIAL,
+                ShopTailorPlusSubscription.STATUS_ACTIVE,
+            ),
+        ) & (
+            Q(tailor_plus_subscription__current_period_end__isnull=True)
+            | Q(tailor_plus_subscription__current_period_end__gte=now)
+        )
+        if self.value() == 'active':
+            return queryset.filter(active_q)
+        if self.value() == 'inactive':
+            return queryset.exclude(active_q)
+        return queryset
 
 
 class TailorProfileReviewInline(admin.StackedInline):
@@ -141,6 +189,7 @@ class TailorProfileAdmin(admin.ModelAdmin):
         'review_status_display',
         'fabric_count',
         'is_featured',
+        'tailor_plus_badge',
         'revenue_display',
         'orders_count_display',
         'shop_image_preview',
@@ -151,6 +200,7 @@ class TailorProfileAdmin(admin.ModelAdmin):
     
     list_filter = [
         ShopStatusFilter,
+        TailorPlusActiveFilter,
         'shop_status',
         'is_featured',
         'establishment_year',
@@ -176,7 +226,7 @@ class TailorProfileAdmin(admin.ModelAdmin):
         'review_status_display',
     ]
     
-    inlines = [TailorProfileReviewInline]  # Add inline for reviews
+    inlines = [ShopTailorPlusSubscriptionInline, TailorProfileReviewInline]
     
     date_hierarchy = 'created_at'
     
@@ -289,6 +339,17 @@ class TailorProfileAdmin(admin.ModelAdmin):
             return format_html('<a href="{}">{} fabric{}</a>', url, count, 's' if count != 1 else '')
         return '0'
     fabric_count.short_description = 'Fabrics'
+
+    def tailor_plus_badge(self, obj):
+        from apps.tailors.services.shop_plus import is_shop_plus_active
+
+        if is_shop_plus_active(obj):
+            return format_html(
+                '<span style="background:#6f42c1;color:#fff;padding:3px 8px;border-radius:4px;font-size:11px;">Plus</span>'
+            )
+        return format_html('<span style="color:#999;">—</span>')
+
+    tailor_plus_badge.short_description = 'Plus'
     
     def revenue_display(self, obj):
         """Display total revenue from completed orders"""
@@ -466,6 +527,11 @@ class TailorProfileAdmin(admin.ModelAdmin):
         
         instances = formset.save(commit=False)
         for instance in instances:
+            if isinstance(instance, ShopTailorPlusSubscription):
+                if instance.granted_by_id is None:
+                    instance.granted_by = request.user
+                instance.save()
+                continue
             if isinstance(instance, TailorProfileReview):
                 # Get original status if this is an update
                 if instance.pk:
@@ -1985,4 +2051,13 @@ class TailorEmployeeAdmin(admin.ModelAdmin):
         return obj.joined_at.strftime('%Y-%m-%d')
     joined_at_formatted.short_description = 'Joined'
     joined_at_formatted.admin_order_field = 'joined_at'
+
+
+@admin.register(ShopTailorPlusSubscription)
+class ShopTailorPlusSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ('shop', 'status', 'current_period_end', 'granted_by', 'updated_at')
+    list_filter = ('status',)
+    search_fields = ('shop__shop_name', 'shop__owner__phone', 'admin_notes')
+    autocomplete_fields = ('shop', 'granted_by')
+    readonly_fields = ('created_at', 'updated_at')
 

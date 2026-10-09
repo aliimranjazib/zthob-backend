@@ -73,6 +73,8 @@ def iter_order_recipient_measurements(order, user_id):
 
 def customer_orders_with_measurements(customer, *, order_id=None, family_member_id=None):
     """Return customer orders that have stored measurement data."""
+    from apps.tailors.services.shop_plus import customer_measurements_order_queryset_filter
+
     queryset = Order.objects.filter(customer=customer).filter(
         Q(measurement_taken_at__isnull=False)
         | Q(rider_measurements__isnull=False)
@@ -91,6 +93,7 @@ def customer_orders_with_measurements(customer, *, order_id=None, family_member_
     if family_member_id:
         queryset = queryset.filter(order_items__family_member_id=family_member_id)
 
+    queryset = customer_measurements_order_queryset_filter(queryset)
     return queryset.order_by('-measurement_taken_at', '-created_at')
 
 

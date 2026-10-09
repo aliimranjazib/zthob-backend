@@ -138,6 +138,14 @@ class V2ShopFabricListView(BaseTailorAPIView):
 
         from django.db import transaction
 
+        from apps.tailors.services.plus_api_errors import plus_limit_api_response
+        from apps.tailors.services.shop_plus import TailorPlusLimitError, assert_can_add_fabric_to_shop
+
+        try:
+            assert_can_add_fabric_to_shop(shop=shop, owner_catalog=False)
+        except TailorPlusLimitError as exc:
+            return plus_limit_api_response(exc, request=request)
+
         with transaction.atomic():
             business = resolve_business_for_shop(shop)
             product = create_fabric_product(
