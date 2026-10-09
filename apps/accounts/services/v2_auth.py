@@ -418,11 +418,12 @@ def build_v2_me_payload(
     token_app_entry: str | None = None,
 ) -> dict[str, Any]:
     app_entry = normalize_v2_app_entry(app_entry)
+    session_info = build_session_payload(user, app_entry=app_entry)
     payload = {
         'app_entry': app_entry,
         'membership': build_membership_payload(user, app_entry=app_entry),
         'permissions': build_permissions_payload(user, app_entry=app_entry),
-        'session': build_session_payload(user, app_entry=app_entry),
+        'session': session_info,
         'onboarding': build_onboarding_flags(user, app_entry=app_entry),
         'platform': build_platform_payload(
             user,
@@ -430,6 +431,11 @@ def build_v2_me_payload(
             token_app_entry=token_app_entry,
         ),
     }
+    active_shop_id = session_info.get('active_shop_id')
+    if active_shop_id:
+        from apps.tailors.services.shop_plus import serialize_shop_tailor_plus
+
+        payload['tailor_plus'] = serialize_shop_tailor_plus(active_shop_id)
     if app_entry in (APP_ENTRY_OWNER, APP_ENTRY_STAFF):
         payload['tailor_context'] = build_owner_auth_context(
             user,

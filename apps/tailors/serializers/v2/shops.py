@@ -15,6 +15,7 @@ class V2ShopSerializer(serializers.ModelSerializer):
     experience_years = serializers.IntegerField(source='tailor_experience', allow_null=True)
     review_status = serializers.SerializerMethodField()
     submitted_at = serializers.SerializerMethodField()
+    tailor_plus = serializers.SerializerMethodField()
 
     class Meta:
         model = TailorProfile
@@ -36,7 +37,12 @@ class V2ShopSerializer(serializers.ModelSerializer):
             'submitted_at',
             'created_at',
             'updated_at',
+            'tailor_plus',
         ]
+
+    def get_tailor_plus(self, obj):
+        from apps.tailors.services.shop_plus import serialize_shop_tailor_plus
+        return serialize_shop_tailor_plus(obj)
 
     def get_review_status(self, obj):
         review = getattr(obj, 'review', None)

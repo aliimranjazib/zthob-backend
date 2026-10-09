@@ -16,6 +16,7 @@ from apps.orders.history_utils import (
 )
 from apps.orders.shop_scoping import get_owner_orders_queryset, owned_shop_ids_for_user
 from apps.tailors.models import TailorProfile
+from apps.tailors.services.shop_plus import report_bounds_for_shop
 
 
 def _money(value):
@@ -122,17 +123,50 @@ def build_owner_reports(
         'active': 0,
         'revenue_total': Decimal('0.00'),
     }
+    reports_limited_for_free_shops = False
 
     for shop in shops:
+        shop_start, shop_end, period_limited = report_bounds_for_shop(
+            shop,
+            period=period,
+            from_date=from_date,
+            to_date=to_date,
+        )
+        if period_limited:
+            reports_limited_for_free_shops = True
+        shop_period_info = _period_label(period, shop_start, shop_end)
+        if period_limited:
+            shop_period_info['limited_to_free_tier'] = True
+
         shop_orders = get_owner_orders_queryset(owner_user, shop_id=shop.id)
-        metrics = _order_metrics_for_period(shop_orders, start, end)
+        metrics = _order_metrics_for_period(shop_orders, shop_start, shop_end)
         analytics = _service_mode_analytics(metrics['completed_queryset'])
+
+        if period_limited:
+            inclusive_end = shop_end - timedelta(microseconds=1)
+            sales_from = timezone.localdate(shop_start).isoformat()
+            sales_to = timezone.localdate(inclusive_end).isoformat()
+            shop_sales = get_shop_sales_summary(
+                owner_user,
+                period='custom',
+                from_date=sales_from,
+                to_date=sales_to,
+                shop_id=shop.id,
+            )
+        else:
+            shop_sales = get_shop_sales_summary(
+                owner_user,
+                period=period,
+                from_date=from_date,
+                to_date=to_date,
+                shop_id=shop.id,
+            )
 
         per_shop.append({
             'shop_id': shop.id,
             'shop_name': shop.shop_name or '',
             'is_pinned': bool(shop.is_pinned),
-            'period': period_info,
+            'period': shop_period_info,
             'orders': {
                 'total': metrics['total'],
                 'completed': metrics['completed'],
@@ -143,13 +177,7 @@ def build_owner_reports(
             },
             'analytics': {
                 **analytics,
-                'shop_sales': get_shop_sales_summary(
-                    owner_user,
-                    period=period,
-                    from_date=from_date,
-                    to_date=to_date,
-                    shop_id=shop.id,
-                ),
+                'shop_sales': shop_sales,
             },
         })
 
@@ -179,6 +207,7 @@ def build_owner_reports(
             'to_date': to_date,
         },
         'period': period_info,
+        'reports_limited_for_free_shops': reports_limited_for_free_shops,
         'summary': {
             'shops_count': len(per_shop),
             'orders_total': aggregate_metrics['total'],

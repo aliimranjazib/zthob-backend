@@ -58,6 +58,23 @@ class TailorAnalyticsView(APIView):
                     message="Days parameter must be one of: 1, 7, 15, 30",
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
+
+            from apps.tailors.models import TailorProfile
+            from apps.tailors.shop_access import get_token_shop_id
+            from apps.tailors.services.plus_api_errors import plus_limit_api_response
+            from apps.tailors.services.shop_plus import (
+                TailorPlusLimitError,
+                validate_analytics_days_for_shop,
+            )
+
+            token_shop_id = get_token_shop_id(request)
+            analytics_shop = None
+            if token_shop_id:
+                analytics_shop = TailorProfile.objects.filter(id=token_shop_id).first()
+            try:
+                validate_analytics_days_for_shop(shop=analytics_shop, days=days)
+            except TailorPlusLimitError as exc:
+                return plus_limit_api_response(exc, request=request)
             
             # Calculate weeks based on days for trends
             # 1 day -> 1 week trend

@@ -27,6 +27,7 @@ class TailorProfileSerializer(serializers.ModelSerializer):
     address = serializers.SerializerMethodField()
     
     is_express = serializers.BooleanField(source='is_express_delivery_enabled', read_only=True)
+    is_tailor_plus = serializers.SerializerMethodField()
     
     class Meta:
         model = TailorProfile
@@ -44,7 +45,12 @@ class TailorProfileSerializer(serializers.ModelSerializer):
             'is_express_delivery_enabled', 'is_express',
             'express_delivery_unit', 'express_delivery_days', 'express_delivery_fee',
             'is_measurement_fee_enabled', 'measurement_fee', 'standard_stitching_days',
+            'is_tailor_plus',
         ]
+
+    def get_is_tailor_plus(self, obj):
+        from apps.tailors.services.shop_plus import is_shop_plus_active
+        return is_shop_plus_active(obj)
 
     def get_tailor_user_id(self, obj):
         return obj.shop_owner_user_id

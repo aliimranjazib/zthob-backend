@@ -320,6 +320,23 @@ class V2FabricProductAssignView(BaseTailorAPIView):
         if stock is None:
             stock = product.default_stock if product.default_stock is not None else 0
 
+        from apps.fabrics.models import ShopFabric
+        from apps.tailors.services.plus_api_errors import plus_limit_api_response
+        from apps.tailors.services.shop_plus import (
+            TailorPlusLimitError,
+            assert_can_assign_owner_product_to_shop,
+        )
+
+        is_new_listing = not ShopFabric.objects.filter(shop=shop, product=product).exists()
+        try:
+            assert_can_assign_owner_product_to_shop(
+                shop=shop,
+                product=product,
+                is_new_listing=is_new_listing,
+            )
+        except TailorPlusLimitError as exc:
+            return plus_limit_api_response(exc, request=request)
+
         shop_fabric = assign_product_to_shop(
             product=product,
             shop=shop,
