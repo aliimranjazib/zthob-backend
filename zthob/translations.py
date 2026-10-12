@@ -549,6 +549,23 @@ TRANSLATIONS_AR = {
     "Tailor Plus is required for this report period on this shop.": "يتطلب Tailor Plus لفترة التقرير هذه على هذا المتجر.",
     "Tailor Plus is required for report date ranges longer than 7 days.": "يتطلب Tailor Plus لفترات التقرير أطول من 7 أيام.",
     "Reusable shop measurements loaded": "تم تحميل مقاسات المتجر القابلة لإعادة الاستخدام",
+    "Shop plans": "خطط المتجر",
+    "Tap a plan to see what's included": "اضغط على خطة لمعرفة ما يشمله",
+    "What's included": "ما الذي يشمله",
+    "Current": "الحالي",
+    "Recommended": "موصى به",
+    "Free plan": "الخطة المجانية",
+    "Add up to {limit} fabrics in the shop": "إضافة حتى {limit} قماشاً في المتجر",
+    "Owner can assign up to {limit} fabrics to the shop": "يمكن للمالك تعيين حتى {limit} قماشاً للمتجر",
+    "Earnings analytics for {days_list} only": "تحليلات الأرباح لـ {days_list} فقط",
+    "Owner reports: today, yesterday, or custom range up to {max_days} days (per branch)": "تقارير المالك: اليوم، أمس، أو نطاق مخصص حتى {max_days} يوماً (لكل فرع)",
+    "Walk-in measurements saved in customer app history": "مقاسات الزيارة محفوظة في سجل تطبيق العميل",
+    "Add unlimited fabrics in the shop": "إضافة عدد غير محدود من الأقمشة في المتجر",
+    "Owner can assign unlimited fabrics to the shop": "يمكن للمالك تعيين عدد غير محدود من الأقمشة للمتجر",
+    "Earnings analytics for {days_list}": "تحليلات الأرباح لـ {days_list}",
+    "All owner report periods for each branch": "جميع فترات تقارير المالك لكل فرع",
+    "Customers can reuse walk-in measurements at Plus shops (faster re-orders)": "يمكن للعملاء إعادة استخدام مقاسات الزيارة في متاجر Plus (طلبات أسرع)",
+    "Priority fabric review and operational support": "أولوية مراجعة الأقمشة والدعم التشغيلي",
 }
 
 TRANSLATIONS = TRANSLATIONS_AR

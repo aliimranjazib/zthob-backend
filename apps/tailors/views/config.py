@@ -167,7 +167,9 @@ class TailorConfigView(APIView):
         from apps.core.models import SystemSettings
         from apps.core.express_delivery import get_express_delivery_options
         from apps.orders.rejection_reasons import build_rejection_reasons_config
-        from apps.tailors.shop_access import get_tailor_profile
+        from apps.tailors.services.shop_plans_config import build_shop_plans_config
+        from apps.tailors.services.shop_plus import serialize_shop_tailor_plus
+        from apps.tailors.shop_access import get_tailor_profile, get_token_shop_id
         from apps.tailors.standard_stitching_days import get_standard_stitching_days_limits
 
         system_settings = SystemSettings.get_active_settings()
@@ -183,8 +185,21 @@ class TailorConfigView(APIView):
 
         stitching_limits = get_standard_stitching_days_limits()
         tailor_profile = None
+        shop_id_for_plus = None
         if request.user.is_authenticated:
-            tailor_profile = get_tailor_profile(request.user)
+            token_shop_id = get_token_shop_id(request)
+            tailor_profile = get_tailor_profile(request.user, shop_id=token_shop_id)
+            if tailor_profile is not None:
+                shop_id_for_plus = tailor_profile.id
+            elif token_shop_id is not None:
+                shop_id_for_plus = token_shop_id
+
+        tailor_plus = serialize_shop_tailor_plus(shop_id_for_plus)
+        shop_plans = build_shop_plans_config(
+            language=language,
+            current_tier=tailor_plus['tier'],
+            translate=translate_message,
+        )
 
         config_data = {
             "statuses": statuses,
@@ -197,6 +212,8 @@ class TailorConfigView(APIView):
             "standard_stitching_days_min": stitching_limits['min'],
             "standard_stitching_days_max": stitching_limits['max'],
             "order_rejection_reasons": build_rejection_reasons_config(language),
+            "tailor_plus": tailor_plus,
+            "shop_plans": shop_plans,
         }
         
         return api_response(
