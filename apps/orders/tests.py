@@ -389,6 +389,147 @@ class OrderCreateSerializerTest(TestCase):
         self.assertFalse(serializer.is_valid())
         self.assertIn('items', serializer.errors)
 
+    def test_walk_in_pos_accepts_fabric_on_session_shop_when_jwt_shop_mismatch(self):
+        """POS walk-in: fabric on branch B while JWT names branch A (same owner)."""
+        owner = User.objects.create_user(
+            username=f'pos_walk_owner_{id(self)}',
+            password='testpass123',
+            role='TAILOR',
+        )
+        shop_a = TailorProfile.objects.create(
+            owner=owner,
+            shop_name='POS Shop A',
+            shop_status=True,
+        )
+        shop_b = TailorProfile.objects.create(
+            owner=owner,
+            user=None,
+            shop_name='POS Shop B',
+            shop_status=True,
+        )
+        fabric_on_b = Fabric.objects.create(
+            tailor=shop_b,
+            name='POS Branch Fabric',
+            price=Decimal('100.00'),
+            stock=5,
+            is_active=True,
+            category=self.fabric_category,
+        )
+        from apps.customers.models import CustomerProfile
+
+        CustomerProfile.objects.get_or_create(
+            user=self.customer,
+            defaults={'pos_created_by': owner},
+        )
+        mock_request = type(
+            'obj',
+            (object,),
+            {
+                'user': owner,
+                'META': {},
+                'auth': {'shop_id': shop_a.id},
+            },
+        )()
+        mock_request.auth.get = lambda key, default=None: (
+            shop_a.id if key == 'shop_id' else default
+        )
+        serializer = OrderCreateSerializer(
+            data={
+                'customer': self.customer.id,
+                'tailor': owner.id,
+                'order_type': 'fabric_with_stitching',
+                'service_mode': 'walk_in',
+                'payment_method': 'cod',
+                'items': [
+                    {
+                        'fabric': fabric_on_b.id,
+                        'quantity': 1,
+                        'measurements': {},
+                        'recipient_display_name': 'Walk-in Guest',
+                    },
+                ],
+            },
+            context={'request': mock_request, 'shop_id': shop_a.id},
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data['shop'].id, shop_b.id)
+
+    def test_walk_in_pos_accepts_owner_assigned_v2_listing_on_session_shop(self):
+        from apps.fabrics.models import FabricProduct, ShopFabric
+        from apps.tailors.models import Business
+
+        owner = User.objects.create_user(
+            username=f'pos_v2_owner_{id(self)}',
+            password='testpass123',
+            role='TAILOR',
+        )
+        business = Business.objects.create(name='POS Fabric Biz', owner=owner)
+        shop = TailorProfile.objects.create(
+            owner=owner,
+            business=business,
+            shop_name='POS V2 Shop',
+            shop_status=True,
+        )
+        legacy = Fabric.objects.create(
+            tailor=shop,
+            name='Legacy Row',
+            price=Decimal('90.00'),
+            stock=3,
+            is_active=True,
+            category=self.fabric_category,
+        )
+        product = FabricProduct.objects.create(
+            business=business,
+            name='Owner Assigned Cotton',
+            price=Decimal('90.00'),
+            is_active=True,
+            approval_status='approved',
+        )
+        ShopFabric.objects.create(
+            shop=shop,
+            product=product,
+            legacy_fabric=legacy,
+            stock=3,
+            is_visible=True,
+            is_active=True,
+        )
+        from apps.customers.models import CustomerProfile
+
+        CustomerProfile.objects.get_or_create(
+            user=self.customer,
+            defaults={'pos_created_by': owner},
+        )
+        mock_request = type(
+            'obj',
+            (object,),
+            {
+                'user': owner,
+                'META': {},
+                'auth': {'shop_id': shop.id},
+            },
+        )()
+        mock_request.auth.get = lambda key, default=None: (
+            shop.id if key == 'shop_id' else default
+        )
+        serializer = OrderCreateSerializer(
+            data={
+                'customer': self.customer.id,
+                'tailor': owner.id,
+                'order_type': 'fabric_only',
+                'service_mode': 'walk_in',
+                'payment_method': 'cod',
+                'items': [
+                    {
+                        'fabric': legacy.id,
+                        'quantity': 1,
+                        'recipient_display_name': 'Walk-in Guest',
+                    },
+                ],
+            },
+            context={'request': mock_request, 'shop_id': shop.id},
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
 
 class OrderCreateIntegrationTest(TestCase):
     """Integration tests for order creation"""

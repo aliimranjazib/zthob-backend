@@ -1395,11 +1395,47 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             })
             
         # Cross-field validation for tailor and items
+        request = self.context.get('request')
         tailor = data.get('tailor')
         items = data.get('items', [])
-        
+
         shop_profile = data.get('shop')
         checkout_shop_id = shop_profile.id if shop_profile is not None else self.context.get('shop_id')
+
+        pos_walk_in_fabric_scope = False
+        if request and service_mode == 'walk_in':
+            from apps.tailors.shop_access import (
+                get_shop_owner_user,
+                get_shop_staff_context_for_request,
+                resolve_active_shop_id,
+            )
+
+            session_shop_id = resolve_active_shop_id(
+                request,
+                explicit_shop_id=checkout_shop_id,
+            )
+            if session_shop_id is not None and shop_profile is None:
+                checkout_shop_id = session_shop_id
+                self.context['shop_id'] = session_shop_id
+
+            owner_user = get_shop_owner_user(request.user, shop_id=session_shop_id)
+            is_shop_actor = bool(
+                owner_user
+                or get_shop_staff_context_for_request(request, shop_id=session_shop_id)
+            )
+            if is_shop_actor and owner_user:
+                data['tailor'] = owner_user
+                tailor = owner_user
+                if session_shop_id is not None and shop_profile is None:
+                    resolved_shop = TailorProfile.objects.filter(
+                        id=session_shop_id,
+                        owner_id=owner_user.id,
+                    ).first()
+                    if resolved_shop:
+                        data['shop'] = resolved_shop
+                        shop_profile = resolved_shop
+                        checkout_shop_id = resolved_shop.id
+                pos_walk_in_fabric_scope = True
 
         if tailor and shop_profile is not None and shop_profile.shop_owner_user_id != tailor.id:
             raise serializers.ValidationError({
@@ -1410,35 +1446,60 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             from apps.orders.shop_scoping import fabric_belongs_to_tailor_order
 
             session_shop_id = checkout_shop_id
+            order_shop_from_fabric = shop_profile
             for item in items:
                 fabric = item.get('fabric')
                 if fabric and not fabric_belongs_to_tailor_order(
                     fabric,
                     tailor,
                     shop_id=session_shop_id,
+                    allow_any_owner_shop=pos_walk_in_fabric_scope,
                 ):
                     raise serializers.ValidationError({
                         'items': f"Fabric {fabric.name} does not belong to the selected tailor."
                     })
+                if pos_walk_in_fabric_scope and fabric is not None:
+                    fabric_shop = getattr(fabric, 'tailor', None)
+                    if (
+                        fabric_shop is not None
+                        and fabric_shop.shop_owner_user_id == tailor.id
+                    ):
+                        order_shop_from_fabric = fabric_shop
 
-        request = self.context.get('request')
-        service_mode = data.get('service_mode', self.initial_data.get('service_mode', 'home_delivery'))
+            if pos_walk_in_fabric_scope and order_shop_from_fabric is not None:
+                data['shop'] = order_shop_from_fabric
+                self.context['shop_id'] = order_shop_from_fabric.id
         customer = self._get_target_customer()
-        if (
-            request
-            and request.user.is_tailor
-            and service_mode == 'walk_in'
-            and customer
-        ):
+        session_shop_id = self.context.get('shop_id')
+        is_shop_pos_actor = False
+        if request and service_mode == 'walk_in' and customer:
             from apps.tailors.services.pos_customer_access import tailor_has_pos_access_to_customer
-            from apps.tailors.shop_access import get_shop_owner_user
+            from apps.tailors.shop_access import (
+                get_shop_owner_user,
+                get_shop_staff_context_for_request,
+            )
 
-            session_shop_id = self.context.get('shop_id')
             tailor_user = data.get('tailor') or get_shop_owner_user(
                 request.user,
                 shop_id=session_shop_id,
             ) or request.user
+            is_shop_pos_actor = bool(
+                tailor_user
+                and (
+                    request.user.is_tailor
+                    or get_shop_staff_context_for_request(
+                        request,
+                        shop_id=session_shop_id,
+                    )
+                )
+            )
 
+        if (
+            request
+            and service_mode == 'walk_in'
+            and customer
+            and is_shop_pos_actor
+        ):
             if not tailor_has_pos_access_to_customer(
                 tailor_owner_user=tailor_user,
                 customer_user=customer,

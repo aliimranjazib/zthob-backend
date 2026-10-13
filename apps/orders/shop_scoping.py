@@ -84,28 +84,76 @@ def _tailor_user_from_queryset(queryset, request):
     return get_shop_owner_user(request.user, shop_id=shop_id_from_request(request))
 
 
-def fabric_belongs_to_tailor_order(fabric, tailor_user, *, shop_id=None) -> bool:
+def _fabric_listed_on_shop_session(*, fabric, tailor_user, shop_id) -> bool:
+    """True when fabric is on the shop profile or an active v2 shop listing."""
+    shop_profile = getattr(fabric, 'tailor', None)
+    if shop_profile is not None and shop_profile.id == shop_id:
+        return True
+
+    from apps.fabrics.models import ShopFabric
+
+    return ShopFabric.objects.filter(
+        shop_id=shop_id,
+        legacy_fabric_id=fabric.id,
+        is_active=True,
+        shop__owner_id=tailor_user.id,
+    ).exists()
+
+
+def _fabric_owned_by_tailor_user(*, fabric, tailor_user) -> bool:
+    shop_profile = getattr(fabric, 'tailor', None)
+    if shop_profile is not None:
+        owner_id = shop_profile.shop_owner_user_id
+        if owner_id is not None and owner_id == tailor_user.id:
+            return True
+
+    from apps.fabrics.models import ShopFabric
+    from apps.tailors.models import Fabric as LegacyFabric
+
+    if ShopFabric.objects.filter(
+        legacy_fabric_id=fabric.id,
+        is_active=True,
+        shop__owner_id=tailor_user.id,
+    ).exists():
+        return True
+
+    return LegacyFabric.objects.filter(
+        id=fabric.id,
+        tailor__owner_id=tailor_user.id,
+    ).exists()
+
+
+def fabric_belongs_to_tailor_order(
+    fabric,
+    tailor_user,
+    *,
+    shop_id=None,
+    allow_any_owner_shop=False,
+) -> bool:
     """
     True when a legacy fabric row belongs to the order tailor (owner user).
 
     Uses TailorProfile.shop_owner_user, not profile.user, for business/multi-shop rows.
-    When shop_id is set (JWT session), fabric must be listed on that shop profile.
+    When shop_id is set (JWT session), fabric must be listed on that shop profile,
+    including owner-assigned v2 ``ShopFabric`` listings.
+
+    ``allow_any_owner_shop`` (POS walk-in): owner must match, but fabric may belong
+    to any branch shop under that owner when the session shop id does not match.
     """
     if not fabric or not tailor_user:
         return False
 
-    shop_profile = getattr(fabric, 'tailor', None)
-    if shop_profile is None:
+    if not _fabric_owned_by_tailor_user(fabric=fabric, tailor_user=tailor_user):
         return False
 
-    owner_id = shop_profile.shop_owner_user_id
-    if owner_id is None or owner_id != tailor_user.id:
-        return False
+    if shop_id is None or allow_any_owner_shop:
+        return True
 
-    if shop_id is not None and shop_profile.id != shop_id:
-        return False
-
-    return True
+    return _fabric_listed_on_shop_session(
+        fabric=fabric,
+        tailor_user=tailor_user,
+        shop_id=shop_id,
+    )
 
 
 def attach_shop_to_order_data(validated_data, *, tailor_user, shop_id=None):
