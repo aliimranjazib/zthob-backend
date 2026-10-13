@@ -475,6 +475,16 @@ class RecordMeasurementsAction(BaseOrderAction):
             title=self.data.get('title'),
             notes=self.data.get('notes'),
         )
+        shop = getattr(self.order, 'shop', None)
+        if shop is not None:
+            from apps.customization.services.shop_measurement_template import (
+                validate_measurements_for_shop,
+            )
+
+            validate_measurements_for_shop(shop=shop, measurements=measurements)
+        from apps.orders.measurement_display import attach_field_label_snapshot
+
+        measurements = attach_field_label_snapshot(measurements, self.order)
         family_member_id = self.data.get('family_member')
         recipient_items = resolve_measurement_recipient_items(
             self.order,

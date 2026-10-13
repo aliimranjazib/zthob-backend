@@ -25,12 +25,10 @@ class ShopTailorPlusServiceTest(TestCase):
             password='pass',
             role='TAILOR',
         )
-        self.shop = TailorProfile.objects.create(
-            owner=self.owner,
-            user=self.owner,
-            shop_name='Plus Test Shop',
-            shop_status=True,
-        )
+        self.shop = self.owner.tailor_profile
+        self.shop.shop_name = 'Plus Test Shop'
+        self.shop.shop_status = True
+        self.shop.save(update_fields=['shop_name', 'shop_status'])
 
     def _activate_plus(self):
         ShopTailorPlusSubscription.objects.create(
@@ -80,12 +78,10 @@ class ShopTailorPlusOwnerReportsTest(TestCase):
             password='pass',
             role='TAILOR',
         )
-        self.shop = TailorProfile.objects.create(
-            owner=self.owner,
-            user=self.owner,
-            shop_name='Reports Shop',
-            shop_status=True,
-        )
+        self.shop = self.owner.tailor_profile
+        self.shop.shop_name = 'Reports Shop'
+        self.shop.shop_status = True
+        self.shop.save(update_fields=['shop_name', 'shop_status'])
 
     def test_free_shop_blocks_long_report_period(self):
         from apps.tailors.services.shop_plus import (
@@ -114,12 +110,10 @@ class ShopTailorPlusMultiShopMeTest(TestCase):
             password='pass',
             role='TAILOR',
         )
-        self.shop_free = TailorProfile.objects.create(
-            owner=self.owner,
-            user=self.owner,
-            shop_name='Free Branch',
-            shop_status=True,
-        )
+        self.shop_free = self.owner.tailor_profile
+        self.shop_free.shop_name = 'Free Branch'
+        self.shop_free.shop_status = True
+        self.shop_free.save(update_fields=['shop_name', 'shop_status'])
         self.shop_plus = TailorProfile.objects.create(
             owner=self.owner,
             shop_name='Plus Branch',

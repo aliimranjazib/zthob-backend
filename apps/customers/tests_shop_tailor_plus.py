@@ -32,12 +32,10 @@ class CustomerPlusMeasurementsTest(TestCase):
             password='pass',
             role='TAILOR',
         )
-        self.shop = TailorProfile.objects.create(
-            owner=self.tailor,
-            user=self.tailor,
-            shop_name='Plus Walk-in Shop',
-            shop_status=True,
-        )
+        self.shop = self.tailor.tailor_profile
+        self.shop.shop_name = 'Plus Walk-in Shop'
+        self.shop.shop_status = True
+        self.shop.save(update_fields=['shop_name', 'shop_status'])
         TailorProfileReview.objects.update_or_create(
             profile=self.shop,
             defaults={'review_status': 'approved'},

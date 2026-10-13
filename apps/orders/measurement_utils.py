@@ -4,7 +4,8 @@ from decimal import Decimal
 
 from rest_framework.exceptions import ValidationError
 
-METADATA_KEYS = frozenset({'unit', 'title', 'recorded_unit', 'notes', '_order'})
+METADATA_KEYS = frozenset({'unit', 'title', 'recorded_unit', 'notes', '_order', '_field_labels'})
+FIELD_LABELS_KEY = '_field_labels'
 MEASUREMENT_ORDER_KEY = '_order'
 MAX_MEASUREMENT_NOTES_LENGTH = 2000
 SUPPORTED_UNITS = frozenset({'cm', 'inches'})

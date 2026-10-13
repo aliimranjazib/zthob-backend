@@ -1072,6 +1072,47 @@ class CustomerPreviousTailorsView(APIView):
         )
 
 
+class ShopMeasurementTemplateView(APIView):
+    """Resolved measurement form for a shop (global or Tailor Plus custom)."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary='Measurement template for a tailor shop',
+        description=(
+            'Returns the measurement form for this shop. Free shops receive the platform template. '
+            'Tailor Plus shops may receive a customized field set.'
+        ),
+        tags=['Customer Measurements'],
+    )
+    def get(self, request, tailor_id):
+        shop = resolve_customer_shop(tailor_id)
+        if shop is None:
+            return api_response(
+                success=False,
+                message='Tailor not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        from apps.customization.services.shop_measurement_template import (
+            resolve_measurement_template_for_shop,
+        )
+
+        payload = resolve_measurement_template_for_shop(shop, request=request)
+        if payload is None:
+            return api_response(
+                success=False,
+                message='Measurement template not configured',
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+        return api_response(
+            success=True,
+            message='Shop measurement template loaded',
+            data=payload,
+            status_code=status.HTTP_200_OK,
+        )
+
+
 class ShopReusableMeasurementsView(APIView):
     """
     Latest walk-in measurements for reorder at a Tailor Plus shop.
