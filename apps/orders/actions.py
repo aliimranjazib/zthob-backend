@@ -482,6 +482,9 @@ class RecordMeasurementsAction(BaseOrderAction):
             )
 
             validate_measurements_for_shop(shop=shop, measurements=measurements)
+        from apps.orders.measurement_display import attach_field_label_snapshot
+
+        measurements = attach_field_label_snapshot(measurements, self.order)
         family_member_id = self.data.get('family_member')
         recipient_items = resolve_measurement_recipient_items(
             self.order,

@@ -6,7 +6,8 @@ from apps.customers.models import Address
 from apps.customization.models import CustomStyle
 from decimal import Decimal
 from django.db import transaction
-from apps.orders.measurement_utils import public_measurements
+from apps.orders.measurement_display import build_measurement_rows, field_map_for_order
+from apps.orders.measurement_utils import FIELD_LABELS_KEY, public_measurements
 from apps.orders.services import OrderCalculationService
 from apps.orders.payments import build_payment_options
 from zthob.translations import get_language_from_request, translate_message
@@ -259,13 +260,14 @@ class OrderItemSerializer(serializers.ModelSerializer):
     customer_fabric_images = serializers.SerializerMethodField()
     family_member_name = serializers.SerializerMethodField()
     custom_styles = serializers.SerializerMethodField()
+    measurement_rows = serializers.SerializerMethodField()
     
     class Meta:
         model = OrderItem
         fields = [
             'id','fabric','fabric_name','fabric_sku', 'fabric_stitching_price', 'fabric_image','quantity',
             'customer_fabric_images', 'customer_fabric_quantity',
-            'unit_price','total_price','measurements','custom_instructions',
+            'unit_price','total_price','measurements','measurement_rows','custom_instructions',
             'is_ready','family_member','family_member_name','custom_styles','created_at',
             'recipient_type','recipient_display_name','recipient_relationship',
         ]
@@ -275,6 +277,21 @@ class OrderItemSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         data['measurements'] = public_measurements(data.get('measurements'))
         return data
+
+    def get_measurement_rows(self, obj):
+        raw = obj.measurements
+        if not raw or not isinstance(raw, dict):
+            return []
+        request = self.context.get('request')
+        language = get_language_from_request(request) if request else 'en'
+        order = obj.order
+        snapshot = raw.get(FIELD_LABELS_KEY) if isinstance(raw.get(FIELD_LABELS_KEY), dict) else None
+        return build_measurement_rows(
+            raw,
+            field_map=field_map_for_order(order),
+            language=language,
+            field_labels_snapshot=snapshot,
+        )
 
     def get_family_member_name(self, obj):
         if obj.recipient_display_name:
@@ -418,6 +435,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'customer_email',
             'customer_phone',
             'tailor',
+            'shop',
             'tailor_name',
             'tailor_contact',
             'tailor_info',
