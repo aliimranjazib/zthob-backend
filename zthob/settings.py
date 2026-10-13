@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import List
 from datetime import timedelta
 
+from corsheaders.defaults import default_headers
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -379,6 +381,13 @@ CORS_ALLOWED_ORIGINS=[
 ]
 
 CORS_ALLOW_CREDENTIALS=True
+
+# Extend defaults only — keeps Authorization, Content-Type, etc. for all existing clients.
+# Required for cross-origin web apps (e.g. tailor.mgask.net → prod.mgask.net) that send X-App-Entry.
+CORS_ALLOW_HEADERS = (
+    *default_headers,
+    "x-app-entry",
+)
 
 # drf-spectacular settings
 SPECTACULAR_SETTINGS = {
