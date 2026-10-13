@@ -1,6 +1,10 @@
 from django.urls import path
 
 from apps.tailors.views.v2.business import V2BusinessView
+from apps.tailors.views.v2.shop_measurement_template import (
+    V2ShopMeasurementTemplateResetView,
+    V2ShopMeasurementTemplateView,
+)
 from apps.tailors.views.v2.shops import (
     V2ShopDetailView,
     V2ShopListCreateView,
@@ -32,6 +36,16 @@ urlpatterns = [
         name='v2-shop-publish',
     ),
     path('shops/<int:shop_id>/pin/', V2ShopPinView.as_view(), name='v2-shop-pin'),
+    path(
+        'shops/<int:shop_id>/measurement-template/',
+        V2ShopMeasurementTemplateView.as_view(),
+        name='v2-shop-measurement-template',
+    ),
+    path(
+        'shops/<int:shop_id>/measurement-template/reset/',
+        V2ShopMeasurementTemplateResetView.as_view(),
+        name='v2-shop-measurement-template-reset',
+    ),
     path('staff/', V2StaffListCreateView.as_view(), name='v2-staff'),
     path('staff/<int:staff_id>/', V2StaffDetailView.as_view(), name='v2-staff-detail'),
     path(

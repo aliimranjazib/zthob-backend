@@ -1,7 +1,7 @@
 from django.urls import path
 
 from apps.core.views import SendOTPView, VerifyOTPView
-from apps.customers.views import AddressListView, AddressCreateView, AddressDetailView, CustomerProfileAPIView, FabricCatalogAPIView, FamilyMemberListView, FamilyMemberDetailView, TailorFabricsAPIView, TailorListAPIView, TailorDetailAPIView, FabricDetailAPIView, FabricFavoriteToggleView, FabricFavoriteListView, CustomerMeasurementsListView, FamilyMemberMeasurementsView, CustomerPreviousTailorsView, ShopReusableMeasurementsView
+from apps.customers.views import AddressListView, AddressCreateView, AddressDetailView, CustomerProfileAPIView, FabricCatalogAPIView, FamilyMemberListView, FamilyMemberDetailView, TailorFabricsAPIView, TailorListAPIView, TailorDetailAPIView, FabricDetailAPIView, FabricFavoriteToggleView, FabricFavoriteListView, CustomerMeasurementsListView, FamilyMemberMeasurementsView, CustomerPreviousTailorsView, ShopReusableMeasurementsView, ShopMeasurementTemplateView
 from apps.customers.home_views import CustomerHomeAPIView
 from apps.tailors.views.rating import TailorRatingListView, SubmitTailorRatingView
 
@@ -25,6 +25,11 @@ urlpatterns = [
         'tailors/<int:tailor_id>/reusable-measurements/',
         ShopReusableMeasurementsView.as_view(),
         name='customer-shop-reusable-measurements',
+    ),
+    path(
+        'tailors/<int:tailor_id>/measurement-template/',
+        ShopMeasurementTemplateView.as_view(),
+        name='customer-shop-measurement-template',
     ),
     path('tailors/<int:tailor_id>/ratings/', TailorRatingListView.as_view(), name='tailor-ratings'),
     # Fabric Catalog

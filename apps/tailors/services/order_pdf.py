@@ -1215,6 +1215,19 @@ def _measurement_field_map():
     return build_pdf_field_map()
 
 
+def _measurement_field_map_for_order(order):
+    shop_id = getattr(order, 'shop_id', None)
+    if shop_id:
+        from apps.customization.services.shop_measurement_template import (
+            build_pdf_field_map_for_shop,
+        )
+
+        shop_map = build_pdf_field_map_for_shop(shop_id)
+        if shop_map:
+            return shop_map
+    return _measurement_field_map()
+
+
 def _format_measurement_pairs(measurements, lang='en', field_map=None):
     """Format measurement JSON into localized label/value/unit tuples, preserving payload order."""
     if not measurements or not isinstance(measurements, dict):
@@ -2491,7 +2504,7 @@ def generate_order_pdf_reportlab(order, lang='en') -> bytes:
 
     s = _styles(lang)
     page_w = _pdf_page_width()
-    measurement_fields = _measurement_field_map()
+    measurement_fields = _measurement_field_map_for_order(order)
     items = list(
         order.order_items.select_related('fabric', 'family_member')
         .prefetch_related('customer_fabric_images')

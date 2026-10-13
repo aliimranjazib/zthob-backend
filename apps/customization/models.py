@@ -302,3 +302,100 @@ class MeasurementField(BaseModel):
 
     def __str__(self):
         return f"{self.template.name} - {self.display_name}"
+
+
+class ShopMeasurementSchema(BaseModel):
+    """Tailor Plus per-shop overlay on the platform measurement template."""
+
+    shop = models.OneToOneField(
+        'tailors.TailorProfile',
+        on_delete=models.CASCADE,
+        related_name='measurement_schema',
+    )
+    base_template = models.ForeignKey(
+        MeasurementTemplate,
+        on_delete=models.PROTECT,
+        related_name='shop_schemas',
+        help_text='Platform template this shop customizes',
+    )
+
+    class Meta:
+        verbose_name = 'Shop measurement schema'
+        verbose_name_plural = 'Shop measurement schemas'
+
+    def __str__(self):
+        return f'ShopMeasurementSchema shop_id={self.shop_id}'
+
+
+class ShopMeasurementField(BaseModel):
+    """Per-shop field overlay: hide, relabel, reorder, or add custom measurement keys."""
+
+    FIELD_TYPE_CHOICES = MeasurementField.FIELD_TYPE_CHOICES
+
+    schema = models.ForeignKey(
+        ShopMeasurementSchema,
+        on_delete=models.CASCADE,
+        related_name='fields',
+    )
+    global_field = models.ForeignKey(
+        MeasurementField,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='shop_overlays',
+        help_text='When set, overrides or hides a platform field',
+    )
+    name = models.CharField(
+        max_length=50,
+        help_text='JSON key stored on orders (must match global name when linked)',
+    )
+    is_visible = models.BooleanField(
+        default=True,
+        help_text='False removes a platform field from this shop form',
+    )
+    display_name = models.CharField(max_length=100, blank=True, default='')
+    display_name_ar = models.CharField(max_length=100, blank=True, default='')
+    display_name_ur = models.CharField(max_length=100, blank=True, default='')
+    field_type = models.CharField(
+        max_length=20,
+        choices=FIELD_TYPE_CHOICES,
+        default='decimal',
+    )
+    min_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    max_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    is_required = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+    pdf_grid_row = models.PositiveSmallIntegerField(null=True, blank=True)
+    pdf_grid_col = models.PositiveSmallIntegerField(null=True, blank=True)
+    help_text_en = models.CharField(max_length=200, blank=True, default='')
+    help_text_ar = models.CharField(max_length=200, blank=True, default='')
+    help_text_ur = models.CharField(max_length=200, blank=True, default='')
+
+    class Meta:
+        ordering = ['schema', 'display_order', 'name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['schema', 'name'],
+                name='customization_shopmeasfield_schema_name_uniq',
+            ),
+            models.UniqueConstraint(
+                fields=['schema', 'global_field'],
+                condition=models.Q(global_field__isnull=False),
+                name='customization_shopmeasfield_schema_global_uniq',
+            ),
+        ]
+        verbose_name = 'Shop measurement field'
+        verbose_name_plural = 'Shop measurement fields'
+
+    def __str__(self):
+        return f'{self.schema_id}:{self.name}'
