@@ -17,6 +17,7 @@ from apps.tailors.services.shop_plus import TailorPlusLimitError
 from apps.tailors.shop_access import get_shop_staff_context
 from apps.tailors.views.base import BaseTailorAPIView
 from apps.fabrics.views.v2.listings import V2ShopFabricListView
+from zthob.translations import get_language_from_request
 from zthob.utils import api_response
 
 
@@ -81,6 +82,7 @@ class V2ShopMeasurementTemplateView(BaseTailorAPIView):
             replace_shop_measurement_schema(
                 shop=shop,
                 fields_data=serializer.validated_data['measurement_fields'],
+                language=get_language_from_request(request),
             )
         except TailorPlusLimitError as exc:
             return plus_limit_api_response(exc, request=request)

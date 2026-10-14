@@ -3,7 +3,12 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
-from apps.customization.models import MeasurementField, MeasurementTemplate, ShopMeasurementSchema
+from apps.customization.models import (
+    MeasurementField,
+    MeasurementTemplate,
+    ShopMeasurementField,
+    ShopMeasurementSchema,
+)
 from apps.customization.services.shop_measurement_template import (
     replace_shop_measurement_schema,
     reset_shop_measurement_schema,
@@ -90,19 +95,25 @@ class ShopMeasurementTemplateTest(TestCase):
                 },
                 {
                     'is_visible': True,
-                    'display_name': 'Special',
-                    'display_name_ar': 'خاص',
-                    'display_name_ur': 'خصوصی',
+                    'display_name': 'خاص',
                     'display_order': 2,
                 },
             ],
+            language='ar',
         )
-        payload = resolve_measurement_template_for_shop(self.shop)
+        from rest_framework.test import APIRequestFactory
+
+        factory = APIRequestFactory()
+        request = factory.get('/', HTTP_ACCEPT_LANGUAGE='ar')
+        payload = resolve_measurement_template_for_shop(self.shop, request=request)
         names = [f['name'] for f in payload['measurement_fields']]
         self.assertIn('chest', names)
         custom = next(f for f in payload['measurement_fields'] if f.get('is_custom'))
         self.assertTrue(custom['name'].startswith('sf_'))
-        self.assertEqual(custom['display_name_ar'], 'خاص')
+        self.assertEqual(custom['display_name'], 'خاص')
+        self.assertNotIn('display_name_ar', custom)
+        row = ShopMeasurementField.objects.get(id=custom['id'])
+        self.assertEqual(row.display_name_ar, 'خاص')
 
     def test_custom_field_key_stable_on_resave(self):
         self._activate_plus()
@@ -116,11 +127,10 @@ class ShopMeasurementTemplateTest(TestCase):
                 },
                 {
                     'display_name': 'First label',
-                    'display_name_ar': 'أ',
-                    'display_name_ur': 'ا',
                     'display_order': 2,
                 },
             ],
+            language='en',
         )
         first = resolve_measurement_template_for_shop(self.shop)
         custom = next(f for f in first['measurement_fields'] if f.get('is_custom'))
@@ -137,17 +147,19 @@ class ShopMeasurementTemplateTest(TestCase):
                 },
                 {
                     'id': field_id,
-                    'display_name': 'Updated label',
-                    'display_name_ar': 'ب',
-                    'display_name_ur': 'ب',
+                    'display_name': 'ب',
                     'display_order': 2,
                 },
             ],
+            language='ar',
         )
         second = resolve_measurement_template_for_shop(self.shop)
         custom2 = next(f for f in second['measurement_fields'] if f.get('is_custom'))
         self.assertEqual(custom2['name'], storage_name)
-        self.assertEqual(custom2['display_name_ar'], 'ب')
+        self.assertEqual(custom2['display_name'], 'First label')
+        row = ShopMeasurementField.objects.get(id=field_id)
+        self.assertEqual(row.display_name, 'First label')
+        self.assertEqual(row.display_name_ar, 'ب')
 
     def test_non_plus_cannot_save(self):
         with self.assertRaises(TailorPlusLimitError):

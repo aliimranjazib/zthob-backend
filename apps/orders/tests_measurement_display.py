@@ -30,12 +30,11 @@ class OrderMeasurementRowsTest(TestCase):
             shop=self.shop,
             fields_data=[
                 {
-                    'display_name': 'Special',
-                    'display_name_ar': 'خاص',
-                    'display_name_ur': 'خصوصی',
+                    'display_name': 'خاص',
                     'display_order': 1,
                 },
             ],
+            language='ar',
         )
         self.fabric = Fabric.objects.create(
             tailor=self.shop,
