@@ -1,7 +1,7 @@
 # apps/tailors/models/__init__.py
 from .business import Business
 from .profile import TailorProfile
-from .subscription import ShopTailorPlusSubscription
+from .subscription import BusinessOwnerPlusSubscription, ShopTailorPlusSubscription
 from .catalog import (
     Fabric,
     FabricType,
@@ -26,6 +26,7 @@ __all__ = [
     'Business',
     'TailorProfile',
     'ShopTailorPlusSubscription',
+    'BusinessOwnerPlusSubscription',
     'Fabric', 
     'FabricType', 
     'FabricCategory', 

@@ -118,7 +118,7 @@ class V2FabricProductListCreateView(BaseTailorAPIView):
         tags=['V2 Fabrics'],
     )
     def post(self, request):
-        business = get_owner_business(request.user)
+        business = _business_for_fabric_actor(request)
         if business is None:
             return api_response(
                 success=False,
@@ -147,14 +147,28 @@ class V2FabricProductListCreateView(BaseTailorAPIView):
 
         from django.db import transaction
 
-        with transaction.atomic():
-            product = create_fabric_product(
-                business=business,
-                validated_data=serializer.validated_data,
-                created_by=request.user,
-            )
-            if images:
-                save_product_gallery(product=product, images=images)
+        from apps.tailors.services.plans.owner_limits import OwnerPlanLimitError
+        from apps.tailors.services.plus_api_errors import owner_plan_limit_api_response
+
+        try:
+            with transaction.atomic():
+                from apps.tailors.services.plans.owner_limits import (
+                    assert_can_create_owner_catalog_product,
+                )
+
+                assert_can_create_owner_catalog_product(
+                    business=business,
+                    owner=request.user,
+                )
+                product = create_fabric_product(
+                    business=business,
+                    validated_data=serializer.validated_data,
+                    created_by=request.user,
+                )
+                if images:
+                    save_product_gallery(product=product, images=images)
+        except OwnerPlanLimitError as exc:
+            return owner_plan_limit_api_response(exc, request=request)
 
         product = get_product_for_business(business_id=business.id, product_id=product.id)
         response = V2FabricProductSerializer(product, context={'request': request})

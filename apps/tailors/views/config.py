@@ -167,8 +167,12 @@ class TailorConfigView(APIView):
         from apps.core.models import SystemSettings
         from apps.core.express_delivery import get_express_delivery_options
         from apps.orders.rejection_reasons import build_rejection_reasons_config
+        from apps.accounts.services.v2_auth import user_owns_active_shop
+        from apps.tailors.services.plans.owner_plans_config import build_owner_plans_config
+        from apps.tailors.services.plans.owner_plus import serialize_owner_plus
         from apps.tailors.services.shop_plans_config import build_shop_plans_config
         from apps.tailors.services.shop_plus import serialize_shop_tailor_plus
+        from apps.tailors.services.v2.business import get_business_record
         from apps.tailors.shop_access import get_tailor_profile, get_token_shop_id
         from apps.tailors.standard_stitching_days import get_standard_stitching_days_limits
 
@@ -194,10 +198,43 @@ class TailorConfigView(APIView):
             elif token_shop_id is not None:
                 shop_id_for_plus = token_shop_id
 
-        tailor_plus = serialize_shop_tailor_plus(shop_id_for_plus)
+        from apps.tailors.services.plans.plus_display_labels import (
+            build_owner_plus_display_fields,
+            build_tailor_plus_display_fields,
+        )
+
+        tailor_plus = {
+            **serialize_shop_tailor_plus(shop_id_for_plus),
+            **build_tailor_plus_display_fields(
+                language=language,
+                translate=translate_message,
+            ),
+        }
         shop_plans = build_shop_plans_config(
             language=language,
             current_tier=tailor_plus['tier'],
+            translate=translate_message,
+        )
+
+        owner_applicable = False
+        owner_business = None
+        if request.user.is_authenticated and user_owns_active_shop(request.user):
+            owner_applicable = True
+            owner_business = get_business_record(request.user)
+        owner_plus = {
+            **serialize_owner_plus(
+                owner_business,
+                owner_user=request.user if owner_applicable else None,
+                applicable=owner_applicable,
+            ),
+            **build_owner_plus_display_fields(
+                language=language,
+                translate=translate_message,
+            ),
+        }
+        owner_plans = build_owner_plans_config(
+            language=language,
+            current_tier=owner_plus['tier'],
             translate=translate_message,
         )
 
@@ -214,6 +251,8 @@ class TailorConfigView(APIView):
             "order_rejection_reasons": build_rejection_reasons_config(language),
             "tailor_plus": tailor_plus,
             "shop_plans": shop_plans,
+            "owner_plus": owner_plus,
+            "owner_plans": owner_plans,
         }
         
         return api_response(

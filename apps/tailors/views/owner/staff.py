@@ -70,6 +70,12 @@ class OwnerStaffListCreateView(BaseTailorAPIView):
         data = serializer.validated_data
         owner = request.user
 
+        from apps.tailors.services.plans.owner_limits import (
+            OwnerPlanLimitError,
+            assert_can_add_staff_member,
+        )
+        from apps.tailors.services.plus_api_errors import owner_plan_limit_api_response
+
         try:
             with transaction.atomic():
                 user, _created = find_or_create_staff_user(
@@ -82,6 +88,17 @@ class OwnerStaffListCreateView(BaseTailorAPIView):
                         message='Shop owner cannot be added as staff',
                         status_code=status.HTTP_400_BAD_REQUEST,
                     )
+
+                will_be_active = data.get('is_active', True)
+                existing_member = TailorStaffMember.objects.filter(
+                    owner=owner,
+                    user=user,
+                ).first()
+                needs_limit_check = will_be_active and (
+                    existing_member is None or not existing_member.is_active
+                )
+                if needs_limit_check:
+                    assert_can_add_staff_member(owner=owner, is_new_active_member=True)
 
                 staff_member, member_created = TailorStaffMember.objects.get_or_create(
                     owner=owner,
@@ -108,6 +125,8 @@ class OwnerStaffListCreateView(BaseTailorAPIView):
                         permissions=data.get('permissions') or [],
                         is_active=True,
                     )
+        except OwnerPlanLimitError as exc:
+            return owner_plan_limit_api_response(exc, request=request)
         except DRFValidationError as exc:
             return api_response(
                 success=False,

@@ -451,6 +451,15 @@ def build_v2_me_payload(
         from apps.tailors.services.shop_plus import serialize_shop_tailor_plus
 
         payload['tailor_plus'] = serialize_shop_tailor_plus(effective_shop_id)
+    if app_entry == APP_ENTRY_OWNER and user_owns_active_shop(user):
+        from apps.tailors.services.plans.owner_plus import serialize_owner_plus
+        from apps.tailors.services.v2.business import get_business_record
+
+        payload['owner_plus'] = serialize_owner_plus(
+            get_business_record(user),
+            owner_user=user,
+            applicable=True,
+        )
     if app_entry in (APP_ENTRY_OWNER, APP_ENTRY_STAFF):
         payload['tailor_context'] = build_owner_auth_context(
             user,

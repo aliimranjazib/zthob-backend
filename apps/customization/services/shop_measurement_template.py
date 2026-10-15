@@ -14,10 +14,16 @@ from apps.customization.models import (
     ShopMeasurementField,
     ShopMeasurementSchema,
 )
+from apps.customization.measurement_labels import (
+    localized_display_name,
+    merge_label_columns_from_write,
+    trilingual_labels,
+)
 from apps.documents.measurement_config import get_pdf_measurement_template
 from apps.orders.measurement_utils import measurement_field_values
 from apps.tailors.models import TailorProfile
 from apps.tailors.services.shop_plus import is_shop_plus_active
+from zthob.translations import get_language_from_request
 
 FIELD_NAME_PATTERN = re.compile(r'^[a-z][a-z0-9_]{0,47}$')
 MAX_SHOP_MEASUREMENT_FIELDS = 50
@@ -44,16 +50,6 @@ def shop_has_custom_measurement_schema(shop: TailorProfile | int | None) -> bool
     return schema.fields.exists()
 
 
-def _pick_label(global_field: MeasurementField | None, shop_row: ShopMeasurementField | None, attr: str, fallback: str):
-    if shop_row is not None:
-        value = getattr(shop_row, attr, '') or ''
-        if value.strip():
-            return value
-    if global_field is not None:
-        return getattr(global_field, attr, '') or fallback
-    return fallback
-
-
 def _resolved_field_dict(*, global_field: MeasurementField | None, shop_row: ShopMeasurementField | None, request):
     from apps.customization.serializers import MeasurementFieldSerializer
 
@@ -63,20 +59,19 @@ def _resolved_field_dict(*, global_field: MeasurementField | None, shop_row: Sho
     if global_field is not None and shop_row is None:
         return MeasurementFieldSerializer(global_field, context={'request': request}).data
 
+    language = get_language_from_request(request)
+
     if global_field is not None and shop_row is not None:
         payload = MeasurementFieldSerializer(global_field, context={'request': request}).data
         payload['id'] = shop_row.id
         payload['name'] = global_field.name
         payload['global_field_id'] = global_field.id
         payload['is_custom'] = False
-        payload['display_name'] = _pick_label(
-            global_field, shop_row, 'display_name', payload.get('display_name') or global_field.display_name
-        )
-        payload['display_name_ar'] = _pick_label(
-            global_field, shop_row, 'display_name_ar', payload.get('display_name_ar') or global_field.display_name_ar
-        )
-        payload['display_name_ur'] = _pick_label(
-            global_field, shop_row, 'display_name_ur', payload.get('display_name_ur') or global_field.display_name_ur
+        payload['display_name'] = localized_display_name(
+            global_field=global_field,
+            shop_row=shop_row,
+            language=language,
+            storage_name=global_field.name,
         )
         if shop_row.field_type:
             payload['field_type'] = shop_row.field_type
@@ -86,9 +81,6 @@ def _resolved_field_dict(*, global_field: MeasurementField | None, shop_row: Sho
             payload['max_value'] = str(shop_row.max_value)
         payload['is_required'] = shop_row.is_required
         payload['display_order'] = shop_row.display_order
-        from zthob.translations import get_language_from_request
-
-        language = get_language_from_request(request)
         if language == 'ur' and (shop_row.help_text_ur or global_field.help_text_ur):
             payload['help_text'] = shop_row.help_text_ur or global_field.help_text_ur
         elif language == 'ar' and (shop_row.help_text_ar or global_field.help_text_ar):
@@ -98,15 +90,6 @@ def _resolved_field_dict(*, global_field: MeasurementField | None, shop_row: Sho
         return payload
 
     if shop_row is not None and shop_row.is_visible:
-        from zthob.translations import get_language_from_request
-
-        language = get_language_from_request(request)
-        display_en = shop_row.display_name or shop_row.name.replace('_', ' ').title()
-        display = display_en
-        if language == 'ur' and shop_row.display_name_ur:
-            display = shop_row.display_name_ur
-        elif language == 'ar' and shop_row.display_name_ar:
-            display = shop_row.display_name_ar
         help_text = shop_row.help_text_en
         if language == 'ur' and shop_row.help_text_ur:
             help_text = shop_row.help_text_ur
@@ -117,9 +100,12 @@ def _resolved_field_dict(*, global_field: MeasurementField | None, shop_row: Sho
             'name': shop_row.name,
             'global_field_id': None,
             'is_custom': True,
-            'display_name': display,
-            'display_name_ar': shop_row.display_name_ar or '',
-            'display_name_ur': shop_row.display_name_ur or '',
+            'display_name': localized_display_name(
+                global_field=None,
+                shop_row=shop_row,
+                language=language,
+                storage_name=shop_row.name,
+            ),
             'field_type': shop_row.field_type,
             'min_value': str(shop_row.min_value) if shop_row.min_value is not None else None,
             'max_value': str(shop_row.max_value) if shop_row.max_value is not None else None,
@@ -225,12 +211,18 @@ def _generate_custom_field_name(*, shop_id: int, reserved: set[str]) -> str:
     raise ValidationError({'measurement_fields': 'Could not allocate a unique field key.'})
 
 
-def _field_row_attributes(*, row: dict, global_field: MeasurementField | None, index: int) -> dict:
+def _field_row_attributes(
+    *,
+    row: dict,
+    global_field: MeasurementField | None,
+    index: int,
+    language: str,
+    existing: ShopMeasurementField | None,
+) -> dict:
+    labels = merge_label_columns_from_write(row=row, language=language, existing=existing)
     return {
         'is_visible': bool(row.get('is_visible', True)),
-        'display_name': (row.get('display_name') or '')[:100],
-        'display_name_ar': (row.get('display_name_ar') or '')[:100],
-        'display_name_ur': (row.get('display_name_ur') or '')[:100],
+        **labels,
         'field_type': row.get('field_type') or (global_field.field_type if global_field else 'decimal'),
         'min_value': row.get('min_value'),
         'max_value': row.get('max_value'),
@@ -245,7 +237,12 @@ def _field_row_attributes(*, row: dict, global_field: MeasurementField | None, i
 
 
 @transaction.atomic
-def replace_shop_measurement_schema(*, shop: TailorProfile, fields_data: list[dict]) -> ShopMeasurementSchema:
+def replace_shop_measurement_schema(
+    *,
+    shop: TailorProfile,
+    fields_data: list[dict],
+    language: str = 'en',
+) -> ShopMeasurementSchema:
     if not is_shop_plus_active(shop):
         from apps.tailors.services.shop_plus import TailorPlusLimitError
 
@@ -331,7 +328,13 @@ def replace_shop_measurement_schema(*, shop: TailorProfile, fields_data: list[di
             )
         used_names.add(name)
 
-        attrs = _field_row_attributes(row=row, global_field=global_field, index=index)
+        attrs = _field_row_attributes(
+            row=row,
+            global_field=global_field,
+            index=index,
+            language=language,
+            existing=instance,
+        )
         if instance is not None:
             for key, value in attrs.items():
                 setattr(instance, key, value)
@@ -401,24 +404,76 @@ def build_pdf_field_map_for_shop(shop_id: int | None):
     if shop_id is None or not shop_has_custom_measurement_schema(shop_id):
         return None
 
-    resolved = resolve_measurement_template_for_shop(shop_id, request=None)
-    if not resolved or resolved.get('source') != 'shop_custom':
+    schema = (
+        ShopMeasurementSchema.objects.filter(shop_id=shop_id)
+        .select_related('base_template')
+        .prefetch_related('fields')
+        .first()
+    )
+    if schema is None or not schema.fields.exists():
         return None
 
-    field_map = {}
-    for idx, field in enumerate(resolved.get('measurement_fields') or []):
-        name = field.get('name')
-        if not name:
+    base_template = schema.base_template
+    global_fields = list(
+        MeasurementField.objects.filter(template=base_template, is_active=True).order_by(
+            'display_order', 'name'
+        )
+    )
+    overlay_by_global = {
+        row.global_field_id: row for row in schema.fields.all() if row.global_field_id
+    }
+    custom_rows = [
+        row for row in schema.fields.all() if row.global_field_id is None and row.is_visible
+    ]
+
+    merged: list[tuple[str, MeasurementField | None, ShopMeasurementField | None]] = []
+    for global_field in global_fields:
+        shop_row = overlay_by_global.get(global_field.id)
+        if shop_row is not None and not shop_row.is_visible:
             continue
+        merged.append((global_field.name, global_field, shop_row))
+
+    for row in sorted(custom_rows, key=lambda r: (r.display_order, r.name)):
+        merged.append((row.name, None, row))
+
+    def _sort_key(item):
+        name, global_field, shop_row = item
+        if shop_row is not None:
+            return (shop_row.display_order, name)
+        if global_field is not None:
+            return (global_field.display_order, name)
+        return (0, name)
+
+    merged.sort(key=_sort_key)
+
+    field_map = {}
+    for idx, (name, global_field, shop_row) in enumerate(merged):
+        label_en, label_ar, label_ur = trilingual_labels(
+            global_field=global_field,
+            shop_row=shop_row,
+            storage_name=name,
+        )
+        if shop_row is not None:
+            display_order = shop_row.display_order
+            pdf_grid_row = shop_row.pdf_grid_row
+            pdf_grid_col = shop_row.pdf_grid_col
+        elif global_field is not None:
+            display_order = global_field.display_order
+            pdf_grid_row = global_field.pdf_grid_row
+            pdf_grid_col = global_field.pdf_grid_col
+        else:
+            display_order = idx + 1
+            pdf_grid_row = None
+            pdf_grid_col = None
         field_map[name] = {
-            'label_en': field.get('display_name') or name.replace('_', ' ').title(),
-            'label_ar': field.get('display_name_ar') or field.get('display_name') or name,
-            'label_ur': field.get('display_name_ur') or field.get('display_name') or name,
+            'label_en': label_en or name.replace('_', ' ').title(),
+            'label_ar': label_ar or label_en or name,
+            'label_ur': label_ur or label_en or name,
             'order': idx,
-            'display_order': field.get('display_order') or (idx + 1),
-            'pdf_grid_row': field.get('pdf_grid_row'),
-            'pdf_grid_col': field.get('pdf_grid_col'),
-            'unit': resolved.get('default_unit') or 'cm',
-            'template': resolved.get('name'),
+            'display_order': display_order or (idx + 1),
+            'pdf_grid_row': pdf_grid_row,
+            'pdf_grid_col': pdf_grid_col,
+            'unit': base_template.default_unit or 'cm',
+            'template': base_template.name,
         }
     return field_map or None

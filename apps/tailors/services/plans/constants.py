@@ -1,0 +1,24 @@
+"""Numeric limits for owner and shop plans (single source of truth)."""
+
+from apps.tailors.services.shop_plus import (
+    FREE_ANALYTICS_DAYS,
+    FREE_FABRIC_LIMIT_PER_BUCKET,
+    FREE_REPORT_MAX_DAYS,
+    PLUS_ANALYTICS_DAYS,
+)
+
+FREE_OWNER_MAX_SHOPS = 3
+FREE_OWNER_MAX_STAFF = 3
+FREE_OWNER_CATALOG_PRODUCTS = 30
+FREE_OWNER_REPORT_DAYS = frozenset({1, 7})
+
+__all__ = [
+    'FREE_OWNER_MAX_SHOPS',
+    'FREE_OWNER_MAX_STAFF',
+    'FREE_OWNER_CATALOG_PRODUCTS',
+    'FREE_OWNER_REPORT_DAYS',
+    'FREE_ANALYTICS_DAYS',
+    'FREE_FABRIC_LIMIT_PER_BUCKET',
+    'FREE_REPORT_MAX_DAYS',
+    'PLUS_ANALYTICS_DAYS',
+]

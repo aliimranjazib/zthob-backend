@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.contrib import messages
 from django.db.models import Count, Q
 from .models import (
+    Business,
     TailorProfile, 
     FabricCategory, 
     Fabric, 
@@ -14,6 +15,7 @@ from .models import (
     ServiceArea,
     TailorRating,
     TailorEmployee,
+    BusinessOwnerPlusSubscription,
     ShopTailorPlusSubscription,
 )
 
@@ -48,6 +50,22 @@ class FabricImageInline(admin.TabularInline):
 
 class ShopTailorPlusSubscriptionInline(admin.StackedInline):
     model = ShopTailorPlusSubscription
+    extra = 0
+    max_num = 1
+    can_delete = True
+    fields = (
+        'status',
+        'current_period_end',
+        'admin_notes',
+        'granted_by',
+        'created_at',
+        'updated_at',
+    )
+    readonly_fields = ('created_at', 'updated_at')
+
+
+class BusinessOwnerPlusSubscriptionInline(admin.StackedInline):
+    model = BusinessOwnerPlusSubscription
     extra = 0
     max_num = 1
     can_delete = True
@@ -2053,11 +2071,111 @@ class TailorEmployeeAdmin(admin.ModelAdmin):
     joined_at_formatted.admin_order_field = 'joined_at'
 
 
+@admin.register(Business)
+class BusinessAdmin(admin.ModelAdmin):
+    list_display = (
+        'id',
+        'display_name',
+        'owner_phone',
+        'status',
+        'console_enabled',
+        'is_active',
+        'owner_plus_badge',
+        'created_at',
+    )
+    list_filter = ('status', 'console_enabled', 'is_active', 'setup_step')
+    search_fields = (
+        'name',
+        'contact_phone',
+        'owner__phone',
+        'owner__username',
+        'owner__email',
+    )
+    autocomplete_fields = ('owner',)
+    readonly_fields = ('created_at', 'updated_at')
+    inlines = [BusinessOwnerPlusSubscriptionInline]
+    fieldsets = (
+        (
+            'Business',
+            {
+                'fields': (
+                    'owner',
+                    'name',
+                    'contact_phone',
+                    'contact_email',
+                    'city',
+                    'logo',
+                ),
+            },
+        ),
+        (
+            'Settings',
+            {
+                'fields': (
+                    'default_language',
+                    'timezone',
+                    'currency',
+                    'status',
+                    'setup_step',
+                    'is_active',
+                    'console_enabled',
+                ),
+            },
+        ),
+        (
+            'Timestamps',
+            {
+                'fields': ('created_at', 'updated_at'),
+            },
+        ),
+    )
+
+    @admin.display(description='Business')
+    def display_name(self, obj):
+        return obj.name or f'Business #{obj.pk}'
+
+    @admin.display(description='Owner phone')
+    def owner_phone(self, obj):
+        owner = obj.owner
+        return getattr(owner, 'phone', None) or owner.username or f'user #{owner.id}'
+
+    @admin.display(description='Owner Plus')
+    def owner_plus_badge(self, obj):
+        from django.utils import timezone
+
+        subscription = getattr(obj, 'owner_plus_subscription', None)
+        if subscription is None:
+            return format_html(
+                '<span style="background-color: #6c757d; color: white; padding: 2px 8px; '
+                'border-radius: 4px; font-size: 10px;">Free</span>',
+            )
+        now = timezone.now()
+        active = subscription.is_active_at(now)
+        if active:
+            return format_html(
+                '<span style="background-color: #28a745; color: white; padding: 2px 8px; '
+                'border-radius: 4px; font-size: 10px;">Owner Plus</span>',
+            )
+        return format_html(
+            '<span style="background-color: #dc3545; color: white; padding: 2px 8px; '
+            'border-radius: 4px; font-size: 10px;">Inactive</span>',
+        )
+
+
 @admin.register(ShopTailorPlusSubscription)
 class ShopTailorPlusSubscriptionAdmin(admin.ModelAdmin):
     list_display = ('shop', 'status', 'current_period_end', 'granted_by', 'updated_at')
     list_filter = ('status',)
     search_fields = ('shop__shop_name', 'shop__owner__phone', 'admin_notes')
     autocomplete_fields = ('shop', 'granted_by')
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(BusinessOwnerPlusSubscription)
+class BusinessOwnerPlusSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ('business', 'status', 'current_period_end', 'granted_by', 'updated_at')
+    list_filter = ('status',)
+    search_fields = ('business__name', 'business__owner__phone', 'admin_notes')
+    autocomplete_fields = ('business', 'granted_by')
     readonly_fields = ('created_at', 'updated_at')
 

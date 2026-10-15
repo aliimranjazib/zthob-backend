@@ -162,6 +162,9 @@ class OwnerShopCreateSerializer(serializers.ModelSerializer):
         service_areas_id = validated_data.pop('service_areas', None)
         owner = self.context['owner']
         stub = _find_empty_owner_stub(owner)
+        from apps.tailors.services.plans.owner_limits import assert_can_create_shop
+
+        assert_can_create_shop(owner=owner, creating_new_named_shop=stub is None)
         if stub is not None:
             for field, value in validated_data.items():
                 setattr(stub, field, value)

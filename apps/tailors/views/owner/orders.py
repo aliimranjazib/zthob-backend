@@ -198,6 +198,28 @@ class OwnerReportsView(BaseTailorAPIView):
                     message=str(exc),
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
+        else:
+            from apps.tailors.services.plans.owner_limits import (
+                OwnerPlanLimitError,
+                validate_report_period_for_owner,
+            )
+            from apps.tailors.services.plus_api_errors import owner_plan_limit_api_response
+
+            try:
+                validate_report_period_for_owner(
+                    request.user,
+                    period=period,
+                    from_date=from_date,
+                    to_date=to_date,
+                )
+            except OwnerPlanLimitError as exc:
+                return owner_plan_limit_api_response(exc, request=request)
+            except ValueError as exc:
+                return api_response(
+                    success=False,
+                    message=str(exc),
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
 
         try:
             payload = build_owner_reports(
