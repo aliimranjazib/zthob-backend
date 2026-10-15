@@ -96,7 +96,14 @@ class OwnerShopListCreateView(BaseTailorAPIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        shop = serializer.save()
+        from apps.tailors.services.plans.owner_limits import OwnerPlanLimitError
+        from apps.tailors.services.plus_api_errors import owner_plan_limit_api_response
+
+        try:
+            shop = serializer.save()
+        except OwnerPlanLimitError as exc:
+            return owner_plan_limit_api_response(exc, request=request)
+
         shop = TailorProfile.objects.select_related('review').get(id=shop.id)
         response_serializer = OwnerShopSerializer(
             shop,

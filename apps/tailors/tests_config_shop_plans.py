@@ -19,12 +19,10 @@ class TailorConfigShopPlansTest(TestCase):
             password='pass',
             role='TAILOR',
         )
-        self.shop = TailorProfile.objects.create(
-            owner=self.owner,
-            user=self.owner,
-            shop_name='Config Plans Shop',
-            shop_status=True,
-        )
+        self.shop = self.owner.tailor_profile
+        self.shop.shop_name = 'Config Plans Shop'
+        self.shop.shop_status = True
+        self.shop.save(update_fields=['shop_name', 'shop_status'])
         self.client.force_authenticate(user=self.owner)
 
     def test_anonymous_config_includes_free_tailor_plus_and_shop_plans(self):
@@ -45,6 +43,9 @@ class TailorConfigShopPlansTest(TestCase):
         self.assertEqual(len(plus_plan['features']), 6)
         self.assertEqual(free_plan['features'][0]['key'], 'shop_created_fabrics')
         self.assertIn('30', free_plan['features'][0]['text'])
+        self.assertIn('owner_plans', data)
+        self.assertIn('owner_plus', data)
+        self.assertEqual(len(data['owner_plans']['plans']), 2)
 
     def test_authenticated_free_shop_config(self):
         response = self.client.get('/api/tailors/config/')

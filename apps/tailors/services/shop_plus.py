@@ -40,16 +40,36 @@ def get_shop_plus_subscription(shop: TailorProfile | int | None) -> ShopTailorPl
         return None
 
 
-def is_shop_plus_active(shop: TailorProfile | int | None) -> bool:
+def _shop_has_direct_plus_active(shop: TailorProfile | int | None) -> bool:
     subscription = get_shop_plus_subscription(shop)
     if subscription is None:
         return False
     return subscription.is_active_at()
 
 
+def resolve_shop_plus_source(shop: TailorProfile | int | None) -> str:
+    """Return plus_source: shop, owner_bundle, or none."""
+    if shop is None:
+        return 'none'
+    if _shop_has_direct_plus_active(shop):
+        return 'shop'
+    from apps.tailors.services.plans.owner_plus import is_owner_plus_active_for_shop
+
+    if is_owner_plus_active_for_shop(shop):
+        return 'owner_bundle'
+    return 'none'
+
+
+def is_shop_plus_active(shop: TailorProfile | int | None) -> bool:
+    return resolve_shop_plus_source(shop) != 'none'
+
+
 def serialize_shop_tailor_plus(shop: TailorProfile | int | None) -> dict:
     subscription = get_shop_plus_subscription(shop)
-    if subscription is None or not subscription.is_active_at():
+    plus_source = resolve_shop_plus_source(shop)
+    shop_subscription_active = _shop_has_direct_plus_active(shop)
+
+    if plus_source == 'none':
         return {
             'is_active': False,
             'tier': 'free',
@@ -59,6 +79,8 @@ def serialize_shop_tailor_plus(shop: TailorProfile | int | None) -> dict:
                 if subscription and subscription.current_period_end
                 else None
             ),
+            'plus_source': 'none',
+            'shop_subscription_active': False,
             'limits': {
                 'owner_catalog_fabrics_per_shop': FREE_FABRIC_LIMIT_PER_BUCKET,
                 'shop_created_fabrics_per_shop': FREE_FABRIC_LIMIT_PER_BUCKET,
@@ -66,15 +88,38 @@ def serialize_shop_tailor_plus(shop: TailorProfile | int | None) -> dict:
                 'analytics_days': sorted(FREE_ANALYTICS_DAYS),
             },
         }
+
+    owner_sub = None
+    if plus_source == 'owner_bundle':
+        from apps.tailors.services.plans.owner_plus import get_owner_plus_subscription
+
+        if shop is not None:
+            shop_obj = shop if isinstance(shop, TailorProfile) else TailorProfile.objects.filter(id=shop).first()
+            if shop_obj is not None:
+                from apps.tailors.models import Business
+
+                business = Business.objects.filter(
+                    owner_id=shop_obj.owner_id,
+                    is_active=True,
+                ).first()
+                owner_sub = get_owner_plus_subscription(business)
+
+    status = subscription.status if shop_subscription_active and subscription else (
+        owner_sub.status if owner_sub else 'active'
+    )
+    period_end = None
+    if shop_subscription_active and subscription and subscription.current_period_end:
+        period_end = subscription.current_period_end.isoformat()
+    elif owner_sub and owner_sub.current_period_end:
+        period_end = owner_sub.current_period_end.isoformat()
+
     return {
         'is_active': True,
         'tier': 'plus',
-        'status': subscription.status,
-        'current_period_end': (
-            subscription.current_period_end.isoformat()
-            if subscription.current_period_end
-            else None
-        ),
+        'status': status,
+        'current_period_end': period_end,
+        'plus_source': plus_source,
+        'shop_subscription_active': shop_subscription_active,
         'limits': {
             'owner_catalog_fabrics_per_shop': None,
             'shop_created_fabrics_per_shop': None,
