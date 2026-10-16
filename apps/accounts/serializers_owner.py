@@ -2,6 +2,7 @@
 
 from rest_framework import serializers
 
+from apps.accounts.appearance import appearance_for_user, apply_appearance_update, normalize_appearance
 from apps.accounts.models import CustomUser
 from apps.core.phone_utils import display_user_label, format_phone_for_display
 from zthob.languages import SUPPORTED_LANGUAGES
@@ -22,11 +23,18 @@ class OwnerProfileSerializer(serializers.ModelSerializer):
             'last_name',
             'full_name',
             'language',
+            'appearance',
+            'appearance_updated_at',
             'date_of_birth',
             'role',
             'date_joined',
         ]
         read_only_fields = fields
+
+    appearance = serializers.SerializerMethodField()
+
+    def get_appearance(self, user):
+        return appearance_for_user(user)
 
     def get_phone(self, user):
         return format_phone_for_display(user.phone)
@@ -52,6 +60,7 @@ class OwnerProfileUpdateSerializer(serializers.ModelSerializer):
             'last_name',
             'name',
             'language',
+            'appearance',
             'date_of_birth',
         ]
         extra_kwargs = {
@@ -68,7 +77,18 @@ class OwnerProfileUpdateSerializer(serializers.ModelSerializer):
             )
         return value
 
+    appearance = serializers.JSONField(required=False)
+
     def validate(self, attrs):
+        appearance = attrs.get('appearance')
+        if appearance is not None:
+            base = appearance_for_user(self.instance)
+            merged = {**base, **appearance}
+            try:
+                attrs['appearance'] = normalize_appearance(merged)
+            except ValueError as exc:
+                raise serializers.ValidationError({'appearance': str(exc)}) from exc
+
         name = attrs.pop('name', None)
         if name is not None:
             cleaned = name.strip()
@@ -82,10 +102,14 @@ class OwnerProfileUpdateSerializer(serializers.ModelSerializer):
         return attrs
 
     def update(self, instance, validated_data):
+        appearance = validated_data.pop('appearance', None)
         update_fields = []
         for field, value in validated_data.items():
             setattr(instance, field, value)
             update_fields.append(field)
+        if appearance is not None:
+            apply_appearance_update(instance, appearance)
+            update_fields.extend(['appearance', 'appearance_updated_at'])
         if update_fields:
             instance.save(update_fields=update_fields)
         return instance

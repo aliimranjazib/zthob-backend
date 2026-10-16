@@ -232,6 +232,18 @@ class V2ProfileView(APIView):
             user.last_name = parts[1] if len(parts) > 1 else ''
         if 'language' in serializer.validated_data:
             user.language = serializer.validated_data['language']
+        if 'appearance' in serializer.validated_data:
+            from apps.accounts.appearance import (
+                appearance_for_user,
+                apply_appearance_update,
+                normalize_appearance,
+            )
+
+            merged = {
+                **appearance_for_user(user),
+                **serializer.validated_data['appearance'],
+            }
+            apply_appearance_update(user, normalize_appearance(merged))
         user.save()
         return api_response(
             success=True,
