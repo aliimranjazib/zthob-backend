@@ -89,10 +89,17 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         
 from zthob.languages import SUPPORTED_LANGUAGES
 
+from apps.accounts.appearance import (
+    appearance_for_user,
+    apply_appearance_update,
+    normalize_appearance,
+)
+
 
 class UserProfileSerializer(serializers.ModelSerializer):
     tailor_context = serializers.SerializerMethodField()
     phone = serializers.SerializerMethodField()
+    appearance = serializers.JSONField(required=False)
 
     class Meta:
         model=CustomUser
@@ -105,6 +112,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'first_name',
             'last_name',
             'language',
+            'appearance',
+            'appearance_updated_at',
             'date_of_birth',
             'date_joined',
             'tailor_context',
@@ -124,12 +133,37 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'is_rider',
             'phone',
             'date_joined',
+            'appearance_updated_at',
         ]
 
     all_roles = serializers.ReadOnlyField(source='get_all_roles')
 
     def get_phone(self, user):
         return format_phone_for_display(user.phone)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['appearance'] = appearance_for_user(instance)
+        return data
+
+    def validate(self, attrs):
+        appearance = attrs.get('appearance')
+        if appearance is not None:
+            base = appearance_for_user(self.instance) if self.instance else None
+            merged = {**(base or {}), **appearance}
+            try:
+                attrs['appearance'] = normalize_appearance(merged)
+            except ValueError as exc:
+                raise serializers.ValidationError({'appearance': str(exc)}) from exc
+        return attrs
+
+    def update(self, instance, validated_data):
+        appearance = validated_data.pop('appearance', None)
+        instance = super().update(instance, validated_data)
+        if appearance is not None:
+            apply_appearance_update(instance, appearance)
+            instance.save(update_fields=['appearance', 'appearance_updated_at'])
+        return instance
 
     def validate_language(self, value):
         if value not in SUPPORTED_LANGUAGES:

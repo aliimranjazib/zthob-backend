@@ -22,7 +22,17 @@ class CustomUser(AbstractUser):
         ('ur', 'Urdu'),
     )
     language = models.CharField(max_length=2, choices=LANGUAGE_CHOICES, default='ar')
-    
+    appearance = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Owner app theme (mode, preset, seed color); synced across devices.',
+    )
+    appearance_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Last time appearance preferences were saved.',
+    )
+
     @property
     def is_customer(self):
         """Check if user has a customer profile or USER role"""

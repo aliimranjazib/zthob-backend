@@ -901,3 +901,112 @@ class V2StaffShopFabricAccessTests(V2FabricCatalogTests):
             self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id),
         )
         self.assertEqual(list_resp.status_code, status.HTTP_403_FORBIDDEN, list_resp.data)
+
+    def test_owner_and_shop_fabric_insights_stay_separate(self):
+        from apps.tailors.models import FabricCountry
+
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+        japan = FabricCountry.objects.get(code='JP')
+
+        premium = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Premium Cotton',
+                'price': '180.00',
+                'category_id': self.fabric_category.id,
+                'country_id': japan.id,
+                'seasons': 'all_season',
+            },
+            format='json',
+        )
+        self.assertEqual(premium.status_code, status.HTTP_201_CREATED, premium.data)
+        premium_id = premium.data['data']['id']
+
+        budget = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Budget Cotton',
+                'price': '40.00',
+                'category_id': self.fabric_category.id,
+                'seasons': 'summer',
+            },
+            format='json',
+        )
+        self.assertEqual(budget.status_code, status.HTTP_201_CREATED, budget.data)
+
+        assign = self.client.post(
+            self._url('fabrics_v2:v2-fabric-product-assign', product_id=premium_id),
+            {'shop_id': shop_id, 'stock': 10, 'is_visible': True},
+            format='json',
+        )
+        self.assertEqual(assign.status_code, status.HTTP_200_OK, assign.data)
+        legacy_fabric_id = assign.data['data']['legacy_fabric_id']
+
+        shop_only = self.client.post(
+            self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id),
+            {
+                'name': 'Shop Only Wool',
+                'price': '20.00',
+                'stock': 4,
+                'category_id': self.fabric_category.id,
+            },
+            format='json',
+        )
+        self.assertEqual(shop_only.status_code, status.HTTP_201_CREATED, shop_only.data)
+        self._create_customer_order(shop_id=shop_id, fabric_id=legacy_fabric_id)
+
+        self._auth(owner_token)
+        owner_insights = self.client.get(self._url('fabrics_v2:v2-owner-fabric-insights'))
+        self.assertEqual(owner_insights.status_code, status.HTTP_200_OK, owner_insights.data)
+        owner_data = owner_insights.data['data']
+        owner_names = {row['name'] for row in owner_data['fabrics']}
+        self.assertEqual(owner_names, {'Premium Cotton', 'Budget Cotton'})
+        self.assertEqual(owner_data['sales_summary']['units_sold'], 1)
+        self.assertEqual(owner_data['rankings']['best_sellers'][0]['name'], 'Premium Cotton')
+        self.assertEqual(owner_data['rankings']['highest_price'][0]['name'], 'Premium Cotton')
+        self.assertEqual(owner_data['rankings']['lowest_price'][0]['name'], 'Budget Cotton')
+        japan_row = next(row for row in owner_data['breakdowns']['by_country'] if row['key'] == 'JP')
+        self.assertEqual(japan_row['units_sold'], 1)
+        self.assertEqual(owner_data['network_stock']['skus_unassigned'], 1)
+        self.assertEqual(owner_data['assignments']['by_shop'][0]['owner_fabric_count'], 1)
+
+        long_range = self.client.get(
+            self._url('fabrics_v2:v2-owner-fabric-insights'),
+            {'days': 30},
+        )
+        self.assertEqual(long_range.status_code, status.HTTP_403_FORBIDDEN, long_range.data)
+
+        price_order = self.client.get(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {'sort': 'price_asc'},
+        )
+        self.assertEqual(price_order.status_code, status.HTTP_200_OK, price_order.data)
+        self.assertEqual(
+            [item['name'] for item in price_order.data['data']],
+            ['Budget Cotton', 'Premium Cotton'],
+        )
+
+        shop_insights = self.client.get(
+            self._url('fabrics_v2:v2-shop-fabric-insights', shop_id=shop_id),
+        )
+        self.assertEqual(shop_insights.status_code, status.HTTP_200_OK, shop_insights.data)
+        shop_data = shop_insights.data['data']
+        self.assertEqual(shop_data['shelf']['all']['sku_count'], 2)
+        self.assertEqual(shop_data['shelf']['from_owner']['sku_count'], 1)
+        self.assertEqual(shop_data['shelf']['from_owner']['units_sold'], 1)
+        self.assertEqual(shop_data['shelf']['shop_own']['sku_count'], 1)
+        self.assertEqual(shop_data['shelf']['shop_own']['units_sold'], 0)
+        self.assertEqual(shop_data['rankings']['shop_own']['lowest_price'][0]['name'], 'Shop Only Wool')
+        self.assertEqual(shop_data['breakdowns']['all']['by_source'][0]['key'] in ('from_owner', 'shop_own'), True)
+        sources = {row['source'] for row in shop_data['fabrics']}
+        self.assertEqual(sources, {'from_owner', 'shop_own'})
+
+        own_only = self.client.get(
+            self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id),
+            {'source': 'shop_own', 'sort': 'price_asc'},
+        )
+        self.assertEqual(own_only.status_code, status.HTTP_200_OK, own_only.data)
+        self.assertEqual(len(own_only.data['data']), 1)
+        self.assertEqual(own_only.data['data'][0]['source'], 'shop_own')
+        self.assertEqual(own_only.data['data'][0]['product']['name'], 'Shop Only Wool')

@@ -18,6 +18,7 @@ from apps.accounts.services.tailor_auth import (
     resolve_shop_session,
     tokens_payload,
 )
+from apps.accounts.appearance import appearance_for_user
 from apps.tailors.models import Business, ShopStaffAssignment, TailorProfile
 from apps.tailors.models.staff import STAFF_PERMISSION_KEYS
 from apps.tailors.services.v2.business import user_has_business_console
@@ -511,6 +512,7 @@ def build_v2_verify_payload(
             'full_name': user.get_full_name() or None,
             'avatar_url': None,
             'language': getattr(user, 'language', None) or 'ar',
+            'appearance': appearance_for_user(user),
         },
         'app_entry': app_entry,
         'app_entry_source': app_entry_source,
@@ -524,13 +526,18 @@ def build_v2_verify_payload(
 def build_v2_profile_payload(user) -> dict[str, Any]:
     from apps.core.phone_utils import format_phone_for_display
 
-    return {
+    payload = {
         'id': user.id,
         'phone': format_phone_for_display(user.phone),
         'full_name': user.get_full_name() or None,
         'avatar_url': None,
         'language': getattr(user, 'language', None) or 'ar',
+        'appearance': appearance_for_user(user),
     }
+    updated = getattr(user, 'appearance_updated_at', None)
+    if updated is not None:
+        payload['appearance_updated_at'] = updated.isoformat()
+    return payload
 
 
 def switch_shop_session(user, shop_id: int, *, app_entry: str | None):

@@ -6,12 +6,14 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 
 from apps.fabrics.permissions import staff_has_fabric_permission, user_can_manage_shop_fabrics
+from apps.fabrics.serializers.v2.insights import ShopFabricListQuerySerializer
 from apps.fabrics.serializers.v2.products import (
     V2FabricProductCreateSerializer,
     V2FabricStockMovementSerializer,
     V2ShopFabricSerializer,
     V2ShopFabricUpdateSerializer,
 )
+from apps.fabrics.services.fabric_filters import filter_shop_fabrics
 from apps.fabrics.services.catalog import create_fabric_product
 from apps.fabrics.services.images import (
     parse_multipart_images,
@@ -82,7 +84,19 @@ class V2ShopFabricListView(BaseTailorAPIView):
         if error:
             return error
 
-        fabrics = shop_fabrics_queryset(shop_id=shop.id)
+        query = ShopFabricListQuerySerializer(data=request.query_params)
+        if not query.is_valid():
+            return api_response(
+                success=False,
+                message='Validation failed',
+                errors=query.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request,
+            )
+        fabrics = filter_shop_fabrics(
+            shop_fabrics_queryset(shop_id=shop.id),
+            query.validated_data,
+        )
         serializer = V2ShopFabricSerializer(
             fabrics,
             many=True,

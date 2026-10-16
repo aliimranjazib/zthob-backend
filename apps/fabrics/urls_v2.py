@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.fabrics.views.v2.analytics import V2FabricAnalyticsView
+from apps.fabrics.views.v2.insights import V2OwnerFabricInsightsView, V2ShopFabricInsightsView
 from apps.fabrics.views.v2.listings import (
     V2ShopFabricDetailView,
     V2ShopFabricListView,
@@ -66,4 +67,10 @@ urlpatterns = [
         name='v2-shop-fabric-stock-movements',
     ),
     path('analytics/fabrics/', V2FabricAnalyticsView.as_view(), name='v2-fabric-analytics'),
+    path('owner/fabrics/insights/', V2OwnerFabricInsightsView.as_view(), name='v2-owner-fabric-insights'),
+    path(
+        'shops/<int:shop_id>/fabrics/insights/',
+        V2ShopFabricInsightsView.as_view(),
+        name='v2-shop-fabric-insights',
+    ),
 ]

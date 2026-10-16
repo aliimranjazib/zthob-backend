@@ -27,6 +27,7 @@ class V2ProfileSerializer(serializers.Serializer):
         choices=[('ar', 'Arabic'), ('en', 'English')],
         required=False,
     )
+    appearance = serializers.JSONField(required=False)
 
 
 class V2SwitchShopSerializer(serializers.Serializer):
