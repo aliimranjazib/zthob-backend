@@ -193,17 +193,21 @@ class V2ShopFabricSerializer(serializers.ModelSerializer):
     legacy_fabric_id = serializers.IntegerField(read_only=True)
     effective_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     available_stock = serializers.IntegerField(read_only=True)
+    source = serializers.SerializerMethodField()
+    units_sold = serializers.SerializerMethodField()
 
     class Meta:
         model = ShopFabric
         fields = [
             'id',
             'shop_id',
+            'source',
             'product',
             'legacy_fabric_id',
             'stock',
             'reserved_stock',
             'available_stock',
+            'units_sold',
             'price_override',
             'effective_price',
             'is_visible',
@@ -212,6 +216,15 @@ class V2ShopFabricSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = ['id', 'shop_id', 'legacy_fabric_id', 'created_at', 'updated_at']
+
+    def get_source(self, obj):
+        product = getattr(obj, 'product', None)
+        if product is not None and product.show_in_owner_catalog:
+            return 'from_owner'
+        return 'shop_own'
+
+    def get_units_sold(self, obj):
+        return int(getattr(obj, 'units_sold', 0) or 0)
 
 
 class V2ShopFabricUpdateSerializer(serializers.ModelSerializer):

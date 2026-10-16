@@ -58,3 +58,18 @@ def user_can_manage_shop_fabrics(request, *, shop_id: int) -> bool:
     if staff and staff.is_active and staff.shop_id == shop_id:
         return bool(staff.can_manage_catalog)
     return False
+
+
+def user_can_view_shop_fabric_insights(request, *, shop_id: int) -> bool:
+    """Shelf insights for the shop owner, catalog staff, or analytics staff."""
+    if user_can_manage_shop_fabrics(request, shop_id=shop_id):
+        return True
+    if request.user.is_admin:
+        return True
+    staff = get_shop_staff_context_for_request(request, shop_id=shop_id)
+    return bool(
+        staff
+        and staff.is_active
+        and staff.shop_id == shop_id
+        and staff.can_view_analytics
+    )

@@ -14,6 +14,7 @@ from apps.fabrics.serializers.v2.products import (
     V2FabricProductWriteSerializer,
     V2ShopFabricSerializer,
 )
+from apps.fabrics.serializers.v2.insights import OwnerFabricListQuerySerializer
 from apps.fabrics.services.catalog import (
     create_fabric_product,
     get_owner_catalog_product_for_business,
@@ -22,6 +23,7 @@ from apps.fabrics.services.catalog import (
     sync_product_assignments_to_legacy,
     update_fabric_product,
 )
+from apps.fabrics.services.fabric_filters import filter_owner_catalog
 from apps.fabrics.services.images import (
     add_product_gallery_images,
     append_product_gallery_from_request,
@@ -98,7 +100,19 @@ class V2FabricProductListCreateView(BaseTailorAPIView):
                 status_code=status.HTTP_404_NOT_FOUND,
                 request=request,
             )
-        products = owner_catalog_products_queryset(business_id=business.id)
+        query = OwnerFabricListQuerySerializer(data=request.query_params)
+        if not query.is_valid():
+            return api_response(
+                success=False,
+                message='Validation failed',
+                errors=query.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request,
+            )
+        products = filter_owner_catalog(
+            owner_catalog_products_queryset(business_id=business.id),
+            query.validated_data,
+        )
         serializer = V2FabricProductSerializer(
             products,
             many=True,
