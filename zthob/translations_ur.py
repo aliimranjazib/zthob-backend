@@ -455,6 +455,7 @@ TRANSLATIONS_UR = {
     'Customers can reuse walk-in measurements at Plus shops (faster re-orders)': 'گاہک خیاط پلس دکانوں پر واک اِن ناپ دوبارہ استعمال کر سکتے ہیں (تیز دوبارہ آرڈر)',
     'Customers can reuse walk-in measurements (faster re-orders)': 'گاہک واک اِن ناپ دوبارہ استعمال کر سکتے ہیں (تیز دوبارہ آرڈر)',
     'Fast payout processing for eligible wallet settlements': 'اہل والیٹ سیٹلمنٹس کے لیے تیز payout پروسیسنگ',
+    'Customize App Theme': 'ایپ تھیم کی تخصیص',
     'Priority fabric review and operational support': 'کپڑوں کی ترجیحی جانچ اور آپریشنل سپورٹ',
     'Priority fabric review and support': 'کپڑوں کی ترجیحی جانچ اور سپورٹ',
     'Business plans': 'کاروبار کے پلان',

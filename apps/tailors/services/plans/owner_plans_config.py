@@ -40,10 +40,6 @@ FREE_OWNER_PLAN_FEATURES: tuple[tuple[str, str], ...] = (
         'shop_plan_default',
         'Branches use the free shop plan unless you add Tailor Plus per branch',
     ),
-    (
-        'app_theme',
-        'Customize App Theme',
-    ),
 )
 
 PLUS_OWNER_PLAN_FEATURES: tuple[tuple[str, str], ...] = (

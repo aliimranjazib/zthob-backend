@@ -589,6 +589,7 @@ TRANSLATIONS_AR = {
     "Customers can reuse walk-in measurements at Plus shops (faster re-orders)": "يمكن للعملاء إعادة استخدام مقاسات الزيارة في متاجر خياط بلس (طلبات أسرع)",
     "Customers can reuse walk-in measurements (faster re-orders)": "يمكن للعملاء إعادة استخدام مقاسات الزيارة (طلبات أسرع)",
     "Fast payout processing for eligible wallet settlements": "معالجة سريعة للمدفوعات لتسويات المحفظة المؤهلة",
+    "Customize App Theme": "تخصيص مظهر التطبيق",
     "Priority fabric review and operational support": "أولوية مراجعة الأقمشة والدعم التشغيلي",
     "Priority fabric review and support": "أولوية مراجعة الأقمشة والدعم",
     "Business plans": "خطط الأعمال",

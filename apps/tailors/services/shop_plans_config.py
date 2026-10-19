@@ -34,10 +34,6 @@ FREE_PLAN_FEATURES: tuple[tuple[str, str], ...] = (
         'walk_in_measurements_history',
         'Walk-in measurements saved in the customer app',
     ),
-    (
-        'app_theme',
-        'Customize App Theme',
-    ),
 )
 
 PLUS_PLAN_FEATURES: tuple[tuple[str, str], ...] = (

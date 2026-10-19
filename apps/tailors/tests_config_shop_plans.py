@@ -39,12 +39,16 @@ class TailorConfigShopPlansTest(TestCase):
         self.assertEqual(free_plan['tier'], 'free')
         self.assertEqual(plus_plan['tier'], 'plus')
         self.assertEqual(plus_plan['badge_key'], 'recommended')
-        self.assertEqual(len(free_plan['features']), 7)
+        self.assertEqual(len(free_plan['features']), 6)
         self.assertEqual(len(plus_plan['features']), 10)
         self.assertEqual(free_plan['features'][0]['key'], 'shop_created_fabrics')
         self.assertIn('30', free_plan['features'][0]['text'])
         self.assertEqual(free_plan['features'][2]['key'], 'fabric_inventory')
         self.assertEqual(plus_plan['features'][0]['key'], 'fabric_inventory')
+        free_keys = {f['key'] for f in free_plan['features']}
+        plus_keys = {f['key'] for f in plus_plan['features']}
+        self.assertNotIn('app_theme', free_keys)
+        self.assertIn('app_theme', plus_keys)
         self.assertIn('owner_plans', data)
         self.assertIn('owner_plus', data)
         self.assertEqual(len(data['owner_plans']['plans']), 2)
