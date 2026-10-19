@@ -8,9 +8,10 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.fabrics.models import FabricProduct
-from apps.tailors.models import Business, BusinessOwnerPlusSubscription, TailorProfile
+from apps.tailors.models import Business, BusinessOwnerPlusSubscription, TailorProfile, TailorStaffMember
 from apps.tailors.services.plans.owner_limits import (
     OwnerPlanLimitError,
+    assert_can_add_staff_member,
     assert_can_create_shop,
     validate_report_period_for_owner,
 )
@@ -74,17 +75,27 @@ class OwnerFreeLimitsTest(TestCase):
             name='Limit Biz',
             contact_phone='0500000002',
         )
-        for index in range(3):
-            TailorProfile.objects.create(
-                owner=self.owner,
-                shop_name=f'Branch {index}',
-                shop_status=True,
-                business=self.business,
-            )
+        TailorProfile.objects.create(
+            owner=self.owner,
+            shop_name='Branch 0',
+            shop_status=True,
+            business=self.business,
+        )
 
-    def test_free_owner_blocked_from_fourth_shop(self):
+    def test_free_owner_blocked_from_second_shop(self):
         with self.assertRaises(OwnerPlanLimitError):
             assert_can_create_shop(owner=self.owner, creating_new_named_shop=True)
+
+    def test_free_owner_blocked_from_fifth_staff_member(self):
+        for index in range(4):
+            user = User.objects.create_user(
+                username=f'staff_limit_{index}',
+                password='pass',
+                role='TAILOR',
+            )
+            TailorStaffMember.objects.create(owner=self.owner, user=user, is_active=True)
+        with self.assertRaises(OwnerPlanLimitError):
+            assert_can_add_staff_member(owner=self.owner, is_new_active_member=True)
 
     def test_free_owner_catalog_product_limit(self):
         from apps.tailors.services.plans.owner_limits import (
