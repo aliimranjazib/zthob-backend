@@ -18,11 +18,15 @@ FREE_OWNER_PLAN_FEATURES: tuple[tuple[str, str], ...] = (
     ),
     (
         'max_staff',
-        'Up to {max_staff} employees on your roster',
+        'Up to {max_staff} employees',
     ),
     (
         'owner_catalog',
-        'Up to {catalog_limit} fabrics in your business catalog',
+        'Business fabric catalog: up to {catalog_limit} products',
+    ),
+    (
+        'fabric_inventory',
+        'Fabric inventory and business-wide stock insights — Owner Plus',
     ),
     (
         'per_shop_fabrics',
@@ -30,11 +34,15 @@ FREE_OWNER_PLAN_FEATURES: tuple[tuple[str, str], ...] = (
     ),
     (
         'owner_reports',
-        'Business dashboard reports for {days_list}-day views',
+        'Dashboard reports: {days_list}-day views only',
     ),
     (
         'shop_plan_default',
-        'Each branch uses the free shop plan unless you upgrade with Tailor Plus',
+        'Branches use the free shop plan unless you add Tailor Plus per branch',
+    ),
+    (
+        'app_theme',
+        'Customize App Theme',
     ),
 )
 
@@ -52,12 +60,20 @@ PLUS_OWNER_PLAN_FEATURES: tuple[tuple[str, str], ...] = (
         'Unlimited fabrics in your business catalog',
     ),
     (
+        'fabric_inventory',
+        'Fabric inventory: stock, movements, and owner-level fabric insights',
+    ),
+    (
         'tailor_plus_all_branches',
-        'Tailor Plus on every branch you own — unlimited fabrics per shop, full analytics and report periods, custom measurement fields, walk-in measurement reuse',
+        'Tailor Plus on every branch you own (full shop benefits without separate upgrades)',
     ),
     (
         'owner_reports',
-        'Full business reports on all branches (all standard periods)',
+        'Full dashboard reports on all branches',
+    ),
+    (
+        'app_theme',
+        'Customize App Theme',
     ),
     (
         'priority_support',
@@ -75,7 +91,7 @@ def build_owner_plans_config(*, language: str, current_tier: str, translate) -> 
 
     return {
         'title': translate('Business plans', language),
-        'subtitle': translate("Tap a plan to see what's included", language),
+        'subtitle': translate("Compare plans and see what's included", language),
         'whats_included_heading': translate("What's included", language),
         'current_tier': current_tier,
         'badge_labels': {

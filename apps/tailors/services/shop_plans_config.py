@@ -12,50 +12,74 @@ from apps.tailors.services.shop_plus import (
 FREE_PLAN_FEATURES: tuple[tuple[str, str], ...] = (
     (
         'shop_created_fabrics',
-        'Add up to {limit} fabrics in the shop',
+        'Shop fabric catalog: up to {limit} fabrics you add',
     ),
     (
         'owner_catalog_fabrics',
-        'Owner can assign up to {limit} fabrics to the shop',
+        'Owner-assigned catalog fabrics: up to {limit} per shop',
+    ),
+    (
+        'fabric_inventory',
+        'Fabric inventory and stock tracking — Tailor Plus',
     ),
     (
         'analytics_days',
-        'Earnings analytics for {days_list} only',
+        'Earnings analytics: {days_list} only',
     ),
     (
         'owner_reports',
-        'Owner reports: today, yesterday, or custom range up to {max_days} days (per branch)',
+        'Branch reports: today, yesterday, or up to {max_days} days custom',
     ),
     (
         'walk_in_measurements_history',
-        'Walk-in measurements saved in customer app history',
+        'Walk-in measurements saved in the customer app',
+    ),
+    (
+        'app_theme',
+        'Customize App Theme',
     ),
 )
 
 PLUS_PLAN_FEATURES: tuple[tuple[str, str], ...] = (
     (
+        'fabric_inventory',
+        'Fabric inventory: stock, sales, movements, and shop insights',
+    ),
+    (
         'shop_created_fabrics',
-        'Add unlimited fabrics in the shop',
+        'Unlimited shop-added fabrics',
     ),
     (
         'owner_catalog_fabrics',
-        'Owner can assign unlimited fabrics to the shop',
+        'Unlimited owner-assigned fabrics per shop',
+    ),
+    (
+        'custom_measurement_fields',
+        'Custom measurement fields for your shop',
     ),
     (
         'analytics_days',
-        'Earnings analytics for {days_list}',
+        'Full earnings analytics: {days_list}',
     ),
     (
         'owner_reports',
-        'All owner report periods for each branch',
+        'All report periods for every branch',
     ),
     (
         'walk_in_measurements_reuse',
-        'Customers can reuse walk-in measurements at Plus shops (faster re-orders)',
+        'Customers can reuse walk-in measurements (faster re-orders)',
+    ),
+    (
+        'fast_payout',
+        'Fast payout processing for eligible wallet settlements',
+    ),
+    (
+        'app_theme',
+        'Customize App Theme',
     ),
     (
         'priority_support',
-        'Priority fabric review and operational support',
+        'Priority fabric review and support',
     ),
 )
 
@@ -98,7 +122,7 @@ def build_shop_plans_config(*, language: str, current_tier: str, translate) -> d
 
     return {
         'title': translate('Shop plans', language),
-        'subtitle': translate("Tap a plan to see what's included", language),
+        'subtitle': translate("Compare plans and see what's included", language),
         'whats_included_heading': translate("What's included", language),
         'current_tier': current_tier,
         'badge_labels': {
