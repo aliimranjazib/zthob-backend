@@ -2,86 +2,118 @@
 
 from __future__ import annotations
 
-from apps.tailors.services.shop_plus import (
-    FREE_ANALYTICS_DAYS,
-    FREE_FABRIC_LIMIT_PER_BUCKET,
-    FREE_REPORT_MAX_DAYS,
-    PLUS_ANALYTICS_DAYS,
-)
-
 FREE_PLAN_FEATURES: tuple[tuple[str, str], ...] = (
     (
-        'shop_created_fabrics',
-        'Shop fabric catalog: up to {limit} fabrics you add',
+        'store_setup',
+        'Open and set up a store through our sales platform',
     ),
     (
-        'owner_catalog_fabrics',
-        'Owner-assigned catalog fabrics: up to {limit} per shop',
+        'add_products',
+        'Add products',
     ),
     (
-        'fabric_inventory',
-        'Fabric inventory and stock tracking — Tailor Plus',
+        'app_orders',
+        'Receive and manage app orders',
     ),
     (
-        'analytics_days',
-        'Earnings analytics: {days_list} only',
+        'app_measurements',
+        'Measurements for app orders',
     ),
     (
-        'owner_reports',
-        'Branch reports: today, yesterday, or up to {max_days} days custom',
+        'choose_driver',
+        'Choose a driver for orders',
     ),
     (
-        'walk_in_measurements_history',
-        'Walk-in measurements saved in the customer app',
+        'weekly_payouts',
+        'Online sales paid out every week',
+    ),
+    (
+        'dashboard',
+        'Basic dashboard',
+    ),
+    (
+        'delivery',
+        'Delivery and measurements managed by the tailor',
     ),
 )
 
 PLUS_PLAN_FEATURES: tuple[tuple[str, str], ...] = (
     (
+        'walk_in_orders',
+        'Add in-store orders and walk-in customers',
+    ),
+    (
+        'crm',
+        'Customer management (CRM)',
+    ),
+    (
+        'order_stages',
+        'Order stages: measuring, cutting, sewing, fitting, ready, delivered',
+    ),
+    (
         'fabric_inventory',
-        'Fabric inventory: stock, sales, movements, and shop insights',
+        'Inventory management',
     ),
     (
-        'shop_created_fabrics',
-        'Unlimited shop-added fabrics',
+        'shop_only_products',
+        'Shop-only products',
     ),
     (
-        'owner_catalog_fabrics',
-        'Unlimited owner-assigned fabrics per shop',
+        'shop_only_measurements',
+        'Shop-only measurements',
     ),
     (
         'custom_measurement_fields',
-        'Custom measurement fields for your shop',
+        'Customisable measurement sheet (PDF)',
     ),
     (
-        'analytics_days',
-        'Full earnings analytics: {days_list}',
+        'dashboard',
+        'Full dashboard',
     ),
     (
-        'owner_reports',
-        'All report periods for every branch',
+        'customer_reports',
+        'Customer reports',
     ),
     (
-        'walk_in_measurements_reuse',
-        'Customers can reuse walk-in measurements (faster re-orders)',
-    ),
-    (
-        'fast_payout',
-        'Fast payout processing for eligible wallet settlements',
+        'whatsapp_messages',
+        'Custom WhatsApp messages to your customers',
     ),
     (
         'app_theme',
-        'Customize App Theme',
+        "Custom design for your store's branding and storefront",
+    ),
+    (
+        'lower_commission',
+        'Lower commission on platform orders',
     ),
     (
         'priority_support',
-        'Priority fabric review and support',
+        'Advanced technical support with higher priority',
+    ),
+    (
+        'payment_gateway_addon',
+        'Dedicated payment gateway (add-on)',
+    ),
+    (
+        'mgask_delivery_addon',
+        'Delivery and measurement-taking by Mgask (as agreed)',
     ),
 )
 
-
-def _format_days_list(days: frozenset[int]) -> str:
-    return ', '.join(str(day) for day in sorted(days))
+OWNER_ONLY_FEATURE_KEYS = frozenset({
+    'max_shops',
+    'max_staff',
+    'unlimited_shops',
+    'unlimited_staff',
+    'owner_dashboard',
+    'branch_comparison',
+    'daily_reports',
+    'account_statements',
+    'smart_analytics',
+    'onboarding',
+    'owner_fabrics',
+    'tailor_plus_all_branches',
+})
 
 
 def _translate_features(
@@ -109,10 +141,6 @@ def build_shop_plans_config(*, language: str, current_tier: str, translate) -> d
 
     ``current_tier`` is ``free`` or ``plus`` (from serialize_shop_tailor_plus).
     """
-    limit = FREE_FABRIC_LIMIT_PER_BUCKET
-    free_days = _format_days_list(FREE_ANALYTICS_DAYS)
-    plus_days = _format_days_list(PLUS_ANALYTICS_DAYS)
-
     if current_tier not in ('free', 'plus'):
         current_tier = 'free'
 
@@ -134,11 +162,6 @@ def build_shop_plans_config(*, language: str, current_tier: str, translate) -> d
                     FREE_PLAN_FEATURES,
                     language=language,
                     translate=translate,
-                    format_kwargs={
-                        'limit': limit,
-                        'days_list': free_days,
-                        'max_days': FREE_REPORT_MAX_DAYS,
-                    },
                 ),
             },
             {
@@ -149,7 +172,6 @@ def build_shop_plans_config(*, language: str, current_tier: str, translate) -> d
                     PLUS_PLAN_FEATURES,
                     language=language,
                     translate=translate,
-                    format_kwargs={'days_list': plus_days},
                 ),
             },
         ],
