@@ -573,4 +573,9 @@ TRANSLATIONS_UR = {
     'Owner Plus is required for smart analytics.': 'اسمارٹ analytics کے لیے مالک پلس درکار ہے۔',
     'Owner Plus is required for fabric inventory management.': 'کپڑے کی انوینٹری مینجمنٹ کے لیے مالک پلس درکار ہے۔',
     'Owner Plus is required to customize store branding.': 'دکان کی برانڈنگ تبدیل کرنے کے لیے مالک پلس درکار ہے۔',
+    '3,200 SAR / year': '3,200 ریال / سالانہ',
+    'excl. VAT – about SAR 267 a month': 'ویٹ شامل نہیں — تقریباً 267 ریال ماہانہ',
+    'Run your shop with us': 'اپنی دکان ہمارے ساتھ چلائیں',
+    'The subscription is annual and renews after we notify you, and you are entitled to a full refund within 7 days of activation.': 'سبسکرپشن سالانہ ہے اور اطلاع کے بعد تجدید ہوتی ہے، اور فعال کرنے کے 7 دن کے اندر مکمل رقم واپس مل سکتی ہے۔',
+    'Free': 'مفت',
 }

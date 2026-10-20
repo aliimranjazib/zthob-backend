@@ -707,6 +707,11 @@ TRANSLATIONS_AR = {
     "Owner Plus is required for smart analytics.": "يتطلب مالك بلس للتحليلات الذكية.",
     "Owner Plus is required for fabric inventory management.": "يتطلب مالك بلس لإدارة مخزون الأقمشة.",
     "Owner Plus is required to customize store branding.": "يتطلب مالك بلس لتخصيص هوية المتجر.",
+    "3,200 SAR / year": "3,200 ريال / سنوياً",
+    "excl. VAT – about SAR 267 a month": "غير شامل ضريبة القيمة المضافة – يعني حوالي 267 ريال شهرياً",
+    "Run your shop with us": "أدر محلك معنا",
+    "The subscription is annual and renews after we notify you, and you are entitled to a full refund within 7 days of activation.": "الاشتراك سنوي ويُجدد بعد إشعارك، ويحق لك الاسترداد الكامل خلال 7 أيام من التفعيل.",
+    "Free": "مجاناً",
 }
 
 TRANSLATIONS = TRANSLATIONS_AR

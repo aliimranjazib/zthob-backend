@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from apps.tailors.services.plans.pricing import build_free_price, build_plus_price
+
 FREE_PLAN_FEATURES: tuple[tuple[str, str], ...] = (
     (
         'store_setup',
@@ -158,6 +160,7 @@ def build_shop_plans_config(*, language: str, current_tier: str, translate) -> d
                 'tier': 'free',
                 'name': translate('Free plan', language),
                 'badge_key': None,
+                'price': build_free_price(language=language, translate=translate),
                 'features': _translate_features(
                     FREE_PLAN_FEATURES,
                     language=language,
@@ -168,6 +171,7 @@ def build_shop_plans_config(*, language: str, current_tier: str, translate) -> d
                 'tier': 'plus',
                 'name': translate('Tailor Plus', language),
                 'badge_key': 'recommended',
+                'price': build_plus_price(language=language, translate=translate),
                 'features': _translate_features(
                     PLUS_PLAN_FEATURES,
                     language=language,
