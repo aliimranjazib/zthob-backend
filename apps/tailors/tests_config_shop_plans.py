@@ -167,6 +167,19 @@ class TailorConfigShopPlansTest(TestCase):
         self.assertEqual(data['shop_plans']['current_tier'], 'free')
         self.assertIsNone(data['tailor_plus']['limits']['owner_catalog_fabrics_per_shop'])
 
+    def test_upgrade_label_stays_arabic_when_client_sends_english_header(self):
+        self.owner.language = 'ar'
+        self.owner.save(update_fields=['language'])
+        response = self.client.get(
+            '/api/tailors/config/',
+            HTTP_ACCEPT_LANGUAGE='en',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data['data']['tailor_plus']['upgrade_label'],
+            'الترقية إلى خياط بلس',
+        )
+
     def test_authenticated_plus_shop_config(self):
         ShopTailorPlusSubscription.objects.create(
             shop=self.shop,
@@ -201,6 +214,14 @@ class TailorConfigShopPlansTest(TestCase):
             'التوصيل والمقاسات يديرها الخياط',
         )
         self.assertEqual(owner_plus['name'], 'مالك بلس')
+        self.assertEqual(
+            response.data['data']['tailor_plus']['upgrade_label'],
+            'الترقية إلى خياط بلس',
+        )
+        self.assertEqual(
+            response.data['data']['owner_plus']['upgrade_label'],
+            'الترقية إلى مالك بلس',
+        )
         self.assertEqual(shop_plus['price']['label'], '3,200 ريال / سنوياً')
         self.assertEqual(
             shop_plus['price']['vat_note'],

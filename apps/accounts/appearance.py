@@ -81,8 +81,36 @@ def normalize_appearance(raw: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def user_can_use_custom_theme(user) -> bool:
+    """True while Owner Plus or Tailor Plus is active for this account."""
+    from apps.tailors.models import TailorProfile
+    from apps.tailors.services.plans.owner_plus import is_owner_plus_active
+    from apps.tailors.services.shop_plus import is_shop_plus_active
+
+    if user is None or not getattr(user, 'id', None):
+        return False
+    if is_owner_plus_active(owner=user):
+        return True
+    shop = getattr(user, 'tailor_profile', None)
+    if is_shop_plus_active(shop):
+        return True
+    owned_shop_ids = (
+        TailorProfile.objects.filter(owner=user)
+        .exclude(shop_name__isnull=True)
+        .exclude(shop_name='')
+        .values_list('id', flat=True)
+    )
+    return any(is_shop_plus_active(shop_id) for shop_id in owned_shop_ids)
+
+
 def appearance_for_user(user) -> dict[str, Any]:
-    """Resolved appearance for API responses."""
+    """Resolved appearance for API responses.
+
+    Custom theme is only returned while Tailor Plus or Owner Plus is active.
+    Saved colors stay on the user and come back if Plus is restored.
+    """
+    if not user_can_use_custom_theme(user):
+        return deepcopy(DEFAULT_APPEARANCE)
     stored = getattr(user, 'appearance', None) or {}
     if not stored:
         return deepcopy(DEFAULT_APPEARANCE)
@@ -102,16 +130,12 @@ def apply_appearance_update(user, raw: dict[str, Any]) -> None:
 
 def _assert_can_update_app_theme(user) -> None:
     """Theme save is promised on Tailor Plus and Owner Plus only."""
+    if user_can_use_custom_theme(user):
+        return
     from apps.tailors.models import TailorProfile
     from apps.tailors.services.plans.owner_limits import OwnerPlanLimitError
-    from apps.tailors.services.plans.owner_plus import is_owner_plus_active
-    from apps.tailors.services.shop_plus import TailorPlusLimitError, is_shop_plus_active
+    from apps.tailors.services.shop_plus import TailorPlusLimitError
 
-    if is_owner_plus_active(owner=user):
-        return
-    shop = getattr(user, 'tailor_profile', None)
-    if is_shop_plus_active(shop):
-        return
     owns_shop = (
         TailorProfile.objects.filter(owner=user)
         .exclude(shop_name__isnull=True)

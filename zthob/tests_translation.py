@@ -88,6 +88,36 @@ class LanguageDetectionTests(TestCase):
         language = get_language_from_request(request)
         self.assertEqual(language, 'ur')
 
+    def test_authenticated_user_language_beats_english_accept_header(self):
+        from django.contrib.auth import get_user_model
+
+        user = get_user_model().objects.create_user(
+            username='lang_ar_user',
+            password='pass',
+            language='ar',
+        )
+        request = self.factory.get('/api/test/')
+        request.user = user
+        request.META['HTTP_ACCEPT_LANGUAGE'] = 'en'
+
+        language = get_language_from_request(request)
+        self.assertEqual(language, 'ar')
+
+    def test_explicit_urdu_header_still_overrides_arabic_user(self):
+        from django.contrib.auth import get_user_model
+
+        user = get_user_model().objects.create_user(
+            username='lang_ur_header_user',
+            password='pass',
+            language='ar',
+        )
+        request = self.factory.get('/api/test/')
+        request.user = user
+        request.META['HTTP_ACCEPT_LANGUAGE'] = 'ur'
+
+        language = get_language_from_request(request)
+        self.assertEqual(language, 'ur')
+
 
 class MessageTranslationTests(TestCase):
     """Test message translation functionality"""
