@@ -138,6 +138,10 @@ class V2FabricCatalogTests(TestCase):
         )
         self.assertEqual(shop_resp.status_code, status.HTTP_201_CREATED, shop_resp.data)
         shop_id = shop_resp.data['data']['id']
+        from apps.tailors.models import TailorProfile
+        from apps.tailors.tests_plus_helpers import grant_shop_plus
+
+        grant_shop_plus(TailorProfile.objects.get(id=shop_id))
 
         switch = self.client.post(
             self._url('accounts_v2:v2-switch-shop'),
@@ -957,6 +961,15 @@ class V2StaffShopFabricAccessTests(V2FabricCatalogTests):
         self._create_customer_order(shop_id=shop_id, fabric_id=legacy_fabric_id)
 
         self._auth(owner_token)
+        blocked_insights = self.client.get(self._url('fabrics_v2:v2-owner-fabric-insights'))
+        self.assertEqual(blocked_insights.status_code, status.HTTP_403_FORBIDDEN, blocked_insights.data)
+        self.assertEqual(blocked_insights.data['data']['entitlement'], 'fabric_inventory')
+
+        from apps.tailors.models import TailorProfile
+        from apps.tailors.tests_plus_helpers import grant_owner_plus
+
+        grant_owner_plus(TailorProfile.objects.get(id=shop_id).business)
+
         owner_insights = self.client.get(self._url('fabrics_v2:v2-owner-fabric-insights'))
         self.assertEqual(owner_insights.status_code, status.HTTP_200_OK, owner_insights.data)
         owner_data = owner_insights.data['data']
@@ -975,7 +988,7 @@ class V2StaffShopFabricAccessTests(V2FabricCatalogTests):
             self._url('fabrics_v2:v2-owner-fabric-insights'),
             {'days': 30},
         )
-        self.assertEqual(long_range.status_code, status.HTTP_403_FORBIDDEN, long_range.data)
+        self.assertEqual(long_range.status_code, status.HTTP_200_OK, long_range.data)
 
         price_order = self.client.get(
             self._url('fabrics_v2:v2-fabric-products'),

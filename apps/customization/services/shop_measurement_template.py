@@ -248,7 +248,7 @@ def replace_shop_measurement_schema(
 
         raise TailorPlusLimitError(
             'Tailor Plus is required to customize measurement fields for this shop.',
-            entitlement='measurement_template_custom',
+            entitlement='custom_measurement_fields',
         )
 
     if len(fields_data) > MAX_SHOP_MEASUREMENT_FIELDS:
@@ -365,7 +365,7 @@ def reset_shop_measurement_schema(*, shop: TailorProfile) -> None:
 
         raise TailorPlusLimitError(
             'Tailor Plus is required to customize measurement fields for this shop.',
-            entitlement='measurement_template_custom',
+            entitlement='custom_measurement_fields',
         )
     ShopMeasurementSchema.objects.filter(shop=shop).delete()
 

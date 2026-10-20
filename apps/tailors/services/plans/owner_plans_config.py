@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from apps.tailors.services.plans.constants import FREE_OWNER_MAX_STAFF
+from apps.tailors.services.plans.constants import (
+    FREE_OWNER_MAX_STAFF,
+    OWNER_PLUS_MAX_SHOPS,
+    OWNER_PLUS_MAX_STAFF,
+)
 from apps.tailors.services.shop_plans_config import _translate_features
 
-# Marketing caps from mgask.sa/en/plans.html (Owner Plus enforcement stays unlimited).
-OWNER_PLUS_DISPLAY_MAX_SHOPS = 10
-OWNER_PLUS_DISPLAY_MAX_STAFF = 40
+OWNER_PLUS_DISPLAY_MAX_SHOPS = OWNER_PLUS_MAX_SHOPS
+OWNER_PLUS_DISPLAY_MAX_STAFF = OWNER_PLUS_MAX_STAFF
 
 FREE_OWNER_PLAN_FEATURES: tuple[tuple[str, str], ...] = (
     (

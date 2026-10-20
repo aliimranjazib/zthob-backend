@@ -1817,6 +1817,11 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             shop_id=resolved_shop_id,
         )
 
+        if service_mode == 'walk_in' and request and getattr(request.user, 'is_tailor', False):
+            from apps.tailors.services.shop_plus import assert_shop_plus_feature
+
+            assert_shop_plus_feature(validated_data.get('shop'), 'walk_in_orders')
+
         order = Order.objects.create(**validated_data)
         order_customer = order.customer
         apply_order_family_member_to_untagged_items(

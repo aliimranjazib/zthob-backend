@@ -28,7 +28,6 @@ from apps.fabrics.services.insights.common import (
     present_cards,
 )
 from apps.tailors.services.shop_plus import (
-    FREE_FABRIC_LIMIT_PER_BUCKET,
     count_owner_catalog_fabrics_on_shop,
     count_shop_created_fabrics_on_shop,
     serialize_shop_tailor_plus,
@@ -119,7 +118,7 @@ def _shop_listings(shop_id: int):
 
 def _limits(shop) -> dict:
     serialized = serialize_shop_tailor_plus(shop)
-    limit = None if serialized['is_active'] else FREE_FABRIC_LIMIT_PER_BUCKET
+    limit = None
     from_owner_count = count_owner_catalog_fabrics_on_shop(shop.id)
     shop_own_count = count_shop_created_fabrics_on_shop(shop.id)
     return {

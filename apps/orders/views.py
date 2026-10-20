@@ -487,6 +487,11 @@ class OrderCreateView(APIView):
                 data=response_serializer.data,
                 status_code=status.HTTP_201_CREATED)
             except ValidationError as e:
+                from apps.tailors.services.plus_api_errors import plus_limit_api_response
+                from apps.tailors.services.shop_plus import TailorPlusLimitError
+
+                if isinstance(e, TailorPlusLimitError):
+                    return plus_limit_api_response(e, request=request)
                 return api_response(
                 success=False,
                 message="Order creation failed",
@@ -843,7 +848,12 @@ class CheckoutCreateOrderView(APIView):
                 status_code=status.HTTP_201_CREATED
             )
         except ValidationError as e:
+            from apps.tailors.services.plus_api_errors import plus_limit_api_response
+            from apps.tailors.services.shop_plus import TailorPlusLimitError
+
             transaction.set_rollback(True)
+            if isinstance(e, TailorPlusLimitError):
+                return plus_limit_api_response(e, request=request)
             return api_response(
                 success=False,
                 message="Order creation from checkout failed",

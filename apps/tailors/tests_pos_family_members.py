@@ -8,6 +8,7 @@ from rest_framework.test import APIClient
 from apps.customers.models import CustomerDataAuditLog, CustomerProfile, FamilyMember
 from apps.orders.models import Order, OrderItem
 from apps.tailors.models import Fabric, FabricCategory, TailorProfile
+from apps.tailors.tests_plus_helpers import grant_shop_plus
 
 User = get_user_model()
 
@@ -28,6 +29,7 @@ class POSFamilyMemberTestCase(TestCase):
         self.tailor_profile.shop_name = 'Family POS Shop'
         self.tailor_profile.shop_status = True
         self.tailor_profile.save(update_fields=['shop_name', 'shop_status'])
+        grant_shop_plus(self.tailor_profile)
 
         self.other_tailor_user = User.objects.create_user(
             username='other_tailor_family',
@@ -37,6 +39,7 @@ class POSFamilyMemberTestCase(TestCase):
         self.other_tailor_profile, _ = TailorProfile.objects.get_or_create(user=self.other_tailor_user)
         self.other_tailor_profile.shop_status = True
         self.other_tailor_profile.save(update_fields=['shop_status'])
+        grant_shop_plus(self.other_tailor_profile)
 
         self.fabric_category = FabricCategory.objects.create(name='Cotton', slug='cotton-family')
         self.fabric = Fabric.objects.create(

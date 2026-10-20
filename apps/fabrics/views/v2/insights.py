@@ -65,6 +65,17 @@ class V2OwnerFabricInsightsView(BaseTailorAPIView):
                 request=request,
             )
 
+        from apps.tailors.services.plans.owner_limits import assert_owner_plus_feature
+
+        try:
+            assert_owner_plus_feature(
+                owner=request.user,
+                business=business,
+                entitlement='fabric_inventory',
+            )
+        except OwnerPlanLimitError as exc:
+            return owner_plan_limit_api_response(exc, request=request)
+
         shop_id = query.validated_data.get('shop_id')
         if shop_id is not None:
             shop = get_shop_for_owner(owner_id=request.user.id, shop_id=shop_id)
@@ -116,6 +127,13 @@ class V2ShopFabricInsightsView(BaseTailorAPIView):
         shop, error = _shop_for_insights(request, shop_id)
         if error is not None:
             return error
+
+        from apps.tailors.services.shop_plus import assert_shop_plus_feature
+
+        try:
+            assert_shop_plus_feature(shop, 'fabric_inventory')
+        except TailorPlusLimitError as exc:
+            return plus_limit_api_response(exc, request=request)
 
         query = FabricInsightWindowSerializer(data=request.query_params)
         if not query.is_valid():

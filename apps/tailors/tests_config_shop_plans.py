@@ -79,6 +79,9 @@ class TailorConfigShopPlansTest(TestCase):
         data = response.data['data']
         self.assertFalse(data['tailor_plus']['is_active'])
         self.assertEqual(data['tailor_plus']['tier'], 'free')
+        self.assertFalse(data['tailor_plus']['entitlements']['walk_in_orders'])
+        self.assertTrue(data['tailor_plus']['entitlements']['app_orders'])
+        self.assertFalse(data['owner_plus']['entitlements']['owner_dashboard'])
         self.assertEqual(data['shop_plans']['current_tier'], 'free')
         self.assertEqual(len(data['shop_plans']['plans']), 2)
         free_plan = data['shop_plans']['plans'][0]
@@ -145,10 +148,7 @@ class TailorConfigShopPlansTest(TestCase):
         data = response.data['data']
         self.assertFalse(data['tailor_plus']['is_active'])
         self.assertEqual(data['shop_plans']['current_tier'], 'free')
-        self.assertEqual(
-            data['tailor_plus']['limits']['owner_catalog_fabrics_per_shop'],
-            30,
-        )
+        self.assertIsNone(data['tailor_plus']['limits']['owner_catalog_fabrics_per_shop'])
 
     def test_authenticated_plus_shop_config(self):
         ShopTailorPlusSubscription.objects.create(

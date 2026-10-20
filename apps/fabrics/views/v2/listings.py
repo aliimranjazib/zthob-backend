@@ -278,6 +278,14 @@ class V2ShopFabricStockMovementView(BaseTailorAPIView):
                 request=request,
             )
 
+        from apps.tailors.services.plus_api_errors import plus_limit_api_response
+        from apps.tailors.services.shop_plus import TailorPlusLimitError, assert_shop_plus_feature
+
+        try:
+            assert_shop_plus_feature(shop_fabric.shop, 'fabric_inventory')
+        except TailorPlusLimitError as exc:
+            return plus_limit_api_response(exc, request=request)
+
         shop_fabric = record_stock_movement(
             shop_fabric=shop_fabric,
             movement_type=serializer.validated_data['movement_type'],

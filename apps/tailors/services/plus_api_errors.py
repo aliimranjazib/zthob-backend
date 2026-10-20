@@ -30,6 +30,16 @@ def owner_plan_limit_api_response(exc: OwnerPlanLimitError, *, request=None):
     return plan_limit_api_response(exc, request=request, default_code='PLAN_LIMIT')
 
 
+def shop_plus_required_response(shop, entitlement, *, request=None):
+    try:
+        from apps.tailors.services.shop_plus import assert_shop_plus_feature
+
+        assert_shop_plus_feature(shop, entitlement)
+    except TailorPlusLimitError as exc:
+        return plus_limit_api_response(exc, request=request)
+    return None
+
+
 def plus_limit_api_response(exc: TailorPlusLimitError, *, request=None):
     detail = exc.detail
     if isinstance(detail, dict):

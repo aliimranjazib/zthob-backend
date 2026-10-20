@@ -243,7 +243,21 @@ class V2ProfileView(APIView):
                 **appearance_for_user(user),
                 **serializer.validated_data['appearance'],
             }
-            apply_appearance_update(user, normalize_appearance(merged))
+            try:
+                apply_appearance_update(user, normalize_appearance(merged))
+            except Exception as exc:
+                from apps.tailors.services.plans.owner_limits import OwnerPlanLimitError
+                from apps.tailors.services.plus_api_errors import (
+                    owner_plan_limit_api_response,
+                    plus_limit_api_response,
+                )
+                from apps.tailors.services.shop_plus import TailorPlusLimitError
+
+                if isinstance(exc, OwnerPlanLimitError):
+                    return owner_plan_limit_api_response(exc, request=request)
+                if isinstance(exc, TailorPlusLimitError):
+                    return plus_limit_api_response(exc, request=request)
+                raise
         user.save()
         return api_response(
             success=True,

@@ -8,11 +8,13 @@ from apps.fabrics.models import FabricProduct
 from apps.tailors.models import Business, TailorProfile
 from apps.tailors.models.subscription import BusinessOwnerPlusSubscription
 from apps.tailors.services.plans.constants import (
-    FREE_OWNER_CATALOG_PRODUCTS,
     FREE_OWNER_MAX_SHOPS,
     FREE_OWNER_MAX_STAFF,
     FREE_OWNER_REPORT_DAYS,
+    OWNER_PLUS_MAX_SHOPS,
+    OWNER_PLUS_MAX_STAFF,
 )
+from apps.tailors.services.plans.entitlements import build_owner_entitlements
 from apps.tailors.services.v2.business import get_business_record
 
 User = get_user_model()
@@ -101,7 +103,7 @@ def serialize_owner_plus(
     base_limits = {
         'max_shops': FREE_OWNER_MAX_SHOPS,
         'max_staff': FREE_OWNER_MAX_STAFF,
-        'owner_catalog_products': FREE_OWNER_CATALOG_PRODUCTS,
+        'owner_catalog_products': None,
         'report_analytics_days': sorted(FREE_OWNER_REPORT_DAYS),
     }
 
@@ -118,6 +120,7 @@ def serialize_owner_plus(
             'limits': base_limits,
             'usage': _owner_usage(business=business, owner_id=owner_id),
             'applicable': False,
+            'entitlements': build_owner_entitlements(is_plus=False, applicable=False),
         }
 
     if not active:
@@ -133,6 +136,7 @@ def serialize_owner_plus(
             'limits': base_limits,
             'usage': _owner_usage(business=business, owner_id=owner_id),
             'applicable': True,
+            'entitlements': build_owner_entitlements(is_plus=False, applicable=True),
         }
 
     return {
@@ -145,11 +149,12 @@ def serialize_owner_plus(
             else None
         ),
         'limits': {
-            'max_shops': None,
-            'max_staff': None,
+            'max_shops': OWNER_PLUS_MAX_SHOPS,
+            'max_staff': OWNER_PLUS_MAX_STAFF,
             'owner_catalog_products': None,
             'report_analytics_days': None,
         },
         'usage': _owner_usage(business=business, owner_id=owner_id),
         'applicable': True,
+        'entitlements': build_owner_entitlements(is_plus=True, applicable=True),
     }

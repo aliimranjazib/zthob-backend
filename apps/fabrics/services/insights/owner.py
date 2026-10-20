@@ -32,10 +32,8 @@ from apps.fabrics.services.insights.common import (
     present_cards,
 )
 from apps.tailors.models import TailorProfile
-from apps.tailors.services.plans.constants import FREE_OWNER_CATALOG_PRODUCTS
 from apps.tailors.services.plans.owner_plus import (
     count_owner_catalog_products,
-    is_owner_plus_active,
     serialize_owner_plus,
 )
 
@@ -141,7 +139,7 @@ def _scope(business, shop_id, shops) -> dict:
 
 def _limits(business, owner, owner_fabric_count: int) -> dict:
     plus = serialize_owner_plus(business, owner_user=owner)
-    limit = None if is_owner_plus_active(business=business, owner=owner) else FREE_OWNER_CATALOG_PRODUCTS
+    limit = None
     used_toward_limit = count_owner_catalog_products(business.id)
     return {
         'tier': plus['tier'],

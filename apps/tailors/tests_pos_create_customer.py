@@ -9,6 +9,7 @@ from rest_framework.test import APIClient
 from apps.customization.models import UserStylePreset
 from apps.customers.models import CustomerProfile, TailorPOSCustomerLink
 from apps.tailors.models import Fabric, FabricCategory, TailorProfile
+from apps.tailors.tests_plus_helpers import grant_shop_plus
 
 
 User = get_user_model()
@@ -36,6 +37,7 @@ class POSCreateCustomerShopLinkTest(TestCase):
         self.tailor_profile.shop_name = 'Shop A'
         self.tailor_profile.shop_status = True
         self.tailor_profile.save(update_fields=['shop_name', 'shop_status'])
+        grant_shop_plus(self.tailor_profile)
 
         self.other_tailor_user = User.objects.create_user(
             username='pos_create_tailor_b',
@@ -48,6 +50,7 @@ class POSCreateCustomerShopLinkTest(TestCase):
         self.other_tailor_profile.shop_name = 'Shop B'
         self.other_tailor_profile.shop_status = True
         self.other_tailor_profile.save(update_fields=['shop_name', 'shop_status'])
+        grant_shop_plus(self.other_tailor_profile)
 
         self.fabric_category = FabricCategory.objects.create(
             name='Cotton POS Link',

@@ -94,6 +94,36 @@ def appearance_for_user(user) -> dict[str, Any]:
 
 def apply_appearance_update(user, raw: dict[str, Any]) -> None:
     """Persist validated appearance on user."""
+    _assert_can_update_app_theme(user)
     normalized = normalize_appearance(raw)
     user.appearance = normalized
     user.appearance_updated_at = timezone.now()
+
+
+def _assert_can_update_app_theme(user) -> None:
+    """Theme save is promised on Tailor Plus and Owner Plus only."""
+    from apps.tailors.models import TailorProfile
+    from apps.tailors.services.plans.owner_limits import OwnerPlanLimitError
+    from apps.tailors.services.plans.owner_plus import is_owner_plus_active
+    from apps.tailors.services.shop_plus import TailorPlusLimitError, is_shop_plus_active
+
+    if is_owner_plus_active(owner=user):
+        return
+    shop = getattr(user, 'tailor_profile', None)
+    if is_shop_plus_active(shop):
+        return
+    owns_shop = (
+        TailorProfile.objects.filter(owner=user)
+        .exclude(shop_name__isnull=True)
+        .exclude(shop_name='')
+        .exists()
+    )
+    if owns_shop:
+        raise OwnerPlanLimitError(
+            'Owner Plus is required to customize store branding.',
+            entitlement='app_theme',
+        )
+    raise TailorPlusLimitError(
+        'Tailor Plus is required to customize store branding.',
+        entitlement='app_theme',
+    )

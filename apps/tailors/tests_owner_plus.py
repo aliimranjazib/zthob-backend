@@ -15,6 +15,7 @@ from apps.tailors.services.plans.owner_limits import (
     assert_can_create_shop,
     validate_report_period_for_owner,
 )
+from apps.tailors.services.plans.constants import OWNER_PLUS_MAX_SHOPS
 from apps.tailors.services.shop_plus import is_shop_plus_active, resolve_shop_plus_source
 
 User = get_user_model()
@@ -97,22 +98,41 @@ class OwnerFreeLimitsTest(TestCase):
         with self.assertRaises(OwnerPlanLimitError):
             assert_can_add_staff_member(owner=self.owner, is_new_active_member=True)
 
-    def test_free_owner_catalog_product_limit(self):
+    def test_free_owner_can_manage_fabrics_without_count_cap(self):
         from apps.tailors.services.plans.owner_limits import (
             assert_can_create_owner_catalog_product,
         )
 
-        for index in range(30):
+        for index in range(31):
             FabricProduct.objects.create(
                 business=self.business,
                 name=f'Fabric {index}',
                 price=Decimal('10.00'),
             )
-        with self.assertRaises(OwnerPlanLimitError):
-            assert_can_create_owner_catalog_product(
-                business=self.business,
+        assert_can_create_owner_catalog_product(
+            business=self.business,
+            owner=self.owner,
+        )
+
+    def test_owner_plus_caps_shops_at_ten(self):
+        from apps.accounts.services.v2_auth import count_active_shops
+        from apps.tailors.models import BusinessOwnerPlusSubscription
+
+        BusinessOwnerPlusSubscription.objects.create(
+            business=self.business,
+            status=BusinessOwnerPlusSubscription.STATUS_ACTIVE,
+        )
+        current = count_active_shops(self.owner.id)
+        for index in range(current, OWNER_PLUS_MAX_SHOPS):
+            TailorProfile.objects.create(
                 owner=self.owner,
+                shop_name=f'Plus Branch {index}',
+                shop_status=True,
+                business=self.business,
             )
+        with self.assertRaises(OwnerPlanLimitError) as ctx:
+            assert_can_create_shop(owner=self.owner, creating_new_named_shop=True)
+        self.assertEqual(ctx.exception.detail['entitlement'], 'max_shops')
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)
@@ -157,6 +177,10 @@ class TailorConfigOwnerPlansTest(TestCase):
         self.assertTrue(data['owner_plus']['is_active'])
         self.assertTrue(data['tailor_plus']['is_active'])
         self.assertEqual(data['tailor_plus']['plus_source'], 'owner_bundle')
+        self.assertEqual(data['owner_plus']['limits']['max_shops'], 10)
+        self.assertEqual(data['owner_plus']['limits']['max_staff'], 40)
+        self.assertTrue(data['tailor_plus']['entitlements']['walk_in_orders'])
+        self.assertTrue(data['owner_plus']['entitlements']['tailor_plus_all_branches'])
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)

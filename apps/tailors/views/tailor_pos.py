@@ -54,6 +54,11 @@ class TailorCustomerListView(BaseTailorAPIView):
         shop_profile = self.get_tailor_profile(request.user)
         if not shop_profile:
              return api_response(success=False, message="Shop profile not found", status_code=404)
+        from apps.tailors.services.plus_api_errors import shop_plus_required_response
+
+        crm_error = shop_plus_required_response(shop_profile, 'crm', request=request)
+        if crm_error:
+            return crm_error
         
         owner_user = shop_profile.shop_owner_user
         
@@ -151,6 +156,11 @@ class TailorCreateCustomerView(BaseTailorAPIView):
         shop_profile = self.get_tailor_profile(request.user)
         if not shop_profile:
              return api_response(success=False, message="Shop profile not found", status_code=404)
+        from apps.tailors.services.plus_api_errors import shop_plus_required_response
+
+        crm_error = shop_plus_required_response(shop_profile, 'crm', request=request)
+        if crm_error:
+            return crm_error
         owner_user = shop_profile.shop_owner_user
 
         serializer = CreateCustomerSerializer(data=request.data)
@@ -263,6 +273,11 @@ class TailorPOSCustomerOrdersView(BaseTailorAPIView):
         profile = self.get_tailor_profile(request.user)
         if not profile:
             return api_response(success=False, message="Shop profile not found", status_code=404)
+        from apps.tailors.services.plus_api_errors import shop_plus_required_response
+
+        crm_error = shop_plus_required_response(profile, 'crm', request=request)
+        if crm_error:
+            return crm_error
 
         orders = (
             Order.objects.filter(
@@ -304,6 +319,11 @@ class TailorPOSCustomerOrderDetailView(BaseTailorAPIView):
         profile = self.get_tailor_profile(request.user)
         if not profile:
             return api_response(success=False, message="Shop profile not found", status_code=404)
+        from apps.tailors.services.plus_api_errors import shop_plus_required_response
+
+        crm_error = shop_plus_required_response(profile, 'crm', request=request)
+        if crm_error:
+            return crm_error
 
         try:
             order = (

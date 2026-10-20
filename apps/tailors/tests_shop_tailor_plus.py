@@ -10,6 +10,7 @@ from apps.fabrics.models import FabricProduct, ShopFabric
 from apps.tailors.models import ShopTailorPlusSubscription, TailorProfile
 from apps.tailors.services.shop_plus import (
     assert_can_add_fabric_to_shop,
+    assert_shop_plus_feature,
     is_shop_plus_active,
     TailorPlusLimitError,
 )
@@ -36,6 +37,26 @@ class ShopTailorPlusServiceTest(TestCase):
             status=ShopTailorPlusSubscription.STATUS_ACTIVE,
         )
 
+    def test_walk_in_feature_requires_plus(self):
+        with self.assertRaises(TailorPlusLimitError) as ctx:
+            assert_shop_plus_feature(self.shop, 'walk_in_orders')
+        self.assertEqual(ctx.exception.detail['entitlement'], 'walk_in_orders')
+        self._activate_plus()
+        assert_shop_plus_feature(self.shop, 'walk_in_orders')
+
+    def test_free_shop_pos_crm_requires_plus(self):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=self.owner)
+        response = client.get('/api/tailors/pos/customers/')
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data['data']['code'], 'SUBSCRIPTION_REQUIRED')
+        self.assertEqual(response.data['data']['entitlement'], 'crm')
+        self._activate_plus()
+        response = client.get('/api/tailors/pos/customers/')
+        self.assertEqual(response.status_code, 200)
+
     def test_inactive_without_subscription(self):
         self.assertFalse(is_shop_plus_active(self.shop))
 
@@ -43,8 +64,8 @@ class ShopTailorPlusServiceTest(TestCase):
         self._activate_plus()
         self.assertTrue(is_shop_plus_active(self.shop))
 
-    def test_free_shop_fabric_limit(self):
-        for index in range(30):
+    def test_free_shop_can_add_products_without_count_cap(self):
+        for index in range(31):
             product = FabricProduct.objects.create(
                 business_id=self._ensure_business().id,
                 name=f'Shop Fabric {index}',
@@ -53,10 +74,6 @@ class ShopTailorPlusServiceTest(TestCase):
             )
             ShopFabric.objects.create(shop=self.shop, product=product, stock=1, is_active=True)
 
-        with self.assertRaises(TailorPlusLimitError):
-            assert_can_add_fabric_to_shop(shop=self.shop, owner_catalog=False)
-
-        self._activate_plus()
         assert_can_add_fabric_to_shop(shop=self.shop, owner_catalog=False)
 
     def _ensure_business(self):
