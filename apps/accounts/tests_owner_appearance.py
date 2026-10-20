@@ -9,7 +9,7 @@ from rest_framework.test import APIClient
 
 from apps.accounts.appearance import DEFAULT_APPEARANCE, appearance_for_user
 from apps.core.services import PhoneVerificationService
-from apps.tailors.models import TailorProfile
+from apps.tailors.models import ShopTailorPlusSubscription, TailorProfile
 
 User = get_user_model()
 
@@ -71,9 +71,13 @@ class OwnerAppearanceTests(TestCase):
         phone = '0522222221'
         login = self._owner_login(phone=phone)
         user = User.objects.get(phone=phone)
-        TailorProfile.objects.get_or_create(
+        shop, _ = TailorProfile.objects.get_or_create(
             owner=user,
             defaults={'shop_name': 'Theme Shop'},
+        )
+        ShopTailorPlusSubscription.objects.get_or_create(
+            shop=shop,
+            defaults={'status': ShopTailorPlusSubscription.STATUS_ACTIVE},
         )
         token = login.data['data']['tokens']['access_token']
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
@@ -108,9 +112,13 @@ class OwnerAppearanceTests(TestCase):
         phone = '0522222222'
         login = self._owner_login(phone=phone)
         user = User.objects.get(phone=phone)
-        TailorProfile.objects.get_or_create(
+        shop, _ = TailorProfile.objects.get_or_create(
             owner=user,
             defaults={'shop_name': 'Theme Shop 2'},
+        )
+        ShopTailorPlusSubscription.objects.get_or_create(
+            shop=shop,
+            defaults={'status': ShopTailorPlusSubscription.STATUS_ACTIVE},
         )
         token = login.data['data']['tokens']['access_token']
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')

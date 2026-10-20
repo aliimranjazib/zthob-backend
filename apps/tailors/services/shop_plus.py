@@ -64,11 +64,29 @@ def is_shop_plus_active(shop: TailorProfile | int | None) -> bool:
     return resolve_shop_plus_source(shop) != 'none'
 
 
+def assert_shop_plus_feature(shop: TailorProfile | int | None, entitlement: str) -> None:
+    """Block promised Tailor Plus features when the shop is on Free."""
+    if is_shop_plus_active(shop):
+        return
+    from apps.tailors.services.plans.entitlements import SHOP_PLUS_FEATURE_MESSAGES
+
+    raise TailorPlusLimitError(
+        SHOP_PLUS_FEATURE_MESSAGES.get(
+            entitlement,
+            'Tailor Plus is required for this action.',
+        ),
+        entitlement=entitlement,
+    )
+
+
 def serialize_shop_tailor_plus(shop: TailorProfile | int | None) -> dict:
     subscription = get_shop_plus_subscription(shop)
     plus_source = resolve_shop_plus_source(shop)
     shop_subscription_active = _shop_has_direct_plus_active(shop)
 
+    from apps.tailors.services.plans.entitlements import build_shop_entitlements
+
+    entitlements = build_shop_entitlements(is_plus=plus_source != 'none')
     if plus_source == 'none':
         return {
             'is_active': False,
@@ -82,11 +100,12 @@ def serialize_shop_tailor_plus(shop: TailorProfile | int | None) -> dict:
             'plus_source': 'none',
             'shop_subscription_active': False,
             'limits': {
-                'owner_catalog_fabrics_per_shop': FREE_FABRIC_LIMIT_PER_BUCKET,
-                'shop_created_fabrics_per_shop': FREE_FABRIC_LIMIT_PER_BUCKET,
+                'owner_catalog_fabrics_per_shop': None,
+                'shop_created_fabrics_per_shop': None,
                 'report_max_days': FREE_REPORT_MAX_DAYS,
                 'analytics_days': sorted(FREE_ANALYTICS_DAYS),
             },
+            'entitlements': entitlements,
         }
 
     owner_sub = None
@@ -126,6 +145,7 @@ def serialize_shop_tailor_plus(shop: TailorProfile | int | None) -> dict:
             'report_max_days': None,
             'analytics_days': sorted(PLUS_ANALYTICS_DAYS),
         },
+        'entitlements': entitlements,
     }
 
 
@@ -152,24 +172,8 @@ def count_shop_created_fabrics_on_shop(shop_id: int) -> int:
 
 
 def assert_can_add_fabric_to_shop(*, shop: TailorProfile, owner_catalog: bool) -> None:
-    if is_shop_plus_active(shop):
-        return
-    if owner_catalog:
-        current = count_owner_catalog_fabrics_on_shop(shop.id)
-        entitlement = 'owner_catalog_fabrics'
-        message = (
-            f'Free shops can list up to {FREE_FABRIC_LIMIT_PER_BUCKET} owner-catalog fabrics. '
-            'Tailor Plus unlocks unlimited fabrics for this shop.'
-        )
-    else:
-        current = count_shop_created_fabrics_on_shop(shop.id)
-        entitlement = 'shop_created_fabrics'
-        message = (
-            f'Free shops can add up to {FREE_FABRIC_LIMIT_PER_BUCKET} shop-created fabrics. '
-            'Tailor Plus unlocks unlimited fabrics for this shop.'
-        )
-    if current >= FREE_FABRIC_LIMIT_PER_BUCKET:
-        raise TailorPlusLimitError(message, entitlement=entitlement)
+    """Free plan text allows adding products; no per-shop fabric count cap."""
+    return
 
 
 def assert_can_assign_owner_product_to_shop(*, shop: TailorProfile, product, is_new_listing: bool) -> None:
@@ -187,7 +191,7 @@ def validate_analytics_days_for_shop(*, shop: TailorProfile | int | None, days: 
     if days not in FREE_ANALYTICS_DAYS:
         raise TailorPlusLimitError(
             'Tailor Plus is required for analytics longer than 7 days.',
-            entitlement='analytics_days',
+            entitlement='dashboard_full',
         )
 
 
@@ -214,14 +218,14 @@ def validate_report_period_for_shop(
     if period in PLUS_ONLY_REPORT_PERIODS:
         raise TailorPlusLimitError(
             'Tailor Plus is required for this report period on this shop.',
-            entitlement='owner_reports_period',
+            entitlement='dashboard_full',
         )
 
     start, end = resolve_period_bounds(period, from_date=from_date, to_date=to_date)
     if _report_span_days(start, end) > FREE_REPORT_MAX_DAYS:
         raise TailorPlusLimitError(
             'Tailor Plus is required for report date ranges longer than 7 days.',
-            entitlement='owner_reports_period',
+            entitlement='dashboard_full',
         )
 
 
@@ -261,17 +265,31 @@ def should_hide_walk_in_order_from_customer_measurements(order) -> bool:
 
 
 def active_plus_shop_ids():
+    """Shop ids with Tailor Plus, including Owner Plus bundle shops."""
     from django.db.models import Q
 
+    from apps.tailors.models import Business, TailorProfile
+    from apps.tailors.models.subscription import BusinessOwnerPlusSubscription
+
     now = timezone.now()
-    return ShopTailorPlusSubscription.objects.filter(
-        status__in=(
-            ShopTailorPlusSubscription.STATUS_TRIAL,
-            ShopTailorPlusSubscription.STATUS_ACTIVE,
-        ),
-    ).filter(
-        Q(current_period_end__isnull=True) | Q(current_period_end__gte=now),
-    ).values_list('shop_id', flat=True)
+    active_statuses = (
+        ShopTailorPlusSubscription.STATUS_TRIAL,
+        ShopTailorPlusSubscription.STATUS_ACTIVE,
+    )
+    period_ok = Q(current_period_end__isnull=True) | Q(current_period_end__gte=now)
+    direct = ShopTailorPlusSubscription.objects.filter(
+        status__in=active_statuses,
+    ).filter(period_ok).values_list('shop_id', flat=True)
+    bundled_owner_ids = Business.objects.filter(
+        is_active=True,
+        id__in=BusinessOwnerPlusSubscription.objects.filter(
+            status__in=active_statuses,
+        ).filter(period_ok).values_list('business_id', flat=True),
+    ).values_list('owner_id', flat=True)
+    bundled = TailorProfile.objects.filter(
+        owner_id__in=bundled_owner_ids,
+    ).values_list('id', flat=True)
+    return list(set(direct) | set(bundled))
 
 
 def customer_measurements_order_queryset_filter(queryset):

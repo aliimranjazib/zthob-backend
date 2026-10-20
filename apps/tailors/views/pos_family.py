@@ -30,6 +30,11 @@ class TailorPOSFamilyMemberListCreateView(BaseTailorAPIView):
         profile = self.get_tailor_profile(request.user)
         if not profile:
             return api_response(success=False, message='Shop profile not found', status_code=404)
+        from apps.tailors.services.plus_api_errors import shop_plus_required_response
+
+        crm_error = shop_plus_required_response(profile, 'crm', request=request)
+        if crm_error:
+            return crm_error
 
         customer = get_customer_for_pos_or_none(
             tailor_owner_user=profile.shop_owner_user,
@@ -55,6 +60,11 @@ class TailorPOSFamilyMemberListCreateView(BaseTailorAPIView):
         profile = self.get_tailor_profile(request.user)
         if not profile:
             return api_response(success=False, message='Shop profile not found', status_code=404)
+        from apps.tailors.services.plus_api_errors import shop_plus_required_response
+
+        crm_error = shop_plus_required_response(profile, 'crm', request=request)
+        if crm_error:
+            return crm_error
 
         customer = get_customer_for_pos_or_none(
             tailor_owner_user=profile.shop_owner_user,
@@ -110,6 +120,11 @@ class TailorPOSFamilyMemberDetailView(BaseTailorAPIView):
         profile = self.get_tailor_profile(request.user)
         if not profile:
             return None, None, api_response(success=False, message='Shop profile not found', status_code=404)
+        from apps.tailors.services.plus_api_errors import shop_plus_required_response
+
+        crm_error = shop_plus_required_response(profile, 'crm', request=request)
+        if crm_error:
+            return None, None, crm_error
 
         customer = get_customer_for_pos_or_none(
             tailor_owner_user=profile.shop_owner_user,

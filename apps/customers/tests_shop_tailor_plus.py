@@ -80,6 +80,25 @@ class CustomerPlusMeasurementsTest(TestCase):
         recipient = response.data['data']['recipients'][0]
         self.assertEqual(recipient['order_history'], [])
 
+    def test_walk_in_hidden_when_owner_plus_bundles_shop(self):
+        from apps.tailors.models import Business
+        from apps.tailors.tests_plus_helpers import grant_owner_plus
+
+        business = Business.objects.create(
+            owner=self.tailor,
+            name='Bundle Biz',
+            contact_phone='0500000099',
+        )
+        self.shop.business = business
+        self.shop.save(update_fields=['business'])
+        self._walk_in_order()
+        grant_owner_plus(business)
+
+        response = self.client.get('/api/customers/measurements/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        recipient = response.data['data']['recipients'][0]
+        self.assertEqual(recipient['order_history'], [])
+
     def test_walk_in_visible_in_library_when_shop_not_plus(self):
         self._walk_in_order()
 

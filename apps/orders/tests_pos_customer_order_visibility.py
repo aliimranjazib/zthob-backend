@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 
 from apps.customers.models import Address, CustomerProfile, FamilyMember
 from apps.tailors.models import Fabric, FabricCategory, TailorProfile
+from apps.tailors.tests_plus_helpers import grant_shop_plus
 from apps.orders.models import Order, OrderItem
 
 
@@ -41,6 +42,7 @@ class PosCustomerOrderVisibilityTest(TestCase):
         self.tailor_profile.shop_name = 'POS Tailor Shop'
         self.tailor_profile.shop_status = True
         self.tailor_profile.save(update_fields=['shop_name', 'shop_status'])
+        grant_shop_plus(self.tailor_profile)
         self.fabric_category = FabricCategory.objects.create(
             name='Cotton',
             slug='cotton',

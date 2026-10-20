@@ -143,7 +143,21 @@ class OwnerProfileView(APIView):
                 request=request,
             )
 
-        user = serializer.save()
+        try:
+            user = serializer.save()
+        except Exception as exc:
+            from apps.tailors.services.plans.owner_limits import OwnerPlanLimitError
+            from apps.tailors.services.plus_api_errors import (
+                owner_plan_limit_api_response,
+                plus_limit_api_response,
+            )
+            from apps.tailors.services.shop_plus import TailorPlusLimitError
+
+            if isinstance(exc, OwnerPlanLimitError):
+                return owner_plan_limit_api_response(exc, request=request)
+            if isinstance(exc, TailorPlusLimitError):
+                return plus_limit_api_response(exc, request=request)
+            raise
         response_serializer = OwnerProfileSerializer(
             user,
             context={'request': request},
