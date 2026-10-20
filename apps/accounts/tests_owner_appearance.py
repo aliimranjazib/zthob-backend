@@ -165,3 +165,45 @@ class OwnerAppearanceTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(response.data['success'])
+
+    def test_expired_plus_returns_default_appearance_instantly(self):
+        phone = '0522222224'
+        login = self._owner_login(phone=phone)
+        user = User.objects.get(phone=phone)
+        shop, _ = TailorProfile.objects.get_or_create(
+            owner=user,
+            defaults={'shop_name': 'Theme Shop 4'},
+        )
+        subscription, _ = ShopTailorPlusSubscription.objects.get_or_create(
+            shop=shop,
+            defaults={'status': ShopTailorPlusSubscription.STATUS_ACTIVE},
+        )
+        token = login.data['data']['tokens']['access_token']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        self.client.patch(
+            self.owner_profile_url,
+            {
+                'appearance': {
+                    'version': 1,
+                    'mode': 'dark',
+                    'preset_id': None,
+                    'seed_color': '#1E88E5',
+                },
+            },
+            format='json',
+        )
+
+        subscription.status = ShopTailorPlusSubscription.STATUS_EXPIRED
+        subscription.save(update_fields=['status'])
+
+        user.refresh_from_db()
+        self.assertEqual(user.appearance['seed_color'], '#1E88E5')
+        self.assertEqual(appearance_for_user(user), DEFAULT_APPEARANCE)
+
+        profile = self.client.get(self.owner_profile_url)
+        self.assertEqual(profile.status_code, status.HTTP_200_OK)
+        self.assertEqual(profile.data['data']['appearance'], DEFAULT_APPEARANCE)
+
+        subscription.status = ShopTailorPlusSubscription.STATUS_ACTIVE
+        subscription.save(update_fields=['status'])
+        self.assertEqual(appearance_for_user(user)['seed_color'], '#1E88E5')

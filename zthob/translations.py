@@ -707,6 +707,11 @@ TRANSLATIONS_AR = {
     "Owner Plus is required for smart analytics.": "يتطلب مالك بلس للتحليلات الذكية.",
     "Owner Plus is required for fabric inventory management.": "يتطلب مالك بلس لإدارة مخزون الأقمشة.",
     "Owner Plus is required to customize store branding.": "يتطلب مالك بلس لتخصيص هوية المتجر.",
+    "3,200 SAR / year": "3,200 ريال / سنوياً",
+    "excl. VAT – about SAR 267 a month": "غير شامل ضريبة القيمة المضافة – يعني حوالي 267 ريال شهرياً",
+    "Run your shop with us": "أدر محلك معنا",
+    "The subscription is annual and renews after we notify you, and you are entitled to a full refund within 7 days of activation.": "الاشتراك سنوي ويُجدد بعد إشعارك، ويحق لك الاسترداد الكامل خلال 7 أيام من التفعيل.",
+    "Free": "مجاناً",
 }
 
 TRANSLATIONS = TRANSLATIONS_AR
@@ -717,34 +722,39 @@ LOCALE_TABLES = {
 }
 
 
+def _accept_language_from_request(request):
+    accept_language = request.META.get('HTTP_ACCEPT_LANGUAGE', '')
+    if not accept_language:
+        return None
+    primary_lang = accept_language.split(',')[0].split(';')[0].strip()[:2].lower()
+    if primary_lang in SUPPORTED_LANGUAGES:
+        return primary_lang
+    return None
+
+
 def get_language_from_request(request):
     """
-    Detect language from request headers.
-    Checks Accept-Language header, authenticated user preference, then DEFAULT_LANGUAGE.
+    Detect language from the request.
 
-    Args:
-        request: Django/DRF request object
-
-    Returns:
-        str: Language code ('en', 'ar', or 'ur')
+    Explicit ``ar`` / ``ur`` Accept-Language wins (in-app language switch).
+    Otherwise authenticated ``user.language`` wins so Flutter's default
+    ``Accept-Language: en`` does not hide Arabic copy.
+    Then English Accept-Language, then DEFAULT_LANGUAGE.
     """
     if not request:
         return 'en'
-    
-    # Check Accept-Language header
-    accept_language = request.META.get('HTTP_ACCEPT_LANGUAGE', '')
-    
-    # Parse Accept-Language header (e.g., "ar,en;q=0.9" or "ar-SA,ar;q=0.9")
-    if accept_language:
-        # Extract primary language (first 2 chars before comma or semicolon)
-        primary_lang = accept_language.split(',')[0].split(';')[0].strip()[:2].lower()
-        if primary_lang in SUPPORTED_LANGUAGES:
-            return primary_lang
 
-    if hasattr(request, 'user') and request.user.is_authenticated:
+    header_lang = _accept_language_from_request(request)
+    if header_lang in TRANSLATABLE_LANGUAGES:
+        return header_lang
+
+    if hasattr(request, 'user') and getattr(request.user, 'is_authenticated', False):
         user_language = getattr(request.user, 'language', None)
         if user_language in SUPPORTED_LANGUAGES:
             return user_language
+
+    if header_lang in SUPPORTED_LANGUAGES:
+        return header_lang
 
     return DEFAULT_LANGUAGE
 

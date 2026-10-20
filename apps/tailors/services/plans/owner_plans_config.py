@@ -7,6 +7,7 @@ from apps.tailors.services.plans.constants import (
     OWNER_PLUS_MAX_SHOPS,
     OWNER_PLUS_MAX_STAFF,
 )
+from apps.tailors.services.plans.pricing import build_free_price, build_plus_price
 from apps.tailors.services.shop_plans_config import _translate_features
 
 OWNER_PLUS_DISPLAY_MAX_SHOPS = OWNER_PLUS_MAX_SHOPS
@@ -101,6 +102,7 @@ def build_owner_plans_config(*, language: str, current_tier: str, translate) -> 
                 'tier': 'free',
                 'name': translate('Free business plan', language),
                 'badge_key': None,
+                'price': build_free_price(language=language, translate=translate),
                 'features': _translate_features(
                     FREE_OWNER_PLAN_FEATURES,
                     language=language,
@@ -114,6 +116,7 @@ def build_owner_plans_config(*, language: str, current_tier: str, translate) -> 
                 'tier': 'plus',
                 'name': translate('Owner Plus', language),
                 'badge_key': 'recommended',
+                'price': build_plus_price(language=language, translate=translate),
                 'features': _translate_features(
                     PLUS_OWNER_PLAN_FEATURES,
                     language=language,

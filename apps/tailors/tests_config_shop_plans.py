@@ -10,6 +10,12 @@ from apps.tailors.services.plans.owner_plans_config import (
     FREE_OWNER_PLAN_FEATURES,
     PLUS_OWNER_PLAN_FEATURES,
 )
+from apps.tailors.services.plans.pricing import (
+    PLUS_PRICE_AMOUNT,
+    PLUS_PRICE_FOOTNOTE,
+    PLUS_PRICE_LABEL,
+    PLUS_VAT_NOTE,
+)
 from apps.tailors.services.shop_plans_config import (
     FREE_PLAN_FEATURES,
     OWNER_ONLY_FEATURE_KEYS,
@@ -141,6 +147,17 @@ class TailorConfigShopPlansTest(TestCase):
             feature['text'] for feature in owner_free['features']
             if feature['key'] == 'max_staff'
         ))
+        self.assertEqual(plus_plan['price']['amount'], PLUS_PRICE_AMOUNT)
+        self.assertEqual(plus_plan['price']['label'], PLUS_PRICE_LABEL)
+        self.assertEqual(plus_plan['price']['vat_note'], PLUS_VAT_NOTE)
+        self.assertEqual(plus_plan['price']['footnote'], PLUS_PRICE_FOOTNOTE)
+        self.assertEqual(owner_plus['price']['amount'], PLUS_PRICE_AMOUNT)
+        self.assertEqual(owner_plus['price']['label'], PLUS_PRICE_LABEL)
+        self.assertEqual(owner_plus['price']['vat_note'], PLUS_VAT_NOTE)
+        self.assertEqual(data['tailor_plus']['price']['amount'], PLUS_PRICE_AMOUNT)
+        self.assertEqual(data['owner_plus']['price']['vat_note'], PLUS_VAT_NOTE)
+        self.assertEqual(free_plan['price']['amount'], 0)
+        self.assertEqual(owner_free['price']['label'], 'Free')
 
     def test_authenticated_free_shop_config(self):
         response = self.client.get('/api/tailors/config/')
@@ -149,6 +166,19 @@ class TailorConfigShopPlansTest(TestCase):
         self.assertFalse(data['tailor_plus']['is_active'])
         self.assertEqual(data['shop_plans']['current_tier'], 'free')
         self.assertIsNone(data['tailor_plus']['limits']['owner_catalog_fabrics_per_shop'])
+
+    def test_upgrade_label_stays_arabic_when_client_sends_english_header(self):
+        self.owner.language = 'ar'
+        self.owner.save(update_fields=['language'])
+        response = self.client.get(
+            '/api/tailors/config/',
+            HTTP_ACCEPT_LANGUAGE='en',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data['data']['tailor_plus']['upgrade_label'],
+            'الترقية إلى خياط بلس',
+        )
 
     def test_authenticated_plus_shop_config(self):
         ShopTailorPlusSubscription.objects.create(
@@ -185,6 +215,20 @@ class TailorConfigShopPlansTest(TestCase):
         )
         self.assertEqual(owner_plus['name'], 'مالك بلس')
         self.assertEqual(
+            response.data['data']['tailor_plus']['upgrade_label'],
+            'الترقية إلى خياط بلس',
+        )
+        self.assertEqual(
+            response.data['data']['owner_plus']['upgrade_label'],
+            'الترقية إلى مالك بلس',
+        )
+        self.assertEqual(shop_plus['price']['label'], '3,200 ريال / سنوياً')
+        self.assertEqual(
+            shop_plus['price']['vat_note'],
+            'غير شامل ضريبة القيمة المضافة – يعني حوالي 267 ريال شهرياً',
+        )
+        self.assertEqual(owner_plus['price']['label'], '3,200 ريال / سنوياً')
+        self.assertEqual(
             next(
                 feature['text'] for feature in owner_plus['features']
                 if feature['key'] == 'owner_dashboard'
@@ -210,6 +254,8 @@ class TailorConfigShopPlansTest(TestCase):
             shop_plus['features'][0]['text'],
             'دکان کے آرڈرز اور واک اِن گاہک شامل کریں',
         )
+        self.assertEqual(shop_plus['price']['label'], '3,200 ریال / سالانہ')
+        self.assertEqual(owner_plus['price']['label'], '3,200 ریال / سالانہ')
 
     def test_every_plan_feature_string_is_localized(self):
         templates = [
@@ -222,6 +268,15 @@ class TailorConfigShopPlansTest(TestCase):
             )
             for _key, text in features
         ]
+        templates.extend(
+            [
+                PLUS_PRICE_LABEL,
+                PLUS_VAT_NOTE,
+                PLUS_PRICE_FOOTNOTE,
+                'Run your shop with us',
+                'Free',
+            ]
+        )
         missing_ar = [text for text in templates if text not in TRANSLATIONS_AR]
         missing_ur = [text for text in templates if text not in TRANSLATIONS_UR]
         self.assertEqual(missing_ar, [], msg=f'Missing Arabic keys: {missing_ar}')
