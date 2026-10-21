@@ -1791,8 +1791,8 @@ class RiderAnalyticsView(APIView):
     - Weekly delivery trends
     
     Query Parameters:
-    - days: Number of days for daily deliveries (default: 30, max: 365)
-    - weeks: Number of weeks for trends (default: 12, max: 52)
+    - days: Number of days for analytics (1, 7, 15, or 30). Default is 30.
+      Weekly trend length is derived from days; the weeks query param is ignored.
     """
     permission_classes = [IsAuthenticated]
     
@@ -1817,9 +1817,6 @@ class RiderAnalyticsView(APIView):
         """
         Get comprehensive analytics for the authenticated rider.
         """
-        from apps.riders.services import RiderAnalyticsService
-        from apps.riders.serializers.analytics import RiderAnalyticsSerializer
-        
         # Check if user is a rider
         if not request.user.is_rider:
             return api_response(
@@ -1856,6 +1853,9 @@ class RiderAnalyticsView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
         
+        from apps.riders.serializers.analytics import RiderAnalyticsSerializer
+        from apps.riders.services import RiderAnalyticsService
+
         # Get analytics data
         try:
             analytics_data = RiderAnalyticsService.get_comprehensive_analytics(

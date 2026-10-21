@@ -504,6 +504,16 @@ class RiderAnalyticsAPITestCase(TestCase):
         self.assertIn('weekly_trends', analytics_data)
         self.assertIn('analytics_period', analytics_data)
     
+    def test_rider_analytics_service_importable_from_package(self):
+        """Regression: services/ package must export RiderAnalyticsService (not shadow services.py)."""
+        from importlib import import_module
+
+        module = import_module('apps.riders.services')
+        self.assertTrue(
+            hasattr(module, 'RiderAnalyticsService'),
+            'apps.riders.services package must export RiderAnalyticsService',
+        )
+
     def test_analytics_endpoint_with_custom_parameters(self):
         """Test analytics endpoint with allowed custom days parameter"""
         self.client.force_authenticate(user=self.rider_user)
@@ -517,6 +527,12 @@ class RiderAnalyticsAPITestCase(TestCase):
         self.assertEqual(len(analytics_data['weekly_trends']), 2)
         self.assertEqual(analytics_data['analytics_period']['daily_deliveries_days'], 7)
         self.assertEqual(analytics_data['analytics_period']['weekly_trends_weeks'], 1)
+
+        response = self.client.get('/api/riders/analytics/?days=1&weeks=12')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        self.assertEqual(response.data['data']['analytics_period']['daily_deliveries_days'], 1)
+        self.assertEqual(response.data['data']['analytics_period']['weekly_trends_weeks'], 1)
     
     def test_analytics_endpoint_invalid_parameters(self):
         """Test analytics endpoint with invalid parameters"""
