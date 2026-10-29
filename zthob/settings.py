@@ -94,8 +94,23 @@ INSTALLED_APPS = [
     "apps.customization",
     "apps.documents",
     "apps.finance",
+    "apps.invoicing",
 ]
-    
+
+# ZATCA Tools (walk-in simplified tax invoices)
+ZATCA_INVOICING_ENABLED = os.getenv('ZATCA_INVOICING_ENABLED', 'false').lower() in ('1', 'true', 'yes')
+ZATCA_TOOLS_API_KEY = os.getenv('ZATCA_TOOLS_API_KEY', '').strip()
+ZATCA_TOOLS_BASE_URL = os.getenv('ZATCA_TOOLS_BASE_URL', 'https://zatcatools.com/api').strip()
+ZATCA_TOOLS_TIMEOUT_SECONDS = int(os.getenv('ZATCA_TOOLS_TIMEOUT_SECONDS', '30'))
+ZATCA_TOOLS_BRANCH_ID = os.getenv('ZATCA_TOOLS_BRANCH_ID', '').strip() or None
+ZATCA_TOOLS_DEVICE_ID = os.getenv('ZATCA_TOOLS_DEVICE_ID', '').strip() or None
+MGASK_INVOICE_BRAND_NAME = os.getenv('MGASK_INVOICE_BRAND_NAME', 'Mgask for Tailors').strip()
+# Local dev: issue invoices in-process unless overridden (avoids Celery+Redis with no worker).
+ZATCA_INVOICE_ISSUE_SYNC = os.getenv(
+    'ZATCA_INVOICE_ISSUE_SYNC',
+    'true' if DEBUG else 'false',
+).lower() in ('1', 'true', 'yes')
+
 MIDDLEWARE = [
     "django.middleware.gzip.GZipMiddleware",
     "django.middleware.security.SecurityMiddleware",

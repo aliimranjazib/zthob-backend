@@ -424,6 +424,7 @@ class OrderSerializer(serializers.ModelSerializer):
     has_rating = serializers.SerializerMethodField()
     tailor_rating = serializers.SerializerMethodField()
     payment_history = serializers.SerializerMethodField()
+    tax_invoice = serializers.SerializerMethodField()
 
     class Meta:
         model=Order
@@ -499,6 +500,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'can_be_cancelled',
             'status_info',
             'pricing_summary',
+            'tax_invoice',
             'has_rating',
             'tailor_rating',
             'is_express',
@@ -511,6 +513,17 @@ class OrderSerializer(serializers.ModelSerializer):
             'can_be_cancelled', 'rejection_reason_code', 'rejection_reason', 'rejected_by',
             'created_at', 'updated_at'
         ]
+
+    def get_tax_invoice(self, obj):
+        from django.core.exceptions import ObjectDoesNotExist
+
+        try:
+            tax_invoice = obj.tax_invoice
+        except ObjectDoesNotExist:
+            return None
+        from apps.invoicing.serializers import TaxInvoiceSummarySerializer
+
+        return TaxInvoiceSummarySerializer(tax_invoice, context=self.context).data
 
     def get_customer_name(self, obj):
         if not obj.customer:
@@ -1036,11 +1049,27 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_pricing_summary(self, obj):
         """Return grouped pricing information"""
-        discount = sum((item.fabric.price - item.unit_price) * item.quantity for item in obj.order_items.all() if item.fabric and item.fabric.price > item.unit_price)
+        from apps.core.models import SystemSettings
+        from apps.orders.services import OrderCalculationService
+
+        discount = sum(
+            (item.fabric.price - item.unit_price) * item.quantity
+            for item in obj.order_items.all()
+            if item.fabric and item.fabric.price > item.unit_price
+        )
+        system_settings = SystemSettings.get_active_settings()
+        taxable_base = OrderCalculationService.calculate_order_taxable_base(
+            obj.subtotal,
+            obj.stitching_price,
+            obj.order_type,
+            express_fee=obj.express_fee,
+        )
         return {
             'subtotal': obj.subtotal,
             'discount': discount,
             'stitching_price': obj.stitching_price,
+            'taxable_base': taxable_base,
+            'vat_rate': system_settings.tax_rate,
             'tax_amount': obj.tax_amount,
             'delivery_fee': obj.delivery_fee,
             'system_fee': obj.system_fee,
@@ -1798,6 +1827,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         
         # Update validated_data with calculated totals (including stitching_price)
         validated_data.update(totals)
+        # taxable_base is API-only; not an Order model field
+        validated_data.pop('taxable_base', None)
 
         # Requirement: Automatically set payment status to 'paid' for walk-in orders created by tailors
         # Also auto-accept the order so it skips the 'Accept' step
@@ -1922,10 +1953,15 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to create order history: {str(e)}")
-    
+
+        if order.service_mode == 'walk_in' and order.payment_status == 'paid':
+            from apps.invoicing.services.walk_in_invoice import schedule_walk_in_tax_invoice
+
+            schedule_walk_in_tax_invoice(order.id)
+
         return order
         
-
+        
 class OrderUpdateSerializer(serializers.ModelSerializer):
     rider_status = serializers.ChoiceField(
         choices=Order.RIDER_STATUS_CHOICES,
@@ -2227,11 +2263,27 @@ class OrderListSerializer(serializers.ModelSerializer):
     
     def get_pricing_summary(self, obj):
         """Return grouped pricing summary for consistency with detail view"""
-        discount = sum((item.fabric.price - item.unit_price) * item.quantity for item in obj.order_items.all() if item.fabric and item.fabric.price > item.unit_price)
+        from apps.core.models import SystemSettings
+        from apps.orders.services import OrderCalculationService
+
+        discount = sum(
+            (item.fabric.price - item.unit_price) * item.quantity
+            for item in obj.order_items.all()
+            if item.fabric and item.fabric.price > item.unit_price
+        )
+        system_settings = SystemSettings.get_active_settings()
+        taxable_base = OrderCalculationService.calculate_order_taxable_base(
+            obj.subtotal,
+            obj.stitching_price,
+            obj.order_type,
+            express_fee=obj.express_fee,
+        )
         return {
             'subtotal': str(obj.subtotal),
             'discount': str(discount),
             'stitching_price': str(obj.stitching_price),
+            'taxable_base': str(taxable_base),
+            'vat_rate': str(system_settings.tax_rate),
             'tax_amount': str(obj.tax_amount),
             'delivery_fee': str(obj.delivery_fee),
             'system_fee': str(obj.system_fee),

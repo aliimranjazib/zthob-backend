@@ -2,6 +2,11 @@ from django.urls import path
 
 from apps.core.views import SendOTPView, VerifyOTPView
 from apps.documents.views import OrderDocumentPreviewView
+from apps.invoicing.views import (
+    TailorOrderTaxInvoiceDownloadView,
+    TailorOrderTaxInvoiceRetryView,
+    TailorOrderTaxInvoiceView,
+)
 from apps.tailors.views import (
     # Profile views
     TailorProfileView,
@@ -143,6 +148,17 @@ urlpatterns = [
     # Order URLs
     path('orders/<int:order_id>/measurements/', TailorAddMeasurementsView.as_view(), name='tailor-add-measurements'),
     path('orders/<int:order_id>/download-pdf/', TailorOrderDownloadPDFView.as_view(), name='tailor-order-download-pdf'),
+    path('orders/<int:order_id>/tax-invoice/', TailorOrderTaxInvoiceView.as_view(), name='tailor-order-tax-invoice'),
+    path(
+        'orders/<int:order_id>/tax-invoice/download/',
+        TailorOrderTaxInvoiceDownloadView.as_view(),
+        name='tailor-order-tax-invoice-download',
+    ),
+    path(
+        'orders/<int:order_id>/tax-invoice/retry/',
+        TailorOrderTaxInvoiceRetryView.as_view(),
+        name='tailor-order-tax-invoice-retry',
+    ),
     path('orders/<int:order_id>/document-preview/', OrderDocumentPreviewView.as_view(), name='tailor-order-document-preview'),
     path('config/', TailorConfigView.as_view(), name='tailor-config'),
 
