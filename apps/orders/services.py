@@ -40,16 +40,42 @@ class OrderCalculationService:
         return subtotal.quantize(Decimal('0.01'))
     
     @staticmethod
-    def calculate_tax(subtotal, tax_rate=None):
-        """Calculate tax amount"""
+    def calculate_tax(taxable_base, tax_rate=None):
+        """Calculate VAT on a taxable base (ex-VAT amounts)."""
         if tax_rate is None:
             system_settings = OrderCalculationService.get_system_settings()
             tax_rate = system_settings.tax_rate
-        
-        if subtotal<=0:
+
+        taxable_base = Decimal(taxable_base or '0')
+        if taxable_base <= Decimal('0.00'):
             return Decimal('0.00')
-        tax_amount=subtotal * tax_rate
+        tax_amount = taxable_base * tax_rate
         return tax_amount.quantize(Decimal('0.01'))
+
+    @staticmethod
+    def calculate_order_taxable_base(
+        subtotal,
+        stitching_price,
+        order_type,
+        *,
+        express_fee=Decimal('0.00'),
+    ) -> Decimal:
+        """VAT base: fabric and/or stitching (ex-VAT), plus express fee when charged."""
+        subtotal = Decimal(subtotal or '0').quantize(Decimal('0.01'))
+        stitching_price = Decimal(stitching_price or '0').quantize(Decimal('0.01'))
+        express_fee = Decimal(express_fee or '0').quantize(Decimal('0.01'))
+
+        if order_type == 'stitching_only':
+            base = stitching_price
+        elif order_type == 'fabric_with_stitching':
+            base = subtotal + stitching_price
+        else:
+            base = subtotal
+
+        if express_fee > Decimal('0.00'):
+            base += express_fee
+
+        return base.quantize(Decimal('0.01'))
 
     @staticmethod
     def calculate_delivery_fee(subtotal, distance_km=None, delivery_address=None, tailor=None, delivery_latitude=None, delivery_longitude=None):
@@ -244,31 +270,25 @@ class OrderCalculationService:
             manual_stitching_price=manual_stitching_price,
         )
         
-        # Subtotal includes fabric price, stitching price is added separately
-        # Tax is calculated on subtotal (fabric price only)
-        tax_amount = OrderCalculationService.calculate_tax(subtotal, tax_rate)
-        
         # Delivery fee is calculated on subtotal (fabric price only)
         # Skip delivery fee for walk-in orders
         if service_mode == 'walk_in':
             delivery_fee = Decimal('0.00')
         else:
             delivery_fee = OrderCalculationService.calculate_delivery_fee(
-                subtotal, 
+                subtotal,
                 distance_km=distance_km,
                 delivery_address=delivery_address,
                 tailor=tailor,
                 delivery_latitude=delivery_latitude,
                 delivery_longitude=delivery_longitude
             )
-        
-        # Total includes: subtotal (fabric) + stitching_price + tax + delivery_fee
+
         system_fee = Decimal('0.00')
         if order_type in ['fabric_with_stitching', 'stitching_only'] and service_mode != 'walk_in':
             system_settings = OrderCalculationService.get_system_settings()
             system_fee = system_settings.system_fee_amount
-        
-        # Calculate express delivery fee
+
         express_fee = OrderCalculationService.calculate_express_fee(tailor, is_express)
 
         measurement_fee = OrderCalculationService.calculate_measurement_fee(
@@ -277,13 +297,30 @@ class OrderCalculationService:
             service_mode=service_mode,
             items_data=items_data,
         )
-        
+
+        taxable_base = OrderCalculationService.calculate_order_taxable_base(
+            subtotal,
+            stitching_price,
+            order_type,
+            express_fee=express_fee,
+        )
+        tax_amount = OrderCalculationService.calculate_tax(taxable_base, tax_rate)
+
         # Total includes order-level fees. Measurement fee is one-time per order.
-        total_amount = subtotal + stitching_price + tax_amount + delivery_fee + system_fee + express_fee + measurement_fee
-        
+        total_amount = (
+            subtotal
+            + stitching_price
+            + tax_amount
+            + delivery_fee
+            + system_fee
+            + express_fee
+            + measurement_fee
+        )
+
         return {
             'subtotal': subtotal,
             'stitching_price': stitching_price,
+            'taxable_base': taxable_base,
             'tax_amount': tax_amount,
             'delivery_fee': delivery_fee,
             'system_fee': system_fee,

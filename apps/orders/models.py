@@ -707,12 +707,15 @@ class Order(BaseModel):
                 'fabric':item.fabric,
                 'quantity':item.quantity,
             })
+        manual_stitching = self.stitching_price if self.order_type == 'stitching_only' else None
         totals = OrderCalculationService.calculate_all_totals(
-                items_data,
-                delivery_address=self.delivery_address,
-                tailor=self.tailor,
-                order_type=self.order_type,
-                service_mode=self.service_mode
+            items_data,
+            delivery_address=self.delivery_address,
+            tailor=self.tailor,
+            order_type=self.order_type,
+            service_mode=self.service_mode,
+            is_express=self.is_express,
+            manual_stitching_price=manual_stitching,
         )
         self.subtotal = totals['subtotal']
         self.stitching_price = totals.get('stitching_price', Decimal('0.00'))
