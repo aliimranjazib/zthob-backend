@@ -283,6 +283,13 @@ class Fabric(BaseModel):
             models.Index(fields=['approval_status']),
             models.Index(fields=['is_on_sale', 'sale_start', 'sale_end']),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                models.functions.Lower('name'),
+                'tailor',
+                name='uniq_legacy_fabric_name_per_shop',
+            ),
+        ]
     
     def save(self, *args, **kwargs):
         """Generate SKU if not provided."""

@@ -183,6 +183,8 @@ class V2FabricProductListCreateView(BaseTailorAPIView):
                     save_product_gallery(product=product, images=images)
         except OwnerPlanLimitError as exc:
             return owner_plan_limit_api_response(exc, request=request)
+        except serializers.ValidationError as exc:
+            return _validation_error_response(request, exc)
 
         product = get_product_for_business(business_id=business.id, product_id=product.id)
         response = V2FabricProductSerializer(product, context={'request': request})
@@ -365,14 +367,18 @@ class V2FabricProductAssignView(BaseTailorAPIView):
         except TailorPlusLimitError as exc:
             return plus_limit_api_response(exc, request=request)
 
-        shop_fabric = assign_product_to_shop(
-            product=product,
-            shop=shop,
-            stock=stock,
-            price_override=serializer.validated_data.get('price_override'),
-            is_visible=serializer.validated_data.get('is_visible', True),
-            created_by=request.user,
-        )
+        try:
+            shop_fabric = assign_product_to_shop(
+                product=product,
+                shop=shop,
+                stock=stock,
+                price_override=serializer.validated_data.get('price_override'),
+                is_visible=serializer.validated_data.get('is_visible', True),
+                created_by=request.user,
+            )
+        except serializers.ValidationError as exc:
+            return _validation_error_response(request, exc)
+
         shop_fabric = get_shop_fabric(shop_id=shop.id, shop_fabric_id=shop_fabric.id)
         response = V2ShopFabricSerializer(shop_fabric, context={'request': request})
         return api_response(

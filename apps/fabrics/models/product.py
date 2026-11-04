@@ -97,6 +97,14 @@ class FabricProduct(BaseModel):
             models.Index(fields=['business', 'is_active'], name='tailors_fab_busines_7977f6_idx'),
             models.Index(fields=['business', 'approval_status'], name='tailors_fab_busines_6a90d8_idx'),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                models.functions.Lower('name'),
+                'business',
+                condition=models.Q(show_in_owner_catalog=True),
+                name='uniq_owner_catalog_fabric_name_per_business',
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.sku:
