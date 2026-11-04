@@ -6,6 +6,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from apps.fabrics.models import FabricProduct, FabricProductImage, ShopFabric
+from apps.fabrics.services.fabric_names import validate_fabric_name_for_legacy_tailor
 from apps.tailors.models import Fabric, FabricImage, FabricTag
 from apps.tailors.shop_access import get_tailor_profile, get_token_shop_id
 
@@ -137,6 +138,11 @@ def create_from_v1_multipart(*, request, validated_data) -> Fabric:
     images_data = validated_data.pop('images', [])
     tags_data = validated_data.pop('tags', [])
 
+    validate_fabric_name_for_legacy_tailor(
+        tailor_profile.id,
+        validated_data.get('name'),
+    )
+
     fabric = Fabric.objects.create(
         tailor=tailor_profile,
         created_by=request.user,
@@ -164,6 +170,13 @@ def create_from_v1_multipart(*, request, validated_data) -> Fabric:
 def update_from_v1(*, fabric: Fabric, validated_data) -> Fabric:
     """Update legacy fabric from v1 payload and sync linked V2 rows when present."""
     tags_data = validated_data.pop('tags', None)
+
+    if 'name' in validated_data:
+        validate_fabric_name_for_legacy_tailor(
+            fabric.tailor_id,
+            validated_data.get('name'),
+            exclude_fabric_id=fabric.id,
+        )
 
     for attr, value in validated_data.items():
         setattr(fabric, attr, value)

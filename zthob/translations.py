@@ -55,6 +55,8 @@ TRANSLATIONS_AR = {
     "Delivery address with ID {id} does not exist. Please select a valid address.": "عنوان التسليم بالمعرف {id} غير موجود. يرجى اختيار عنوان صحيح.",
     "Family member with ID {id} does not exist. Please select a valid family member.": "عضو العائلة بالمعرف {id} غير موجود. يرجى اختيار عضو عائلة صحيح.",
     "Fabric with ID {id} does not exist. Please select a valid fabric.": "القماش بالمعرف {id} غير موجود. يرجى اختيار قماش صحيح.",
+    "A fabric with this name already exists for this shop.": "يوجد قماش بهذا الاسم بالفعل في هذا المتجر.",
+    "A fabric with this name already exists in your catalog.": "يوجد قماش بهذا الاسم بالفعل في قائمة أقمشة نشاطك.",
     "Customer with ID {id} does not exist.": "العميل بالمعرف {id} غير موجود.",
     "Invalid credentials": "بيانات الاعتماد غير صحيحة",
     "User not found": "المستخدم غير موجود",

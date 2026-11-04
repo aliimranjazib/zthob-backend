@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.db import transaction
 
 from apps.fabrics.models import FabricStockMovement, ShopFabric
+from apps.fabrics.services.fabric_names import validate_fabric_name_for_shop
 from apps.fabrics.services.legacy_bridge import sync_legacy_fabric_from_shop_fabric
 
 
@@ -38,6 +39,12 @@ def assign_product_to_shop(
     is_visible: bool = True,
     created_by=None,
 ) -> ShopFabric:
+    validate_fabric_name_for_shop(
+        shop.id,
+        product.name,
+        exclude_product_id=product.id,
+    )
+
     shop_fabric = ShopFabric.objects.filter(shop=shop, product=product).first()
     previous_stock = shop_fabric.stock if shop_fabric else 0
 

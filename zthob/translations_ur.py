@@ -45,6 +45,8 @@ TRANSLATIONS_UR = {
     'Delivery address with ID {id} does not exist. Please select a valid address.': 'شناختی نمبر {id} والا ترسیل کا پتہ موجود نہیں ہے۔ براہ کرم درست پتہ منتخب کریں۔',
     'Family member with ID {id} does not exist. Please select a valid family member.': 'شناختی نمبر {id} والا خاندانی رکن موجود نہیں ہے۔ براہ کرم درست رکن منتخب کریں۔',
     'Fabric with ID {id} does not exist. Please select a valid fabric.': 'شناختی نمبر {id} والا کپڑا موجود نہیں ہے۔ براہ کرم درست کپڑا منتخب کریں۔',
+    'A fabric with this name already exists for this shop.': 'اس دکان میں یہ نام پہلے سے موجود ہے۔',
+    'A fabric with this name already exists in your catalog.': 'آپ کی فہرست میں یہ کپڑے کا نام پہلے سے موجود ہے۔',
     'Customer with ID {id} does not exist.': 'شناختی نمبر {id} والا گاہک موجود نہیں ہے۔',
     'Invalid credentials': 'لاگ ان کی معلومات درست نہیں ہیں',
     'User not found': 'صارف نہیں ملا',

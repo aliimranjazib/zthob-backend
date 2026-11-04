@@ -160,24 +160,28 @@ class V2ShopFabricListView(BaseTailorAPIView):
         except TailorPlusLimitError as exc:
             return plus_limit_api_response(exc, request=request)
 
-        with transaction.atomic():
-            business = resolve_business_for_shop(shop)
-            product = create_fabric_product(
-                business=business,
-                validated_data=validated_data,
-                created_by=request.user,
-            )
-            if images:
-                save_product_gallery(product=product, images=images)
+        try:
+            with transaction.atomic():
+                business = resolve_business_for_shop(shop)
+                product = create_fabric_product(
+                    business=business,
+                    validated_data=validated_data,
+                    created_by=request.user,
+                    shop_id=shop.id,
+                )
+                if images:
+                    save_product_gallery(product=product, images=images)
 
-            assign_stock = stock if stock is not None else 0
-            shop_fabric = assign_product_to_shop(
-                product=product,
-                shop=shop,
-                stock=assign_stock,
-                is_visible=True,
-                created_by=request.user,
-            )
+                assign_stock = stock if stock is not None else 0
+                shop_fabric = assign_product_to_shop(
+                    product=product,
+                    shop=shop,
+                    stock=assign_stock,
+                    is_visible=True,
+                    created_by=request.user,
+                )
+        except serializers.ValidationError as exc:
+            return _validation_error_response(request, exc)
 
         shop_fabric = get_shop_fabric(shop_id=shop.id, shop_fabric_id=shop_fabric.id)
         response = V2ShopFabricSerializer(shop_fabric, context={'request': request})

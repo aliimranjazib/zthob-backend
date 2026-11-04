@@ -816,6 +816,87 @@ class V2FabricCatalogTests(TestCase):
         shop_names = [item['product']['name'] for item in shop_fabrics.data['data']]
         self.assertIn('V1 Shop Cotton', shop_names)
 
+    def test_duplicate_owner_catalog_fabric_name_rejected(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        payload = {
+            'name': 'Dup Owner Cotton',
+            'price': '180.00',
+            'category_id': self.fabric_category.id,
+            'seasons': 'all_season',
+        }
+        first = self.client.post(self._url('fabrics_v2:v2-fabric-products'), payload, format='json')
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
+
+        second = self.client.post(self._url('fabrics_v2:v2-fabric-products'), payload, format='json')
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST, second.data)
+        self.assertIn('name', second.data['errors'])
+
+    def test_duplicate_shop_fabric_name_rejected(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        payload = {
+            'name': 'Dup Shop Cotton',
+            'price': '150.00',
+            'stock': 4,
+            'category_id': self.fabric_category.id,
+        }
+        first = self.client.post(
+            self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id),
+            payload,
+            format='json',
+        )
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
+
+        second = self.client.post(
+            self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id),
+            {**payload, 'name': 'dup shop cotton'},
+            format='json',
+        )
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST, second.data)
+        self.assertIn('name', second.data['errors'])
+
+    def test_duplicate_assign_rejected_when_shop_already_has_name(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        shop_resp = self.client.post(
+            self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id),
+            {
+                'name': 'Shared Name Linen',
+                'price': '140.00',
+                'stock': 3,
+                'category_id': self.fabric_category.id,
+            },
+            format='json',
+        )
+        self.assertEqual(shop_resp.status_code, status.HTTP_201_CREATED, shop_resp.data)
+
+        owner_product = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Shared Name Linen',
+                'price': '160.00',
+                'category_id': self.fabric_category.id,
+                'seasons': 'all_season',
+            },
+            format='json',
+        )
+        self.assertEqual(owner_product.status_code, status.HTTP_201_CREATED, owner_product.data)
+
+        assign_resp = self.client.post(
+            self._url(
+                'fabrics_v2:v2-fabric-product-assign',
+                product_id=owner_product.data['data']['id'],
+            ),
+            {'shop_id': shop_id, 'stock': 5, 'is_visible': True},
+            format='json',
+        )
+        self.assertEqual(assign_resp.status_code, status.HTTP_400_BAD_REQUEST, assign_resp.data)
+        self.assertIn('name', assign_resp.data['errors'])
+
 
 @override_settings(
     REST_FRAMEWORK=TEST_REST_FRAMEWORK,
