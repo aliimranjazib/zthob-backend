@@ -253,7 +253,9 @@ class TailorFabricCountryListView(APIView):
 
     def get(self, request):
         queryset = FabricCountry.objects.filter(is_active=True).order_by("display_order", "name")
-        data = FabricCountrySerializer(queryset, many=True).data
+        data = FabricCountrySerializer(
+            queryset, many=True, context={"request": request}
+        ).data
         return api_response(
             success=True,
             message="Fabric countries fetched",
@@ -272,7 +274,9 @@ class AdminFabricCountryListCreateView(APIView):
 
     def get(self, request):
         queryset = FabricCountry.objects.all().order_by("display_order", "name")
-        data = FabricCountrySerializer(queryset, many=True).data
+        data = FabricCountrySerializer(
+            queryset, many=True, context={"request": request}
+        ).data
         return api_response(
             success=True,
             message="Fabric countries fetched",
@@ -281,7 +285,9 @@ class AdminFabricCountryListCreateView(APIView):
         )
 
     def post(self, request):
-        serializer = FabricCountrySerializer(data=request.data)
+        serializer = FabricCountrySerializer(
+            data=request.data, context={"request": request}
+        )
         if serializer.is_valid():
             serializer.save(created_by=request.user)
             return api_response(
@@ -311,7 +317,9 @@ class AdminFabricCountryDetailView(APIView):
 
     def get(self, request, pk):
         country = self.get_object(pk)
-        data = FabricCountrySerializer(country).data
+        data = FabricCountrySerializer(
+            country, context={"request": request}
+        ).data
         return api_response(
             success=True,
             message="Fabric country fetched",
@@ -321,7 +329,9 @@ class AdminFabricCountryDetailView(APIView):
 
     def put(self, request, pk):
         country = self.get_object(pk)
-        serializer = FabricCountrySerializer(country, data=request.data)
+        serializer = FabricCountrySerializer(
+            country, data=request.data, context={"request": request}
+        )
         if serializer.is_valid():
             serializer.save()
             return api_response(
@@ -339,7 +349,9 @@ class AdminFabricCountryDetailView(APIView):
 
     def patch(self, request, pk):
         country = self.get_object(pk)
-        serializer = FabricCountrySerializer(country, data=request.data, partial=True)
+        serializer = FabricCountrySerializer(
+            country, data=request.data, partial=True, context={"request": request}
+        )
         if serializer.is_valid():
             serializer.save()
             return api_response(

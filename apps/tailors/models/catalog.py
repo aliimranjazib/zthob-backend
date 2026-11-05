@@ -94,6 +94,12 @@ class FabricCountry(BaseModel):
         blank=True,
         help_text="Country name in Arabic"
     )
+    name_ur = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Country name in Urdu"
+    )
     description = models.TextField(
         null=True,
         blank=True,
@@ -103,6 +109,11 @@ class FabricCountry(BaseModel):
         null=True,
         blank=True,
         help_text="Short description in Arabic"
+    )
+    description_ur = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Short description in Urdu"
     )
     famous_mills = models.TextField(
         null=True,
@@ -128,6 +139,28 @@ class FabricCountry(BaseModel):
 
     def __str__(self):
         return f"{self.name} ({self.code})"
+
+    def get_localized_name(self, language="en"):
+        if language == "ur":
+            if self.name_ur:
+                return self.name_ur
+            if self.name_ar:
+                return self.name_ar
+            return self.name
+        if language == "ar" and self.name_ar:
+            return self.name_ar
+        return self.name
+
+    def get_localized_description(self, language="en"):
+        if language == "ur":
+            if self.description_ur:
+                return self.description_ur
+            if self.description_ar:
+                return self.description_ar
+            return self.description or ""
+        if language == "ar" and self.description_ar:
+            return self.description_ar
+        return self.description or ""
 
 
 class Fabric(BaseModel):

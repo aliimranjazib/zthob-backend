@@ -7,6 +7,7 @@ from ..models import (
 from ..models.base import SEASON_CHOICES
 from .base import ImageWithMetadataSerializer
 from apps.core.media_utils import build_public_media_url
+from zthob.translations import get_language_from_request
 
 # Fabric Type Serializers
 class FabricTypeSerializer(serializers.ModelSerializer):
@@ -32,23 +33,54 @@ class FabricCategoryBasicSerializer(serializers.ModelSerializer):
 
 
 class FabricCountrySerializer(serializers.ModelSerializer):
+    localized_name = serializers.SerializerMethodField()
+    localized_description = serializers.SerializerMethodField()
+
     class Meta:
         model = FabricCountry
         fields = [
-            "id", "code", "name", "name_ar",
-            "description", "description_ar",
+            "id", "code",
+            "name", "name_ar", "name_ur",
+            "description", "description_ar", "description_ur",
+            "localized_name", "localized_description",
             "famous_mills", "display_order", "is_active",
             "created_at", "updated_at",
         ]
 
+    def _request_language(self):
+        request = self.context.get("request")
+        return get_language_from_request(request) if request else "en"
+
+    def get_localized_name(self, obj):
+        return obj.get_localized_name(self._request_language())
+
+    def get_localized_description(self, obj):
+        return obj.get_localized_description(self._request_language())
+
 
 class FabricCountryBasicSerializer(serializers.ModelSerializer):
+    localized_name = serializers.SerializerMethodField()
+    localized_description = serializers.SerializerMethodField()
+
     class Meta:
         model = FabricCountry
         fields = [
-            "id", "code", "name", "name_ar",
-            "description", "description_ar", "famous_mills",
+            "id", "code",
+            "name", "name_ar", "name_ur",
+            "description", "description_ar", "description_ur",
+            "localized_name", "localized_description",
+            "famous_mills",
         ]
+
+    def _request_language(self):
+        request = self.context.get("request")
+        return get_language_from_request(request) if request else "en"
+
+    def get_localized_name(self, obj):
+        return obj.get_localized_name(self._request_language())
+
+    def get_localized_description(self, obj):
+        return obj.get_localized_description(self._request_language())
 
 # Fabric Tag Serializers
 class FabricTagSerializer(serializers.ModelSerializer):
