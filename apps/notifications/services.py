@@ -322,7 +322,7 @@ class NotificationService:
                 'rider': 'Order #{order_number} is ready for pickup from tailor',
             },
             'ready_for_pickup': {
-                'customer': 'Your order #{order_number} is ready for pickup at the shop',
+                'customer': 'Your order #{order_number} is ready to pick up at the shop.',
                 'tailor': 'Order #{order_number} is ready for customer pickup',
             },
             'delivered': {

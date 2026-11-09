@@ -1956,8 +1956,13 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
         if order.service_mode == 'walk_in' and order.payment_status == 'paid':
             from apps.invoicing.services.walk_in_invoice import schedule_walk_in_tax_invoice
+            from apps.orders.walk_in_whatsapp import (
+                EVENT_ORDER_CREATED,
+                schedule_walk_in_whatsapp,
+            )
 
             schedule_walk_in_tax_invoice(order.id)
+            schedule_walk_in_whatsapp(order.id, EVENT_ORDER_CREATED)
 
         return order
         

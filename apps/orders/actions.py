@@ -162,6 +162,12 @@ class BaseOrderAction(ABC):
         
         # 1. Order Status changed?
         if self.order.status != self._old_status:
+            from apps.orders.walk_in_whatsapp import maybe_schedule_ready_for_pickup_whatsapp
+
+            maybe_schedule_ready_for_pickup_whatsapp(
+                self.order,
+                old_status=self._old_status,
+            )
             NotificationService.send_order_status_notification(
                 self.order, self._old_status, self.order.status, self.user
             )

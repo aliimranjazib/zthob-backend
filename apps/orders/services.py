@@ -1263,6 +1263,14 @@ class OrderStatusTransitionService:
                 user_id = user.id if user and hasattr(user, 'id') else None
 
                 if status_changed:
+                    from apps.orders.walk_in_whatsapp import (
+                        maybe_schedule_ready_for_pickup_whatsapp,
+                    )
+
+                    maybe_schedule_ready_for_pickup_whatsapp(
+                        order,
+                        old_status=old_status,
+                    )
                     send_order_status_notification_task.delay(
                         order_id=order.id,
                         old_status=old_status,
