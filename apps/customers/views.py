@@ -758,7 +758,9 @@ class FabricFavoriteListView(APIView):
         URL: /api/customers/favorites/
         """
         favorites = FabricFavorite.objects.filter(
-            user=request.user
+            user=request.user,
+            fabric__is_active=True,
+            fabric__approval_status='approved',
         ).select_related(
             'fabric',
             'fabric__category',

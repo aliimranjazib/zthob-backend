@@ -1435,6 +1435,92 @@ class StyleReferenceImage(BaseModel):
         return f"StyleReferenceImage #{self.pk} by {self.uploaded_by_id}"
 
 
+class WalkInWhatsAppDelivery(BaseModel):
+    """Idempotent log of WSLA WhatsApp template sends for walk-in orders."""
+
+    EVENT_ORDER_CREATED = 'order_created'
+    EVENT_READY_FOR_PICKUP = 'ready_for_pickup'
+    EVENT_CHOICES = (
+        (EVENT_ORDER_CREATED, 'Order created'),
+        (EVENT_READY_FOR_PICKUP, 'Ready for pickup'),
+    )
+
+    STATUS_PENDING = 'pending'
+    STATUS_SENT = 'sent'
+    STATUS_FAILED = 'failed'
+    STATUS_CHOICES = (
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_SENT, 'Sent'),
+        (STATUS_FAILED, 'Failed'),
+    )
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='walk_in_whatsapp_deliveries',
+    )
+    event = models.CharField(max_length=32, choices=EVENT_CHOICES)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    template_name = models.CharField(max_length=128, blank=True, default='')
+    phone_used = models.CharField(max_length=20, blank=True, default='')
+    provider_message_id = models.CharField(max_length=128, blank=True, default='')
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    error_message = models.TextField(blank=True, default='')
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['order', 'event'],
+                name='orders_walk_in_whatsapp_order_event_uniq',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['event', 'status'], name='orders_wa_event_status_idx'),
+        ]
+
+    def __str__(self):
+        return f'WalkInWhatsAppDelivery order={self.order_id} event={self.event} status={self.status}'
+
+
+class DailySalesWhatsAppDelivery(BaseModel):
+    """Idempotent log of daily mgask_daily_sales_report sends to tailor shops."""
+
+    STATUS_PENDING = 'pending'
+    STATUS_SENT = 'sent'
+    STATUS_FAILED = 'failed'
+    STATUS_CHOICES = (
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_SENT, 'Sent'),
+        (STATUS_FAILED, 'Failed'),
+    )
+
+    report_key = models.CharField(max_length=64, unique=True, db_index=True)
+    shop = models.ForeignKey(
+        'tailors.TailorProfile',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='daily_sales_whatsapp_deliveries',
+    )
+    report_date = models.DateField(db_index=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    template_name = models.CharField(max_length=128, blank=True, default='')
+    phone_used = models.CharField(max_length=20, blank=True, default='')
+    provider_message_id = models.CharField(max_length=128, blank=True, default='')
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    error_message = models.TextField(blank=True, default='')
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['report_date', 'status'], name='orders_daily_wa_dt_st_idx'),
+        ]
+
+    def __str__(self):
+        return f'DailySalesWhatsAppDelivery key={self.report_key} status={self.status}'
+
+
 # ============================================================================
 # FSM SIGNAL HANDLERS FOR AUTOMATIC NOTIFICATIONS
 # ============================================================================

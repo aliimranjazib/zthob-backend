@@ -481,9 +481,11 @@ class OrderCreateView(APIView):
             try:
                 order=serializer.save()
                 response_serializer = OrderSerializer(order, context={'request':request})
+                from apps.orders.walk_in_whatsapp import walk_in_order_created_api_message
+
                 return api_response(
                 success=True,
-                message="Order created successfully",
+                message=walk_in_order_created_api_message(order),
                 data=response_serializer.data,
                 status_code=status.HTTP_201_CREATED)
             except ValidationError as e:

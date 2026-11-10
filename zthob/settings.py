@@ -111,6 +111,50 @@ ZATCA_INVOICE_ISSUE_SYNC = os.getenv(
     'true' if DEBUG else 'false',
 ).lower() in ('1', 'true', 'yes')
 
+# WSLA WhatsApp (walk-in customer templates)
+WSLA_WHATSAPP_ENABLED = os.getenv('WSLA_WHATSAPP_ENABLED', 'false').lower() in ('1', 'true', 'yes')
+WSLA_BASE_URL = os.getenv('WSLA_BASE_URL', 'https://api.wsla.io').strip()
+WSLA_WHATSAPP_TOKEN = os.getenv('WSLA_WHATSAPP_TOKEN', '').strip()
+WSLA_TEMPLATE_WALK_IN_CREATED = os.getenv(
+    'WSLA_TEMPLATE_WALK_IN_CREATED',
+    'mgask_walk_in_order_created',
+).strip()
+WSLA_TEMPLATE_WALK_IN_READY = os.getenv(
+    'WSLA_TEMPLATE_WALK_IN_READY',
+    'mgask_walk_in_ready',
+).strip()
+WSLA_TEMPLATE_LANG = os.getenv('WSLA_TEMPLATE_LANG', 'ar').strip()
+WSLA_TIMEOUT_SECONDS = int(os.getenv('WSLA_TIMEOUT_SECONDS', '30'))
+WSLA_WHATSAPP_ADDRESS_MAX_LEN = int(os.getenv('WSLA_WHATSAPP_ADDRESS_MAX_LEN', '200'))
+WSLA_WALK_IN_REQUIRE_TAILOR_PLUS = os.getenv(
+    'WSLA_WALK_IN_REQUIRE_TAILOR_PLUS',
+    'false',
+).lower() in ('1', 'true', 'yes')
+WSLA_WHATSAPP_SYNC = os.getenv(
+    'WSLA_WHATSAPP_SYNC',
+    'true' if DEBUG else 'false',
+).lower() in ('1', 'true', 'yes')
+# Daily tailor sales report (template mgask_daily_sales_report)
+WSLA_DAILY_SALES_REPORT_ENABLED = os.getenv(
+    'WSLA_DAILY_SALES_REPORT_ENABLED',
+    'false',
+).lower() in ('1', 'true', 'yes')
+WSLA_TEMPLATE_DAILY_SALES_REPORT = os.getenv(
+    'WSLA_TEMPLATE_DAILY_SALES_REPORT',
+    'mgask_daily_sales_report',
+).strip()
+WSLA_DAILY_SALES_REPORT_TZ = os.getenv('WSLA_DAILY_SALES_REPORT_TZ', 'Asia/Riyadh').strip()
+WSLA_DAILY_SALES_REPORT_HOUR = int(os.getenv('WSLA_DAILY_SALES_REPORT_HOUR', '0'))
+WSLA_DAILY_SALES_REPORT_MINUTE = int(os.getenv('WSLA_DAILY_SALES_REPORT_MINUTE', '5'))
+WSLA_DAILY_SALES_REQUIRE_TAILOR_PLUS = os.getenv(
+    'WSLA_DAILY_SALES_REQUIRE_TAILOR_PLUS',
+    'false',
+).lower() in ('1', 'true', 'yes')
+WSLA_DAILY_SALES_INCLUDE_PLATFORM_IN_LINE9 = os.getenv(
+    'WSLA_DAILY_SALES_INCLUDE_PLATFORM_IN_LINE9',
+    'true',
+).lower() in ('1', 'true', 'yes')
+
 MIDDLEWARE = [
     "django.middleware.gzip.GZipMiddleware",
     "django.middleware.security.SecurityMiddleware",
@@ -339,6 +383,28 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+
+# Celery Beat — daily tailor sales WhatsApp (disabled unless WSLA_DAILY_SALES_REPORT_ENABLED)
+if WSLA_DAILY_SALES_REPORT_ENABLED and WSLA_WHATSAPP_ENABLED:
+    try:
+        from celery.schedules import crontab
+        from zoneinfo import ZoneInfo
+
+        _daily_sales_tz = ZoneInfo(WSLA_DAILY_SALES_REPORT_TZ)
+        CELERY_BEAT_SCHEDULE = {
+            'send-daily-sales-whatsapp': {
+                'task': 'apps.orders.tasks.send_daily_sales_whatsapp_task',
+                'schedule': crontab(
+                    hour=WSLA_DAILY_SALES_REPORT_HOUR,
+                    minute=WSLA_DAILY_SALES_REPORT_MINUTE,
+                    tz=_daily_sales_tz,
+                ),
+            },
+        }
+    except Exception:
+        CELERY_BEAT_SCHEDULE = {}
+else:
+    CELERY_BEAT_SCHEDULE = {}
 
 # Email settings (for production and staging)
 if APP_ENV in ['production', 'staging']:

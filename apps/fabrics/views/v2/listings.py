@@ -23,6 +23,7 @@ from apps.fabrics.services.images import (
 from apps.fabrics.services.listings import (
     assign_product_to_shop,
     get_shop_fabric,
+    get_shop_fabric_record,
     record_stock_movement,
     shop_fabrics_queryset,
     update_shop_fabric,
@@ -212,7 +213,7 @@ class V2ShopFabricDetailView(BaseTailorAPIView):
                 request=request,
             )
 
-        shop_fabric = get_shop_fabric(shop_id=shop_id, shop_fabric_id=shop_fabric_id)
+        shop_fabric = get_shop_fabric_record(shop_id=shop_id, shop_fabric_id=shop_fabric_id)
         if shop_fabric is None:
             return api_response(
                 success=False,
@@ -234,12 +235,44 @@ class V2ShopFabricDetailView(BaseTailorAPIView):
             shop_fabric=shop_fabric,
             validated_data=serializer.validated_data,
         )
-        shop_fabric = get_shop_fabric(shop_id=shop_id, shop_fabric_id=shop_fabric.id)
         response = V2ShopFabricSerializer(shop_fabric, context={'request': request})
         return api_response(
             success=True,
             message='Shop fabric updated',
             data=response.data,
+            status_code=status.HTTP_200_OK,
+            request=request,
+        )
+
+    @extend_schema(
+        responses={200: {'description': 'Shop fabric removed from shelf'}},
+        tags=['V2 Fabrics'],
+    )
+    def delete(self, request, shop_id, shop_fabric_id):
+        if not user_can_manage_shop_fabrics(request, shop_id=shop_id):
+            return api_response(
+                success=False,
+                message='Permission denied',
+                status_code=status.HTTP_403_FORBIDDEN,
+                request=request,
+            )
+
+        shop_fabric = get_shop_fabric_record(shop_id=shop_id, shop_fabric_id=shop_fabric_id)
+        if shop_fabric is None:
+            return api_response(
+                success=False,
+                message='Shop fabric not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request,
+            )
+
+        from apps.fabrics.services.catalog_lifecycle import deactivate_shop_listing
+
+        deactivate_shop_listing(shop_fabric=shop_fabric)
+        return api_response(
+            success=True,
+            message='Fabric removed from shop',
+            data=None,
             status_code=status.HTTP_200_OK,
             request=request,
         )

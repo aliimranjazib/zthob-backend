@@ -153,6 +153,8 @@ def count_owner_catalog_fabrics_on_shop(shop_id: int) -> int:
     return ShopFabric.objects.filter(
         shop_id=shop_id,
         is_active=True,
+        is_visible=True,
+        product__is_active=True,
         product__show_in_owner_catalog=True,
     ).count()
 
@@ -161,6 +163,8 @@ def count_shop_created_fabrics_on_shop(shop_id: int) -> int:
     v2_count = ShopFabric.objects.filter(
         shop_id=shop_id,
         is_active=True,
+        is_visible=True,
+        product__is_active=True,
         product__show_in_owner_catalog=False,
     ).count()
     legacy_count = Fabric.objects.filter(

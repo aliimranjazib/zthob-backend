@@ -348,7 +348,9 @@ class TailorFabricDetailView(APIView):
             )
         
         fabric_name = fabric.name
-        fabric.delete()
+        from apps.fabrics.services.catalog_lifecycle import delete_tailor_fabric
+
+        delete_tailor_fabric(fabric=fabric)
         return api_response(
             success=True, 
             message=f"Fabric '{fabric_name}' deleted successfully", 

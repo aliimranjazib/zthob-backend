@@ -395,7 +395,9 @@ class TailorFabricView(BaseTailorAuthenticatedView):
         if not profile:
              return api_response(success=False, message="Profile missing", status_code=404)
              
-        queryset = Fabric.objects.filter(tailor=profile).order_by("-created_at")
+        queryset = Fabric.objects.filter(tailor=profile, is_active=True).order_by("-created_at")
+        if request.query_params.get('include_inactive', '').lower() in ('1', 'true', 'yes'):
+            queryset = Fabric.objects.filter(tailor=profile).order_by("-created_at")
         data = FabricSerializer(queryset, many=True, context={'request': request}).data
         return api_response(
             success=True, 
@@ -627,7 +629,9 @@ class TailorFabricDetailView(BaseTailorAuthenticatedView):
             )
         
         fabric_name = fabric.name
-        fabric.delete()
+        from apps.fabrics.services.catalog_lifecycle import delete_tailor_fabric
+
+        delete_tailor_fabric(fabric=fabric)
         return api_response(
             success=True, 
             message=f"Fabric '{fabric_name}' deleted successfully", 

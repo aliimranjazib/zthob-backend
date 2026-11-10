@@ -9,6 +9,7 @@ from apps.fabrics.services.fabric_names import (
     validate_fabric_name_for_business_owner_catalog,
     validate_fabric_name_for_shop,
 )
+from apps.fabrics.services.catalog_lifecycle import deactivate_product_shop_assignments
 from apps.fabrics.services.legacy_bridge import sync_legacy_fabric_from_shop_fabric
 
 
@@ -26,8 +27,11 @@ def fabric_products_queryset(*, business_id: int):
     )
 
 
-def owner_catalog_products_queryset(*, business_id: int):
-    return fabric_products_queryset(business_id=business_id).filter(show_in_owner_catalog=True)
+def owner_catalog_products_queryset(*, business_id: int, include_inactive: bool = False):
+    queryset = fabric_products_queryset(business_id=business_id).filter(show_in_owner_catalog=True)
+    if not include_inactive:
+        queryset = queryset.filter(is_active=True)
+    return queryset
 
 
 def get_product_for_business(*, business_id: int, product_id: int) -> FabricProduct | None:
@@ -117,6 +121,9 @@ def update_fabric_product(*, product: FabricProduct, validated_data) -> FabricPr
     product.save()
     if tags is not None:
         product.tags.set(tags)
+
+    if validated_data.get('is_active') is False:
+        deactivate_product_shop_assignments(product=product)
 
     sync_product_assignments_to_legacy(product=product)
     return product

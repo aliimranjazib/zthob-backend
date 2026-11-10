@@ -389,6 +389,65 @@ class V2FabricProductAssignView(BaseTailorAPIView):
             request=request,
         )
 
+    @extend_schema(
+        request=V2FabricAssignSerializer,
+        responses={200: {'description': 'Fabric removed from shop'}},
+        tags=['V2 Fabrics'],
+    )
+    def delete(self, request, product_id):
+        business = _business_for_fabric_actor(request)
+        if business is None:
+            return api_response(
+                success=False,
+                message='Business not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request,
+            )
+        product = get_product_for_business(business_id=business.id, product_id=product_id)
+        if product is None:
+            return api_response(
+                success=False,
+                message='Fabric product not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request,
+            )
+
+        shop_id = request.data.get('shop_id') if isinstance(request.data, dict) else request.query_params.get('shop_id')
+        if not shop_id:
+            return api_response(
+                success=False,
+                message='shop_id is required',
+                status_code=status.HTTP_400_BAD_REQUEST,
+                request=request,
+            )
+
+        shop = get_shop_for_owner(owner_id=request.user.id, shop_id=int(shop_id))
+        if shop is None or shop.business_id != business.id:
+            return api_response(
+                success=False,
+                message='Shop not found',
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request,
+            )
+
+        from apps.fabrics.services.catalog_lifecycle import detach_product_from_shop
+
+        removed = detach_product_from_shop(product_id=product.id, shop_id=shop.id)
+        if not removed:
+            return api_response(
+                success=False,
+                message='This fabric is not assigned to the shop',
+                status_code=status.HTTP_404_NOT_FOUND,
+                request=request,
+            )
+        return api_response(
+            success=True,
+            message='Fabric removed from shop',
+            data=None,
+            status_code=status.HTTP_200_OK,
+            request=request,
+        )
+
 
 class V2FabricProductImageAddView(BaseTailorAuthenticatedView):
     required_employee_permission = 'can_manage_catalog'
