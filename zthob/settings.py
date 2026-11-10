@@ -154,6 +154,45 @@ WSLA_DAILY_SALES_INCLUDE_PLATFORM_IN_LINE9 = os.getenv(
     'WSLA_DAILY_SALES_INCLUDE_PLATFORM_IN_LINE9',
     'true',
 ).lower() in ('1', 'true', 'yes')
+WSLA_WALK_IN_ORDER_URL_BUTTON_ENABLED = os.getenv(
+    'WSLA_WALK_IN_ORDER_URL_BUTTON_ENABLED',
+    'true',
+).lower() in ('1', 'true', 'yes')
+WSLA_URL_BUTTON_INDEX = os.getenv('WSLA_URL_BUTTON_INDEX', '0').strip()
+
+# Customer app deep links (WhatsApp URL button + /.well-known verification)
+_CUSTOMER_DEEP_LINK_BASE_DEFAULT = (
+    'https://app.mgask.net/order/' if APP_ENV != 'production' else 'https://prod.mgask.net/order/'
+)
+CUSTOMER_ORDER_DEEP_LINK_BASE = os.getenv(
+    'CUSTOMER_ORDER_DEEP_LINK_BASE',
+    _CUSTOMER_DEEP_LINK_BASE_DEFAULT,
+).strip()
+CUSTOMER_ORDER_DEEP_LINK_PATH_PATTERN = os.getenv(
+    'CUSTOMER_ORDER_DEEP_LINK_PATH_PATTERN',
+    '/order/*',
+).strip()
+CUSTOMER_APP_ANDROID_PACKAGE = os.getenv(
+    'CUSTOMER_APP_ANDROID_PACKAGE',
+    'com.mgask.customerapp',
+).strip()
+CUSTOMER_APP_IOS_BUNDLE_ID = os.getenv(
+    'CUSTOMER_APP_IOS_BUNDLE_ID',
+    'com.mgask.customerapp',
+).strip()
+CUSTOMER_APP_APPLE_TEAM_ID = os.getenv('CUSTOMER_APP_APPLE_TEAM_ID', '').strip()
+CUSTOMER_APP_ANDROID_SHA256_FINGERPRINTS = os.getenv(
+    'CUSTOMER_APP_ANDROID_SHA256_FINGERPRINTS',
+    '',
+).strip()
+CUSTOMER_APP_PLAY_STORE_URL = os.getenv(
+    'CUSTOMER_APP_PLAY_STORE_URL',
+    'https://play.google.com/store/apps/details?id=com.mgask.customerapp',
+).strip()
+CUSTOMER_APP_APP_STORE_URL = os.getenv(
+    'CUSTOMER_APP_APP_STORE_URL',
+    'https://apps.apple.com/pk/app/mgask/id6756522494',
+).strip()
 
 MIDDLEWARE = [
     "django.middleware.gzip.GZipMiddleware",

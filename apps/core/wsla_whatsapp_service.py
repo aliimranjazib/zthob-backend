@@ -37,6 +37,8 @@ class WslaWhatsAppService:
         template_name: str,
         language: str,
         body_parameters: list[str],
+        url_button_suffix: str | None = None,
+        url_button_index: str | None = None,
     ) -> tuple[bool, str, str | None]:
         """
         Send an approved WhatsApp template.
@@ -60,16 +62,35 @@ class WslaWhatsAppService:
             for value in body_parameters
         ]
 
+        components: list[dict[str, Any]] = [
+            {
+                'type': 'body',
+                'parameters': parameters,
+            }
+        ]
+
+        suffix = (url_button_suffix or '').strip()
+        if suffix:
+            button_index = (url_button_index or getattr(settings, 'WSLA_URL_BUTTON_INDEX', '0') or '0').strip()
+            components.append(
+                {
+                    'type': 'button',
+                    'sub_type': 'url',
+                    'index': button_index,
+                    'parameters': [
+                        {
+                            'type': 'text',
+                            'text': suffix[:2000],
+                        }
+                    ],
+                }
+            )
+
         payload: dict[str, Any] = {
             'number': number,
             'templateName': template_name,
             'language': language or getattr(settings, 'WSLA_TEMPLATE_LANG', 'ar'),
-            'components': [
-                {
-                    'type': 'body',
-                    'parameters': parameters,
-                }
-            ],
+            'components': components,
         }
 
         base_url = (getattr(settings, 'WSLA_BASE_URL', 'https://api.wsla.io') or '').rstrip('/')

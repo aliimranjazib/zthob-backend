@@ -9,6 +9,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from apps.core.customer_deep_link import walk_in_whatsapp_url_button_suffix
 from apps.core.phone_format import normalize_phone_to_local
 from apps.core.phone_utils import display_user_label
 from apps.core.wsla_whatsapp_service import WslaWhatsAppService
@@ -27,6 +28,13 @@ WALK_IN_WHATSAPP_ORDER_TYPES = frozenset(
 
 def wsla_whatsapp_enabled() -> bool:
     return bool(getattr(settings, 'WSLA_WHATSAPP_ENABLED', False))
+
+
+def walk_in_order_url_button_enabled() -> bool:
+    if not getattr(settings, 'WSLA_WALK_IN_ORDER_URL_BUTTON_ENABLED', True):
+        return False
+    base = (getattr(settings, 'CUSTOMER_ORDER_DEEP_LINK_BASE', '') or '').strip()
+    return bool(base)
 
 
 def _shop_profile(order: Order):
@@ -207,11 +215,16 @@ def send_walk_in_whatsapp(order_id: int, event: str) -> bool:
     template_name = _template_name_for_event(event)
     language = getattr(settings, 'WSLA_TEMPLATE_LANG', 'ar')
 
+    url_suffix = None
+    if walk_in_order_url_button_enabled():
+        url_suffix = walk_in_whatsapp_url_button_suffix(order.id)
+
     success, detail, message_id = WslaWhatsAppService.send_template(
         phone_number=phone,
         template_name=template_name,
         language=language,
         body_parameters=parameters,
+        url_button_suffix=url_suffix,
     )
 
     delivery.phone_used = WslaWhatsAppService.format_number_for_wsla(phone)
