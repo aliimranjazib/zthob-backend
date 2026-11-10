@@ -98,7 +98,12 @@ def get_shop_fabric_insights(
 def _shop_listings(shop_id: int):
     latest = FabricStockMovement.objects.filter(shop_fabric_id=OuterRef('pk')).order_by('-created_at')
     return (
-        ShopFabric.objects.filter(shop_id=shop_id, is_active=True)
+        ShopFabric.objects.filter(
+            shop_id=shop_id,
+            is_active=True,
+            is_visible=True,
+            product__is_active=True,
+        )
         .select_related(
             'shop',
             'product',

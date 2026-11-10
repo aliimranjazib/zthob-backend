@@ -89,15 +89,26 @@ def append_images_to_legacy_fabric(*, fabric: Fabric, images: list[dict]) -> int
 
 
 @transaction.atomic
-def sync_legacy_fabric_from_shop_fabric(*, shop_fabric: ShopFabric) -> Fabric:
+def sync_legacy_fabric_from_shop_fabric(*, shop_fabric: ShopFabric) -> Fabric | None:
+    """Mirror an active shop listing to legacy Fabric; hide or skip when delisted."""
+    if not shop_fabric.is_active:
+        if shop_fabric.legacy_fabric_id:
+            fabric = shop_fabric.legacy_fabric
+            fabric.is_active = False
+            fabric.save(update_fields=['is_active', 'updated_at'])
+            return fabric
+        return None
+
     product = shop_fabric.product
     shop = shop_fabric.shop
     price = shop_fabric.effective_price
 
     if shop_fabric.legacy_fabric_id:
         fabric = shop_fabric.legacy_fabric
-    else:
+    elif _legacy_is_active(shop_fabric=shop_fabric):
         fabric = Fabric(tailor=shop)
+    else:
+        return None
 
     fabric.name = product.name
     fabric.description = product.description

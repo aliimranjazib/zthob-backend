@@ -897,6 +897,154 @@ class V2FabricCatalogTests(TestCase):
         self.assertEqual(assign_resp.status_code, status.HTTP_400_BAD_REQUEST, assign_resp.data)
         self.assertIn('name', assign_resp.data['errors'])
 
+    @staticmethod
+    def _catalog_fabric_ids(response):
+        data = response.data['data']
+        if data is None:
+            return []
+        if isinstance(data, dict):
+            return [row['id'] for row in data.get('results', data.get('items', []))]
+        return [row['id'] for row in data]
+
+    def _approve_shop_for_customers(self, shop_id):
+        from apps.tailors.models import TailorProfile, TailorProfileReview
+
+        profile = TailorProfile.objects.get(pk=shop_id)
+        profile.shop_status = True
+        profile.save(update_fields=['shop_status'])
+        review, _ = TailorProfileReview.objects.get_or_create(profile=profile)
+        review.review_status = 'approved'
+        review.save(update_fields=['review_status'])
+
+    def test_v1_delete_clears_shop_inventory_and_customer_catalog(self):
+        from apps.tailors.models import Fabric
+
+        shop_id, _owner_token, work_token = self._setup_owner_shop()
+        self._approve_shop_for_customers(shop_id)
+        self._auth(work_token)
+
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Lifecycle Cotton',
+                'price': '120.00',
+                'category_id': self.fabric_category.id,
+            },
+            format='json',
+        )
+        self.assertEqual(product_resp.status_code, status.HTTP_201_CREATED, product_resp.data)
+        product_id = product_resp.data['data']['id']
+
+        assign_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-product-assign', product_id=product_id),
+            {'shop_id': shop_id, 'stock': 5, 'is_visible': True},
+            format='json',
+        )
+        self.assertEqual(assign_resp.status_code, status.HTTP_200_OK, assign_resp.data)
+        legacy_fabric_id = assign_resp.data['data']['legacy_fabric_id']
+        shop_fabric_id = assign_resp.data['data']['id']
+
+        customer_before = self.client.get('/api/customers/allfabrics/')
+        self.assertEqual(customer_before.status_code, status.HTTP_200_OK)
+        self.assertIn(legacy_fabric_id, self._catalog_fabric_ids(customer_before))
+
+        delete_resp = self.client.delete(
+            reverse('tailor-fabric-detail', kwargs={'pk': legacy_fabric_id}),
+        )
+        self.assertEqual(delete_resp.status_code, status.HTTP_200_OK, delete_resp.data)
+        self.assertFalse(Fabric.objects.filter(pk=legacy_fabric_id).exists())
+
+        shop_fabric = ShopFabric.objects.get(id=shop_fabric_id)
+        self.assertFalse(shop_fabric.is_active)
+        self.assertFalse(shop_fabric.is_visible)
+
+        shop_list = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        self.assertEqual(shop_list.data['data'], [])
+
+        customer_after = self.client.get('/api/customers/allfabrics/')
+        self.assertNotIn(legacy_fabric_id, self._catalog_fabric_ids(customer_after))
+
+        self._auth(work_token)
+        patch_resp = self.client.patch(
+            self._url('fabrics_v2:v2-fabric-product-detail', product_id=product_id),
+            {'description': 'Touch after delete'},
+            format='json',
+        )
+        self.assertEqual(patch_resp.status_code, status.HTTP_200_OK, patch_resp.data)
+        self.assertEqual(Fabric.objects.filter(tailor_id=shop_id, name='Lifecycle Cotton').count(), 0)
+
+    def test_unassign_owner_fabric_from_shop(self):
+        from apps.tailors.models import Fabric
+
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._approve_shop_for_customers(shop_id)
+        self._auth(owner_token)
+
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {
+                'name': 'Unassign Silk',
+                'price': '300.00',
+                'category_id': self.fabric_category.id,
+            },
+            format='json',
+        )
+        product_id = product_resp.data['data']['id']
+        assign_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-product-assign', product_id=product_id),
+            {'shop_id': shop_id, 'stock': 3, 'is_visible': True},
+            format='json',
+        )
+        legacy_fabric_id = assign_resp.data['data']['legacy_fabric_id']
+
+        unassign_resp = self.client.delete(
+            self._url('fabrics_v2:v2-fabric-product-assign', product_id=product_id),
+            {'shop_id': shop_id},
+            format='json',
+        )
+        self.assertEqual(unassign_resp.status_code, status.HTTP_200_OK, unassign_resp.data)
+
+        shop_list = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        self.assertEqual(shop_list.data['data'], [])
+
+        customer_resp = self.client.get(f'/api/customers/tailors/{shop_id}/fabrics')
+        fabric_ids = self._catalog_fabric_ids(customer_resp)
+        self.assertNotIn(legacy_fabric_id, fabric_ids)
+
+        fabric = Fabric.objects.filter(pk=legacy_fabric_id).first()
+        if fabric is not None:
+            self.assertFalse(fabric.is_active)
+
+        owner_catalog = self.client.get(self._url('fabrics_v2:v2-fabric-products'))
+        owner_names = [row['name'] for row in owner_catalog.data['data']]
+        self.assertIn('Unassign Silk', owner_names)
+
+    def test_deactivate_product_hides_all_shop_listings(self):
+        shop_id, owner_token, _work_token = self._setup_owner_shop()
+        self._auth(owner_token)
+
+        product_resp = self.client.post(
+            self._url('fabrics_v2:v2-fabric-products'),
+            {'name': 'Deactivate Linen', 'price': '90.00'},
+            format='json',
+        )
+        product_id = product_resp.data['data']['id']
+        self.client.post(
+            self._url('fabrics_v2:v2-fabric-product-assign', product_id=product_id),
+            {'shop_id': shop_id, 'stock': 2, 'is_visible': True},
+            format='json',
+        )
+
+        deactivate_resp = self.client.patch(
+            self._url('fabrics_v2:v2-fabric-product-detail', product_id=product_id),
+            {'is_active': False},
+            format='json',
+        )
+        self.assertEqual(deactivate_resp.status_code, status.HTTP_200_OK, deactivate_resp.data)
+
+        shop_list = self.client.get(self._url('fabrics_v2:v2-shop-fabrics', shop_id=shop_id))
+        self.assertEqual(shop_list.data['data'], [])
+
 
 @override_settings(
     REST_FRAMEWORK=TEST_REST_FRAMEWORK,

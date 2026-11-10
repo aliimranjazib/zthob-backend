@@ -6,12 +6,18 @@ from django.db import transaction
 
 from apps.fabrics.models import FabricStockMovement, ShopFabric
 from apps.fabrics.services.fabric_names import validate_fabric_name_for_shop
+from apps.fabrics.services.catalog_lifecycle import deactivate_shop_listing
 from apps.fabrics.services.legacy_bridge import sync_legacy_fabric_from_shop_fabric
 
 
 def shop_fabrics_queryset(*, shop_id: int):
     return (
-        ShopFabric.objects.filter(shop_id=shop_id, is_active=True)
+        ShopFabric.objects.filter(
+            shop_id=shop_id,
+            is_active=True,
+            is_visible=True,
+            product__is_active=True,
+        )
         .select_related(
             'shop',
             'product',
@@ -27,6 +33,22 @@ def shop_fabrics_queryset(*, shop_id: int):
 
 def get_shop_fabric(*, shop_id: int, shop_fabric_id: int) -> ShopFabric | None:
     return shop_fabrics_queryset(shop_id=shop_id).filter(id=shop_fabric_id).first()
+
+
+def get_shop_fabric_record(*, shop_id: int, shop_fabric_id: int) -> ShopFabric | None:
+    return (
+        ShopFabric.objects.filter(shop_id=shop_id, id=shop_fabric_id)
+        .select_related(
+            'shop',
+            'product',
+            'product__fabric_type',
+            'product__category',
+            'product__country',
+            'legacy_fabric',
+        )
+        .prefetch_related('product__tags', 'product__gallery', 'product__shop_assignments')
+        .first()
+    )
 
 
 @transaction.atomic
@@ -94,9 +116,14 @@ def update_shop_fabric(*, shop_fabric: ShopFabric, validated_data) -> ShopFabric
     stock_changed = 'stock' in validated_data
     previous_stock = shop_fabric.stock
 
+    listing_deactivated = validated_data.get('is_active') is False
+
     for field, value in validated_data.items():
         setattr(shop_fabric, field, value)
     shop_fabric.save()
+
+    if listing_deactivated:
+        return deactivate_shop_listing(shop_fabric=shop_fabric)
 
     if stock_changed and shop_fabric.stock != previous_stock:
         FabricStockMovement.objects.create(
