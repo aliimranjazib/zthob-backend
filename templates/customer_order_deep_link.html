@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page_title }}</title>
+    <meta name="robots" content="noindex, nofollow">
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f4f6fb;
+            --card: #ffffff;
+            --text: #14213d;
+            --muted: #5c677d;
+            --accent: #1b4fd8;
+            --border: #dde3ee;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            background: linear-gradient(180deg, #eef4ff 0%, var(--bg) 100%);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .card {
+            width: 100%;
+            max-width: 480px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: 0 14px 40px rgba(20, 33, 61, 0.08);
+            text-align: center;
+        }
+        h1 { margin: 0 0 12px; font-size: 1.5rem; }
+        p { margin: 0 0 20px; color: var(--muted); line-height: 1.6; }
+        .actions { display: flex; flex-direction: column; gap: 12px; }
+        a.btn {
+            display: block;
+            padding: 14px 18px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            color: var(--text);
+            background: #fbfcff;
+        }
+        a.btn-primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .en { direction: ltr; unicode-bidi: embed; margin-top: 16px; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>عرض الطلب في تطبيق مقاس</h1>
+        <p>
+            {% if order_exists %}
+                اضغط أدناه لفتح تفاصيل الطلب في التطبيق.
+            {% else %}
+                افتح تطبيق مقاس. إذا لم يكن مثبتاً، حمّله من المتجر.
+            {% endif %}
+        </p>
+        <div class="actions">
+            <a class="btn btn-primary" id="open-app" href="{{ order_url }}">فتح الطلب</a>
+            {% if play_store_url %}
+            <a class="btn" href="{{ play_store_url }}" rel="noopener">Google Play</a>
+            {% endif %}
+            {% if app_store_url %}
+            <a class="btn" href="{{ app_store_url }}" rel="noopener">App Store</a>
+            {% endif %}
+        </div>
+        <p class="en">Open this order in the Mgask customer app, or install it from your store.</p>
+    </div>
+    <script>
+        (function () {
+            var orderUrl = "{{ order_url|escapejs }}";
+            var pkg = "{{ android_package|escapejs }}";
+            var playUrl = "{{ play_store_url|escapejs }}";
+            var isAndroid = /Android/i.test(navigator.userAgent);
+            var openApp = document.getElementById('open-app');
+            if (isAndroid && pkg && orderUrl) {
+                var fallback = playUrl ? encodeURIComponent(playUrl) : '';
+                var intent = 'intent://' + orderUrl.replace(/^https?:\\/\\//, '') +
+                    '#Intent;scheme=https;package=' + pkg +
+                    (fallback ? ';S.browser_fallback_url=' + fallback : '') +
+                    ';end';
+                openApp.setAttribute('href', intent);
+            }
+            // On iOS, Universal Links open the app when installed; otherwise user uses store links.
+        })();
+    </script>
+</body>
+</html>

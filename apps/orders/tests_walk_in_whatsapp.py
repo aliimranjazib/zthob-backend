@@ -19,6 +19,8 @@ from apps.tailors.models import TailorProfile
     WSLA_WHATSAPP_TOKEN='test-token',
     WSLA_TEMPLATE_WALK_IN_CREATED='mgask_walk_in_order_created',
     WSLA_TEMPLATE_WALK_IN_READY='mgask_walk_in_ready',
+    CUSTOMER_ORDER_DEEP_LINK_BASE='https://prod.mgask.net/order/',
+    WSLA_WALK_IN_ORDER_URL_BUTTON_ENABLED=True,
 )
 class WalkInWhatsAppTests(TestCase):
     def setUp(self):

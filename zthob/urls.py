@@ -28,6 +28,12 @@ from drf_spectacular.views import (
     SpectacularRedocView,
 )
 from apps.core.views import PublicMediaServeView
+from apps.core.views_customer_deep_link import (
+    android_assetlinks_view,
+    apple_app_site_association_legacy_view,
+    apple_app_site_association_view,
+    customer_order_deep_link_view,
+)
 from apps.tailors.views.help import tailor_help_view
 from apps.core.views_product_overview import product_overview_view
 
@@ -254,6 +260,22 @@ api_v2_patterns = [
 urlpatterns = [
     path("admin/", admin.site.urls),
     path('studio/', include('apps.documents.urls')),
+    path(
+        '.well-known/assetlinks.json',
+        android_assetlinks_view,
+        name='customer-android-assetlinks',
+    ),
+    path(
+        '.well-known/apple-app-site-association',
+        apple_app_site_association_view,
+        name='customer-apple-app-site-association',
+    ),
+    path(
+        'apple-app-site-association',
+        apple_app_site_association_legacy_view,
+        name='customer-apple-app-site-association-legacy',
+    ),
+    path('order/<str:order_id>', customer_order_deep_link_view, name='customer-order-deep-link'),
     path('payment-result', payment_result_view, name='payment-result'),
     path('tailor-help/', tailor_help_view, name='tailor-help'),
     path('product-overview/', product_overview_view, name='product-overview'),
