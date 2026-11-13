@@ -12,10 +12,10 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET
 
 from apps.core.customer_deep_link import (
+    build_android_assetlinks_payload,
+    build_apple_app_site_association_payload,
+    custom_scheme_order_url,
     customer_app_android_package,
-    customer_app_android_sha256_list,
-    customer_app_apple_app_id,
-    customer_order_link_paths,
     parse_order_id_from_path,
 )
 from apps.orders.models import Order
@@ -40,13 +40,17 @@ def customer_order_deep_link_view(request, order_id: str):
     if parsed is None:
         raise Http404('Invalid order link')
 
+    order_https_url = _absolute_order_url(request, parsed)
     order_exists = Order.objects.filter(pk=parsed).exists()
     context = {
         **_store_context(),
         'order_id': parsed,
         'order_exists': order_exists,
-        'order_url': _absolute_order_url(request, parsed),
+        'order_url': order_https_url,
+        'order_https_url': order_https_url,
+        'custom_scheme_url': custom_scheme_order_url(parsed),
         'page_title': 'Mgask — Order',
+        'auto_redirect_app_store': getattr(settings, 'CUSTOMER_DEEPLINK_AUTO_REDIRECT', True),
     }
     return TemplateResponse(request, 'customer_order_deep_link.html', context)
 
@@ -54,47 +58,15 @@ def customer_order_deep_link_view(request, order_id: str):
 @require_GET
 @cache_control(public=True, max_age=3600)
 def android_assetlinks_view(request):
-    fingerprints = customer_app_android_sha256_list()
-    package = customer_app_android_package()
-    if not package or not fingerprints:
-        return JsonResponse([], safe=False)
-
-    payload = [
-        {
-            'relation': ['delegate_permission/common.handle_all_urls'],
-            'target': {
-                'namespace': 'android_app',
-                'package_name': package,
-                'sha256_cert_fingerprints': fingerprints,
-            },
-        }
-    ]
+    payload = build_android_assetlinks_payload()
     return JsonResponse(payload, safe=False)
-
-
-def _apple_app_site_association_payload() -> dict:
-    app_id = customer_app_apple_app_id()
-    if not app_id:
-        return {'applinks': {'apps': [], 'details': []}}
-
-    return {
-        'applinks': {
-            'apps': [],
-            'details': [
-                {
-                    'appID': app_id,
-                    'paths': customer_order_link_paths(),
-                }
-            ],
-        }
-    }
 
 
 @require_GET
 @csrf_exempt
 @cache_control(public=True, max_age=3600)
 def apple_app_site_association_view(request):
-    payload = _apple_app_site_association_payload()
+    payload = build_apple_app_site_association_payload()
     return HttpResponse(
         json.dumps(payload, separators=(',', ':')),
         content_type='application/json',
