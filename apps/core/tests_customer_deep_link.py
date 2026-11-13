@@ -35,6 +35,7 @@ class CustomerDeepLinkHttpTests(TestCase):
         response = self.client.get('/order/42')
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'Mgask', response.content)
+        self.assertIn(b'mgask://order/42', response.content)
 
     @override_settings(
         CUSTOMER_APP_ANDROID_SHA256_FINGERPRINTS='AB' * 32,
@@ -47,16 +48,25 @@ class CustomerDeepLinkHttpTests(TestCase):
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]['target']['package_name'], 'com.mgask.customerapp')
 
+    def test_apple_app_site_association_from_ops_default_team(self):
+        response = self.client.get('/.well-known/apple-app-site-association')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertEqual(
+            data['applinks']['details'][0]['appID'],
+            'BLGYQ7CQ2B.com.mgask.customerapp',
+        )
+        self.assertEqual(data['applinks']['details'][0]['paths'], ['/order/*'])
+
     @override_settings(
         CUSTOMER_APP_APPLE_TEAM_ID='TEAM123',
         CUSTOMER_APP_IOS_BUNDLE_ID='com.mgask.customerapp',
     )
-    def test_apple_app_site_association(self):
+    def test_apple_app_site_association_env_override(self):
         response = self.client.get('/.well-known/apple-app-site-association')
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
         self.assertEqual(data['applinks']['details'][0]['appID'], 'TEAM123.com.mgask.customerapp')
-        self.assertEqual(data['applinks']['details'][0]['paths'], ['/order/*'])
 
 
 class WslaUrlButtonTests(TestCase):

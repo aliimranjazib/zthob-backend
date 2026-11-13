@@ -63,13 +63,13 @@
         <h1>عرض الطلب في تطبيق مقاس</h1>
         <p>
             {% if order_exists %}
-                اضغط أدناه لفتح تفاصيل الطلب في التطبيق.
+                جاري فتح التطبيق…
             {% else %}
-                افتح تطبيق مقاس. إذا لم يكن مثبتاً، حمّله من المتجر.
+                افتح تطبيق مقاس أو حمّله من المتجر.
             {% endif %}
         </p>
         <div class="actions">
-            <a class="btn btn-primary" id="open-app" href="{{ order_url }}">فتح الطلب</a>
+            <a class="btn btn-primary" id="open-app" href="{{ custom_scheme_url }}">فتح الطلب</a>
             {% if play_store_url %}
             <a class="btn" href="{{ play_store_url }}" rel="noopener">Google Play</a>
             {% endif %}
@@ -77,25 +77,62 @@
             <a class="btn" href="{{ app_store_url }}" rel="noopener">App Store</a>
             {% endif %}
         </div>
-        <p class="en">Open this order in the Mgask customer app, or install it from your store.</p>
+        <p class="en">Opening Mgask customer app…</p>
     </div>
+    {% if auto_redirect_app_store %}
     <script>
-        (function () {
-            var orderUrl = "{{ order_url|escapejs }}";
-            var pkg = "{{ android_package|escapejs }}";
-            var playUrl = "{{ play_store_url|escapejs }}";
-            var isAndroid = /Android/i.test(navigator.userAgent);
-            var openApp = document.getElementById('open-app');
-            if (isAndroid && pkg && orderUrl) {
-                var fallback = playUrl ? encodeURIComponent(playUrl) : '';
-                var intent = 'intent://' + orderUrl.replace(/^https?:\\/\\//, '') +
-                    '#Intent;scheme=https;package=' + pkg +
-                    (fallback ? ';S.browser_fallback_url=' + fallback : '') +
-                    ';end';
-                openApp.setAttribute('href', intent);
+    (function () {
+        var orderId = "{{ order_id }}";
+        var orderUrl = "{{ order_https_url|escapejs }}";
+        var customUrl = "{{ custom_scheme_url|escapejs }}";
+        var pkg = "{{ android_package|escapejs }}";
+        var playUrl = "{{ play_store_url|escapejs }}";
+        var appStoreUrl = "{{ app_store_url|escapejs }}";
+        var ua = navigator.userAgent || "";
+        var isAndroid = /Android/i.test(ua);
+        var isIOS = /iPhone|iPad|iPod/i.test(ua);
+
+        function goStore() {
+            if (isIOS && appStoreUrl) {
+                window.location.replace(appStoreUrl);
+            } else if (isAndroid && playUrl) {
+                window.location.replace(playUrl);
             }
-            // On iOS, Universal Links open the app when installed; otherwise user uses store links.
-        })();
+        }
+
+        function tryCustomScheme() {
+            window.location.href = customUrl;
+        }
+
+        if (isAndroid && pkg && orderUrl) {
+            var path = orderUrl.replace(/^https?:\/\//, "");
+            var playFallback = playUrl ? encodeURIComponent(playUrl) : encodeURIComponent(customUrl);
+            var intent =
+                "intent://" + path +
+                "#Intent;scheme=https;package=" + pkg +
+                ";S.browser_fallback_url=" + playFallback +
+                ";end";
+            window.location.href = intent;
+            setTimeout(function () {
+                tryCustomScheme();
+                setTimeout(goStore, 800);
+            }, 1200);
+            return;
+        }
+
+        if (isIOS) {
+            tryCustomScheme();
+            setTimeout(function () {
+                window.location.replace(orderUrl);
+                setTimeout(goStore, 1200);
+            }, 400);
+            return;
+        }
+
+        tryCustomScheme();
+        setTimeout(goStore, 1500);
+    })();
     </script>
+    {% endif %}
 </body>
 </html>

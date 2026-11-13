@@ -180,11 +180,23 @@ CUSTOMER_APP_IOS_BUNDLE_ID = os.getenv(
     'CUSTOMER_APP_IOS_BUNDLE_ID',
     'com.mgask.customerapp',
 ).strip()
-CUSTOMER_APP_APPLE_TEAM_ID = os.getenv('CUSTOMER_APP_APPLE_TEAM_ID', '').strip()
+CUSTOMER_APP_APPLE_TEAM_ID = os.getenv(
+    'CUSTOMER_APP_APPLE_TEAM_ID',
+    'BLGYQ7CQ2B',
+).strip()
 CUSTOMER_APP_ANDROID_SHA256_FINGERPRINTS = os.getenv(
     'CUSTOMER_APP_ANDROID_SHA256_FINGERPRINTS',
     '',
 ).strip()
+CUSTOMER_APP_CUSTOM_SCHEME = os.getenv('CUSTOMER_APP_CUSTOM_SCHEME', 'mgask').strip()
+CUSTOMER_APP_DEEPLINK_OPS_DIR = os.getenv(
+    'CUSTOMER_APP_DEEPLINK_OPS_DIR',
+    str(BASE_DIR / 'ops' / 'deeplink'),
+).strip()
+CUSTOMER_DEEPLINK_AUTO_REDIRECT = os.getenv(
+    'CUSTOMER_DEEPLINK_AUTO_REDIRECT',
+    'true',
+).lower() in ('1', 'true', 'yes')
 CUSTOMER_APP_PLAY_STORE_URL = os.getenv(
     'CUSTOMER_APP_PLAY_STORE_URL',
     'https://play.google.com/store/apps/details?id=com.mgask.customerapp',
